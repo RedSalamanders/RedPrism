@@ -88,6 +88,10 @@ int Application::RunSelectionSizeOutlineFaultSelfTest() noexcept
         Case{"selected-opening", Mode::SelectedOpening, {}},
         Case{"selected-card", Mode::SelectedCard, {}},
         Case{"saved-marker", Mode::Saved, {}}};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -104,6 +108,8 @@ int Application::RunSelectionSizeOutlineFaultSelfTest() noexcept
         bool eventExact = false, cancelPending = false, youngerPending = false, pumpPending = false;
         bool zoomChanged = false, mutationReached = false;
     };
+#pragma warning(pop)
+
     constexpr UINT kSizeOutlinePumpMessage = WM_APP + 0x4cd;
     const auto originalViewport = _viewport;
     const auto originalForeground = _session.ForegroundColor(), originalBackground = _session.BackgroundColor();

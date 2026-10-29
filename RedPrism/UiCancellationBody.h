@@ -9,6 +9,10 @@
 // Owner-only reduction of immutable observer samples. The caller explicitly chooses the original ticket and
 // the useful Run ordinal: color jobs use ordinal 2 after their admitted ordinal-1 capture stub. No mutable
 // Application state is read by a callback. Feed in the log's reservation order, stopping at unpublished holes.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class UiCancellationBody final
 {
   public:
@@ -224,3 +228,4 @@ class UiCancellationBody final
     bool _clockFailed = false;
     bool _malformed = false;
 };
+#pragma warning(pop)

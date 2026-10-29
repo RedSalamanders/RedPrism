@@ -1,7 +1,7 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -105,8 +105,8 @@ int Application::RunPanelWandHostSelfTest() noexcept
     const auto raster = Raster::Make(4, 4, RasterFormat::Bgra8888, pixels.data(), pixels.size());
     const std::array kinds{FilterKind::Levels, FilterKind::HueSaturation, FilterKind::Exposure};
     const std::array names{"levels", "hsv", "exposure"};
-    const std::array commands{ChromeHost::kCommandLevels, ChromeHost::kCommandHueSaturation,
-                              ChromeHost::kCommandExposure};
+    const std::array<int, 3> commands{
+        {ChromeHost::kCommandLevels, ChromeHost::kCommandHueSaturation, ChromeHost::kCommandExposure}};
     for (std::size_t panelIndex = 0; panelIndex < kinds.size(); ++panelIndex)
         for (const bool composite : {false, true})
             for (int action = 0; action < 5; ++action)

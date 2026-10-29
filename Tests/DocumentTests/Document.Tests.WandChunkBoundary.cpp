@@ -70,6 +70,13 @@ bool SlotFor(MagicWand::WorkStage stage, StageSlot& slot) noexcept
     case MagicWand::WorkStage::TraceStarts:
         slot = StageSlot::TraceStarts;
         return true;
+    case ::MagicWand::WorkStage::Complete:
+    case ::MagicWand::WorkStage::FloodSeeds:
+    case ::MagicWand::WorkStage::MaskInitialize:
+    case ::MagicWand::WorkStage::Sample:
+    case ::MagicWand::WorkStage::Source:
+    case ::MagicWand::WorkStage::TraceInitialize:
+    case ::MagicWand::WorkStage::TraceWalk:
     default:
         return false;
     }

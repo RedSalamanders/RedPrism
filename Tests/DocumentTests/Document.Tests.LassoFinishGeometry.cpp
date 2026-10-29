@@ -29,6 +29,10 @@ void Expect(bool condition, const char* label) noexcept
     std::printf("%s lasso-finish.%s\n", condition ? "PASS" : "FAIL", label);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct Fixture final
 {
     std::shared_ptr<SharedPublicationMemory> memory = SharedPublicationMemory::CreateForWork(1024 * 1024);
@@ -40,6 +44,7 @@ struct Fixture final
             gesture.emplace(std::move(points.value()));
     }
 };
+#pragma warning(pop)
 
 std::optional<BoundedLassoGesture> NewGesture(std::shared_ptr<SharedPublicationMemory> memory, std::uint32_t blocks)
 {

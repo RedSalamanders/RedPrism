@@ -1,8 +1,8 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.TransformWorkTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -34,6 +34,10 @@ int Application::RunDuplicateGestureSelfTest() noexcept
         PendingRecordFailure,
         CommitFailure
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -66,6 +70,7 @@ int Application::RunDuplicateGestureSelfTest() noexcept
                    actual.IsModified() == modified;
         }
     };
+#pragma warning(pop)
 
     unsigned checks = 0;
     unsigned failures = 0;

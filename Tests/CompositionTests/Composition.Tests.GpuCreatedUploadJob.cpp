@@ -33,6 +33,10 @@ bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 struct GatedPump final : OwnerWorkPump
 {
     GatedPump(OwnerWorkMultiplexer& source, std::atomic_bool& gate) noexcept : routes(source), paused(gate) {}
@@ -52,7 +56,12 @@ struct GatedPump final : OwnerWorkPump
     OwnerWorkMultiplexer& routes;
     std::atomic_bool& paused;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     GpuResidencyBudget budget; // outlives queue and every creation/retirement/adopted reservation
@@ -100,7 +109,12 @@ struct Fixture final
         Close();
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Completion final
 {
     GpuRasterCreatedResidency residency;
@@ -113,7 +127,12 @@ struct Completion final
     bool duplicateRefused = false;
     bool oldBorrowCleared = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class Probe final : public GpuRasterUploadJob
 {
   public:
@@ -152,12 +171,14 @@ class Probe final : public GpuRasterUploadJob
     Fixture& _fixture;
     Completion& _completion;
 };
+#pragma warning(pop)
 
 std::unique_ptr<GpuRasterUploadInput> Input(const Raster& source, int scale, bool mips)
 {
-    auto layout = RasterUploadLayout::Make(
-        source, 0, 0, source.Width(), source.Height(), scale, 4096,
-        static_cast<std::uint64_t>(1 + (source.Width() - 1) / scale) * source.Channels(), 4096, mips);
+    auto layout = RasterUploadLayout::Make(source, 0, 0, source.Width(), source.Height(), scale, 4096,
+                                           static_cast<std::uint64_t>(1 + (source.Width() - 1) / scale) *
+                                               static_cast<unsigned int>(source.Channels()),
+                                           4096, mips);
     return GpuRasterUploadInput::Make(std::move(layout));
 }
 
@@ -244,8 +265,9 @@ void Success(const char* name, const Raster& source, int scale, std::span<const 
     Expect(fixture.budget.ReservedOwner() == kGpuAllowance + gpu && fixture.budget.ActiveOwner() == 2 &&
                fixture.scheduler.IsIdle(),
            name, "adopted-gpu-reservation-outlives-producing-job");
-    Expect(BaseEquals(fixture, completed.residency.TextureOwner(), expected, source.Channels()), name,
-           "literal-base-pixels-after-worker-creation-and-upload");
+    Expect(
+        BaseEquals(fixture, completed.residency.TextureOwner(), expected, static_cast<unsigned int>(source.Channels())),
+        name, "literal-base-pixels-after-worker-creation-and-upload");
     auto moved = std::move(completed.residency);
     Expect(moved && !completed.residency && fixture.budget.ReservedOwner() == kGpuAllowance + gpu, name,
            "moving-adopted-owner-keeps-one-charge");
@@ -318,6 +340,10 @@ void Quarantine()
            "joined-owner-storage-release-ends-retirement-charge");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct HeldProducer final
 {
     wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -337,6 +363,7 @@ struct HeldProducer final
         self.shutdownObserved = WaitForMultipleObjects(2, events, FALSE, 10000) == WAIT_OBJECT_0 + 1;
     }
 };
+#pragma warning(pop)
 
 bool AwaitPublished(Fixture& fixture, HANDLE entered) noexcept
 {

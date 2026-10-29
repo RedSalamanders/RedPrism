@@ -1,11 +1,11 @@
 #include "Composition.Tests.RecordedAdjustment.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Adjust.h"
 #include "GpuCommandPump.h"
 #include "GpuWork.h"
 #include "Jobs.h"
 #include "OwnerWorkMultiplexer.h"
 #include "RecordedDisplayGraph.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -304,6 +304,10 @@ bool CheckRefusalsForWork(RecordedDisplayGraph& graph, ID3D11Device* device, con
     return refuse("incomplete-cube-refuses-without-resources", bad);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class ParentState final : public GpuCommandSourceReceiver, public GpuCompletionReceiver
 {
   public:
@@ -692,7 +696,12 @@ class ParentState final : public GpuCommandSourceReceiver, public GpuCompletionR
         lastUseCapture = {};
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class RecordedBlitParentJob final : public Job
 {
   public:
@@ -779,6 +788,7 @@ class RecordedBlitParentJob final : public Job
   private:
     ParentState& _state;
 };
+#pragma warning(pop)
 
 bool WaitForParent(JobScheduler& scheduler, OwnerWorkMultiplexer& routes, ParentState& state) noexcept
 {

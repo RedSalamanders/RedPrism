@@ -6,8 +6,9 @@
 #include "PathReadWait.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
+#include <cstddef>
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <atomic>
@@ -68,6 +69,10 @@ class TestFile final
     bool _valid = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class TestPipe final
 {
   public:
@@ -75,8 +80,8 @@ class TestPipe final
     {
         static unsigned int sequence = 0; // Test setup is serial on the owner.
         std::array<wchar_t, 192> name{};
-        (void)std::format_to_n(name.data(), name.size() - 1, L"\\\\.\\pipe\\RedPrism.PathRead.{}.{}",
-                               GetCurrentProcessId(), ++sequence);
+        (void)std::format_to_n(name.data(), static_cast<std::ptrdiff_t>(name.size() - 1),
+                               L"\\\\.\\pipe\\RedPrism.PathRead.{}.{}", GetCurrentProcessId(), ++sequence);
         _server.reset(CreateNamedPipeW(name.data(),
                                        PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
                                        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1, 64, 64, 0, nullptr));
@@ -130,7 +135,12 @@ class TestPipe final
     wil::unique_hfile _server;
     wil::unique_hfile _writer;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Source final
 {
     TestPipe* pipe = nullptr;
@@ -187,6 +197,11 @@ struct Source final
         case PathClassificationReadNotice::CancellationRequested:
             source.cancellations.fetch_add(1);
             break;
+        case ::PathClassificationReadNotice::Count:
+        case ::PathClassificationReadNotice::Destroyed:
+        case ::PathClassificationReadNotice::Immediate:
+        case ::PathClassificationReadNotice::IssueFailed:
+        case ::PathClassificationReadNotice::Unissued:
         default:
             return;
         }
@@ -212,9 +227,14 @@ struct Source final
         }
     }
 };
+#pragma warning(pop)
 
 // One independent compute job writes the literal bytes needed by the suspended original native read.
 // On a one-worker scheduler it cannot run if that read blocks the compute lane waiting for the bytes.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class LanePing final : public Job
 {
   public:
@@ -242,6 +262,7 @@ class LanePing final : public Job
     bool& _completed; // Owner callback only.
     JobResult& _terminal;
 };
+#pragma warning(pop)
 
 enum class Mode : std::uint8_t
 {

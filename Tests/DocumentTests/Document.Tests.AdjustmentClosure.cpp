@@ -1,7 +1,7 @@
 #include "Document.Tests.AdjustmentClosure.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "AdjustmentClosureWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>

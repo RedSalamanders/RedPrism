@@ -10,6 +10,10 @@
 
 // Owner-only event descriptors while an admitted Hue/Saturation press readback waits. No document,
 // pixels, panel pointer or GPU owner is captured. The caller validates the edit/document again at publication.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class HostHueInput final
 {
   public:
@@ -159,3 +163,4 @@ class HostHueInput final
     Stream _stream;
     Sample _lastAccepted{};
 };
+#pragma warning(pop)

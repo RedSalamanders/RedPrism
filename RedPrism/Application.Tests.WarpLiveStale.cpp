@@ -1,7 +1,7 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "KeyboardState.h"
 #include "Runtime.Tests.StrokeFinishTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <DxUi/Embedded.h>
 #include <array>

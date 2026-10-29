@@ -17,6 +17,10 @@
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct LeaseState final
 {
     DWORD ownerThread = GetCurrentThreadId();
@@ -50,6 +54,7 @@ struct LeaseState final
     CancelToken cancellation;
     std::uint64_t reservation = 0;
 };
+#pragma warning(pop)
 
 [[nodiscard]] bool LiteralRows(const std::uint8_t* data, std::size_t stride, unsigned int width,
                                unsigned int height) noexcept
@@ -71,6 +76,10 @@ struct LeaseState final
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct LeaseCpuOwners final : DeferredReleaseNode
 {
     CanvasDocument document;
@@ -117,6 +126,8 @@ struct LeaseCpuOwners final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetireLeaseOwners final
 {
     void operator()(LeaseCpuOwners* payload) const noexcept
@@ -128,6 +139,10 @@ struct RetireLeaseOwners final
 
 using LeaseOwners = std::unique_ptr<LeaseCpuOwners, RetireLeaseOwners>;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class HeldReadback final : public DocumentReadbackJob
 {
   public:
@@ -187,7 +202,12 @@ class HeldReadback final : public DocumentReadbackJob
     HRESULT (*const _prepare)(void*) noexcept;
     LeaseOwners _payload;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class HeldRetry final : public Job, public RetryWaitReceiver
 {
   public:
@@ -232,7 +252,12 @@ class HeldRetry final : public Job, public RetryWaitReceiver
     LeaseState& _state;
     LeaseOwners _payload;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ReleaseRetryOnShutdown final : public Job
 {
   public:
@@ -264,6 +289,7 @@ class ReleaseRetryOnShutdown final : public Job
   private:
     LeaseState& _state;
 };
+#pragma warning(pop)
 
 } // namespace
 

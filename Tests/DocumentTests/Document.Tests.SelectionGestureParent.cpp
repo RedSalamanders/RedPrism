@@ -1,11 +1,11 @@
 #include "Document.Tests.SelectionGestureParent.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Jobs.h"
 #include "SelectionCommandWork.h"
 #include "SelectionMoveOpeningWork.h"
 #include "SelectionMoveWork.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -59,6 +59,10 @@ enum class Mode
     Cancelled,
     JoinedClose
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
 struct State final
 {
     JobScheduler& scheduler;
@@ -73,6 +77,12 @@ struct State final
     std::weak_ptr<const SharedPublicationMemory> openingOwner, terminalOwner;
     std::shared_ptr<const SharedPublicationMemory> joinedAccountingWitness;
 };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class ParentJob final : public Job
 {
   public:
@@ -247,9 +257,15 @@ class ParentJob final : public Job
     std::optional<SelectionCommandInput> _commandInput;
     std::optional<PreparedSelectionCommand> _command;
 };
+#pragma warning(pop)
+
 constexpr std::uint64_t kObserverBytes = 8192;
 // A settled independent read-only accounting owner observes the shared endpoint after Close. Its own
 // explicit charge stays outside the gesture's admission, so final parent refund has an observable oracle.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class EndpointObserverJob final : public Job
 {
   public:
@@ -280,6 +296,8 @@ class EndpointObserverJob final : public Job
     std::shared_ptr<SharedPublicationMemory> _memory;
     JobTicket _ticket;
 };
+#pragma warning(pop)
+
 void WaitOpening(State& s)
 {
     const auto deadline = GetTickCount64() + 10000;

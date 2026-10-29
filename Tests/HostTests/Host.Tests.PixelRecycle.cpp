@@ -1,7 +1,7 @@
 #include "Host.Tests.PixelRecycle.h"
 
-#include "../../Common/Document.h"
-#include "../../Common/PixelBuffer.h"
+#include "Common/Document.h"
+#include "Common/PixelBuffer.h"
 
 #include <array>
 #include <barrier>

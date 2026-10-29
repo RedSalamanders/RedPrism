@@ -1,10 +1,10 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.PreparedLayerRowsStressFixture.h"
 #include "ChromeHost.h"
 #include "PreparedLayerRows.h"
 #include "Resources.h"
 #include "Runtime.Tests.LayerRowsTestGate.h"
+#include "Tests/Support/Support.Tests.PreparedLayerRowsStressFixture.h"
 #include "resource.h"
 
 #include <array>

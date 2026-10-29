@@ -294,6 +294,10 @@ Status CopyFormat(UINT format, bool png, std::int64_t pixelBudget, const FormatI
 }
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct PreparedImage::Storage final
 {
     wil::unique_hglobal png;
@@ -304,6 +308,7 @@ struct PreparedImage::Storage final
     UINT receiptFormat = 0;
     std::optional<ClipboardFingerprint::Binding> binding;
 };
+#pragma warning(pop)
 
 static_assert(sizeof(CodecMemoryStream) <= 256);
 

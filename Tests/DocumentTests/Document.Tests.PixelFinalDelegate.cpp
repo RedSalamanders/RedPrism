@@ -1,10 +1,10 @@
 #include "Document.Tests.PixelFinalDelegate.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "PixelMoveClosureWork.h"
 #include "SelectionOutlineGestureJob.h"
 #include "SelectionOutlineGestureMemory.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -69,6 +69,10 @@ bool Matches(const DocumentSession& session, const Pixels& expected)
     return actual == expected;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Memory final
 {
     std::atomic<unsigned> queries{0};
@@ -80,7 +84,12 @@ struct Memory final
         return true;
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Probe final
 {
     std::thread::id owner = std::this_thread::get_id();
@@ -113,9 +122,14 @@ struct Probe final
         }
     }
 };
+#pragma warning(pop)
 
 struct Fixture;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class FinalStage final : public Job
 {
   public:
@@ -279,6 +293,7 @@ class FinalStage final : public Job
     bool _applied = false;
     std::optional<JobResult> _failure;
 };
+#pragma warning(pop)
 
 std::unique_ptr<Job> MakeFinalStage(void* raw, SelectionOutlineGestureState& result, SelectionPixelFinalWork work)
 {
@@ -291,6 +306,10 @@ std::unique_ptr<Job> MakeFinalStage(void* raw, SelectionOutlineGestureState& res
     return std::make_unique<FinalStage>(probe, result, std::move(work), result.scheduler, result.session);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     Memory memory;
@@ -369,6 +388,7 @@ struct Fixture final
             Broken("settle-original-admission");
     }
 };
+#pragma warning(pop)
 
 void VerifyDelegated(bool duplicate, int& failures)
 {

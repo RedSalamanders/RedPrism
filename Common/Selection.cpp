@@ -1,6 +1,7 @@
 #include "Selection.h"
 #include "BoundedLassoGesture.h"
 #include "SelectionHitWork.h"
+#include <cstddef>
 
 #include "CanvasSize.h"
 #include "RasterWork.h"
@@ -57,6 +58,10 @@ class WandProgress final
     MagicWand::WorkObserver _observer;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class WandPixels final
 {
   public:
@@ -74,6 +79,7 @@ class WandPixels final
   private:
     PixelBuffer _privateCopy;
 };
+#pragma warning(pop)
 
 // Reserve once, then initialize bounded spans. Allocation itself has no cancellation latency guarantee.
 [[nodiscard]] bool InitializeWandBytes(std::vector<std::uint8_t>& bytes, std::size_t count,
@@ -147,6 +153,10 @@ void CancelledWand(WandFailure* failure) noexcept
 // column cell it crosses, its signed height (`cover`) and that height weighted by the share of the cell right of
 // the edge (`area`). The running sum of cover across a row is the winding to the left of a cell; adding the
 // cell's own area gives its coverage. Cell 0 collects everything left of the canvas, cell width + 1 the rest.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct CoverageCells
 {
     int width = 0;
@@ -154,6 +164,7 @@ struct CoverageCells
     std::unique_ptr<float[]> cover;
     std::unique_ptr<float[]> area;
 };
+#pragma warning(pop)
 
 [[nodiscard]] bool DepositEdge(CoverageCells& cells, Vec2 from, Vec2 to, const CancelToken& cancellation)
 {
@@ -469,12 +480,12 @@ enum Heading : std::uint8_t
 
 [[nodiscard]] constexpr std::uint8_t TurnRight(std::uint8_t d) noexcept
 {
-    return d == North ? East : static_cast<std::uint8_t>(d << 1);
+    return d == North ? static_cast<std::uint8_t>(East) : static_cast<std::uint8_t>(d << 1);
 }
 
 [[nodiscard]] constexpr std::uint8_t TurnLeft(std::uint8_t d) noexcept
 {
-    return d == East ? North : static_cast<std::uint8_t>(d >> 1);
+    return d == East ? static_cast<std::uint8_t>(North) : static_cast<std::uint8_t>(d >> 1);
 }
 
 [[nodiscard]] constexpr std::uint8_t LowestBit(std::uint8_t bits) noexcept
@@ -1393,7 +1404,7 @@ void DocumentSession::BeginMarquee(Vec2 point, SelectionMode mode)
     const Vec2 anchor{std::round(point.x), std::round(point.y)};
     InvalidateLassoPendingIntents();
     ++_lassoOpening;
-    _lassoDraft = LassoDraft{{anchor}, std::nullopt, mode, marqueeKind, anchor};
+    _lassoDraft = LassoDraft({anchor}, std::nullopt, mode, marqueeKind, anchor);
 }
 
 void DocumentSession::BeginLasso(Vec2 point, SelectionMode mode)
@@ -1405,7 +1416,7 @@ void DocumentSession::BeginLasso(Vec2 point, SelectionMode mode)
     }
     InvalidateLassoPendingIntents();
     ++_lassoOpening;
-    _lassoDraft = LassoDraft{{point}, std::nullopt, mode, lassoKind, std::nullopt};
+    _lassoDraft = LassoDraft({point}, std::nullopt, mode, lassoKind, std::nullopt);
 }
 
 void DocumentSession::DragMarquee(Vec2 point, bool square, bool fromCenter)

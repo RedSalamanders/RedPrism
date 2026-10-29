@@ -42,6 +42,10 @@ enum class Mode
     PublishedCommand
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct State final : GpuCommandSourceReceiver
 {
     State(JobScheduler& owner, GpuCommandPump& commandPump, ID3D11Device& sourceDevice, std::uint64_t generation,
@@ -97,6 +101,7 @@ struct State final : GpuCommandSourceReceiver
         ++failureCallbacks;
     }
 };
+#pragma warning(pop)
 
 HRESULT CreateNonEmptyCommandList(ID3D11Device& device, wil::com_ptr_nothrow<ID3D11CommandList>& command) noexcept
 {
@@ -121,6 +126,10 @@ HRESULT CreateNonEmptyCommandList(ID3D11Device& device, wil::com_ptr_nothrow<ID3
     return deferred->FinishCommandList(FALSE, command.put());
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class EmptyShutdownJob final : public Job
 {
   public:
@@ -225,6 +234,7 @@ class EmptyShutdownJob final : public Job
     State& _state;
     bool _recording = false;
 };
+#pragma warning(pop)
 
 bool WaitForHandle(HANDLE event, DWORD timeoutMs) noexcept
 {

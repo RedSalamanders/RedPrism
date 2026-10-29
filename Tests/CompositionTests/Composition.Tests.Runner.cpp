@@ -1,5 +1,3 @@
-#include "../Support/Support.Tests.DocumentFixture.h"
-#include "../Support/Support.Tests.FailureReports.h"
 #include "Adjust.h"
 #include "BrushCompute.h"
 #include "BrushStroke.h"
@@ -61,7 +59,10 @@
 #include "Document.h"
 #include "FrameScheduler.h"
 #include "Runtime.Tests.ViewportFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.FailureReports.h"
 #include "TransformOverlay.h"
+#include <cstddef>
 
 #include <algorithm>
 #include <array>
@@ -194,6 +195,10 @@ HRESULT MakeWarp(wil::com_ptr_nothrow<ID3D11Device>& device,
                              D3D11_SDK_VERSION, device.put(), &used, context.put());
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Harness
 {
     wil::com_ptr_nothrow<ID3D11Device> device;
@@ -229,6 +234,7 @@ struct Harness
         return pixels;
     }
 };
+#pragma warning(pop)
 
 [[nodiscard]] CanvasDocument Document2x2()
 {
@@ -1962,7 +1968,8 @@ void TestLayerAdjustmentPreview(Harness& h)
     const auto setUpper = [&](int x, int y, std::array<std::uint8_t, 4> bgra)
     {
         std::copy(bgra.begin(), bgra.end(),
-                  upperBytes.begin() + (static_cast<std::size_t>(y) * 6u + static_cast<std::size_t>(x)) * 4u);
+                  upperBytes.begin() + static_cast<std::ptrdiff_t>(
+                                           (static_cast<std::size_t>(y) * 6u + static_cast<std::size_t>(x)) * 4u));
     };
     setUpper(2, 0, {20, 240, 20, 255});
     setUpper(4, 1, {20, 20, 120, 160});

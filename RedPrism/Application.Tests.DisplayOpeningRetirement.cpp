@@ -1,6 +1,6 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <cstdio>
 #include <memory>

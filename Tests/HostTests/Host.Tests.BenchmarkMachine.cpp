@@ -1,7 +1,7 @@
 #include "Host.Tests.BenchmarkMachine.h"
 
-#include "../../Common/BenchmarkMachine.h"
-#include "../../Common/Jobs.h"
+#include "Common/BenchmarkMachine.h"
+#include "Common/Jobs.h"
 
 #include <array>
 #include <cmath>

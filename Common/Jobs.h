@@ -193,6 +193,10 @@ struct JobExecutionObserver final
     void (*cancellationObserved)(void*, JobExecutionNotice) noexcept = nullptr;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class JobContext final
 {
   public:
@@ -218,6 +222,7 @@ class JobContext final
     Report _report;
     void* _context;
 };
+#pragma warning(pop)
 
 class JobScheduler;
 

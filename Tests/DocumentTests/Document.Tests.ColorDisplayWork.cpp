@@ -1,7 +1,7 @@
 #include "Document.Tests.ColorDisplayWork.h"
 
-#include "../../Common/ColorDisplayWork.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Common/ColorDisplayWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>

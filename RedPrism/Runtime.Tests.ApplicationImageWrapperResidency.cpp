@@ -1,10 +1,10 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.LayerCopyWorkTestGate.h"
 #include "Runtime.Tests.MaskWorkTestGate.h"
 #include "Runtime.Tests.ShapeWorkTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "resource.h"
 
 #include <array>
@@ -116,6 +116,10 @@ int Application::RunImageWrapperResidencySelfTest(unsigned int kind) noexcept
                     const ShapeDraft draft{ShapeKind::Rectangle, {0, 0}, {0, 0, 1, 1}, 0};
                     receipt = QueueHostInput(HostShapeFinishInput{draft, 0xFF6B4F35});
                 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
                 struct Held final
                 {
                     Application& owner;
@@ -125,7 +129,9 @@ int Application::RunImageWrapperResidencySelfTest(unsigned int kind) noexcept
                     Guid revision;
                     std::uint64_t serial;
                     bool visited = false, unchanged = false;
-                } held{*this, *gate, receipt, source, revision, serial};
+                }
+#pragma warning(pop)
+                held{*this, *gate, receipt, source, revision, serial};
                 const auto dispatch = [](void* context, void* native) noexcept
                 {
                     auto& state = *static_cast<Held*>(context);

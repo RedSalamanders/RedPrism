@@ -1,5 +1,4 @@
 #include "Composition.Tests.RecordedPixelPreview.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "CanvasViewport.h"
 #include "GpuCommandPump.h"
 #include "GpuWork.h"
@@ -9,6 +8,7 @@
 #include "RasterEditWork.h"
 #include "RecordedDisplayGraph.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "WarpPreviewWork.h"
 #include <algorithm>
 #include <array>
@@ -260,6 +260,10 @@ bool CheckRefusalsForWork(RecordedDisplayGraph& graph, ID3D11Device* device, con
     return overlay == E_INVALIDARG && graph.IsUnpreparedForTest();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class ParentState final : public GpuCommandSourceReceiver, public GpuCompletionReceiver
 {
   public:
@@ -683,7 +687,12 @@ class ParentState final : public GpuCommandSourceReceiver, public GpuCompletionR
         lastUseCapture = {};
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class RecordedBlitParentJob final : public Job
 {
   public:
@@ -783,6 +792,7 @@ class RecordedBlitParentJob final : public Job
   private:
     ParentState& _state;
 };
+#pragma warning(pop)
 
 bool WaitForParent(JobScheduler& scheduler, OwnerWorkMultiplexer& routes, ParentState& state) noexcept
 {

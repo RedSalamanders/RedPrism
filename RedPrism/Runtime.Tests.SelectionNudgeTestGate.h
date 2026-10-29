@@ -11,6 +11,10 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct SelectionNudgeTestGate final
 {
     static constexpr UINT kMessage = WM_APP + 0x4cb;
@@ -31,3 +35,4 @@ struct SelectionNudgeTestGate final
     std::atomic<unsigned int> captures{0};
     std::atomic<unsigned int> residentGrowths{0}, residencyRefreshes{0};
 };
+#pragma warning(pop)

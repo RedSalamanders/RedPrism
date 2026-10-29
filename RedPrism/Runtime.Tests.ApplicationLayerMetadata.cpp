@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.LayerMetadataTestGate.h"
@@ -83,6 +83,10 @@ int Application::RunLayerMetadataSelfTest() noexcept
         Case{"residency-refresh-cancel", Mode::ResidencyRefreshCancel, {}, {}},
     };
     constexpr UINT kPumpMessage = WM_APP + 0x5c1;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -97,6 +101,8 @@ int Application::RunLayerMetadataSelfTest() noexcept
         bool visited = false, held = false, viewPending = false, cancelPending = false;
         int originalUndoCount = 0;
     };
+#pragma warning(pop)
+
     int checks = 0;
     const auto expect = [&checks](const char* mode, const char* check, bool condition) noexcept
     {
@@ -451,6 +457,9 @@ int Application::RunLayerMetadataSelfTest() noexcept
                 title = L"Layer Blend Mode";
                 receipt = QueueHostInput(HostCommandInput{ChromeHost::kCommandBlendNext});
                 break;
+            case ::LayerMetadataKind::FlipHorizontal:
+            case ::LayerMetadataKind::FlipVertical:
+                break;
             }
             const bool finished = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
             const auto& currentLasso = _session.PendingLasso();
@@ -525,6 +534,10 @@ int Application::RunLayerMetadataSelfTest() noexcept
     // Exercise the ordinary idle command entrypoint. QueueHostInput alone would miss a synchronous
     // OnCommand bypass, even if every admitted publication test passed.
     const int flipChecks = checks;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct FlipState final
     {
         Application& owner;
@@ -537,6 +550,8 @@ int Application::RunLayerMetadataSelfTest() noexcept
         std::uint64_t ordinal = 0;
         bool visited = false, held = false, cancelPending = false;
     };
+#pragma warning(pop)
+
     constexpr std::array flipCases{
         Case{"ordinary", Mode::Rename, {}, {}},
         Case{"younger-undo", Mode::Ordered, {}, {}},

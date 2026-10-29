@@ -36,6 +36,10 @@ int Application::RunSelectionMoveCallerSelfTest() noexcept
         ToolInputAllocation,
         CommandInputBudget,
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -61,6 +65,7 @@ int Application::RunSelectionMoveCallerSelfTest() noexcept
         bool latePointerIgnored = false;
         bool youngerPending = false;
     };
+#pragma warning(pop)
 
     int passed = 0;
     int failed = 0;

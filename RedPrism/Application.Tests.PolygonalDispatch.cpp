@@ -1,5 +1,4 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ImageCodecs.h"
 #include "KeyboardState.h"
@@ -7,6 +6,7 @@
 #include "Resources.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.ColorWorkTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "resource.h"
 
 #include <array>
@@ -24,6 +24,10 @@
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct PolygonalSchedulerCapacityGate final
 {
     HANDLE lastStarted = nullptr;
@@ -32,7 +36,12 @@ struct PolygonalSchedulerCapacityGate final
     std::atomic<unsigned> completed{0};
     std::atomic<unsigned> failed{0};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PolygonalSchedulerCapacityJob final : public Job
 {
   public:
@@ -64,7 +73,12 @@ class PolygonalSchedulerCapacityJob final : public Job
     PolygonalSchedulerCapacityGate& _gate;
     bool _block;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PolygonalHeaderPrompts final : public Prompts
 {
   public:
@@ -110,6 +124,7 @@ class PolygonalHeaderPrompts final : public Prompts
   private:
     const Prompts& _delegate;
 };
+#pragma warning(pop)
 
 [[nodiscard]] bool IsNamedEnabledButton(IRawElementProviderFragment* fragment, std::wstring_view name) noexcept
 {
@@ -520,7 +535,7 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             if (alt)
                 keys[VK_MENU] = 0x80;
             KeyboardState::Write(keys);
-            const WPARAM modifiers = MK_CONTROL | (shift ? MK_SHIFT : 0);
+            const WPARAM modifiers = static_cast<WPARAM>(MK_CONTROL | (shift ? MK_SHIFT : 0));
             for (const Vec2 corner : std::array<Vec2, 3>{{{left + 4, 1}, {left + 4, 5}, {left, 5}}})
             {
                 owner->_lastPressTick = 0;
@@ -1210,13 +1225,19 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         }
         if (heldHistory)
         {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
             struct Gate final
             {
                 wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
                 wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
                 std::atomic<unsigned> visits{0};
                 std::atomic<DWORD> waited{WAIT_FAILED};
-            } gate;
+            }
+#pragma warning(pop)
+            gate;
             // The worker borrows only event/scalar state. Join before destroying that stack state on every exit.
             const auto joinGate = wil::scope_exit(
                 [&]() noexcept

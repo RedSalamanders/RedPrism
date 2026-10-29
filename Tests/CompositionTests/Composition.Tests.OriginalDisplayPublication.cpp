@@ -54,6 +54,10 @@ DocumentSelection Rectangle(double x)
     return {false, SelectionLoops{{Vec2{x, 0}, Vec2{x + 1, 0}, Vec2{x + 1, 1}, Vec2{x, 1}}}};
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Client final : public CommittedDisplayClient
 {
   public:
@@ -120,6 +124,7 @@ class Client final : public CommittedDisplayClient
                session.history.CanRedo();
     }
 };
+#pragma warning(pop)
 
 template <typename Predicate> bool Until(JobScheduler& jobs, OwnerWorkMultiplexer& routes, Predicate predicate) noexcept
 {
@@ -158,6 +163,10 @@ struct Observation final
     unsigned stages = 0;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class Parent final : public Job
 {
     enum class Stage
@@ -452,6 +461,7 @@ class Parent final : public Job
         pump.parent = nullptr;
     }
 };
+#pragma warning(pop)
 
 bool PixelPump::HasReady() const noexcept
 {
@@ -478,6 +488,10 @@ enum class ClosePoint
     RetireTransportWorker
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ClosePayload final
 {
     std::unique_ptr<OriginalDisplayPublication> publication;
@@ -486,7 +500,12 @@ struct ClosePayload final
     bool captured = false;
     std::uint64_t documentSerial = 0;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct CloseState final
 {
     std::unique_ptr<ClosePayload> retired;
@@ -507,7 +526,12 @@ struct CloseState final
         workerRetired = true;
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class CloseParent final : public Job, public OwnerWorkPump
 {
     enum class Stage
@@ -717,6 +741,7 @@ class CloseParent final : public Job, public OwnerWorkPump
         BoundaryFailure(__LINE__);
     }
 };
+#pragma warning(pop)
 
 bool RunClose(D3D_DRIVER_TYPE driver, ClosePoint point)
 {
@@ -773,12 +798,18 @@ bool RunClose(D3D_DRIVER_TYPE driver, ClosePoint point)
     commands.StopOwner();
     display.StopOwner();
     queue.StopNotifications();
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct Closing
     {
         CloseState& state;
         CommittedDisplayController& display;
         GpuWorkQueue& queue;
-    } closing{state, display, queue};
+    }
+#pragma warning(pop)
+    closing{state, display, queue};
     jobs.Close({[](void* raw) noexcept
                 {
                     auto& value = *static_cast<Closing*>(raw);
@@ -904,11 +935,17 @@ bool Run(D3D_DRIVER_TYPE driver, Scenario scenario)
         BoundaryFailure(__LINE__);
     display.StopOwner();
     queue.StopNotifications();
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct Closing
     {
         CommittedDisplayController& display;
         GpuWorkQueue& queue;
-    } closing{display, queue};
+    }
+#pragma warning(pop)
+    closing{display, queue};
     jobs.Close({[](void* p) noexcept
                 {
                     auto& c = *static_cast<Closing*>(p);

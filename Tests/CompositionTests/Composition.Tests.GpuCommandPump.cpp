@@ -25,6 +25,10 @@ void Expect(bool passed, const char* name) noexcept
     gFailures += passed ? 0 : 1;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct State final : GpuCommandSourceReceiver
 {
     enum class Stage
@@ -83,7 +87,12 @@ struct State final : GpuCommandSourceReceiver
         failure = status;
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class Recorder final : public Job
 {
   public:
@@ -238,7 +247,12 @@ class Recorder final : public Job
   private:
     State& _state;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Independent final : public Job
 {
   public:
@@ -255,6 +269,7 @@ class Independent final : public Job
   private:
     bool& _done;
 };
+#pragma warning(pop)
 
 template <typename Predicate> bool Until(JobScheduler& scheduler, Predicate ready) noexcept
 {
@@ -335,10 +350,16 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool ret
     state.testJoinedSource = joinedSource;
     state.disposition = retainOriginal ? GpuCommandFailureDisposition::RetainOriginalForRecovery
                                        : GpuCommandFailureDisposition::CancelOriginal;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct Cleanup final
     {
         State& state;
-    } cleanup{state};
+    }
+#pragma warning(pop)
+    cleanup{state};
     const auto close = wil::scope_exit(
         [&]() noexcept
         {

@@ -1,6 +1,6 @@
 #include "Document.Tests.SelectionMoveOpening.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "SelectionMoveWork.h"
 

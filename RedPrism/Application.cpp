@@ -2,11 +2,11 @@
 #include "MonitorDiagnostics.h"
 #include "Runtime.Tests.ViewportFixture.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "DocumentDraft.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 #include "SelectionCommandWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "PipelineTrace.h"
 
@@ -4323,7 +4323,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     if (_traceWandForTest)
     {
         const CanvasHole hole = _chrome->HolePixels();
-        const Vec2 view{point.x - hole.left, point.y - hole.top};
+        const Vec2 view{static_cast<float>(point.x) - hole.left, static_cast<float>(point.y) - hole.top};
         const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
         const bool inside = view.x >= 0 && view.y >= 0 && view.x < hole.width && view.y < hole.height;
         std::printf("WAND POINTER message=%u client=%ld,%ld document=%.3f,%.3f modifiers=%u inside=%d\n", message,
@@ -4497,6 +4497,9 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
             SyncBrushCursor();
         }
         return;
+    case ::DxUi::PointerAction::Cancel:
+    case ::DxUi::PointerAction::Move:
+    case ::DxUi::PointerAction::Up:
     default:
         if (!DragPointer(event, view) && event.action == DxUi::PointerAction::Move)
         {
@@ -5918,7 +5921,7 @@ void Application::NewDocument() noexcept
         ReportHostAdmission(QueueHostInput(HostNewInput{}));
         return;
     }
-    _hostExecutionError = StartDocumentLifecycle(std::array<int, 2>{kDefaultClientWidth, kDefaultClientHeight});
+    _hostExecutionError = StartDocumentLifecycle(std::array<int, 2>{{kDefaultClientWidth, kDefaultClientHeight}});
     if (FAILED(_hostExecutionError))
     {
         ++_errorsShown;
@@ -8240,6 +8243,18 @@ BrushKind Application::BrushKindFor() const noexcept
         return BrushKind::Clone;
     case EditorTool::Smear:
         return BrushKind::Blur;
+    case ::EditorTool::Brush:
+    case ::EditorTool::Count:
+    case ::EditorTool::Crop:
+    case ::EditorTool::Eyedropper:
+    case ::EditorTool::Gradient:
+    case ::EditorTool::Hand:
+    case ::EditorTool::Lasso:
+    case ::EditorTool::Marquee:
+    case ::EditorTool::Move:
+    case ::EditorTool::Shape:
+    case ::EditorTool::Wand:
+    case ::EditorTool::Zoom:
     default:
         return _session.brushMode == BrushToolMode::Erase ? BrushKind::Erase : BrushKind::Paint;
     }
@@ -9120,6 +9135,10 @@ int Application::RunRefusalSelfTest() noexcept
     {
         fresh();
         constexpr int kSide = 2100;
+        const bool previousTrace = _traceWandForTest;
+        _traceWandForTest = true;
+        const auto restoreTrace =
+            wil::scope_exit([this, previousTrace]() noexcept { _traceWandForTest = previousTrace; });
         std::vector<std::uint8_t> checker(static_cast<std::size_t>(kSide) * static_cast<std::size_t>(kSide));
         std::vector<std::uint8_t> dots(checker.size() * 4u, 0);
         for (int y = 0; y < kSide; ++y)
@@ -9142,10 +9161,16 @@ int Application::RunRefusalSelfTest() noexcept
         const int errors = _errorsShown;
         OnCommand(ChromeHost::kCommandLoadMaskSelection);
         const bool maskAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+        const int maskErrors = _errorsShown - errors;
+        const UINT maskErrorId = _lastErrorId;
+        const bool maskHasSelection = _session.Selection().has_value();
         const bool maskRefused = maskAcknowledged && _errorsShown == errors + 1 &&
                                  _lastErrorId == IDS_ERROR_SELECTION_DETAILED && !_session.Selection().has_value();
         OnCommand(ChromeHost::kCommandLoadLayerSelection);
         const bool layerAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+        const int layerErrors = _errorsShown - errors;
+        const UINT layerErrorId = _lastErrorId;
+        const bool layerHasSelection = _session.Selection().has_value();
         const bool layerRefused = layerAcknowledged && _errorsShown == errors + 2 &&
                                   _lastErrorId == IDS_ERROR_SELECTION_DETAILED && !_session.Selection().has_value();
         OnCommand(ChromeHost::kCommandNewLayer);
@@ -9155,8 +9180,14 @@ int Application::RunRefusalSelfTest() noexcept
         if (!maskRefused || !layerRefused || !emptySilent)
         {
             SelfTestFailure(std::format(L"Load Mask / Layer Selection did not say why it loaded nothing (mask {}, "
-                                        L"layer {}, blank layer silent {}, errors {}).\n",
-                                        maskRefused, layerRefused, emptySilent, _errorsShown - errors)
+                                        L"layer {}, blank layer silent {}, errors {}; "
+                                        L"mask settled={} errors={} id={} selection={}; "
+                                        L"layer settled={} errors={} id={} selection={}; canvas={}x{}).\n",
+                                        maskRefused, layerRefused, emptySilent, _errorsShown - errors, maskAcknowledged,
+                                        maskErrors, maskErrorId, maskHasSelection, layerAcknowledged, layerErrors,
+                                        layerErrorId, layerHasSelection,
+                                        _session.Document().has_value() ? _session.Document()->width : 0,
+                                        _session.Document().has_value() ? _session.Document()->height : 0)
                                 .c_str());
             return 5;
         }

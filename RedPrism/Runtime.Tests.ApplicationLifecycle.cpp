@@ -1,9 +1,9 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.DocumentLifecycleTestGate.h"
 #include "Selection.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "resource.h"
 
 #include <array>
@@ -33,6 +33,10 @@ int Application::RunDocumentLifecycleSelfTest() noexcept
         StaleHistoryEpoch,
         NewThenUndo,
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -49,6 +53,7 @@ int Application::RunDocumentLifecycleSelfTest() noexcept
         bool cancelPending = false;
         bool youngerPending = false;
     };
+#pragma warning(pop)
 
     unsigned int checks = 0;
     int failures = 0;
@@ -115,6 +120,13 @@ int Application::RunDocumentLifecycleSelfTest() noexcept
             state.youngerPending = state.youngerUndo->Read().outcome == HostOutcome::Pending &&
                                    owner._historyWork.Busy() && owner._documentLifecycleTicket.has_value();
             break;
+        case Mode::AdmissionFailure:
+        case Mode::CaptureFailure:
+        case Mode::CloseAbsentPreservesRedo:
+        case Mode::CloseProject:
+        case Mode::HistoryFailure:
+        case Mode::NewDefault:
+        case Mode::PreparationFailure:
         default:
             break;
         }
@@ -276,6 +288,15 @@ int Application::RunDocumentLifecycleSelfTest() noexcept
         case Mode::CloseAbsentPreservesRedo:
             state.receipt = QueueHostInput(HostCloseProjectInput{});
             break;
+        case Mode::AdmissionFailure:
+        case Mode::CancelAfterPreparation:
+        case Mode::CancelBeforePreparation:
+        case Mode::CaptureFailure:
+        case Mode::HistoryFailure:
+        case Mode::PreparationFailure:
+        case Mode::StaleGeneration:
+        case Mode::StaleHistoryEpoch:
+        case Mode::StaleReplacement:
         default:
             state.receipt = QueueHostInput(HostNewInput{});
             break;

@@ -322,8 +322,9 @@ int RunSelectionOutlineGpuTests()
         for (std::size_t baseIndex = 0; baseIndex < bases.size(); ++baseIndex)
         {
             const auto& quarters = clips[clipIndex];
-            const std::array<float, 4> clip{quarters[0] / 4.0f, quarters[1] / 4.0f, quarters[2] / 4.0f,
-                                            quarters[3] / 4.0f};
+            const std::array<float, 4> clip{
+                static_cast<float>(quarters[0]) / 4.0f, static_cast<float>(quarters[1]) / 4.0f,
+                static_cast<float>(quarters[2]) / 4.0f, static_cast<float>(quarters[3]) / 4.0f};
             Target clippedTarget;
             const HRESULT result =
                 CreateTarget(device.get(), 256, 256, bases[baseIndex], clippedTarget)

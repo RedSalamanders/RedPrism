@@ -1,6 +1,6 @@
 #include "Host.Tests.PathInputTransfer.h"
 
-#include "../../RedPrism/ContinuationRequests.h"
+#include "RedPrism/ContinuationRequests.h"
 
 #include <array>
 #include <cstddef>

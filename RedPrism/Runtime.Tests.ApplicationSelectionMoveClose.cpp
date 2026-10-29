@@ -54,6 +54,10 @@ int Application::RunSelectionMoveCloseSelfTest() noexcept
         Mask,
         Epoch,
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -98,6 +102,8 @@ int Application::RunSelectionMoveCloseSelfTest() noexcept
         std::size_t redoCountAfterMutation = 0;
         DocumentHistory::StateView historyAfterMutation;
     };
+#pragma warning(pop)
+
     constexpr UINT kPumpMessage = WM_APP + 0x4ca;
     int passed = 0;
     int failed = 0;
@@ -414,6 +420,28 @@ int Application::RunSelectionMoveCloseSelfTest() noexcept
         case Mode::TrimIndex:
             gate->throwHistoryStage = DocumentHistory::PrepareStage::TrimIndex;
             break;
+        case Mode::ActiveLayer:
+        case Mode::CancelOriginal:
+        case Mode::CaptureFailure:
+        case Mode::Crop:
+        case Mode::End:
+        case Mode::Epoch:
+        case Mode::EscapeProducer:
+        case Mode::Generation:
+        case Mode::Mask:
+        case Mode::Nested:
+        case Mode::NoOpEnd:
+        case Mode::Ordered:
+        case Mode::PendingCancel:
+        case Mode::PointerRelease:
+        case Mode::QueueProducer:
+        case Mode::RedoProducer:
+        case Mode::Replacement:
+        case Mode::SavedDuringWorker:
+        case Mode::StaleOpening:
+        case Mode::UndoProducer:
+        case Mode::ViewPump:
+        case Mode::WorkerFailure:
         default:
             break;
         }

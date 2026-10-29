@@ -15,6 +15,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct SelectionMoveClosePayload final : DeferredReleaseNode
 {
     std::shared_ptr<SharedPublicationMemory> geometryMemory; // outlives every contained geometry owner
@@ -38,6 +42,8 @@ struct SelectionMoveClosePayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireSelectionMoveClosePayload final
 {
     void operator()(SelectionMoveClosePayload* payload) const noexcept
@@ -50,6 +56,10 @@ struct RetireSelectionMoveClosePayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::SelectionMoveCloseJob final : public Job
 {
   public:
@@ -260,6 +270,7 @@ class Application::SelectionMoveCloseJob final : public Job
     JobTicket _ticket;
     bool _captured = false;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartSelectionMoveClose(std::uint64_t opening, bool cancel) noexcept
 {

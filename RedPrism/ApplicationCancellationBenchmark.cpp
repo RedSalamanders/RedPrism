@@ -648,6 +648,8 @@ void Application::FinishUiCancellationTrial(const char* outcome, bool measured) 
             return "stop-overlap";
         case UiCancellationBody::CheckOutcome::ObservedAfterAcceptance:
             return "after-acceptance";
+        case ::UiCancellationBody::CheckOutcome::ClockFailed:
+        case ::UiCancellationBody::CheckOutcome::Malformed:
         default:
             return "malformed";
         }

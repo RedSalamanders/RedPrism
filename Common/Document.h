@@ -298,7 +298,7 @@ class Raster
     [[nodiscard]] const std::vector<RasterTile>& Tiles() const noexcept;
     [[nodiscard]] std::uint8_t Fill() const noexcept
     {
-        return _storage ? _storage->fill : 0;
+        return _storage ? _storage->fill : std::uint8_t{0};
     }
     // The region [x, x + width) × [y, y + height) of this raster written to `out` (`outStride` bytes per row),
     // without assembling a sparse raster; pixels outside it read `fill`.
@@ -336,6 +336,10 @@ class Raster
     // The intrusive base outlives the last shared_ptr when large storage is handed to the worker release queue.
 #pragma warning(push)
 #pragma warning(disable : 4324) // the intrusive release node requires 16-byte storage alignment
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Storage : DeferredReleaseNode
     {
         explicit Storage(std::uint64_t identity) noexcept;
@@ -360,7 +364,13 @@ class Raster
         std::optional<std::uint64_t> gridReplacementWorkspaceBytes;
         std::uint64_t graphNodes = 1;
         unsigned int graphDepth = 0;
+#if defined(_M_ARM64)
+        // Occupy the base tail padding: MSVC C5291 warns that deriving through it can violate the ARM64 ABI.
+        std::uint64_t arm64AbiTailPadding = 0;
+#endif
     };
+#pragma warning(pop)
+
 #pragma warning(pop)
     struct FreeStorage final
     {
@@ -368,11 +378,18 @@ class Raster
     };
 #pragma warning(push)
 #pragma warning(disable : 4324) // inherits the intrusive release node's alignment
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct ChargedStorage final : Storage
     {
         explicit ChargedStorage(std::uint64_t identity) noexcept;
         std::shared_ptr<const void> lifetime;
     };
+    static_assert(sizeof(ChargedStorage) == sizeof(Storage) + sizeof(std::shared_ptr<const void>));
+#pragma warning(pop)
+
 #pragma warning(pop)
     struct FreeChargedStorage final
     {

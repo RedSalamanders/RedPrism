@@ -1,8 +1,8 @@
 #include "Document.Tests.PreparedRasterHistory.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Executor.h"
 #include "RasterEditWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

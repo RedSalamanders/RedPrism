@@ -1,6 +1,7 @@
 #include "Renderer.h"
 #include "MonitorDiagnostics.h"
 #include "RecordedDisplayGraph.h"
+#include <cstddef>
 
 #include "CanvasRenderer.h"
 #include "CanvasViewport.h"
@@ -185,7 +186,7 @@ void Renderer::RecordDeviceIdentity(bool warp, bool adapterOwnsWindowMonitor) no
 
     std::array<wchar_t, 384> message{};
     const auto written =
-        std::format_to_n(message.data(), message.size() - 1,
+        std::format_to_n(message.data(), static_cast<std::ptrdiff_t>(message.size() - 1),
                          L"Direct3D device created on {} (LUID {:08X}-{:08X}, {}, adapter owns "
                          L"window monitor: {}).\n",
                          _deviceInfo.adapterName.data(), static_cast<unsigned long>(_deviceInfo.adapterLuid.HighPart),

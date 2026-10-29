@@ -397,6 +397,10 @@ template <class Iterator> class CheckedIterator final
   private:
     Iterator _iterator;
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 template <class Range> class CheckedRangeView final
 {
   public:
@@ -413,6 +417,8 @@ template <class Range> class CheckedRangeView final
   private:
     Range& _range;
 };
+#pragma warning(pop)
+
 template <class Range> auto CheckedRange(Range& range) noexcept
 {
     return CheckedRangeView<Range>(range);

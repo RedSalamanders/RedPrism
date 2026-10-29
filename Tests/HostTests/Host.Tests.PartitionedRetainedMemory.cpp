@@ -76,6 +76,10 @@ struct State final
     SharedRetainedMemoryLease* uniqueTemporary = nullptr;
     JobResult completed;
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PartitionJob final : public Job
 {
   public:
@@ -146,6 +150,8 @@ class PartitionJob final : public Job
     }
     State& _state;
 };
+#pragma warning(pop)
+
 void Submit(JobScheduler& scheduler, State& state, bool preclaim = true, bool deferred = true)
 {
     state.scheduler = &scheduler;

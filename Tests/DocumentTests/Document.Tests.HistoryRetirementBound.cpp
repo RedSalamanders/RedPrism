@@ -1,7 +1,7 @@
 #include "Document.Tests.HistoryRetirementBound.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <atomic>
@@ -1175,6 +1175,10 @@ void ScopeBoundResidencyLeaseRefusesRecursiveMaterialization()
                     "released-scope-allows-one-subsequent-shared-cache-publication");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ResidencyNoticeProbe final
 {
     std::atomic<int> notices{0};
@@ -1189,6 +1193,7 @@ struct ResidencyNoticeProbe final
         probe.notices.fetch_add(1, std::memory_order_release);
     }
 };
+#pragma warning(pop)
 
 void ResidencySubscriptionsNotifyBoundedlyAndFenceStop()
 {
@@ -1261,6 +1266,10 @@ void ResidencySubscriptionsNotifyBoundedlyAndFenceStop()
     for (auto& subscription : capacitySubscriptions)
         subscription.Stop();
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct InFlightNotice final
     {
         std::latch entered{1};
@@ -1276,7 +1285,9 @@ void ResidencySubscriptionsNotifyBoundedlyAndFenceStop()
             notice.release.wait();
             notice.callbackFinished.store(true, std::memory_order_release);
         }
-    } inFlight;
+    }
+#pragma warning(pop)
+    inFlight;
     Raster::ResidencySubscription fenced;
     const bool fenceStarted = fenced.Start(&InFlightNotice::OnChanged, &inFlight);
     if (!fenceStarted)
@@ -1328,7 +1339,7 @@ void StoppedResidencyWaitersReturnBeforeTheHolderReleases()
     (void)alreadyLocal.Cancel();
     (void)alreadyShutdown.Cancel();
     auto localRefused = Raster::AcquireResidencyLease(alreadyLocal.Token());
-    auto shutdownRefused = Raster::AcquireResidencyLease(CancelToken{{}, alreadyShutdown.Token().LocalToken()});
+    auto shutdownRefused = Raster::AcquireResidencyLease(CancelToken({}, alreadyShutdown.Token().LocalToken()));
     ExpectResidency(!localRefused.Held() && !shutdownRefused.Held(),
                     "pre-stopped-local-and-shutdown-tokens-never-acquire-residency");
     for (const bool shutdown : {false, true})
@@ -1344,7 +1355,7 @@ void StoppedResidencyWaitersReturnBeforeTheHolderReleases()
         }
         CancelSource stop;
         const auto epoch = Raster::ResidencyEpoch();
-        const CancelToken token = shutdown ? CancelToken{{}, stop.Token().LocalToken()} : stop.Token();
+        const CancelToken token = shutdown ? CancelToken({}, stop.Token().LocalToken()) : stop.Token();
         std::latch started{1};
         std::atomic<bool> acquired{false};
         std::thread waiter(

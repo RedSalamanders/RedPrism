@@ -3,7 +3,6 @@
 // It uses the existing hidden WARP host, ApplicationShutdownTestProbe, and real Application::Shutdown path.
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "ChromeHost.h"
 #include "DeferredRelease.h"
@@ -11,6 +10,7 @@
 #include "ModalProbePrompts.h"
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 #include "Runtime.Tests.CloneReadbackTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -148,6 +148,10 @@ int Application::RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instanc
         const std::uint64_t ordinal = accepted ? accepted->ordinal : 0;
         const std::uint64_t opening = owner->_canvasBrushInput.Opening();
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             Application& owner;
@@ -162,7 +166,9 @@ int Application::RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instanc
             bool workerHeld = false;
             bool adopted = false;
             bool reached = false;
-        } state{*owner, gate, live, ordinal, opening};
+        }
+#pragma warning(pop)
+        state{*owner, gate, live, ordinal, opening};
         const auto dispatch = [](void* opaque, void* native) noexcept
         {
             auto& state = *static_cast<State*>(opaque);
@@ -241,6 +247,10 @@ int Application::RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instanc
                scenario, "literal-red-blue-green-pixels-history-and-no-gpu-preparation-before-shutdown");
 
         probe.draft = owner->_session.WeakPendingBrushForTest();
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct DetachState final
         {
             Application& owner;
@@ -254,8 +264,10 @@ int Application::RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instanc
             bool pixelsAndHistoryUnchanged = false;
             bool chargeRetained = false;
             bool liveDraftAlive = false;
-        } detach{*owner,           probe, live, revision, sourceId, overlayId, state.reservation + state.openingBytes,
-                 state.reservation};
+        }
+#pragma warning(pop)
+        detach{*owner,           probe, live, revision, sourceId, overlayId, state.reservation + state.openingBytes,
+               state.reservation};
         probe.checkContext = &detach;
         probe.checkOwner = [](void* opaque) noexcept
         {

@@ -1,8 +1,8 @@
 #include "Document.Tests.WarpRetirement.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "DeferredRelease.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "WarpOpeningWork.h"
 #include "WarpRetirementWork.h"
 #include "WarpSampleWork.h"
@@ -326,7 +326,7 @@ void OldSequenceCannotClearNewUpdate()
     std::thread secondWorker(
         [&]
         {
-            secondCancelled = !second->AppendForWork(CancelToken{{}, secondStop.get_token()});
+            secondCancelled = !second->AppendForWork(CancelToken({}, secondStop.get_token()));
             abandoned.emplace(std::move(second.value()));
         });
     secondWorker.join();

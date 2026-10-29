@@ -97,6 +97,10 @@ struct State final
     std::weak_ptr<const SharedPublicationMemory> offOwnerWeakMemory;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class SelectionOutlineAllocationJob final : public Job
 {
   public:
@@ -238,6 +242,7 @@ class SelectionOutlineAllocationJob final : public Job
     std::shared_ptr<const SharedPublicationMemory> _attemptOwner;
     std::shared_ptr<SharedPublicationMemory> _sourceMemory;
 };
+#pragma warning(pop)
 
 bool Settle(JobScheduler& scheduler, const char* fact)
 {

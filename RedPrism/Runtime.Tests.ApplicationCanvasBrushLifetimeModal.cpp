@@ -1,11 +1,12 @@
 #include "Application.h"
+#include <cstddef>
 
 #include "ChromeHost.h"
 #include "ModalProbePrompts.h"
 #include "Prompts.h"
 #include "Runtime.Tests.LayerMetadataTestGate.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -142,6 +143,10 @@ int Application::RunCanvasBrushLifetimeModalSelfTest() noexcept
                         MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
                                    static_cast<int>(std::lround(hole.top + view.y))));
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct GateState final
     {
         Application& owner;
@@ -159,6 +164,8 @@ int Application::RunCanvasBrushLifetimeModalSelfTest() noexcept
         bool closeMessageConsumed = false;
         bool preflightDispatched = false;
     };
+#pragma warning(pop)
+
     static constexpr auto requestLifecycle = [](GateState& state) noexcept
     {
         auto& owner = state.owner;
@@ -227,6 +234,10 @@ int Application::RunCanvasBrushLifetimeModalSelfTest() noexcept
         (void)SetEvent(gate->release.get());
     };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct ModalState final
     {
         Application& owner;
@@ -234,6 +245,8 @@ int Application::RunCanvasBrushLifetimeModalSelfTest() noexcept
         bool nestedPreserved = false;
         bool lossPreserved = false;
     };
+#pragma warning(pop)
+
     static constexpr auto modalCallback = [](void* opaque) noexcept
     {
         auto& state = *static_cast<ModalState*>(opaque);

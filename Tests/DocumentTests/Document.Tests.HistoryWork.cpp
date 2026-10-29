@@ -1,10 +1,10 @@
 #include "Document.Tests.HistoryWork.h"
 
-#include "../../Common/BrushStroke.h"
-#include "../../Common/ContinuationQueue.h"
-#include "../../Common/HistoryWork.h"
-#include "../../Common/PreviewMailbox.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Common/BrushStroke.h"
+#include "Common/ContinuationQueue.h"
+#include "Common/HistoryWork.h"
+#include "Common/PreviewMailbox.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>

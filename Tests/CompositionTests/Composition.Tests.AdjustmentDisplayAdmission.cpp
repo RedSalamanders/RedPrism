@@ -1,7 +1,7 @@
 #include "Composition.Tests.AdjustmentDisplayAdmission.h"
 
-#include "../../Common/AdjustmentDisplayAdmission.h"
-#include "../../Common/Document.h"
+#include "Common/AdjustmentDisplayAdmission.h"
+#include "Common/Document.h"
 
 #include <cstdint>
 #include <cstdio>

@@ -65,6 +65,10 @@ bool WaitOne(HANDLE event) noexcept
     return WaitForSingleObject(event, kWaitMs) == WAIT_OBJECT_0;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Entry final
 {
     std::atomic<bool> published{false};
@@ -79,8 +83,13 @@ struct Entry final
     DWORD callbackThreadId = 0;
     bool bodyLocalsDestroyed = false;
 };
+#pragma warning(pop)
 
 // Fixed storage and atomics only: observer callback never allocates, locks, waits, or calls the scheduler.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ObservationLog final
 {
     ObservationLog(HANDLE wakeEvent, HANDLE overflowEvent) noexcept : wake(wakeEvent), overflowWake(overflowEvent) {}
@@ -97,6 +106,7 @@ struct ObservationLog final
     HANDLE wake = nullptr;                                  // borrowed; owner outlives scheduler Close
     HANDLE overflowWake = nullptr; // borrowed bounded failure event; owner outlives scheduler Close
 };
+#pragma warning(pop)
 
 void ObserveExecution(void* context, JobExecutionNotice notice) noexcept
 {
@@ -166,6 +176,10 @@ bool Settled(JobScheduler& scheduler) noexcept
     return SettleJobs(scheduler, kWaitMs) == SettleResult::Settled;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ReturnJob : public Job
 {
   public:
@@ -183,7 +197,12 @@ class ReturnJob : public Job
     ObservationLog& _log;
     JobResult _value;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ThrowBadAllocJob final : public Job
 {
   public:
@@ -205,7 +224,12 @@ class ThrowBadAllocJob final : public Job
     ObservationLog& _log;
     std::atomic<bool>& _unwindWitness;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Gate final
 {
     Gate() : entered(Event()), release(Event()) {}
@@ -217,7 +241,12 @@ struct Gate final
         (void)SetEvent(release.get());
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class GatedJob final : public Job
 {
   public:
@@ -249,6 +278,7 @@ class GatedJob final : public Job
     JobResult _value;
     std::atomic<bool>* _unwindWitness;
 };
+#pragma warning(pop)
 
 void TestNormalBoundaryOrderAndIdentity()
 {
@@ -422,6 +452,10 @@ void TestRawFailureAndBadAlloc()
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CountJob final : public Job
 {
   public:
@@ -440,6 +474,7 @@ class CountJob final : public Job
     ObservationLog& _log;
     std::atomic<unsigned int>& _runs;
 };
+#pragma warning(pop)
 
 void TestQueuedAndRunningCancellation()
 {
@@ -509,6 +544,10 @@ void TestQueuedAndRunningCancellation()
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ResumedJobState final
 {
     std::atomic<unsigned int> stage{0};
@@ -516,7 +555,12 @@ struct ResumedJobState final
     std::atomic<std::size_t> deferredSlot{0};
     std::atomic<std::uint64_t> deferredGeneration{0};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ResumedJob final : public Job
 {
   public:
@@ -543,6 +587,7 @@ class ResumedJob final : public Job
     ObservationLog& _log;
     ResumedJobState& _state;
 };
+#pragma warning(pop)
 
 // Entry/exit observations precede completion publication. A Submit/Resume readiness signal may be stale:
 // wait for the exact owner deferral stage, consuming only actual events under one total failure deadline.
@@ -630,6 +675,10 @@ void TestResumedOriginalTicketHasBodyPairs()
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class RetirementGateJob final : public Job
 {
   public:
@@ -652,6 +701,7 @@ class RetirementGateJob final : public Job
     ObservationLog& _log;
     Gate& _retirement;
 };
+#pragma warning(pop)
 
 void TestExitIsVisibleWhileRetirementIsHeld()
 {
@@ -695,6 +745,10 @@ void TestExitIsVisibleWhileRetirementIsHeld()
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ShutdownGatedJob final : public Job
 {
   public:
@@ -719,6 +773,7 @@ class ShutdownGatedJob final : public Job
     Gate& _gate;
     std::atomic<HANDLE>& _shutdownHandle;
 };
+#pragma warning(pop)
 
 void TestDefaultObserverAndJoinedClose()
 {

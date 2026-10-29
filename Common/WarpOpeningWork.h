@@ -99,11 +99,16 @@ struct WarpOpeningObserver final
     void* context = nullptr;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct WarpOpeningResult final
 {
     WarpOpeningStatus status = WarpOpeningStatus::Invalid;
     std::optional<PreparedWarpOpening> prepared;
 };
+#pragma warning(pop)
 
 // Opening only: cached captured graph, fixed source windows, lazy mutable tile directory, first tip,
 // directories and control bookkeeping. Future serial samples/snapshots/final history/display require their

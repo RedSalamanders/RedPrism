@@ -1,8 +1,8 @@
 #include "Document.Tests.StrokeFinishPublication.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "HistoryRestoreWork.h"
 #include "StrokeFinishWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstddef>

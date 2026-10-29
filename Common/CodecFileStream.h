@@ -14,6 +14,10 @@
 
 // Private WIC file stream. One worker owns the cursor; only COM reference counting is concurrent.
 // Reads retain an opened, size-checked source with write/delete sharing denied. Writes own an exclusive temporary.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class CodecFileStream final : public IStream
 {
     struct ConstructionKey final
@@ -55,3 +59,4 @@ class CodecFileStream final : public IStream
     const bool _readOnly;
     bool _dirty = false;
 };
+#pragma warning(pop)

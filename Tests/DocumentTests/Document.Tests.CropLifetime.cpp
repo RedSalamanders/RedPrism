@@ -204,6 +204,8 @@ void ChargedMetadataAndTokenLifetime()
         originalOwnerToken.reset();
     }
     Expect(!weakOriginalOwnerToken.expired(), "metadata.output-retains-the-original-ownerToken-after-source-release");
+    Expect(HasBytes(charged, 2, 1, RasterFormat::Bgra8888, pixels),
+           "metadata.charged-output-preserves-base-pixels-after-source-and-caller-release");
     charged = {};
     Expect(weakOriginalOwnerToken.expired(), "metadata.output-release-releases-the-original-ownerToken");
 }

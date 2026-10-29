@@ -59,6 +59,10 @@ class SelectionOutlineGestureTransition final
 // The descriptor's complete admission is supplied before any immutable document/geometry capture.
 // The original parent handles an inside-selection New outline move and explicitly admitted New marquees.
 // Preserving marquees require their explicit additional gate. Wand and lifted pixels remain separate branches.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct SelectionOutlineGestureState
 {
     struct Limits final
@@ -191,3 +195,4 @@ struct SelectionOutlineGestureState
     friend class SelectionOutlineGestureJob;
     std::optional<SelectionOutlineGestureTransition> _successor;
 };
+#pragma warning(pop)

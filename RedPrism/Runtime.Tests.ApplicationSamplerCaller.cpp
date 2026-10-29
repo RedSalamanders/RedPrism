@@ -1,10 +1,10 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "CanvasViewport.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "Runtime.Tests.ColorWorkTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -188,7 +188,12 @@ int Application::RunSamplerCallerSelfTest() noexcept
         return 5;
     }
 
-    const auto installFixture = [this, &source, &fixtureInstalled, kWidth, kHeight, kBlue, kBackground]() noexcept
+    const auto installFixture =
+// Keep the fixture snapshot/borrow explicit across nested callbacks; a constant-use notice
+// does not replace its lifetime contract. Owner: RedPrism maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 5258)
+        [this, &source, &fixtureInstalled, kWidth, kHeight, kBlue, kBackground]() noexcept
     {
         DocumentFixture fixture;
         fixture.id = Guid::Generate();
@@ -218,7 +223,9 @@ int Application::RunSamplerCallerSelfTest() noexcept
         _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
         SyncView();
         SyncChrome();
-    };
+    }
+#pragma warning(pop)
+    ;
     const auto clientAt = [this](Vec2 documentPoint) noexcept
     {
         const CanvasHole hole = _chrome->HolePixels();
@@ -266,9 +273,13 @@ int Application::RunSamplerCallerSelfTest() noexcept
         return result;
     };
 
-    const auto runCaller = [this, &installFixture, &pointer, &check, &hostReceipts, &pixelAt, &samplerSlotsClear,
-                            settle, kBlue, kMagenta,
-                            kBackground](EditorTool tool, Vec2 down, Vec2 up, const char* controlPrefix) noexcept
+    const auto runCaller =
+// Keep the fixture snapshot/borrow explicit across nested callbacks; a constant-use notice
+// does not replace its lifetime contract. Owner: RedPrism maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 5258)
+        [this, &installFixture, &pointer, &check, &hostReceipts, &pixelAt, &samplerSlotsClear, settle, kBlue, kMagenta,
+         kBackground](EditorTool tool, Vec2 down, Vec2 up, const char* controlPrefix) noexcept
     {
         if (!settle())
             return false;
@@ -429,7 +440,9 @@ int Application::RunSamplerCallerSelfTest() noexcept
         if (!check(graphEmpty, L"The settled caller retained sampler, canvas, or utility work.\n", controlPrefix))
             return false;
         return true;
-    };
+    }
+#pragma warning(pop)
+    ;
 
     if (!runCaller(EditorTool::Brush, Vec2{40, 16}, Vec2{40, 16}, "sampler-caller.brush.no-pending-graph"))
         return 5;
@@ -445,8 +458,13 @@ int Application::RunSamplerCallerSelfTest() noexcept
             keys[static_cast<std::size_t>(VK_MENU)] = 0x80;
         KeyboardState::Write(keys);
     };
-    const auto runAltSampler = [this, &installFixture, &pointer, &check, &settle, &samplerSlotsClear, &setSyntheticAlt,
-                                kBlue](EditorTool tool, const char* inputControl, const char* settledControl) noexcept
+    const auto runAltSampler =
+// Keep the fixture snapshot/borrow explicit across nested callbacks; a constant-use notice
+// does not replace its lifetime contract. Owner: RedPrism maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 5258)
+        [this, &installFixture, &pointer, &check, &settle, &samplerSlotsClear, &setSyntheticAlt,
+         kBlue](EditorTool tool, const char* inputControl, const char* settledControl) noexcept
     {
         if (!settle())
             return false;
@@ -505,7 +523,9 @@ int Application::RunSamplerCallerSelfTest() noexcept
                 L"Alt sampling failed to publish brown cleanly or left document/tool work behind.\n", settledControl))
             return false;
         return true;
-    };
+    }
+#pragma warning(pop)
+    ;
 
     if (!runAltSampler(EditorTool::Brush, "sampler-caller.alt-brush.scalar-prefix-ends-before-pump",
                        "sampler-caller.alt-brush.opaque-middle-publishes-without-document-edit"))

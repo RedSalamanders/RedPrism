@@ -1,10 +1,10 @@
 #include "Host.Tests.PipelineTrace.h"
 
-#include "../../Common/Document.h"
-#include "../../Common/Jobs.h"
-#include "../../Common/PerfRoot.h"
-#include "../../Common/PipelineTrace.h"
-#include "../../Common/UiTiming.h"
+#include "Common/Document.h"
+#include "Common/Jobs.h"
+#include "Common/PerfRoot.h"
+#include "Common/PipelineTrace.h"
+#include "Common/UiTiming.h"
 
 #include <windows.h>
 

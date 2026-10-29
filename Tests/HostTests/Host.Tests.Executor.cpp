@@ -165,7 +165,7 @@ int RunExecutorValueTests()
 
     std::stop_source cancelledSecondarySource;
     cancelledSecondarySource.request_stop();
-    const CancelToken cancelledSecondaryToken{{}, cancelledSecondarySource.get_token()};
+    const CancelToken cancelledSecondaryToken({}, cancelledSecondarySource.get_token());
     int cancelledSecondaryVisits = 0;
     const bool completedWithCancelledSecondary = ParallelFor(executor, TileGrid{2, 1, 1, 1}, cancelledSecondaryToken,
                                                              [&cancelledSecondaryVisits](Tile, CancelToken) noexcept
@@ -178,7 +178,7 @@ int RunExecutorValueTests()
 
     CancelSource localCallbackSource;
     std::stop_source shutdownCallbackSource;
-    const CancelToken callbackToken{localCallbackSource.Token().LocalToken(), shutdownCallbackSource.get_token()};
+    const CancelToken callbackToken(localCallbackSource.Token().LocalToken(), shutdownCallbackSource.get_token());
     bool localCallbackInvoked = false;
     bool shutdownCallbackInvoked = false;
     const std::stop_callback localCallback(callbackToken.LocalToken(), [&]() noexcept { localCallbackInvoked = true; });

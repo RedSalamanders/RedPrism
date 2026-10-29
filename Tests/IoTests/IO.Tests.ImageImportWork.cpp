@@ -1,6 +1,6 @@
 #include "IO.Tests.ImageImportWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ImageImportWork.h"
 

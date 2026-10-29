@@ -1,6 +1,6 @@
 #include "Document.Tests.DocumentDraft.h"
 
-#include "../../Common/DocumentDraft.h"
+#include "Common/DocumentDraft.h"
 
 #include <array>
 #include <cstdio>

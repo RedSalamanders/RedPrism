@@ -1,8 +1,8 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <atomic>
@@ -13,6 +13,10 @@
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct CursorGate final
 {
     wil::unique_event_nothrow reached;
@@ -23,6 +27,8 @@ struct CursorGate final
     std::atomic<DWORD> worker = 0;
     std::atomic<DWORD> retireWorker = 0;
 };
+#pragma warning(pop)
+
 DocumentSelection CursorOutline(bool hole)
 {
     std::vector<SelectionLoop> loops{{{1, 1}, {7, 1}, {7, 7}, {1, 7}}};

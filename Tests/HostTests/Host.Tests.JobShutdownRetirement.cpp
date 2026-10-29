@@ -1,8 +1,8 @@
 #include "Host.Tests.JobShutdownRetirement.h"
 
-#include "../../Common/DeferredRelease.h"
-#include "../../Common/Jobs.h"
-#include "../../Common/WorkerPool.h"
+#include "Common/DeferredRelease.h"
+#include "Common/Jobs.h"
+#include "Common/WorkerPool.h"
 
 #include <array>
 #include <atomic>
@@ -40,6 +40,10 @@ void Wait(HANDLE event) noexcept
     }
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Probe final
 {
     JobScheduler* scheduler = nullptr;
@@ -50,9 +54,14 @@ struct Probe final
     std::atomic<bool> joinedBeforeWrapper{false}, handlesAlive{false}, pixelsIntact{false}, mta{false};
     std::atomic<std::uint64_t> reservedAtWrapper{0};
 };
+#pragma warning(pop)
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 struct Payload final : DeferredReleaseNode
 {
     Probe& probe;
@@ -76,6 +85,8 @@ struct Payload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct Retire final
 {
     void operator()(Payload* payload) const noexcept
@@ -87,6 +98,10 @@ struct Retire final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class ProbeJob final : public Job
 {
   public:
@@ -122,7 +137,12 @@ class ProbeJob final : public Job
     bool _wait;
     std::unique_ptr<Payload, Retire> _payload;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class ProbeAction final : public UiAction
 {
   public:
@@ -142,6 +162,7 @@ class ProbeAction final : public UiAction
     Probe& _probe;
     std::unique_ptr<Payload, Retire> _payload;
 };
+#pragma warning(pop)
 
 bool Sample(void*, MemorySnapshot& snapshot) noexcept
 {
@@ -227,13 +248,19 @@ void TestUndrainedCompletion()
 }
 void TestStoppedIdlePoolHooks()
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct State final
     {
         DWORD owner = GetCurrentThreadId();
         unsigned int ownerCalls = 0;
         std::atomic<unsigned int> workerCalls{0};
         std::atomic<bool> ordered{false}, mta{false};
-    } state;
+    }
+#pragma warning(pop)
+    state;
     WorkerPool pool;
     Expect(pool.Initialize(1) == S_OK, "idle-pool-initialize");
     pool.RequestStop();

@@ -1,6 +1,6 @@
 #include "Document.Tests.PanelWandAuthority.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Document.h"
 #include "Selection.h"
@@ -34,6 +34,10 @@ constexpr auto kPixels = OpaquePixels();
 constexpr std::array<std::uint8_t, 16> kMaskPixels{255, 255, 255, 255, 255, 255, 255, 255,
                                                    255, 255, 255, 255, 255, 255, 255, 255};
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     std::unique_ptr<DocumentSession> session = std::make_unique<DocumentSession>();
@@ -76,6 +80,7 @@ struct Fixture final
                 (openPanel ? session->HasColorEdit(FilterKind::Levels) : !session->HasColorEdit());
     }
 };
+#pragma warning(pop)
 
 bool AbsentPanelRefusesDefaults()
 {

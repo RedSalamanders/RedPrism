@@ -1,11 +1,11 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ImageCodecs.h"
 #include "KeyboardState.h"
 #include "ProjectStore.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.ProjectSaveTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -656,7 +656,8 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                             return 5;
                         owner->_screenshotDpi = harnessDpi;
                         if (haveBounds)
-                            SendMessageW(owner->_window.get(), WM_DPICHANGED, MAKELONG(harnessDpi, harnessDpi),
+                            SendMessageW(owner->_window.get(), WM_DPICHANGED,
+                                         static_cast<WPARAM>(MAKELONG(harnessDpi, harnessDpi)),
                                          reinterpret_cast<LPARAM>(&suggested));
                         owner->RenderFrame();
                         RECT afterHarnessMessage{};
@@ -712,7 +713,8 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                             owner->_session.history.CurrentRevision() == revision;
                         owner->_screenshotDpi = previousHarnessDpi;
                         if (haveBounds)
-                            SendMessageW(owner->_window.get(), WM_DPICHANGED, MAKELONG(nativeDpi, nativeDpi),
+                            SendMessageW(owner->_window.get(), WM_DPICHANGED,
+                                         static_cast<WPARAM>(MAKELONG(nativeDpi, nativeDpi)),
                                          reinterpret_cast<LPARAM>(&originalBounds));
                         owner->RenderFrame();
                         RECT restoredBounds{};

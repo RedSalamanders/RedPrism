@@ -18,6 +18,10 @@ CloneReadbackState::~CloneReadbackState()
     }
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Application::CloneReadbackJob final : public RecordedDocumentReadbackJob
 {
   public:
@@ -158,6 +162,7 @@ class Application::CloneReadbackJob final : public RecordedDocumentReadbackJob
     const DWORD _ownerThread;
     std::unique_ptr<CloneReadbackState, CloneReadbackState::Retire> _payload;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartCloneReadback(std::uint64_t opening) noexcept
 {

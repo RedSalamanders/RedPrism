@@ -21,6 +21,10 @@ enum class ColorWorkTestKind
 };
 
 // Harness-owned events travel with the submitted job. Production submissions have no gate and never wait here.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ColorWorkTestGate final
 {
     wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -40,6 +44,7 @@ struct ColorWorkTestGate final
     std::atomic<bool> unchangedCommit{false};
     std::atomic<unsigned int> visits{0};
 };
+#pragma warning(pop)
 
 [[nodiscard]] JobResult PassColorWorkTestGate(const std::shared_ptr<ColorWorkTestGate>& gate, ColorWorkTestKind kind,
                                               JobContext& context) noexcept;

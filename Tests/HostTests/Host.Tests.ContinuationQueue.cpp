@@ -1,6 +1,6 @@
 #include "Host.Tests.ContinuationQueue.h"
 
-#include "../../Common/ContinuationQueue.h"
+#include "Common/ContinuationQueue.h"
 
 #include <array>
 #include <cstdint>
@@ -110,6 +110,10 @@ struct RetirementRecord final
     bool ownsPayload = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct RetirementLog final
 {
     std::array<RetirementRecord, 32> records{};
@@ -148,6 +152,7 @@ struct RetirementLog final
         }
     }
 };
+#pragma warning(pop)
 
 int g_failures = 0;
 
@@ -168,7 +173,7 @@ TrackedRequest Make(Lifetime& lifetime, int opcode, int value, int ownedValue)
 TrackedRequest MakeWithReceipt(Lifetime& lifetime, int opcode, int value, int ownedValue,
                                const std::shared_ptr<RetirementReceipt>& receipt)
 {
-    return TrackedRequest{lifetime, opcode, value, ownedValue, receipt};
+    return TrackedRequest(lifetime, opcode, value, ownedValue, receipt);
 }
 
 void ExpectRetirement(const RetirementLog& log, std::size_t index, std::uint64_t documentSerial, std::uint64_t ordinal,
@@ -350,7 +355,7 @@ void TestRingWrapAndClearOrder()
     for (std::uint64_t ordinal = 1; ordinal <= 5; ++ordinal)
     {
         const Queue::Taken taken = queue.TakeReady(51, false);
-        Expect(taken.ready && taken.ready->ordinal == ordinal && taken.ready->input.value == ordinal,
+        Expect(taken.ready && taken.ready->ordinal == ordinal && taken.ready->input.value == static_cast<int>(ordinal),
                "ring-prefix-popped");
     }
     for (std::uint64_t ordinal = 7; ordinal <= 12; ++ordinal)
@@ -364,7 +369,8 @@ void TestRingWrapAndClearOrder()
     for (const std::uint64_t expected : expectedOrdinals)
     {
         const Queue::Taken taken = queue.TakeReady(51, false);
-        Expect(taken.ready && taken.ready->ordinal == expected && taken.ready->input.value == expected,
+        Expect(taken.ready && taken.ready->ordinal == expected &&
+                   taken.ready->input.value == static_cast<int>(expected),
                "ring-wrap-preserves-fifo");
     }
 

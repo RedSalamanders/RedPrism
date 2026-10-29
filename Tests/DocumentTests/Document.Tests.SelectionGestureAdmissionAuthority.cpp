@@ -1,7 +1,7 @@
 #include "Document.Tests.SelectionGestureAdmissionAuthority.h"
-#include "../../RedPrism/SelectionOutlineGestureJob.h"
-#include "../../RedPrism/SelectionOutlineGestureMemory.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "RedPrism/SelectionOutlineGestureJob.h"
+#include "RedPrism/SelectionOutlineGestureMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <cstdio>
 #include <cstdlib>

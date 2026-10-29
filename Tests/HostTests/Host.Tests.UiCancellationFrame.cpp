@@ -1,6 +1,6 @@
 #include "Host.Tests.UiCancellationFrame.h"
 
-#include "../../RedPrism/UiCancellationFrame.h"
+#include "RedPrism/UiCancellationFrame.h"
 
 #include <cstdio>
 #include <limits>

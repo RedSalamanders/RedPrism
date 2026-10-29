@@ -119,6 +119,10 @@ template <typename T> [[nodiscard]] constexpr AllocationClass ClassifyAllocation
         return AllocationClass::Unclassified;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct AllocationProbe final
 {
     std::atomic<std::uint64_t> calls{0};
@@ -170,6 +174,8 @@ struct AllocationProbe final
         case AllocationClass::RootControl:
             rootAttempts.fetch_add(1, std::memory_order_relaxed);
             break;
+        case ::AllocationClass::None:
+        case ::AllocationClass::Unclassified:
         default:
             unclassifiedAttempts.fetch_add(1, std::memory_order_relaxed);
             break;
@@ -194,6 +200,7 @@ struct AllocationProbe final
         throw std::bad_alloc{};
     }
 };
+#pragma warning(pop)
 
 template <typename T> struct LookupAllocator final
 {

@@ -444,7 +444,7 @@ void FittingSparseMaskWorkerThumbnailCases()
     (void)localCancellation.Cancel();
     std::stop_source shutdown;
     (void)shutdown.request_stop();
-    const CancelToken shutdownCancellation{std::stop_token{}, shutdown.get_token()};
+    const CancelToken shutdownCancellation(std::stop_token{}, shutdown.get_token());
     const Raster locallyCancelled = ThumbnailRasterForWork(sparse, 2, localCancellation.Token());
     const Raster shutdownCancelled = ThumbnailRasterForWork(sparse, 2, shutdownCancellation);
     Expect(!locallyCancelled.HasStorage() && !shutdownCancelled.HasStorage() &&

@@ -71,8 +71,7 @@ bool RasterBytesEqual(const Raster& image, std::span<const std::uint8_t> expecte
         expected.size() != static_cast<std::size_t>(image.Width()) * static_cast<std::size_t>(image.Height()) * 4u)
         return false;
     std::vector<std::uint8_t> actual(expected.size());
-    image.ReadRegion(0, 0, image.Width(), image.Height(), actual.data(), static_cast<std::size_t>(image.Width()) * 4u,
-                     0);
+    image.ReadRegion(0, 0, image.Width(), image.Height(), actual.data(), image.Width() * 4, 0);
     return std::equal(actual.begin(), actual.end(), expected.begin());
 }
 

@@ -374,7 +374,7 @@ void RefusalPreservesDraftAndCancellationPublishesNothing()
     std::stop_source stop;
     static_cast<void>(stop.request_stop());
     const bool cancelled =
-        !AppendOnJoinedWorker(cancelledStroke, cancelledPlan.value(), CancelToken{{}, stop.get_token()});
+        !AppendOnJoinedWorker(cancelledStroke, cancelledPlan.value(), CancelToken({}, stop.get_token()));
     const auto unpublishedTiles = ChangedTilesOnJoinedWorker(cancelledStroke);
     Expect(cancelled && !cancelledStroke->IsValid() && !cancelledStroke->Image().HasStorage() &&
                unpublishedTiles.empty() && cancelledStroke->Points().empty(),

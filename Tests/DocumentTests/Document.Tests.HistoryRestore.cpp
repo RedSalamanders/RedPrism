@@ -1,9 +1,9 @@
 #include "Document.Tests.HistoryRestore.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "HistoryRestoreWork.h"
 #include "RasterWork.h"
 #include "Selection.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

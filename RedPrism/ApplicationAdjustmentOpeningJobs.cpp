@@ -1,7 +1,7 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "DocumentDraft.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "AdjustmentOpeningWork.h"
 #include "ChromeHost.h"
@@ -26,6 +26,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct AdjustmentOpeningPayload final : DeferredReleaseNode
 {
     std::shared_ptr<SharedPublicationMemory> memory; // Dies after every input/publication/readback owner.
@@ -56,6 +60,8 @@ struct AdjustmentOpeningPayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireAdjustmentOpening final
 {
     void operator()(AdjustmentOpeningPayload* payload) const noexcept
@@ -66,6 +72,10 @@ struct RetireAdjustmentOpening final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Application::AdjustmentOpeningJob final : public RecordedDocumentReadbackJob
 {
   public:
@@ -256,6 +266,7 @@ class Application::AdjustmentOpeningJob final : public RecordedDocumentReadbackJ
     const DWORD _ownerThread;
     std::unique_ptr<AdjustmentOpeningPayload, RetireAdjustmentOpening> _payload;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartAdjustmentOpening() noexcept
 {
@@ -355,6 +366,10 @@ int Application::RunAdjustmentOpeningSelfTest() noexcept
         PendingRecord,
         Epoch
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -364,6 +379,8 @@ int Application::RunAdjustmentOpeningSelfTest() noexcept
         bool visited = false, held = false;
         HRESULT rebound = E_PENDING;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<State*>(opaque);

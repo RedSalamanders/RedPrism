@@ -55,6 +55,10 @@ int Application::RunStandaloneCanvasLifetimeShutdownSelfTest(HINSTANCE instance)
                         MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
                                    static_cast<int>(std::lround(hole.top + view.y))));
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State
     {
         Application& owner;
@@ -70,6 +74,8 @@ int Application::RunStandaloneCanvasLifetimeShutdownSelfTest(HINSTANCE instance)
         bool producerClosedAtDetach = false;
         std::weak_ptr<BrushStroke> originalCore;
     };
+#pragma warning(pop)
+
     static constexpr auto modal = [](void* opaque) noexcept
     {
         auto& state = *static_cast<State*>(opaque);

@@ -11,6 +11,10 @@
 
 // One active file writer, shared by its original job and the owner. No document, device or callback is owned.
 // The event acknowledges only the CPU write stage, so confirmed session end can wait without UI application.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class WorkerWriteCompletion final
 {
   public:
@@ -75,3 +79,4 @@ class WorkerWriteCompletion final
     std::atomic<Phase> _phase;
     HRESULT _creationError = S_OK;
 };
+#pragma warning(pop)

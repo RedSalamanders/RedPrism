@@ -1,6 +1,6 @@
 #include "Composition.Tests.DocumentReadback.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Adjust.h"
 #include "CanvasRenderer.h"
@@ -46,9 +46,9 @@ HRESULT MakeWarp(wil::com_ptr_nothrow<ID3D11Device>& device,
 
 [[nodiscard]] std::array<std::uint8_t, 4> PatternPixel(unsigned int x, unsigned int y) noexcept
 {
-    return {static_cast<std::uint8_t>((x * 17u + y * 3u + 19u) & 0xffu),
-            static_cast<std::uint8_t>((x * 5u + y * 29u + 47u) & 0xffu),
-            static_cast<std::uint8_t>((x * 11u + y * 7u + 83u) & 0xffu), 255};
+    return {{static_cast<std::uint8_t>((x * 17u + y * 3u + 19u) & 0xffu),
+             static_cast<std::uint8_t>((x * 5u + y * 29u + 47u) & 0xffu),
+             static_cast<std::uint8_t>((x * 11u + y * 7u + 83u) & 0xffu), 255}};
 }
 
 [[nodiscard]] Raster PatternRaster(int width, int height)
@@ -99,6 +99,10 @@ HRESULT MakeWarp(wil::com_ptr_nothrow<ID3D11Device>& device,
     return expected;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     wil::com_ptr_nothrow<ID3D11Device> device;
@@ -155,7 +159,12 @@ struct Fixture final
         Close();
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
 struct CaptureState final
 {
     Fixture& fixture;
@@ -193,7 +202,12 @@ struct CaptureState final
     void (*continuationOwnerAction)(CaptureState&) noexcept = nullptr;
     void* continuationContext = nullptr;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class ReadbackProbe final : public DocumentReadbackJob
 {
   public:
@@ -259,6 +273,7 @@ class ReadbackProbe final : public DocumentReadbackJob
     Fixture& _fixture;
     CaptureState& _state;
 };
+#pragma warning(pop)
 
 [[nodiscard]] bool ReplaceReadbackDevice(CaptureState& state) noexcept
 {
@@ -327,6 +342,10 @@ void DispatchReadbackMessage(void* context, void* nativeMessage) noexcept
     }
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
 struct ContinuationState final
 {
     static constexpr std::array<std::array<unsigned int, 2>, 3> samples{
@@ -370,7 +389,12 @@ struct ContinuationState final
         return boundaryClean && reservationHeldAtBoundary;
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class PixelContinuationProbe final : public DocumentReadbackJob
 {
   public:
@@ -514,6 +538,7 @@ class PixelContinuationProbe final : public DocumentReadbackJob
     CaptureState& _capture;
     ContinuationState& _continuation;
 };
+#pragma warning(pop)
 
 [[nodiscard]] bool RasterMatches(const Raster& image, int width, int height,
                                  const std::vector<std::uint8_t>& expected) noexcept

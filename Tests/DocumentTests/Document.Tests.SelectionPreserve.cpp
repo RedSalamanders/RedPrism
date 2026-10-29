@@ -1,6 +1,6 @@
 #include "Document.Tests.SelectionPreserve.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "BrushStroke.h"
 #include "Document.h"
@@ -199,7 +199,8 @@ void CommittedBrushClip()
             for (int x = 0; x != 4; ++x)
                 if (x < 1 || x >= 3 || y < 1 || y >= 3)
                     for (int c = 0; c != 4; ++c)
-                        outsideUnchanged &= after[(y * 4 + x) * 4 + c] == before[(y * 4 + x) * 4 + c];
+                        outsideUnchanged &= after[static_cast<std::size_t>((y * 4 + x) * 4 + c)] ==
+                                            before[static_cast<std::size_t>((y * 4 + x) * 4 + c)];
         ExpectKind(!session.PendingBrush() && session.history.UndoName() == L"Brush Stroke",
                    "clip.commit-reached-with-original-brush-title", kind);
         ExpectKind(after[20] == 255 && after[21] == 255 && after[22] == 255 && after[23] == 255,

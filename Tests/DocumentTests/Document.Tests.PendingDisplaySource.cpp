@@ -1,6 +1,5 @@
 #include "Document.Tests.PendingDisplaySource.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Adjust.h"
 #include "ColorDisplayPublication.h"
 #include "ColorEditWork.h"
@@ -8,6 +7,7 @@
 #include "Executor.h"
 #include "PendingDisplaySource.h"
 #include "Selection.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "TransformPreviewWork.h"
 
 #include <array>

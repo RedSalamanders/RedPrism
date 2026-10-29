@@ -13,8 +13,16 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct RetryWaitQueue::Impl final
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Slot final
     {
         Impl* owner = nullptr;
@@ -27,6 +35,7 @@ struct RetryWaitQueue::Impl final
         std::int32_t error = 0;
         bool cancelSignalled = false;
     };
+#pragma warning(pop)
 
     JobScheduler* scheduler = nullptr;
     OwnerWorkMultiplexer* routes = nullptr;
@@ -57,6 +66,7 @@ struct RetryWaitQueue::Impl final
         scheduler->NotifyOwnerWork();
     }
 };
+#pragma warning(pop)
 
 RetryWaitQueue::RetryWaitQueue() noexcept = default;
 RetryWaitQueue::~RetryWaitQueue()

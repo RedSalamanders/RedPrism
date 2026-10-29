@@ -1,11 +1,11 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "PreparedLayerRows.h"
 #include "Resources.h"
 #include "Runtime.Tests.LayerRowsTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "resource.h"
 
 #include <array>
@@ -88,6 +88,10 @@ int Application::RunStandalonePreparedLayerRowsEditSelfTest(HINSTANCE instance) 
     const Guid initialRevision = owner->_session.history.CurrentRevision();
     const int initialUndoCount = owner->_session.history.UndoCount();
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct PumpState final
     {
         Application& owner;
@@ -107,7 +111,9 @@ int Application::RunStandalonePreparedLayerRowsEditSelfTest(HINSTANCE instance) 
         bool held = false;
         bool staleReorderBlocked = false;
         bool staleInvokeBlocked = false;
-    } pump{*owner};
+    }
+#pragma warning(pop)
+    pump{*owner};
     const auto dispatch = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<PumpState*>(opaque);

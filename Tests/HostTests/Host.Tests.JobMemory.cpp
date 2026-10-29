@@ -1,6 +1,6 @@
-#include "../../Common/DeferredRelease.h"
-#include "../../Common/Jobs.h"
-#include "../../Common/PixelBuffer.h"
+#include "Common/DeferredRelease.h"
+#include "Common/Jobs.h"
+#include "Common/PixelBuffer.h"
 
 #include <windows.h>
 
@@ -81,6 +81,10 @@ bool Sample(void* context, MemorySnapshot& snapshot) noexcept
     return source.succeeds;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Probe final
 {
     JobScheduler* scheduler = nullptr;
@@ -101,7 +105,12 @@ struct Probe final
     bool waitForShutdown = false;
     bool throwBadAlloc = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class ProbeJob final : public Job
 {
   public:
@@ -162,6 +171,7 @@ class ProbeJob final : public Job
   private:
     Probe& _probe;
 };
+#pragma warning(pop)
 
 bool Submit(JobScheduler& scheduler, Probe& probe, JobOptions options, JobTicket& ticket) noexcept
 {
@@ -419,6 +429,10 @@ void TestCancellationAndShutdownWhileWaiting()
            "close-waiting-joins-drops-callbacks-and-destroys-on-owner");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct SerialState final
 {
     HANDLE firstStarted = nullptr;
@@ -429,7 +443,12 @@ struct SerialState final
     std::atomic<unsigned int> firstRetired{0};
     std::atomic<unsigned int> firstDestroyed{0};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class SerialProbeJob final : public Job
 {
   public:
@@ -472,6 +491,7 @@ class SerialProbeJob final : public Job
     SerialState& _state;
     bool _first;
 };
+#pragma warning(pop)
 
 void TestSerialSuccessorReservesAfterRetirement()
 {
@@ -501,6 +521,10 @@ void TestSerialSuccessorReservesAfterRetirement()
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct DeferredPayload final
 {
     DeferredReleaseNode node;
@@ -509,6 +533,7 @@ struct DeferredPayload final
     std::atomic<unsigned int> destroyed{0};
     std::atomic<DWORD> destroyThread{0};
 };
+#pragma warning(pop)
 
 static_assert(offsetof(DeferredPayload, node) == 0);
 

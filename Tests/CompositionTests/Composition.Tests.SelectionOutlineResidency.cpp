@@ -40,6 +40,10 @@ bool Memory(void*, MemorySnapshot& snapshot) noexcept
     snapshot = {8ull * 1024 * 1024 * 1024, 8ull * 1024 * 1024 * 1024};
     return true;
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Rig final
 {
     wil::com_ptr_nothrow<ID3D11Device> device;
@@ -65,6 +69,8 @@ struct Rig final
         queue.CloseAfterWorkers();
     }
 };
+#pragma warning(pop)
+
 constexpr Grid grid{16, 16, 1.0, 4.0, 4.0, 96.0f};
 constexpr std::uint64_t gpuBytes = 2ull * 9 * 16 * 16 + 64ull * 1024 * 1024;
 GpuResidencyReservation Reserve(GpuResidencyBudget& budget, std::uint64_t generation, std::uint64_t bytes = gpuBytes)

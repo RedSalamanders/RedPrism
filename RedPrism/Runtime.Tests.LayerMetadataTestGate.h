@@ -13,6 +13,10 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct LayerMetadataTestGate final
 {
     // Harness-only original owner observations. Weak controls are deliberately reset after retirement;
@@ -34,3 +38,4 @@ struct LayerMetadataTestGate final
     std::atomic<unsigned int> visits{0}, faultHits{0}, captures{0}, residentGrowths{0}, residencyRefreshes{0};
     std::atomic<bool> refreshReservationHeld{false};
 };
+#pragma warning(pop)

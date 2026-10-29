@@ -70,6 +70,10 @@ enum class Invalid
     Failure,
     Cancelled
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct State final
 {
     JobScheduler* scheduler = nullptr;
@@ -95,7 +99,12 @@ struct State final
     bool callbackSeen = false;
     bool joinedSeen = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PersistentOutputJob final : public Job
 {
   public:
@@ -181,6 +190,7 @@ class PersistentOutputJob final : public Job
     }
     State& _state;
 };
+#pragma warning(pop)
 
 void Submit(JobScheduler& scheduler, State& state)
 {

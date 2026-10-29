@@ -55,6 +55,10 @@ struct Application::MergeProbePayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Application::MergePlanProbeJob final : public Job
 {
   public:
@@ -89,8 +93,8 @@ class Application::MergePlanProbeJob final : public Job
                     const std::unique_ptr<MergeProbePayload> owned(payload);
                 }
             };
-            _payload = std::shared_ptr<MergeProbePayload>{allocated.release(), retire,
-                                                          PublicationGraphAllocator<MergeProbePayload>{_memory}};
+            _payload = std::shared_ptr<MergeProbePayload>(allocated.release(), retire,
+                                                          PublicationGraphAllocator<MergeProbePayload>{_memory});
             return {}; // Original admitted Compute allocates before the owner captures source/selection.
         }
         if (_gate && _gate->throwProbeAllocationFailure)
@@ -240,11 +244,16 @@ class Application::MergePlanProbeJob final : public Job
     bool _captured = false;
     std::int32_t _captureError = 0;
 };
+#pragma warning(pop)
 
 namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct MergePayload final : DeferredReleaseNode
 {
     std::shared_ptr<SharedPublicationMemory> memory;
@@ -269,6 +278,8 @@ struct MergePayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireMergePayload final
 {
     void operator()(MergePayload* payload) const noexcept
@@ -279,6 +290,10 @@ struct RetireMergePayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Application::MergeReadbackJob final : public RecordedDocumentReadbackJob
 {
   public:
@@ -421,6 +436,7 @@ class Application::MergeReadbackJob final : public RecordedDocumentReadbackJob
     const std::shared_ptr<MergeProbePayload> _probe;
     std::unique_ptr<MergePayload, RetireMergePayload> _payload;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartPreparedMergeReadback(HistoryWorkStamp stamp, std::uint64_t generation,
                                                 std::shared_ptr<MergeProbePayload> source) noexcept

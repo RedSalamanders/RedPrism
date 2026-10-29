@@ -1,11 +1,11 @@
 #include "Composition.Tests.GpuRasterUploadJob.h"
 
-#include "../../Common/Document.h"
-#include "../../Common/Jobs.h"
-#include "../../Common/OwnerWorkMultiplexer.h"
-#include "../../Common/RasterUploadLayout.h"
-#include "../../RedPrism/GpuRasterUploadJob.h"
-#include "../../RedPrism/GpuUploadWork.h"
+#include "Common/Document.h"
+#include "Common/Jobs.h"
+#include "Common/OwnerWorkMultiplexer.h"
+#include "Common/RasterUploadLayout.h"
+#include "RedPrism/GpuRasterUploadJob.h"
+#include "RedPrism/GpuUploadWork.h"
 
 #include <array>
 #include <atomic>
@@ -50,6 +50,10 @@ struct Device final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     JobScheduler scheduler;
@@ -90,7 +94,12 @@ struct Fixture final
         Close();
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 struct GatedOwnerPump final : OwnerWorkPump
 {
     GatedOwnerPump(JobScheduler& ownerScheduler, OwnerWorkMultiplexer& ownerRoutes) noexcept
@@ -130,7 +139,12 @@ struct GatedOwnerPump final : OwnerWorkPump
     OwnerWorkMultiplexer& routes;
     bool paused = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct GatedFixture final
 {
     JobScheduler scheduler;
@@ -174,6 +188,7 @@ struct GatedFixture final
         Close();
     }
 };
+#pragma warning(pop)
 
 wil::com_ptr_nothrow<ID3D11Texture2D> MakeTarget(Device& device, unsigned int width, unsigned int height,
                                                  DXGI_FORMAT format, std::uint8_t guard) noexcept
@@ -278,6 +293,10 @@ struct Completion final
     JobScheduler* scheduler = nullptr;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class ProbeJob final : public GpuRasterUploadJob
 {
   public:
@@ -309,7 +328,12 @@ class ProbeJob final : public GpuRasterUploadJob
     }
     Completion& _completion;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Observer final
 {
     wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -340,6 +364,7 @@ struct Observer final
         self.wokeForShutdown = result == WAIT_OBJECT_0 + 1;
     }
 };
+#pragma warning(pop)
 
 RasterUploadLayout Layout(const Raster& source, int x, int y, int width, int height, int scale,
                           std::uint64_t chunkBytes) noexcept
@@ -533,17 +558,31 @@ void RunEarlyRefusals()
            "refusal.scratch-reservation-fails-before-map-and-releases");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Blocker final
 {
     wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Marker final
 {
     wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class MarkerJob final : public Job
 {
   public:
@@ -558,7 +597,12 @@ class MarkerJob final : public Job
   private:
     Marker& _marker;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class BlockerJob final : public Job
 {
   public:
@@ -575,6 +619,7 @@ class BlockerJob final : public Job
   private:
     Blocker& _blocker;
 };
+#pragma warning(pop)
 
 void RunProducerSkippedCancellation()
 {

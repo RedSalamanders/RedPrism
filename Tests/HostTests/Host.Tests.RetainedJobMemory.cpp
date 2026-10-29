@@ -1,6 +1,6 @@
 #include "Host.Tests.RetainedJobMemory.h"
 
-#include "../../Common/Jobs.h"
+#include "Common/Jobs.h"
 
 #include <windows.h>
 
@@ -100,6 +100,10 @@ struct CallbackState final
     bool noAdditionalSample = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class BasicJob final : public Job
 {
   public:
@@ -133,6 +137,7 @@ class BasicJob final : public Job
     CallbackState& _state;
     JobResult _result;
 };
+#pragma warning(pop)
 
 bool Submit(JobScheduler& scheduler, CallbackState& state, std::uint64_t bytes, int& failures, const char* name,
             bool allowMemoryWaiting = true) noexcept
@@ -194,6 +199,10 @@ void TestExactFinalCallbackAuthority(int& failures)
             SetupFailure("callback-authority.initialize");
         auto entered = Event();
         auto release = Event();
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             JobScheduler& scheduler;
@@ -207,7 +216,13 @@ void TestExactFinalCallbackAuthority(int& failures)
                 ++attempts;
                 illegalResult = scheduler.RetainMemory(target, illegal);
             }
-        } state{scheduler, kind};
+        }
+#pragma warning(pop)
+        state{scheduler, kind};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
         class Source final : public Job
         {
           public:
@@ -232,6 +247,12 @@ void TestExactFinalCallbackAuthority(int& failures)
           private:
             State& _state;
         };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
         class Target final : public Job
         {
           public:
@@ -248,6 +269,12 @@ void TestExactFinalCallbackAuthority(int& failures)
           private:
             State& _state;
         };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
         class OwnerPump final : public OwnerWorkPump
         {
           public:
@@ -269,11 +296,17 @@ void TestExactFinalCallbackAuthority(int& failures)
           private:
             State& _state;
             bool _ready;
-        } pump{state};
+        }
+#pragma warning(pop)
+        pump{state};
         struct Gate final
         {
             HANDLE entered, release;
         } gate{entered.get(), release.get()};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
         class Barrier final : public Job
         {
           public:
@@ -289,6 +322,8 @@ void TestExactFinalCallbackAuthority(int& failures)
           private:
             Gate& _gate;
         };
+#pragma warning(pop)
+
         if (!scheduler.RegisterOwnerWork(pump))
             SetupFailure("callback-authority.register-owner");
         std::unique_ptr<Job> source = std::make_unique<Source>(state);
@@ -411,6 +446,10 @@ void TestRefusedTransferStates(int& failures)
         HANDLE entered;
         HANDLE release;
     } gate{entered.get(), release.get()};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
     class GateJob final : public Job
     {
       public:
@@ -426,6 +465,8 @@ void TestRefusedTransferStates(int& failures)
       private:
         Gate& _gate;
     };
+#pragma warning(pop)
+
     std::unique_ptr<Job> blocker = std::make_unique<GateJob>(gate);
     JobTicket blockerTicket;
     (void)cancelledScheduler.Submit(blocker, {JobClass::Background, 0, 0}, blockerTicket);
@@ -498,6 +539,10 @@ struct CapacityState final
     bool overflowKeptReservation = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CapacityJob final : public Job
 {
   public:
@@ -531,6 +576,7 @@ class CapacityJob final : public Job
     std::size_t _ordinal;
     JobTicket _ticket{};
 };
+#pragma warning(pop)
 
 void TestCapacityRefusal(int& failures)
 {

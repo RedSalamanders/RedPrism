@@ -17,6 +17,10 @@
 #include <utility>
 #include <vector>
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::PathClassificationJob final : public Job, public PathReadWaitReceiver
 {
     enum class Phase
@@ -32,6 +36,10 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
         Retire,
         Retired
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Payload final : DeferredReleaseNode
     {
         std::vector<std::wstring> paths;
@@ -43,6 +51,8 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
             read.Initialize(event, source);
         }
     };
+#pragma warning(pop)
+
     struct PayloadDelete final
     {
         void operator()(Payload* value) const noexcept
@@ -113,6 +123,11 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
             _payload.reset();
             _phase = Phase::Retired;
             return _terminalResult;
+        case ::Application::PathClassificationJob::Phase::BatchComplete:
+        case ::Application::PathClassificationJob::Phase::CapturePaths:
+        case ::Application::PathClassificationJob::Phase::NeedIssue:
+        case ::Application::PathClassificationJob::Phase::NeedRearm:
+        case ::Application::PathClassificationJob::Phase::Retired:
         default:
             return {JobStatus::Failed, E_UNEXPECTED};
         }
@@ -344,6 +359,7 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
     Phase _phase = Phase::Allocate;
     bool _readCycle = false, _terminal = false, _stale = false;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartPathClassification(const HostPathsInput& input) noexcept
 {
@@ -403,6 +419,10 @@ int Application::RunPathClassificationSelfTest() noexcept
         Allocation,
         Replace
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -413,6 +433,8 @@ int Application::RunPathClassificationSelfTest() noexcept
         bool held = false;
         bool cancellationPending = false;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<State*>(context);

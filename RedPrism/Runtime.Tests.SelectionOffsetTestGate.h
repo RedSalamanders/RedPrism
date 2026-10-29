@@ -14,6 +14,10 @@
 
 class SharedPublicationMemory;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct SelectionOffsetTestGate final
 {
     static constexpr UINT kMessage = WM_APP + 0x4c7;
@@ -36,3 +40,4 @@ struct SelectionOffsetTestGate final
     std::atomic<bool> reservationHeld{false}, refreshReservationHeld{false}, retired{false}, retiredOffOwner{false};
     std::atomic<unsigned int> visits{0}, captures{0}, historyFaultHits{0}, residentGrowths{0}, residencyRefreshes{0};
 };
+#pragma warning(pop)

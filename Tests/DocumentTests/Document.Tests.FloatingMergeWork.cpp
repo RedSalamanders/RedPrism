@@ -1,8 +1,8 @@
 #include "Document.Tests.FloatingMergeWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "FloatingMergeWork.h"
 #include "Selection.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>

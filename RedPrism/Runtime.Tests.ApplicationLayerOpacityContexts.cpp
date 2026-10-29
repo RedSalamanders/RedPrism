@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.LayerMetadataTestGate.h"
@@ -143,12 +143,18 @@ int Application::RunLayerOpacityContextsSelfTest() noexcept
         gate->retiredOffOwner.store(false);
         gate->hold = true;
         const auto commit = input(active, 0.375, ChromeEditPhase::Commit);
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct HeldCommit final
         {
             Application& owner;
             std::uint64_t opening;
             bool captured = false;
-        } held{*this, opening};
+        }
+#pragma warning(pop)
+        held{*this, opening};
         const auto pump = [](void* opaque, void* native) noexcept
         {
             auto& state = *static_cast<HeldCommit*>(opaque);
@@ -300,13 +306,19 @@ int Application::RunLayerOpacityContextsSelfTest() noexcept
         gate->retiredOffOwner.store(false);
         gate->hold = true;
         const auto stale = input(target, .375, ChromeEditPhase::Commit);
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct Reopened final
         {
             Application& owner;
             const decltype(reopen)& action;
             bool visited = false;
             bool changed = false;
-        } state{*this, reopen};
+        }
+#pragma warning(pop)
+        state{*this, reopen};
         const auto pump = [](void* opaque, void* native) noexcept
         {
             auto& state = *static_cast<Reopened*>(opaque);

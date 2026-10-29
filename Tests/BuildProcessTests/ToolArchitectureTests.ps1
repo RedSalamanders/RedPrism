@@ -7,7 +7,7 @@ $fixture = Join-Path $repo ('.build/ToolTests/ToolArchitecture-' + [guid]::NewGu
 New-Item -ItemType Directory -Path (Join-Path $fixture 'Build') -Force | Out-Null
 
 # Execute the exact build entrypoint with dependency/compiler stand-ins. These controls never compile C++.
-foreach ($relative in @('build.ps1', 'Build/BuildPresentation.psm1', 'Build/BuildPreflight.psm1', 'Build/VisualStudioDiscovery.psm1')) {
+foreach ($relative in @('build.ps1', 'Build/BuildConsole.psm1', 'Build/BuildPresentation.psm1', 'Build/BuildPreflight.psm1', 'Build/VisualStudioDiscovery.psm1')) {
     $source = Join-Path $repo $relative
     $target = Join-Path $fixture $relative
     Copy-Item -LiteralPath $source -Destination $target
@@ -41,6 +41,17 @@ param([Parameter(ValueFromRemainingArguments)][string[]] $Arguments)
 Invoke-ToolBoundary $PSScriptRoot 'solution'
 $state = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'case.json') -Raw | ConvertFrom-Json
 if ($state.failure -eq 'solution-exit') { $global:LASTEXITCODE = 19; return }
+$logArgument = @($Arguments | Where-Object { $_ -match '^/flp:LogFile=' })[0]
+if (-not $logArgument) { throw 'The real build entrypoint must capture a native diagnostic log.' }
+$nativeLog = $logArgument.Substring('/flp:LogFile='.Length).Split(';')[0]
+if ($state.failure -ne 'missing-log') {
+    $text = switch ($state.failure) {
+        'warning-log' { 'fixture.cpp(1): warning C4189: zero native exit is insufficient' }
+        'error-log' { 'LINK : error LNK2001: zero native exit is insufficient' }
+        default { 'Build succeeded.' }
+    }
+    [IO.File]::WriteAllText($nativeLog, $text)
+}
 $output = Join-Path $PSScriptRoot '.build/ARM64/Release'
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 [IO.File]::WriteAllText((Join-Path $output 'RedPrism.exe'), 'not executable; build-boundary fixture only')
@@ -82,6 +93,9 @@ try {
         @{name='dependency-failure';value=$null;failure='dependencies';clean=$false;boundaries=@('dependencies')},
         @{name='restore-failure';value='arm64';failure='restore';clean=$false;boundaries=@('dependencies','restore')},
         @{name='solution-failure';value=$null;failure='solution-exit';clean=$false;boundaries=@('dependencies','restore','solution')},
+        @{name='native-warning';value=$null;failure='warning-log';clean=$false;boundaries=@('dependencies','restore','solution')},
+        @{name='native-error';value=$null;failure='error-log';clean=$false;boundaries=@('dependencies','restore','solution')},
+        @{name='missing-native-log';value=$null;failure='missing-log';clean=$false;boundaries=@('dependencies','restore','solution')},
         @{name='provenance-failure';value=$null;failure='provenance';clean=$false;boundaries=@('dependencies','restore','solution','provenance')},
         @{name='clean';value=$null;failure='';clean=$true;boundaries=@('solution')}
     )
@@ -98,7 +112,13 @@ try {
         if ($case.failure -eq '') {
             if ($failure) { throw "$($case.name): $failure" }
         } else {
-            $expected = if ($case.failure -eq 'solution-exit') { 'MSBuild failed with exit code 19' } else { 'CONTROL_FAILURE_' + $case.failure }
+            $expected = switch ($case.failure) {
+                'solution-exit' { 'MSBuild failed with exit code 19' }
+                'warning-log' { 'Zero-warning build validation failed: 1 warning(s), 0 error(s)' }
+                'error-log' { 'Zero-warning build validation failed: 0 warning(s), 1 error(s)' }
+                'missing-log' { 'Build diagnostics log is missing' }
+                default { 'CONTROL_FAILURE_' + $case.failure }
+            }
             if (-not $failure -or -not $failure.Contains($expected)) { throw "$($case.name) lost the original failure: $failure" }
         }
         $trace = @(Get-Content -LiteralPath (Join-Path $fixture 'trace.jsonl') | ForEach-Object { $_ | ConvertFrom-Json })

@@ -177,8 +177,9 @@ int RunRasterConcurrencyTests(int rounds)
                             {
                                 const std::uint8_t* pixels = owned.Data();
                                 valid &= CheckPixels(owned, pixels);
-                                valid &= pointers[thread] == nullptr || pointers[thread] == pixels;
-                                pointers[thread] = pixels;
+                                valid &= pointers[static_cast<std::size_t>(thread)] == nullptr ||
+                                         pointers[static_cast<std::size_t>(thread)] == pixels;
+                                pointers[static_cast<std::size_t>(thread)] = pixels;
                             }
                             else
                             {
@@ -200,7 +201,7 @@ int RunRasterConcurrencyTests(int rounds)
                                 });
                             valid &= storageCount == 3;
                         }
-                        passed[thread] = valid;
+                        passed[static_cast<std::size_t>(thread)] = valid;
                     });
             }
         }
@@ -224,7 +225,8 @@ int RunRasterConcurrencyTests(int rounds)
         for (int thread = 0; thread < kThreads; ++thread)
         {
             const Raster& target = sharedBase && thread % 2 != 0 ? sibling : raster;
-            if (!passed[thread] || (thread < kThreads / 2 && pointers[thread] != target.Data()))
+            if (!passed[static_cast<std::size_t>(thread)] ||
+                (thread < kThreads / 2 && pointers[static_cast<std::size_t>(thread)] != target.Data()))
             {
                 std::printf("FAIL sparse.concurrent-readers round=%d thread=%d\n", round, thread);
                 return 1;

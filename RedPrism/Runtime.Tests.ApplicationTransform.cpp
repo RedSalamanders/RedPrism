@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.TransformWorkTestGate.h"
@@ -34,6 +34,10 @@ int Application::RunTransformWorkSelfTest() noexcept
         SameIdReplacement,
         YoungerUndo
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -53,6 +57,8 @@ int Application::RunTransformWorkSelfTest() noexcept
         bool retained = false;
         bool viewChanged = false;
     };
+#pragma warning(pop)
+
     unsigned checks = 0;
     unsigned failures = 0;
     const auto expect =

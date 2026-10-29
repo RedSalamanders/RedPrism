@@ -422,7 +422,7 @@ void RunPublicationLifetime()
 {
     auto memory = NewMemory();
     std::weak_ptr<const SharedPublicationMemory> weakMemory{memory};
-    auto marker = MakePublicationObject<Marker>(memory, kLiteralValueBytes, 9001);
+    auto marker = MakePublicationObject<Marker>(memory, kLiteralValueBytes, std::uint64_t{9001});
     std::shared_ptr<const Marker> strongMarker = marker;
     std::weak_ptr<const Marker> weakMarker{strongMarker};
     const void* const ownedKeyAddress = strongMarker.get();

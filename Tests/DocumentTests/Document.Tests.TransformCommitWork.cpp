@@ -1,6 +1,6 @@
 #include "Document.Tests.TransformCommitWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "TransformCommitWork.h"
 
 #include <array>

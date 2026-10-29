@@ -14,6 +14,10 @@
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct LassoOpeningPayload final : DeferredReleaseNode
 {
     std::shared_ptr<LassoWorkTestGate> gate;
@@ -37,6 +41,8 @@ struct LassoOpeningPayload final : DeferredReleaseNode
         { const std::unique_ptr<LassoOpeningPayload> owned(static_cast<LassoOpeningPayload*>(node)); };
     }
 };
+#pragma warning(pop)
+
 struct RetireLassoOpeningPayload final
 {
     void operator()(LassoOpeningPayload* value) const noexcept
@@ -49,6 +55,10 @@ struct RetireLassoOpeningPayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::LassoOpeningJob final : public Job
 {
   public:
@@ -209,6 +219,7 @@ class Application::LassoOpeningJob final : public Job
     HRESULT _captureError = S_OK;
     bool _captured = false;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartLassoOpening(std::uint64_t opening) noexcept
 {

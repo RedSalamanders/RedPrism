@@ -191,6 +191,12 @@ std::optional<std::uint64_t> RenderMemoryBytes(const ColorEdit& edit, int width,
         kernelPeak += static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension *
                       Adjust::kCubeDimension * 4 * sizeof(float);
         break;
+    case ::FilterKind::AddNoise:
+    case ::FilterKind::Curves:
+    case ::FilterKind::Exposure:
+    case ::FilterKind::GradientMap:
+    case ::FilterKind::Grain:
+    case ::FilterKind::Levels:
     default:
         break;
     }
@@ -211,6 +217,11 @@ int ColorEditPreviewLimit(FilterKind kind) noexcept
     case FilterKind::MotionBlur:
     case FilterKind::LensCorrection:
         return 2048;
+    case ::FilterKind::Curves:
+    case ::FilterKind::Exposure:
+    case ::FilterKind::GradientMap:
+    case ::FilterKind::HueSaturation:
+    case ::FilterKind::Levels:
     default:
         return 4096;
     }
@@ -372,7 +383,8 @@ std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEdit& edit, 
     const auto preparation = downscale ? fullRgba + rgba : 0;
     if (lookupPreview && FilterIsImageAdjustment(edit.kind))
     {
-        const auto coverage = CoverageMemoryBytes(edit, width, height);
+        const auto coverage =
+            CoverageMemoryBytes(edit, static_cast<std::uint64_t>(width), static_cast<std::uint64_t>(height));
         if (!coverage)
             return std::nullopt;
         const bool cachedCoverage = cached && edit.previewCoverage.Format() == RasterFormat::Gray8 &&

@@ -1,10 +1,10 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "PreparedLayerRows.h"
 #include "Runtime.Tests.StrokeFinishTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "WarpStroke.h"
 
 #include <algorithm>
@@ -51,7 +51,8 @@ Raster LiteralSource(Geometry geometry)
                 const int ix = geometry == Geometry::Scaled ? dx / 2 : geometry == Geometry::Rotated ? 7 - dx : dx;
                 const int iy = geometry == Geometry::Scaled ? dy / 2 : geometry == Geometry::Rotated ? 7 - dy : dy;
                 auto* pixel = pixels.data() + (y * kSide + x) * 4;
-                std::copy(kColors[(iy / 4) * 2 + ix / 4].begin(), kColors[(iy / 4) * 2 + ix / 4].end(), pixel);
+                std::copy(kColors[static_cast<std::size_t>((iy / 4) * 2 + ix / 4)].begin(),
+                          kColors[static_cast<std::size_t>((iy / 4) * 2 + ix / 4)].end(), pixel);
                 if (geometry == Geometry::Sparse && ix == 2 && iy == 3)
                     std::fill_n(pixel, 4, std::uint8_t{255});
             }
@@ -82,7 +83,8 @@ CanvasDocument Scene(Geometry geometry, Guid& active)
         std::array<std::uint8_t, 8 * 8 * 4> pixels{};
         for (int y = 0; y < 8; ++y)
             for (int x = 0; x < 8; ++x)
-                std::copy(kColors[(y / 4) * 2 + x / 4].begin(), kColors[(y / 4) * 2 + x / 4].end(),
+                std::copy(kColors[static_cast<std::size_t>((y / 4) * 2 + x / 4)].begin(),
+                          kColors[static_cast<std::size_t>((y / 4) * 2 + x / 4)].end(),
                           pixels.data() + (y * 8 + x) * 4);
         auto image = Raster::Make(8, 8, RasterFormat::Bgra8888, pixels.data(), pixels.size());
         if (geometry == Geometry::Sparse)

@@ -1,6 +1,6 @@
 #include "Host.Tests.PointerInputStream.h"
 
-#include "../../Common/PointerInputStream.h"
+#include "Common/PointerInputStream.h"
 
 #include <cstdint>
 #include <cstdio>

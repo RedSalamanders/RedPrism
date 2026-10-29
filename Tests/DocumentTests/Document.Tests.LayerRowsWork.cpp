@@ -1,8 +1,8 @@
 #include "Document.Tests.LayerRowsWork.h"
 
-#include "../../Common/DeferredRelease.h"
-#include "../../Common/LayerRowsWork.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Common/DeferredRelease.h"
+#include "Common/LayerRowsWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstddef>

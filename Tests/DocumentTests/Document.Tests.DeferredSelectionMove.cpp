@@ -1,10 +1,10 @@
 #include "Document.Tests.DeferredSelectionMove.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Selection.h"
 #include "SelectionMoveOpeningWork.h"
 #include "SelectionMoveWork.h"
 #include "SelectionNudgeWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -54,6 +54,10 @@ constexpr std::array<Vec2, 4> kHole{{{1, 0}, {1, 4}, {5, 4}, {5, 0}}};
 constexpr std::array<Vec2, 4> kOriginOuter{{{1, 1}, {9, 1}, {9, 9}, {1, 9}}};
 constexpr std::array<Vec2, 4> kOriginHole{{{3, 3}, {3, 7}, {7, 7}, {7, 3}}};
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     std::unique_ptr<DocumentSession> session{new DocumentSession()};
@@ -84,6 +88,7 @@ struct Fixture final
                 HasLiteral(session->Selection(), kOriginOuter, kOriginHole) && session->history.CanRedo();
     }
 };
+#pragma warning(pop)
 
 using InputResult = std::optional<SelectionMoveClosureInput>;
 using PreparedResult = std::optional<PreparedSelectionMoveClosure>;

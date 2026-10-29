@@ -1,8 +1,8 @@
 #include "Document.Tests.SelectionPixelParent.h"
 
-#include "../../RedPrism/SelectionOutlineGestureJob.h"
-#include "../../RedPrism/SelectionOutlineGestureMemory.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "RedPrism/SelectionOutlineGestureJob.h"
+#include "RedPrism/SelectionOutlineGestureMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -54,6 +54,10 @@ struct Memory
         return true;
     }
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct WorkProbe
 {
     const std::thread::id owner = std::this_thread::get_id();
@@ -69,6 +73,12 @@ struct WorkProbe
             probe.closure.fetch_add(1);
     }
 };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture
 {
     Memory memory;
@@ -172,6 +182,8 @@ struct Fixture
                "joined-last-readers-refund-complete-original");
     }
 };
+#pragma warning(pop)
+
 void Inside(const char* name, bool duplicate, bool shift, bool zero = false, bool lost = false)
 {
     scenario = name;

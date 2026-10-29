@@ -823,6 +823,10 @@ class ChromeHost final : public CommandIds
     }
 
   private:
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
     class LayerTreeModel final : public DxUi::ITreeModel, public DxUi::ITreeDelegate
     {
       public:
@@ -873,9 +877,14 @@ class ChromeHost final : public CommandIds
         void OnTreeItemInvoked(uint64_t itemId) override;
         void OnTreeReorder(const DxUi::TreeDrop& drop) override;
     };
+#pragma warning(pop)
 
     // The Command List's rows. An item's id is its command id, so a selection survives filtering only while its
     // command is still listed and never moves to another command.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
     class ShortcutListModel final : public DxUi::ITreeModel, public DxUi::ITreeDelegate
     {
       public:
@@ -895,6 +904,7 @@ class ChromeHost final : public CommandIds
         [[nodiscard]] std::optional<std::size_t> FindVisibleItemById(uint64_t itemId) const noexcept override;
         void OnTreeItemInvoked(uint64_t itemId) override;
     };
+#pragma warning(pop)
 
     HRESULT BindDevice(ID3D11Device* device) noexcept;
     HRESULT Build() noexcept;
