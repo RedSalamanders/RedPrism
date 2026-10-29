@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.HistoryResidencyTestGate.h"
@@ -15,6 +15,10 @@
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PublishLiteralCache final : public Job
 {
   public:
@@ -36,6 +40,7 @@ class PublishLiteralCache final : public Job
     const Raster _source; // Literal eight-byte fixture only; no large owner destruction on this diagnostic lane.
     bool& _completed;
 };
+#pragma warning(pop)
 
 class OccupyResidencySlot final : public Job
 {
@@ -130,6 +135,10 @@ int Application::RunHistoryResidencySelfTest() noexcept
                     !_session.history.NeedsResidencyMaintenance() && _session.history.RetainedBytes(original) == 4 &&
                         !_session.history.IsModified()))
             return 5;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             Application& owner;
@@ -139,7 +148,9 @@ int Application::RunHistoryResidencySelfTest() noexcept
             ContinuationReceipt dependent;
             std::uint64_t generation = 0;
             bool visited = false, held = false;
-        } state{*this, mode, original, {}, revision, {}, {}, generation};
+        }
+#pragma warning(pop)
+        state{*this, mode, original, {}, revision, {}, {}, generation};
         const auto dispatch = [](void* raw, void* native) noexcept
         {
             auto& state = *static_cast<State*>(raw);
@@ -306,6 +317,10 @@ int Application::RunHistoryResidencySelfTest() noexcept
     _session.EndEdit();
     const auto deferredFinishedGeneration = _session.Generation();
     DocumentChanged(); // Existing owner finisher wake rearms the deferred notice without creating a user edit.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct DeferredState final
     {
         Application& owner;
@@ -314,7 +329,9 @@ int Application::RunHistoryResidencySelfTest() noexcept
         std::uint64_t generation;
         bool reached = false;
         bool held = false;
-    } deferredState{*this, deferredOriginal, deferredRevision, deferredFinishedGeneration};
+    }
+#pragma warning(pop)
+    deferredState{*this, deferredOriginal, deferredRevision, deferredFinishedGeneration};
     const auto deferredDispatch = [](void* raw, void* native) noexcept
     {
         auto& state = *static_cast<DeferredState*>(raw);

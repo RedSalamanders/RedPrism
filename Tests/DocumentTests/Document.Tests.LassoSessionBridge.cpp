@@ -63,6 +63,10 @@ bool SamePoint(Vec2 left, Vec2 right) noexcept
     return left.x == right.x && left.y == right.y;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct OpeningState final
 {
     JobScheduler* scheduler = nullptr;
@@ -96,7 +100,12 @@ struct OpeningState final
     bool unboundApplyRefused = false;
     DocumentSession* session = nullptr;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PrepareOpeningJob final : public Job
 {
   public:
@@ -195,6 +204,8 @@ class PrepareOpeningJob final : public Job
     bool _preparationStage = false;
     bool _contextAdmissionHeld = false;
 };
+#pragma warning(pop)
+
 bool StartScheduler(JobScheduler& scheduler) noexcept
 {
     if (scheduler.Initialize(1, {}, {SampleMemory, nullptr}) != S_OK)

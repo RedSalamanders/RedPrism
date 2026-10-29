@@ -26,6 +26,10 @@ bool AddPixelFinalBytes(std::uint64_t& value, std::uint64_t extra) noexcept
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct PixelFinalPayload final : DeferredReleaseNode
 {
     // These accounting aliases die last, after every owned graph/history/row payload.
@@ -76,6 +80,8 @@ struct PixelFinalPayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetirePixelFinalPayload final
 {
     void operator()(PixelFinalPayload* value) const noexcept
@@ -87,6 +93,10 @@ struct RetirePixelFinalPayload final
 } // namespace
 
 // This stage belongs to its already admitted selection/Size original, never a submitted younger job.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Application::FinalPublicationJob final : public Job
 {
     enum class Stage
@@ -277,6 +287,11 @@ class Application::FinalPublicationJob final : public Job
         case Stage::RetireGraph:
         case Stage::Destroy:
             return {}; // Actual destruction lives in the unconditional worker hook, including skipped Runs.
+        case ::Application::FinalPublicationJob::Stage::AwaitRows:
+        case ::Application::FinalPublicationJob::Stage::AwaitSlot:
+        case ::Application::FinalPublicationJob::Stage::AwaitTransport:
+        case ::Application::FinalPublicationJob::Stage::Intro:
+        case ::Application::FinalPublicationJob::Stage::Publish:
         default:
             return {JobStatus::Failed, E_UNEXPECTED};
         }
@@ -396,6 +411,11 @@ class Application::FinalPublicationJob final : public Job
             return _terminal.status == JobStatus::Finished ? PublishOwner() : BeginRetirement();
         case Stage::Destroy:
             return false;
+        case ::Application::FinalPublicationJob::Stage::AwaitRows:
+        case ::Application::FinalPublicationJob::Stage::AwaitSlot:
+        case ::Application::FinalPublicationJob::Stage::AwaitTransport:
+        case ::Application::FinalPublicationJob::Stage::Record:
+        case ::Application::FinalPublicationJob::Stage::RetireGraph:
         default:
             std::terminate();
         }
@@ -470,6 +490,7 @@ class Application::FinalPublicationJob final : public Job
         _shutdownJoined = true;
     }
 };
+#pragma warning(pop)
 
 bool Application::AddPixelFinalAdmissionOwner(SelectionOutlineGestureMemory& memory, std::uint64_t& cpuBound,
                                               std::uint64_t& gpuBound) const noexcept

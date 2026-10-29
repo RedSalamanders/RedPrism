@@ -204,7 +204,7 @@ void SamplingAndRefusals()
                 static_cast<void>(cancellation.request_stop());
                 destination.fill(0xC7);
                 preCancelledUnchanged =
-                    !reader.Read({0, 0, 2, 2}, destination, 8, CancelToken{cancellation.get_token(), {}}) &&
+                    !reader.Read({0, 0, 2, 2}, destination, 8, CancelToken(cancellation.get_token(), {})) &&
                     std::all_of(destination.begin(), destination.end(), [](std::uint8_t v) { return v == 0xC7; });
             });
         readerWorker.join();
@@ -230,7 +230,7 @@ void SamplingAndRefusals()
             auto cancelledMemory = SharedPublicationMemory::CreateForWork();
             auto cancelled = WarpStroke::MakePlacedForWork(
                 WarpSourceView{RampImage(), Placement(0, 0, 2, 2, LayerSampling::Nearest), 2, 2}, SmearMode::Liquify,
-                kLiquifySettings, owner, CancelToken{cancellation.get_token(), {}}, cancelledMemory);
+                kLiquifySettings, owner, CancelToken(cancellation.get_token(), {}), cancelledMemory);
             preCancelledFactoryRefused = !cancelled;
         });
     factoryWorker.join();
@@ -321,7 +321,7 @@ void PreviewFactoryRefusals()
             missingMemory = !PrepareWarpPreviewForWork(*draft, owner, {}, {});
             std::stop_source stop;
             static_cast<void>(stop.request_stop());
-            cancelled = !PrepareWarpPreviewForWork(*draft, owner, CancelToken{stop.get_token(), {}}, memory);
+            cancelled = !PrepareWarpPreviewForWork(*draft, owner, CancelToken(stop.get_token(), {}), memory);
             draftPreserved = draft->IsValid() && draft->Points().empty() && draft->AllTouchedTilesForWork({}).empty();
             auto incomplete = std::make_shared<PreparedWarpPreview>();
             incomplete->memory = memory;

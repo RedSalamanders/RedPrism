@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 #include "Runtime.Tests.HistoryResidencyTestGate.h"
@@ -16,12 +16,21 @@
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct CacheShutdownWitness final
 {
     wil::unique_handle ready;
     std::atomic<bool> literal{false};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class GrowShutdownCache final : public Job
 {
   public:
@@ -46,6 +55,8 @@ class GrowShutdownCache final : public Job
     const Raster _raster;
     const std::shared_ptr<CacheShutdownWitness> _witness;
 };
+#pragma warning(pop)
+
 } // namespace
 
 int Application::RunStandaloneHistoryResidencyShutdownSelfTest(HINSTANCE instance) noexcept
@@ -150,6 +161,10 @@ int Application::RunStandaloneHistoryResidencyShutdownSelfTest(HINSTANCE instanc
                     : gate->captures.load() == 0 && gate->preparations.load() == 0 &&
                           owner->_historyResidencySource.HasReady() && !owner->_historyResidencyTicket,
                scenario, "actual-source-is-at-selected-shutdown-boundary");
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct JoinedWitness final
         {
             Application& owner;
@@ -159,7 +174,9 @@ int Application::RunStandaloneHistoryResidencyShutdownSelfTest(HINSTANCE instanc
             std::uint64_t generation;
             bool called = false;
             bool preserved = false;
-        } joined{*owner, gate, document, revision, generation};
+        }
+#pragma warning(pop)
+        joined{*owner, gate, document, revision, generation};
         ApplicationShutdownTestProbe probe;
         probe.checkContext = &joined;
         probe.checkJoined = [](void* context) noexcept

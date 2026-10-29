@@ -78,6 +78,10 @@ struct Receiver final : RetryWaitReceiver
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Rig final
 {
     JobScheduler scheduler;
@@ -117,6 +121,7 @@ struct Rig final
         Close();
     }
 };
+#pragma warning(pop)
 
 bool RunFaultCase(RetryWaitFault target, bool initializeFault) noexcept
 {
@@ -162,6 +167,10 @@ struct DeferredEvidence final
     JobResult finalResult{};
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class DeferredRetryJob final : public Job, public RetryWaitReceiver
 {
   public:
@@ -204,6 +213,7 @@ class DeferredRetryJob final : public Job, public RetryWaitReceiver
         evidence.finalResult = result;
     }
 };
+#pragma warning(pop)
 
 void TestRetryIntervalsAndValidation() noexcept
 {

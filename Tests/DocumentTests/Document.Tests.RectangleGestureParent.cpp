@@ -1,9 +1,9 @@
 #include "Document.Tests.RectangleGestureParent.h"
-#include "../../RedPrism/SelectionOutlineGestureJob.h"
-#include "../../RedPrism/SelectionOutlineGestureMemory.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "DocumentDraft.h"
 #include "LassoFinishGeometry.h"
+#include "RedPrism/SelectionOutlineGestureJob.h"
+#include "RedPrism/SelectionOutlineGestureMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <atomic>
 #include <cmath>
@@ -110,6 +110,10 @@ void Install(DocumentSession& session, Initial initial)
     session.ReplaceDocument(std::move(document).Seal(), active);
     session.history.Reset();
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Probe final
 {
     DocumentSession* session = nullptr;
@@ -152,6 +156,12 @@ struct Probe final
             Broken("finish-gate");
     }
 };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     Memory memory;
@@ -243,6 +253,8 @@ struct Fixture final
         Settle(jobs);
     }
 };
+#pragma warning(pop)
+
 void Numeric(Initial initial, const char* name, Vec2 last = {70, 80}, HostSelectionPressInput::Modifiers modifiers = {},
              SelectionBounds wanted = {20, 30, 70, 80}, bool lost = false, LassoKind kind = LassoKind::Rectangle,
              std::uint64_t expectedPoints = 4)
@@ -646,7 +658,7 @@ void FreehandMultiblock()
     auto f = std::make_unique<Fixture>(Initial::Absent, false, LassoKind::Freehand, std::nullopt, SelectionMode::New,
                                        std::nullopt, Vec2{1, 1});
     for (std::uint64_t i = 1; i <= 128; ++i)
-        f->Move({1.0 + .25 * i, 1}, {}, i + 1);
+        f->Move({1.0 + .25 * static_cast<double>(i), 1}, {}, i + 1);
     f->Move({33, 5}, {}, 130);
     f->Move({1, 5}, {}, 131);
     f->End(false, 132);

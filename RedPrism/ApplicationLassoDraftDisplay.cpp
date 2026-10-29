@@ -154,7 +154,7 @@ Renderer::LassoDraftFrame Application::BorrowLassoDraftFrameOwner(float left, fl
     frame.pixelLeft = std::floor(left);
     frame.pixelTop = std::floor(top);
     frame.clipped = _lassoDraftGrid.clipped;
-    frame.clip = {static_cast<float>(_lassoDraftGrid.clipLeft), static_cast<float>(_lassoDraftGrid.clipTop),
-                  static_cast<float>(_lassoDraftGrid.clipRight), static_cast<float>(_lassoDraftGrid.clipBottom)};
+    frame.clip = {{static_cast<float>(_lassoDraftGrid.clipLeft), static_cast<float>(_lassoDraftGrid.clipTop),
+                   static_cast<float>(_lassoDraftGrid.clipRight), static_cast<float>(_lassoDraftGrid.clipBottom)}};
     return frame;
 }

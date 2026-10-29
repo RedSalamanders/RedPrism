@@ -74,7 +74,7 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             const bool validMove = ClientToScreen(benchmarkWindow, &clientOrigin) != FALSE;
             const bool validDpi = currentDpi != 0 && GetWindowRect(benchmarkWindow, &suggested) != FALSE;
             const bool actualDisplayModeAvailable =
-                initialMonitor && GetMonitorInfoW(initialMonitor, reinterpret_cast<MONITORINFO*>(&monitorInfo)) &&
+                initialMonitor && GetMonitorInfoW(initialMonitor, static_cast<MONITORINFO*>(&monitorInfo)) &&
                 EnumDisplaySettingsW(monitorInfo.szDevice, ENUM_CURRENT_SETTINGS, &currentMode) &&
                 currentMode.dmBitsPerPel != 0 && currentMode.dmPelsWidth != 0 && currentMode.dmPelsHeight != 0 &&
                 currentMode.dmPelsWidth <= 0xffff && currentMode.dmPelsHeight <= 0xffff;
@@ -87,7 +87,8 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 (void)SendMessageW(benchmarkWindow, WM_MOVE, 0,
                                    MAKELPARAM(static_cast<WORD>(clientOrigin.x), static_cast<WORD>(clientOrigin.y)));
             if (validDpi)
-                (void)SendMessageW(benchmarkWindow, WM_DPICHANGED, MAKELPARAM(currentDpi, currentDpi),
+                (void)SendMessageW(benchmarkWindow, WM_DPICHANGED,
+                                   static_cast<WPARAM>(MAKELPARAM(currentDpi, currentDpi)),
                                    reinterpret_cast<LPARAM>(&suggested));
             if (validDisplayPayload)
                 (void)SendMessageW(benchmarkWindow, WM_DISPLAYCHANGE, displayBitsPerPixel,
@@ -331,6 +332,10 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 FAILED(owner->InitializeChrome()))
                 return 5;
             owner->BindCompositionDevice();
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
             class EndpointProbeJob final : public Job
             {
               public:
@@ -359,6 +364,8 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 bool& _retained;
                 JobTicket _ticket;
             };
+#pragma warning(pop)
+
             bool diagnosticRetained = false;
             std::unique_ptr<Job> diagnosticJob =
                 std::make_unique<EndpointProbeJob>(owner->_jobs, endpointProbe, diagnosticRetained);
@@ -389,11 +396,17 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             const auto geometry = owner->_session.Selection()->loops.Identity();
             owner->_inverseSelectionTestGate = gate;
             const auto receipt = owner->QueueHostInput(HostCommandInput{ChromeHost::kCommandInverse});
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
             struct Held final
             {
                 Application& owner;
                 bool reached = false;
-            } held{*owner};
+            }
+#pragma warning(pop)
+            held{*owner};
             const auto dispatch = [](void* opaque, void* native) noexcept
             {
                 auto& value = *static_cast<Held*>(opaque);
@@ -470,6 +483,10 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                                   gate->visits.load() == 1,
                               "pending-original-ticket-full-reservation");
             }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
             struct Observation final
             {
                 Application& owner;
@@ -482,15 +499,17 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 SharedRetainedMemoryLease& endpointProbe;
                 std::uint64_t expectedCharge;
                 bool chargeAliveAtDetach = false;
-            } observed{*owner,
-                       root,
-                       geometry,
-                       revision,
-                       generation,
-                       published,
-                       false,
-                       endpointProbe,
-                       kProbeBytes + (published ? gate->inversePublishedBytes : gate->reservationBytes)};
+            }
+#pragma warning(pop)
+            observed{*owner,
+                     root,
+                     geometry,
+                     revision,
+                     generation,
+                     published,
+                     false,
+                     endpointProbe,
+                     kProbeBytes + (published ? gate->inversePublishedBytes : gate->reservationBytes)};
             ApplicationShutdownTestProbe probe;
             probe.checkContext = &observed;
             probe.checkOwner = [](void* opaque) noexcept
@@ -592,6 +611,10 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 FAILED(owner->InitializeChrome()))
                 return 5;
             owner->BindCompositionDevice();
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
             class EndpointProbeJob final : public Job
             {
               public:
@@ -620,6 +643,8 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 bool& _retained;
                 JobTicket _ticket;
             };
+#pragma warning(pop)
+
             bool diagnosticRetained = false;
             std::unique_ptr<Job> diagnosticJob =
                 std::make_unique<EndpointProbeJob>(owner->_jobs, endpointProbe, diagnosticRetained);
@@ -650,11 +675,17 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             const auto geometry = owner->_session.Selection()->loops.Identity();
             owner->_selectionOffsetTestGate = gate;
             const auto receipt = owner->QueueHostInput(HostSelectionOffsetInput{amount});
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
             struct Held final
             {
                 Application& owner;
                 bool reached = false;
-            } held{*owner};
+            }
+#pragma warning(pop)
+            held{*owner};
             const auto dispatch = [](void* opaque, void* native) noexcept
             {
                 auto& value = *static_cast<Held*>(opaque);
@@ -704,6 +735,10 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                                  gate->visits.load() == 1,
                              "pending-original-ticket-full-reservation");
             }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
             struct Observation final
             {
                 Application& owner;
@@ -717,11 +752,13 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 SharedRetainedMemoryLease& endpointProbe;
                 std::uint64_t expectedCharge;
                 bool chargeAliveAtDetach = false;
-            } observed{*owner,        root,
-                       geometry,      revision,
-                       generation,    published,
-                       amount > 0,    false,
-                       endpointProbe, kProbeBytes + (published ? gate->offsetPublishedBytes : gate->reservationBytes)};
+            }
+#pragma warning(pop)
+            observed{*owner,        root,
+                     geometry,      revision,
+                     generation,    published,
+                     amount > 0,    false,
+                     endpointProbe, kProbeBytes + (published ? gate->offsetPublishedBytes : gate->reservationBytes)};
             ApplicationShutdownTestProbe probe;
             probe.checkContext = &observed;
             probe.checkOwner = [](void* opaque) noexcept
@@ -802,7 +839,11 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             const char* direction = redo ? "redo" : "undo";
             const char* phase = held ? "prepared-worker-held" : "before-capture";
             auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
-            // Borrowed observations must outlive cleanup on every refusal as well as the successful path.
+        // Borrowed observations must outlive cleanup on every refusal as well as the successful path.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
             struct Observation final
             {
                 Application& owner;
@@ -814,7 +855,9 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 std::optional<JobTicket> ticket;
                 std::optional<HistoryWorkStamp> stamp;
                 bool reached = false, joined = false, sourcePreserved = false, originalHeldAtJoin = false;
-            } observation{*owner};
+            }
+#pragma warning(pop)
+            observation{*owner};
             ApplicationShutdownTestProbe probe;
             const auto shutdown = wil::scope_exit(
                 [&]() noexcept
@@ -1184,6 +1227,10 @@ int Application::RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexce
 
 int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct MemoryState final
     {
         std::atomic<std::uint64_t> physical{0};
@@ -1192,6 +1239,12 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
         std::atomic<std::uint64_t> sampledCommit{0};
         HANDLE sampled = nullptr;
     };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct BlockerGate final
     {
         wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -1200,6 +1253,12 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
         std::atomic<JobStatus> status{JobStatus::Failed};
         std::atomic<std::int32_t> error{E_PENDING};
     };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
     struct BlockerJob final : Job
     {
         explicit BlockerJob(BlockerGate& gate) noexcept : _gate(gate) {}
@@ -1224,6 +1283,8 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
         }
         BlockerGate& _gate;
     };
+#pragma warning(pop)
+
     enum class Scenario : std::uint8_t
     {
         Recovery,

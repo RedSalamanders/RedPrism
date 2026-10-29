@@ -1,9 +1,10 @@
 #include "Application.h"
+#include <cstddef>
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ProjectStore.h"
 #include "Runtime.Tests.LayerMetadataTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -86,6 +87,10 @@ int Application::RunCanvasBrushLifetimeAcceptedSelfTest() noexcept
                         MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
                                    static_cast<int>(std::lround(hole.top + view.y))));
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State
     {
         Application& owner;
@@ -99,6 +104,8 @@ int Application::RunCanvasBrushLifetimeAcceptedSelfTest() noexcept
         bool decision = false;
         bool ordered = false;
     };
+#pragma warning(pop)
+
     static constexpr auto admit = [](State& state) noexcept
     {
         auto& owner = state.owner;
@@ -165,7 +172,7 @@ int Application::RunCanvasBrushLifetimeAcceptedSelfTest() noexcept
         const Guid target = _session.ActiveLayerID().value();
         std::vector<std::uint8_t> bytes(32 * 24 * 4);
         for (std::size_t offset = 0; offset < bytes.size(); offset += 4)
-            std::copy(sourcePixel.begin(), sourcePixel.end(), bytes.begin() + offset);
+            std::copy(sourcePixel.begin(), sourcePixel.end(), bytes.begin() + static_cast<std::ptrdiff_t>(offset));
         const auto source = Raster::Make(32, 24, RasterFormat::Bgra8888, bytes.data(), bytes.size());
         EditLayerRecordsForTest(_session,
                                 [&](DocumentFixture& document)

@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Adjust.h"
 #include "ChromeHost.h"
@@ -82,7 +82,7 @@ constexpr int kTaskButtonSecond = 101;
     const std::wstring legend = FormatStringResource(nullptr, IDS_QUESTION_FALLBACK, first, second);
     const std::wstring fallback = title + L"\n\n" + text + L"\n\n" + legend;
     switch (MessageBoxW(owner, fallback.c_str(), caption.c_str(),
-                        MB_YESNOCANCEL | (warning ? MB_ICONWARNING : MB_ICONQUESTION)))
+                        static_cast<UINT>(MB_YESNOCANCEL | (warning ? MB_ICONWARNING : MB_ICONQUESTION))))
     {
     case IDYES:
         return kTaskButtonFirst;
@@ -185,6 +185,10 @@ class QuietPromptsImpl final : public Prompts
 };
 
 // Another thread holding the clipboard open, as another app does while it reads or writes: a copy's write fails.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ClipboardHold
 {
     wil::unique_event_nothrow opened;
@@ -194,6 +198,7 @@ struct ClipboardHold
     bool closed = false;
     DWORD released = WAIT_FAILED;
 };
+#pragma warning(pop)
 
 DWORD WINAPI HoldClipboard(void* context) noexcept
 {
@@ -267,6 +272,7 @@ Application::ImageOpenChoice Application::PromptImageOpen(const std::wstring& fi
         return ImageOpenChoice::AddLayer;
     case Prompts::Answer::Second:
         return ImageOpenChoice::NewProject;
+    case ::Prompts::Answer::Cancel:
     default:
         return ImageOpenChoice::Cancel;
     }
@@ -385,9 +391,10 @@ HRESULT Application::SelectHostOutput(HostRequest& request, HostWriteFormat form
                                               : format == HostWriteFormat::Jpeg  ? L"*.jpg;*.jpeg"
                                                                                  : L"*.png"},
                                              {strings.exploded.c_str(), L"*.*"}};
-        const auto name = LoadStringResource(nullptr, format == HostWriteFormat::Project ? IDS_DEFAULT_PROJECT_NAME
-                                                      : format == HostWriteFormat::Jpeg  ? IDS_DEFAULT_EXPORT_JPEG
-                                                                                         : IDS_DEFAULT_EXPORT_PNG);
+        const auto name =
+            LoadStringResource(nullptr, format == HostWriteFormat::Project ? static_cast<UINT>(IDS_DEFAULT_PROJECT_NAME)
+                                        : format == HostWriteFormat::Jpeg  ? IDS_DEFAULT_EXPORT_JPEG
+                                                                           : IDS_DEFAULT_EXPORT_PNG);
         return PickOutputForRequest(_window.get(), name.c_str(),
                                     format == HostWriteFormat::Project ? L"prism"
                                     : format == HostWriteFormat::Jpeg  ? L"jpg"

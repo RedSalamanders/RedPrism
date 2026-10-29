@@ -1,7 +1,7 @@
 #include "Host.Tests.HistoryWork.h"
 
-#include "../../Common/ContinuationQueue.h"
-#include "../../Common/HistoryWork.h"
+#include "Common/ContinuationQueue.h"
+#include "Common/HistoryWork.h"
 
 #include <array>
 #include <cstdint>

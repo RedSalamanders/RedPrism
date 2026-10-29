@@ -124,6 +124,10 @@ bool MakeFixtures(std::array<CanvasDocument, kGraphCount>& documents)
     return documents[0].layers.size() == 1 && documents[1].layers.size() == 1 && documents[2].layers.size() == 1;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class ParentState final : public GpuCommandSourceReceiver, public GpuCompletionReceiver
 {
   public:
@@ -482,7 +486,12 @@ class ParentState final : public GpuCommandSourceReceiver, public GpuCompletionR
         lastUseCapture = {};
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class RecordedBlitParentJob final : public Job
 {
   public:
@@ -559,6 +568,7 @@ class RecordedBlitParentJob final : public Job
   private:
     ParentState& _state;
 };
+#pragma warning(pop)
 
 bool WaitForParent(JobScheduler& scheduler, OwnerWorkMultiplexer& routes, ParentState& state) noexcept
 {

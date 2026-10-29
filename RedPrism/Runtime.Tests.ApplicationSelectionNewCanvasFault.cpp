@@ -135,6 +135,10 @@ int Application::RunSelectionNewCanvasFaultSelfTest() noexcept
         Case{"canvas-selected-crop", Mode::SelectedCrop, false, std::nullopt, SizeCardKind::CanvasSize},
         Case{"image-selected-opacity", Mode::SelectedOpacity, false, std::nullopt, SizeCardKind::ImageSize},
         Case{"image-selected-crop", Mode::SelectedCrop, false, std::nullopt, SizeCardKind::ImageSize}};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -156,6 +160,8 @@ int Application::RunSelectionNewCanvasFaultSelfTest() noexcept
         bool saveVisited = false, saveHeld = false, cancelPending = false, mutationReached = false;
         bool youngerHeld = true, zoomChanged = false, messagePumped = false;
     };
+#pragma warning(pop)
+
     constexpr UINT kNewCanvasOutlinePump = WM_APP + 0x4ce;
     constexpr std::size_t temporarySize = 32768;
     auto temporary = std::make_unique<wchar_t[]>(temporarySize);

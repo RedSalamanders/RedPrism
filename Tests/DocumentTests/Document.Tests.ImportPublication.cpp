@@ -1,8 +1,8 @@
 #include "Document.Tests.ImportPublication.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "ImageImportHistory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "WarpStroke.h"
 
 #include <algorithm>
@@ -231,6 +231,10 @@ enum class DraftContext
     Outline
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class OwnerCoverage final : public BrushCoverageEngine
 {
   public:
@@ -248,6 +252,7 @@ class OwnerCoverage final : public BrushCoverageEngine
         wrongThread = wrongThread || std::this_thread::get_id() != owner;
     }
 };
+#pragma warning(pop)
 
 bool DraftOpen(const DocumentSession& session, DraftContext context) noexcept
 {
@@ -366,12 +371,18 @@ void CheckLiveDraftReplacement()
         for (const bool stop : {false, true})
         {
             CancelSource cancellation;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
             struct Refusal
             {
                 CancelSource& cancellation;
                 bool stop;
                 unsigned int hits = 0;
-            } fault{cancellation, stop};
+            }
+#pragma warning(pop)
+            fault{cancellation, stop};
             const DocumentHistory::PrepareObserver observer{[](void* opaque, DocumentHistory::PrepareStage stage)
                                                             {
                                                                 auto& fault = *static_cast<Refusal*>(opaque);
@@ -1010,12 +1021,18 @@ int RunImportPublicationTests()
             const auto redoName = fixture.session.history.RedoName();
             const CanvasDocument replacement = PixelDocument(L"Refused replacement", kImportedPixel);
             CancelSource cancellation;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
             struct Fault final
             {
                 CancelSource& cancellation;
                 bool stop;
                 unsigned int hits = 0;
-            } fault{cancellation, stop};
+            }
+#pragma warning(pop)
+            fault{cancellation, stop};
             const DocumentHistory::PrepareObserver observer{[](void* context, DocumentHistory::PrepareStage stage)
                                                             {
                                                                 auto& fault = *static_cast<Fault*>(context);

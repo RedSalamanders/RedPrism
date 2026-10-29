@@ -17,6 +17,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct PixelMovePayload final : DeferredReleaseNode
 {
     std::shared_ptr<const SharedPublicationMemory> memory; // All captured/output owners retire first.
@@ -86,6 +90,8 @@ struct PixelMovePayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetirePixelMovePayload final
 {
     void operator()(PixelMovePayload* payload) const noexcept
@@ -101,6 +107,10 @@ struct RetirePixelMovePayload final
 
 // One admission/capture protocol serves both kinds. Requests are primitive event-time values; source handles
 // are captured only under the full held reservation. Run never dereferences the Application or mailboxes.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::PixelMoveJob final : public Job
 {
   public:
@@ -357,6 +367,9 @@ class Application::PixelMoveJob final : public Job
             case RasterEditStatus::Cancelled:
                 outcome = HostOutcome::Cancelled;
                 break;
+            case ::RasterEditStatus::Invalid:
+            case ::RasterEditStatus::Memory:
+            case ::RasterEditStatus::TooLarge:
             default:
                 outcome = HostOutcome::Failed;
                 error = status == RasterEditStatus::TooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
@@ -450,6 +463,7 @@ class Application::PixelMoveJob final : public Job
     std::unique_ptr<PixelMovePayload, RetirePixelMovePayload> _payload;
     HRESULT _captureError = S_OK;
 };
+#pragma warning(pop)
 
 Application::PixelMoveRequest Application::CapturePixelMoveRequest() const noexcept
 {

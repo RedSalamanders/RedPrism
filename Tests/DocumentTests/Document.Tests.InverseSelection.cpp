@@ -1,7 +1,7 @@
 #include "Document.Tests.InverseSelection.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "InverseSelectionWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Document.h"
 #include "Selection.h"
@@ -402,6 +402,10 @@ void CancelInsideInverseBooleanLeavesLiveStateUntouched()
 }
 
 // Spliced into the test's existing anonymous namespace after independent review.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct InverseAccountingState final
 {
     DocumentSession* session = nullptr;
@@ -416,7 +420,12 @@ struct InverseAccountingState final
     bool captured = false, admissionAtCapture = false, preparedOffOwner = false, applied = false;
     JobResult completed{JobStatus::Failed, E_UNEXPECTED};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class InverseAccountingJob final : public Job
 {
   public:
@@ -481,6 +490,7 @@ class InverseAccountingJob final : public Job
   private:
     InverseAccountingState& _state;
 };
+#pragma warning(pop)
 
 bool InverseAccountingMemory(void*, MemorySnapshot& snapshot) noexcept
 {

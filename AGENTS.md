@@ -91,7 +91,7 @@ preserved failures and interruptions, verified identities/hashes/streams/metadat
   catches only `std::bad_alloc`, translating it to a failed job with `E_OUTOFMEMORY`. Other allocation failures
   remain fatal except at explicit `noexcept` construction/admission boundaries that return `E_OUTOFMEMORY` only
   when the caller then fails the operation or exits. Hot paths do not catch.
-- Unicode `stdcpplatest`, `/W4`, `/permissive-`, SDL, warnings as errors, `/utf-8`. Headers that are not Win32
+- Unicode `stdcpplatest`, `/Wall`, `/permissive-`, SDL, zero warnings, with /WX disabled, `/utf-8`. Headers that are not Win32
   headers do not depend on `windows.h` typedefs (`UINT`, `DWORD`); use fixed-width or plain types.
 - One D3D11 device, one flip-model swap chain, one Present. Do not render from `WM_PAINT`.
 - Idle, hidden, minimized, suspended, and occluded work blocks on events. Busy polling is prohibited.
@@ -140,3 +140,12 @@ Keep the fragment in the change: never fold it in a feature change and never edi
 folded on `main` after merge by `Tools/Submit-ChangelogFold.ps1`, which opens a fold pull request of its own. Run
 `Tools/Test-Changelog.ps1` while editing; PrePush and CI run it with `-Base`, which refuses any `CHANGELOG.md` change
 that is not an exact fold of fragments already on `main`. Validation is read-only.
+
+## Shared native build policy (2026-10-28)
+
+Use /Wall with /WX disabled in every first-party profile. A build is accepted
+only with zero warnings and zero errors; fix actionable diagnostics rather than
+adding blanket suppressions. Ordinary Debug uses /ZI, ASan Debug uses /Zi.
+Release explicitly enables /OPT:ICF; Debug/ASan explicitly disable it.
+Follow Specs/Build/Build_ConsoleAndPaths.md for the common green result, safe
+terminal launch links and short dependency folders with full identity checking.

@@ -19,6 +19,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct WandCompositePayload final : DeferredReleaseNode
 {
     std::shared_ptr<SharedPublicationMemory> memory;
@@ -51,6 +55,8 @@ struct WandCompositePayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireWandCompositePayload final
 {
     void operator()(WandCompositePayload* payload) const noexcept
@@ -68,6 +74,10 @@ bool AddWandBytes(std::uint64_t& total, std::uint64_t bytes) noexcept
 }
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJob
 {
   public:
@@ -296,6 +306,7 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
     JobTicket _originalOutputTicket;
     std::unique_ptr<WandCompositePayload, RetireWandCompositePayload> _payload;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartWandCompositeSelection(const HostWandCompositeNewInput& input) noexcept
 {

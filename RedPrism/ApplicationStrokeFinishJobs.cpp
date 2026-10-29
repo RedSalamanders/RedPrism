@@ -26,13 +26,23 @@
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct LiveRetirementCapture final
 {
     std::optional<StrokeFinishInput> input;
     GpuBrushCoverage::StrokeEpoch epoch;
 };
+#pragma warning(pop)
+
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct FinishPayload final : DeferredReleaseNode
 {
     // Last member destruction keeps the original complete final-work admission charged.
@@ -117,6 +127,8 @@ struct FinishPayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetireFinishPayload final
 {
     void operator()(FinishPayload* value) const noexcept
@@ -127,6 +139,10 @@ struct RetireFinishPayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Application::StrokeFinishJob final : public Job,
                                            public GpuCommandSourceReceiver,
                                            public GpuBufferReadbackReceiver,
@@ -972,6 +988,15 @@ class Application::StrokeFinishJob final : public Job,
             _terminalResult = {};
             return BeginRetirementOwner();
         }
+        case ::Application::StrokeFinishJob::Phase::AwaitCommands:
+        case ::Application::StrokeFinishJob::Phase::AwaitCoverage:
+        case ::Application::StrokeFinishJob::Phase::AwaitCoverageSlot:
+        case ::Application::StrokeFinishJob::Phase::AwaitDisplayCommands:
+        case ::Application::StrokeFinishJob::Phase::AwaitInput:
+        case ::Application::StrokeFinishJob::Phase::AwaitRetirement:
+        case ::Application::StrokeFinishJob::Phase::AwaitRetirementSlot:
+        case ::Application::StrokeFinishJob::Phase::Quarantined:
+        case ::Application::StrokeFinishJob::Phase::Retire:
         default:
             return false;
         }
@@ -1955,6 +1980,7 @@ class Application::StrokeFinishJob final : public Job,
     std::uint64_t _sampleCpuBase = 0;
     std::uint64_t _sampleGpuBase = 0;
 };
+#pragma warning(pop)
 
 bool Application::StrokeFinishSource::Start() noexcept
 {

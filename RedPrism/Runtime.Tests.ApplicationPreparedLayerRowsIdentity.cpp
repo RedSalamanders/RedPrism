@@ -1,9 +1,9 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "PreparedLayerRows.h"
 #include "Resources.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "resource.h"
 
 #include <array>

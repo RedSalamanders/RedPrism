@@ -1,11 +1,11 @@
 #include "Application.h"
 
-#include "../Common/ClipboardReceipt.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ClipboardTransfer.h"
+#include "Common/ClipboardReceipt.h"
 #include "Runtime.Tests.ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -174,6 +174,10 @@ int Application::RunClipboardEndSessionSelfTest() noexcept
             std::filesystem::remove_all(settingsScratch, ignored);
         });
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct DispatchState final
     {
         Application& owner;
@@ -190,6 +194,8 @@ int Application::RunClipboardEndSessionSelfTest() noexcept
         HistoryWorkStamp originalStamp{};
         std::uint64_t reservationBytes = 0;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* raw, void* native) noexcept
     {
         auto& state = *static_cast<DispatchState*>(raw);

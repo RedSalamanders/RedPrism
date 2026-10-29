@@ -573,7 +573,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
                         const int premultiplied = pixel[channel];
                         pixel[channel] =
                             alpha == 0
-                                ? 0
+                                ? std::uint8_t{0}
                                 : static_cast<std::uint8_t>(std::min(255, (premultiplied * 255 + alpha / 2) / alpha));
                     }
                 }
@@ -617,7 +617,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
         if (cancellation.IsCancelled())
             return ImageCodecStatus::Cancelled;
         const auto count = (std::min)(std::size_t{64 * 1024}, source.size() - offset);
-        encoded.insert(encoded.end(), source.begin() + offset, source.begin() + offset + count);
+        encoded.insert(encoded.end(), source.subspan(offset, count).begin(), source.subspan(offset, count).end());
         offset += count;
     }
     if (cancellation.IsCancelled())

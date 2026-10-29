@@ -66,6 +66,10 @@ template <typename T> struct FreeRecord
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct PixelAllocation : DeferredReleaseNode
 {
     std::unique_ptr<std::uint8_t[], FreeAligned> pixels;
@@ -73,6 +77,8 @@ struct PixelAllocation : DeferredReleaseNode
     std::size_t capacity = 0;
     std::uint64_t padding = 0;
 };
+#pragma warning(pop)
+
 static_assert(sizeof(PixelAllocation) == 64);
 static_assert(sizeof(PixelBuffer) == sizeof(void*));
 
@@ -86,6 +92,10 @@ void DestroyBuffer(OwnedRecord record) noexcept
     Unpoison(record->pixels.get(), record->capacity);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class RecyclePool final
 {
   public:
@@ -154,6 +164,7 @@ class RecyclePool final
     std::mutex _mutex;
     std::array<OwnedRecord, 32> _slots;
 };
+#pragma warning(pop)
 
 std::atomic<std::shared_ptr<RecyclePool>> g_recycle;
 

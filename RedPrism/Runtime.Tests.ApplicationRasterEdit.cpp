@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.ColorWorkTestGate.h"
@@ -45,6 +45,10 @@ int Application::RunRasterEditSelfTest() noexcept
         Undo,
         LargeRelease
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -56,6 +60,8 @@ int Application::RunRasterEditSelfTest() noexcept
         bool held = false;
         bool cancelRetained = false;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<State*>(context);
@@ -126,9 +132,9 @@ int Application::RunRasterEditSelfTest() noexcept
             }
             _rasterEditTestGate.reset();
         });
-    const std::array commands{ChromeHost::kCommandFillForeground, ChromeHost::kCommandFillBackground,
-                              ChromeHost::kCommandClearPixels, ChromeHost::kCommandDeleteKey,
-                              ChromeHost::kCommandInvert};
+    const std::array<int, 5> commands{{ChromeHost::kCommandFillForeground, ChromeHost::kCommandFillBackground,
+                                       ChromeHost::kCommandClearPixels, ChromeHost::kCommandDeleteKey,
+                                       ChromeHost::kCommandInvert}};
     for (const bool mask : {false, true})
     {
         for (const auto command : commands)

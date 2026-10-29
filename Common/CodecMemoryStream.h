@@ -32,6 +32,10 @@ struct CodecMemoryObserver final
 // Capped private WIC memory stream. One worker owns all cursor/data access, only COM references are concurrent.
 // Reserve address space once, commit bounded pages lazily, and initialize all logical growth before exposure.
 // No heap allocation or C++ exception occurs in COM stream methods. No payload survives a failed encoding.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class CodecMemoryStream final : public IStream
 {
     struct ConstructionKey final
@@ -85,3 +89,4 @@ class CodecMemoryStream final : public IStream
     std::uint64_t _committed = 0, _cursor = 0, _size = 0;
     bool _limitExceeded = false;
 };
+#pragma warning(pop)

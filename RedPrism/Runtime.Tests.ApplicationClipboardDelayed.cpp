@@ -2,10 +2,10 @@
 
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <atomic>
@@ -20,6 +20,10 @@ constexpr UINT kRenderEnteredMessage = WM_APP + 56;
 constexpr wchar_t kProducerClass[] = L"RedPrismClipboardHostDelayedProducer";
 constexpr std::array<std::uint8_t, 44> kDib{40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 32, 0, 0, 0, 0,  0,  4,  0,
                                             0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0, 0, 17, 33, 65, 255};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct DelayedClipboard final
 {
     wil::unique_handle ready{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -34,6 +38,8 @@ struct DelayedClipboard final
     std::atomic<ULONGLONG> enteredAt{0}, releasedAt{0}, completedAt{0};
     std::atomic<DWORD> releaseWait{WAIT_FAILED}, publicationError{ERROR_SUCCESS};
 };
+#pragma warning(pop)
+
 bool OpenProducer(HWND window) noexcept
 {
     wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
@@ -161,12 +167,18 @@ void JoinClipboardThread(HANDLE thread) noexcept
         std::_Exit(5);
     }
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ReleaseAfterStop final
 {
     HANDLE stopped = nullptr;
     HANDLE release = nullptr;
     std::atomic<bool> observed{false};
 };
+#pragma warning(pop)
+
 DWORD WINAPI ReleaseOnStop(void* raw) noexcept
 {
     auto& state = *static_cast<ReleaseAfterStop*>(raw);
@@ -221,6 +233,10 @@ int Application::RunClipboardDelayedSelfTest() noexcept
         Scenario{"paste-shutdown", Action::Paste, Mode::Shutdown},
         Scenario{"prefill-shutdown", Action::Prefill, Mode::Shutdown},
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -233,6 +249,8 @@ int Application::RunClipboardDelayedSelfTest() noexcept
         bool shutdownObserved = false;
         ULONGLONG dispatchedAt = 0, openedAt = 0;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* raw, void* native) noexcept
     {
         auto& state = *static_cast<State*>(raw);
@@ -287,6 +305,7 @@ int Application::RunClipboardDelayedSelfTest() noexcept
             state.shutdownObserved = release.observed.load() && owner._shutdownComplete;
             return;
         }
+        case Mode::Success:
         default:
             break;
         }
@@ -371,13 +390,19 @@ int Application::RunClipboardDelayedSelfTest() noexcept
                    "declined-early-read-preserves-delayed-format");
         }
         State state{*owner, scenario, producer, gate, {}, owner->_session.history.CurrentRevision()};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct ShutdownAuthority final
         {
             Application& owner;
             Raster source;
             const Guid& revision;
             bool unchanged = false;
-        } authority{*owner, source, state.revision};
+        }
+#pragma warning(pop)
+        authority{*owner, source, state.revision};
         ApplicationShutdownTestProbe probe;
         probe.checkContext = &authority;
         probe.checkOwner = [](void* opaque) noexcept

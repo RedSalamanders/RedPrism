@@ -1,6 +1,6 @@
 #include "Document.Tests.LayerOpacityWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Document.h"
 #include "Executor.h"
@@ -450,6 +450,20 @@ const char* HistoryStageName(DocumentHistory::PrepareStage stage) noexcept
         return "stack-growth";
     case DocumentHistory::PrepareStage::TrimIndex:
         return "trim-index";
+    case ::DocumentHistory::PrepareStage::AdjustmentSnapshot:
+    case ::DocumentHistory::PrepareStage::PendingRecord:
+    case ::DocumentHistory::PrepareStage::PendingSnapshot:
+    case ::DocumentHistory::PrepareStage::ReplacementReset:
+    case ::DocumentHistory::PrepareStage::ReplacementSnapshot:
+    case ::DocumentHistory::PrepareStage::RestoreSnapshot:
+    case ::DocumentHistory::PrepareStage::SelectionSnapshot:
+    case ::DocumentHistory::PrepareStage::StorageIndexBounds:
+    case ::DocumentHistory::PrepareStage::StorageIndexClone:
+    case ::DocumentHistory::PrepareStage::StorageIndexHistoryEdge:
+    case ::DocumentHistory::PrepareStage::StorageIndexLiveEdge:
+    case ::DocumentHistory::PrepareStage::StorageIndexMembership:
+    case ::DocumentHistory::PrepareStage::StorageIndexResidencyFullScan:
+    case ::DocumentHistory::PrepareStage::StorageIndexResidencyRecord:
     default:
         return "unexpected-stage";
     }

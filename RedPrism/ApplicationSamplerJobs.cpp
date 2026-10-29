@@ -17,6 +17,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct SamplerReadbackPayload final : DeferredReleaseNode
 {
     std::shared_ptr<SharedPublicationMemory> memory; // Original complete charge dies after pixel/document owners.
@@ -32,6 +36,8 @@ struct SamplerReadbackPayload final : DeferredReleaseNode
         { const std::unique_ptr<SamplerReadbackPayload> owned(static_cast<SamplerReadbackPayload*>(node)); };
     }
 };
+#pragma warning(pop)
+
 #pragma warning(pop)
 struct RetireSamplerPayload final
 {
@@ -54,6 +60,10 @@ bool SameSamplerIntent(const SamplerPointIntent& left, const SamplerPointIntent&
 }
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
 {
   public:
@@ -244,6 +254,7 @@ class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
     HRESULT _terminalError = S_OK;
     std::unique_ptr<SamplerReadbackPayload, RetireSamplerPayload> _payload;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartSamplerReadback(std::uint64_t openingId) noexcept
 {

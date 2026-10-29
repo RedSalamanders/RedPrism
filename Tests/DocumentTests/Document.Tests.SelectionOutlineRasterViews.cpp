@@ -1,7 +1,7 @@
 #include "Document.Tests.SelectionOutlineRasterViews.h"
 
-#include "../../Common/SelectionOutlineRasterWork.h"
-#include "../../Common/SharedPublicationMemory.h"
+#include "Common/SelectionOutlineRasterWork.h"
+#include "Common/SharedPublicationMemory.h"
 
 #include <objbase.h>
 
@@ -64,7 +64,7 @@ using Grid = Raster::GridKey;
     return plane < Raster::PlaneCount && x < key.width && y < key.height &&
                    bytes.size() == static_cast<std::size_t>(key.width) * key.height
                ? bytes[static_cast<std::size_t>(y) * key.width + x]
-               : 0;
+               : std::uint8_t{0};
 }
 
 [[nodiscard]] std::uint32_t PixelAt(double pixel) noexcept

@@ -192,8 +192,11 @@ CopyPixelsResult RunCopyPixels(const CopyPixelsInput& input, CancelToken cancell
     if (!bytes)
         return {CopyPixelsStatus::Memory};
     // Mask copies are opaque gray. Build only cropped BGRA output, avoiding the reference's full BGRA plane.
-    auto sourceRow = input.mask ? std::make_unique_for_overwrite<std::uint8_t[]>(region->width) : nullptr;
-    auto coverageRow = coverage.HasStorage() ? std::make_unique_for_overwrite<std::uint8_t[]>(region->width) : nullptr;
+    auto sourceRow =
+        input.mask ? std::make_unique_for_overwrite<std::uint8_t[]>(static_cast<std::size_t>(region->width)) : nullptr;
+    auto coverageRow = coverage.HasStorage()
+                           ? std::make_unique_for_overwrite<std::uint8_t[]>(static_cast<std::size_t>(region->width))
+                           : nullptr;
     const auto stride = static_cast<std::size_t>(region->width) * 4u;
     for (int y = 0; y < region->height; ++y)
     {
@@ -205,14 +208,14 @@ CopyPixelsResult RunCopyPixels(const CopyPixelsInput& input, CancelToken cancell
         if (input.mask)
         {
             if (!ReadRasterRegionForWork(shown, window, {sourceRow.get(), static_cast<std::size_t>(region->width)},
-                                         region->width, input.background, cancellation))
+                                         static_cast<std::size_t>(region->width), input.background, cancellation))
                 return Failed(cancellation);
             for (int x = 0; x < region->width; ++x)
             {
                 if ((x & 255) == 0 && cancellation.IsCancelled())
                     return Failed(cancellation);
                 const auto pixel = static_cast<std::size_t>(x) * 4u;
-                row[pixel] = row[pixel + 1] = row[pixel + 2] = sourceRow[x];
+                row[pixel] = row[pixel + 1] = row[pixel + 2] = sourceRow[static_cast<std::size_t>(x)];
                 row[pixel + 3] = 255;
             }
         }
@@ -221,13 +224,13 @@ CopyPixelsResult RunCopyPixels(const CopyPixelsInput& input, CancelToken cancell
         if (coverage.HasStorage())
         {
             if (!ReadRasterRegionForWork(coverage, window, {coverageRow.get(), static_cast<std::size_t>(region->width)},
-                                         region->width, 0, cancellation))
+                                         static_cast<std::size_t>(region->width), 0, cancellation))
                 return Failed(cancellation);
             for (int x = 0; x < region->width; ++x)
             {
                 if ((x & 255) == 0 && cancellation.IsCancelled())
                     return Failed(cancellation);
-                const double c = coverageRow[x] / 255.0;
+                const double c = coverageRow[static_cast<std::size_t>(x)] / 255.0;
                 const auto pixel = static_cast<std::size_t>(x) * 4u;
                 for (std::size_t channel = 0; channel < 4; ++channel)
                     row[pixel + channel] = static_cast<std::uint8_t>(std::lround(row[pixel + channel] * c));

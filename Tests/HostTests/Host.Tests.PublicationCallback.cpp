@@ -1,7 +1,7 @@
 #include "Host.Tests.PublicationCallback.h"
 
 // Jobs.h is supplied by the single staged Common include root for PublicationCallbackIdentity-r1.
-#include "../../Common/Jobs.h"
+#include "Common/Jobs.h"
 
 #include <windows.h>
 
@@ -77,6 +77,10 @@ JobTicket WrongGeneration(JobTicket ticket) noexcept
     return ticket;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Probe final
 {
     JobScheduler* scheduler = nullptr;
@@ -113,6 +117,7 @@ struct Probe final
     bool originalTicketAtHooks = true;
     bool workerReturnedBeforeHooks = true;
 };
+#pragma warning(pop)
 
 enum class RunMode
 {
@@ -121,6 +126,10 @@ enum class RunMode
     Cancelled
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CallbackIdentityJob final : public Job
 {
   public:
@@ -227,7 +236,12 @@ class CallbackIdentityJob final : public Job
     Probe& _probe;
     RunMode _mode;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Fixture final
 {
     wil::unique_handle runEntered = MakeEvent("run-entered-event");
@@ -249,6 +263,7 @@ struct Fixture final
             SetupFailure("scheduler-initialize");
     }
 };
+#pragma warning(pop)
 
 void Submit(Fixture& fixture, RunMode mode)
 {

@@ -1,7 +1,7 @@
 #include "Document.Tests.StrokeSampleSession.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "StrokeSampleWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstddef>
@@ -509,6 +509,10 @@ void WrongEngineCanRetryWithOriginalAfterJoin()
     fixture.session.CancelBrush();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class OwnerObservedCpuEngine final : public BrushCoverageEngine
 {
   public:
@@ -535,6 +539,7 @@ class OwnerObservedCpuEngine final : public BrushCoverageEngine
         endOffOwner = endOffOwner || std::this_thread::get_id() != owner;
     }
 };
+#pragma warning(pop)
 
 void AppliedInputRetiresAfterOwnerCancellation()
 {

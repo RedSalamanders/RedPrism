@@ -1,6 +1,6 @@
 #include "Host.Tests.UiCancellationRefusal.h"
 
-#include "../../RedPrism/UiCancellationRefusal.h"
+#include "RedPrism/UiCancellationRefusal.h"
 
 #include <array>
 #include <cstdio>

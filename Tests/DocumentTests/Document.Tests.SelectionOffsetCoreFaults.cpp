@@ -1,7 +1,7 @@
 #include "Document.Tests.SelectionOffsetCoreFaults.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Selection.h"
 #include "SelectionOffsetWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <cstdio>
 #include <new>

@@ -280,7 +280,7 @@ void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
         const bool image = state.kind == SizeCardKind::ImageSize;
         // ShowControl (ChromeHost.cpp) already writes SetVisible only when it changes; a local re-implementation
         // without that check re-issued it for every control on every sync (every pan move re-syncs the card).
-        _sizeTitle->SetText(LoadStringResource(nullptr, newCanvas ? IDS_SIZE_NEW_CANVAS_TITLE
+        _sizeTitle->SetText(LoadStringResource(nullptr, newCanvas ? static_cast<UINT>(IDS_SIZE_NEW_CANVAS_TITLE)
                                                         : canvas  ? IDS_SIZE_CANVAS_TITLE
                                                                   : IDS_SIZE_IMAGE_TITLE));
         ShowControl(_sizeTitle, true);
@@ -377,7 +377,7 @@ void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
         ShowControl(_sizeImport, newCanvas);
         ShowControl(_sizeCancel, true);
         ShowControl(_sizeApply, true);
-        _sizeApply->SetText(LoadStringResource(nullptr, newCanvas ? IDS_SIZE_CREATE
+        _sizeApply->SetText(LoadStringResource(nullptr, newCanvas ? static_cast<UINT>(IDS_SIZE_CREATE)
                                                         : canvas  ? IDS_ADJUST_OK
                                                                   : IDS_SIZE_RESIZE));
         _sizeApply->SetEnabled(state.valid);

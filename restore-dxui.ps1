@@ -19,6 +19,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'Build/DxUiPaths.psm1') -Scope Local -ErrorAction Stop
 
 # The DxUi API revision this product's code is written against: the lock names it and the pinned capabilities.json carries it.
 $requiredApiRevision = 3
@@ -30,7 +31,7 @@ if ($pin.repository -ne 'https://github.com/RedSalamanders/DxUi' -or $pin.commit
 }
 
 $dependencyRoot = Join-Path $PSScriptRoot '.build/dependencies/DxUi'
-$source = Join-Path $dependencyRoot "source/$($pin.commit)"
+$source = Get-DxUiSourcePath -DependencyRoot $dependencyRoot -Commit $pin.commit
 if (-not (Test-Path -LiteralPath $source)) {
     $sibling = Join-Path (Split-Path -Parent $PSScriptRoot) 'DxUi'
     $cloneFrom = ''
@@ -72,6 +73,7 @@ if ($buildIdentity.Identity -is [Collections.IDictionary]) {
     foreach ($entry in $buildIdentity.Identity.PSObject.Properties) { $policyIdentity[$entry.Name] = $entry.Value }
 }
 $policyIdentity['releaseOptimizationPolicy'] = 'Gy-REF-GL-LTCG-full-v1'
+foreach($field in (Get-DxUiNativePolicyFields -RepoRoot $PSScriptRoot).GetEnumerator()){$policyIdentity[$field.Key]=$field.Value}
 $policyHasher = [Security.Cryptography.SHA256]::Create()
 try { $policyFingerprint = ([BitConverter]::ToString($policyHasher.ComputeHash([Text.Encoding]::UTF8.GetBytes(($policyIdentity | ConvertTo-Json -Depth 8 -Compress))))).Replace('-','').ToLowerInvariant() }
 finally { $policyHasher.Dispose() }

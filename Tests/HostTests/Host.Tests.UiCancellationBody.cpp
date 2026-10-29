@@ -1,6 +1,6 @@
 #include "Host.Tests.UiCancellationBody.h"
 
-#include "../../RedPrism/UiCancellationBody.h"
+#include "RedPrism/UiCancellationBody.h"
 
 #include <array>
 #include <cstdio>

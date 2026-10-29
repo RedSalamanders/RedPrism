@@ -73,3 +73,5 @@ When a spec, implementation, test, or document disagrees:
 The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and the fold of merged fragments into `CHANGELOG.md` on the default branch.
 
 [RedMonitor integration](Core/Core_RedMonitorIntegration.md) owns the optional diagnostic client, SDK pin and viewer command.
+
+Common native build policy, zero-warning acceptance, terminal output and short consumer paths: [Build_ConsoleAndPaths](Build/Build_ConsoleAndPaths.md).

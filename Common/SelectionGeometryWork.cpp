@@ -133,7 +133,7 @@ bool SelectionLoops::SealPreparedStorageForWork(std::vector<SelectionLoop> loops
     owned->loops = std::move(loops);
     owned->bytes = _storageBytes + allowance;
     auto storage =
-        std::shared_ptr<GeometryNode>{owned.release(), FreeGeometry{}, GeometryAllocator<GeometryNode>{lifetime}};
+        std::shared_ptr<GeometryNode>(owned.release(), FreeGeometry{}, GeometryAllocator<GeometryNode>{lifetime});
     const auto* view = &storage->loops;
     _loops = std::shared_ptr<const std::vector<SelectionLoop>>{std::move(storage), view};
     return true;

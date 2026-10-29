@@ -150,7 +150,7 @@ Renderer::SelectionOutlineFrame Application::BorrowSelectionOutlineFrameOwner(fl
     result.pixelTop = std::floor(top);
     result.clipped = _selectionOutlineGrid.clipped;
     result.clip = {
-        static_cast<float>(_selectionOutlineGrid.clipLeft), static_cast<float>(_selectionOutlineGrid.clipTop),
-        static_cast<float>(_selectionOutlineGrid.clipRight), static_cast<float>(_selectionOutlineGrid.clipBottom)};
+        {static_cast<float>(_selectionOutlineGrid.clipLeft), static_cast<float>(_selectionOutlineGrid.clipTop),
+         static_cast<float>(_selectionOutlineGrid.clipRight), static_cast<float>(_selectionOutlineGrid.clipBottom)}};
     return result;
 }

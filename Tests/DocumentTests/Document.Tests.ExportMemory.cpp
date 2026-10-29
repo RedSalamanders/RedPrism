@@ -1,7 +1,7 @@
 #include "Document.Tests.ExportMemory.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "ExportWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstddef>

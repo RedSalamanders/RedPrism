@@ -132,6 +132,10 @@ void CheckSourceIndependenceAndRefusal()
                "refuses-without-plan", test.name);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct Fixture final
 {
     std::optional<BoundedSelectionBoolean::Limits> limits;
@@ -153,6 +157,7 @@ struct Fixture final
             gesture.emplace(std::move(points.value()));
     }
 };
+#pragma warning(pop)
 
 std::optional<BoundedLassoGesture::Display> Terminal(Fixture& fixture, std::span<const Vec2> points, SelectionMode mode)
 {
@@ -438,6 +443,10 @@ struct CeilingOutcome final
     bool produced = false;
     JobResult result{JobStatus::Failed, E_UNEXPECTED};
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CeilingJob final : public Job
 {
   public:
@@ -467,6 +476,7 @@ class CeilingJob final : public Job
     CeilingOutcome& _outcome;
     std::optional<LassoFinishGeometry::Result> _result;
 };
+#pragma warning(pop)
 
 void CheckEnforcedWorkerCeilings()
 {

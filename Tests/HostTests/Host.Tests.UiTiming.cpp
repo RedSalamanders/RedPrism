@@ -1,8 +1,8 @@
 #include "Host.Tests.UiTiming.h"
 
-#include "../../Common/Jobs.h"
-#include "../../Common/PipelineTrace.h"
-#include "../../Common/UiTiming.h"
+#include "Common/Jobs.h"
+#include "Common/PipelineTrace.h"
+#include "Common/UiTiming.h"
 
 #include <algorithm>
 #include <array>
@@ -37,6 +37,10 @@ void RecordOne(UiTimingKind kind) noexcept
     const ScopedUiTiming timing{kind};
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct SchedulerState final
 {
     JobScheduler scheduler;
@@ -45,7 +49,12 @@ struct SchedulerState final
     unsigned int nestedDrains = 0;
     bool failed = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CountAction final : public UiAction
 {
   public:
@@ -60,7 +69,12 @@ class CountAction final : public UiAction
   private:
     SchedulerState& _state;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CountJob final : public Job
 {
   public:
@@ -81,6 +95,8 @@ class CountJob final : public Job
   private:
     SchedulerState& _state;
 };
+#pragma warning(pop)
+
 } // namespace
 
 int RunUiTimingTests()

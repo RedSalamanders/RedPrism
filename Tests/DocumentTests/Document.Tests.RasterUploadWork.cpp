@@ -1,7 +1,7 @@
 #include "Document.Tests.RasterUploadWork.h"
 
-#include "../../Common/Document.h"
-#include "../../Common/RasterUploadWork.h"
+#include "Common/Document.h"
+#include "Common/RasterUploadWork.h"
 
 #include <array>
 #include <cstddef>
@@ -58,7 +58,7 @@ void DenseBgraAndPitchedGuards()
     bool rowsMatch = true;
     for (std::size_t index = 0; index < expected.size(); ++index)
     {
-        const std::uint8_t expectedByte = index % 10 < 8 ? expected[index] : 0xE1;
+        const std::uint8_t expectedByte = index % 10 < 8 ? expected[index] : std::uint8_t{0xE1};
         rowsMatch = rowsMatch && destination[index + 2] == expectedByte;
     }
     Expect(rowsMatch, "dense-bgra-subset-pitch-padding");

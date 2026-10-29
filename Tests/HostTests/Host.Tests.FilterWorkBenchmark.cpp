@@ -1,6 +1,5 @@
 #include "Host.Tests.FilterWorkBenchmark.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Adjust.h"
 #include "BenchmarkMachine.h"
 #include "CanvasSize.h"
@@ -9,6 +8,7 @@
 #include "Kernels.h"
 #include "RasterWork.h"
 #include "Selection.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <wil/resource.h>
 #include <windows.h>
@@ -31,6 +31,10 @@ constexpr int kHeight = 5464;
 constexpr int kSamples = 10;
 constexpr DWORD kCancelDelayMs = 20;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Observation final
 {
     wil::unique_event_nothrow started;
@@ -43,6 +47,7 @@ struct Observation final
     std::optional<ResizeStatus> resizeStatus;
     CanvasDocument resized;
 };
+#pragma warning(pop)
 
 // One original job per sample. Set current before Submit; ticket assignment precedes dispatch. Change/clear
 // only after joined SettleJobs or Close. The context and borrowed event outlive the scheduler's Close.
@@ -62,6 +67,10 @@ void NoteFilterBodyBoundary(void* opaque, JobExecutionNotice notice) noexcept
     current->returned.SetEvent();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class FilterWork final : public Job
 {
   public:
@@ -136,7 +145,12 @@ class FilterWork final : public Job
     int _operation;
     Observation& _observed;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class SizingWork final : public Job
 {
   public:
@@ -176,6 +190,8 @@ class SizingWork final : public Job
     const std::variant<CanvasSizeOptions, ImageSizeOptions> _options;
     Observation& _observed;
 };
+#pragma warning(pop)
+
 } // namespace
 
 int RunFilterWorkBenchmark()

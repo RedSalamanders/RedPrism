@@ -1,9 +1,9 @@
 #include "Document.Tests.PixelMoveState.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "Document.h"
 #include "RasterEditWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

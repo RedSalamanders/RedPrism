@@ -35,12 +35,17 @@ struct GpuRasterUploadInput final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct GpuRasterCreationRequest final
 {
     ID3D11Device* device = nullptr; // borrowed for immediate owner capture only
     GpuResidencyReservation reservation;
     bool completeMips = false;
 };
+#pragma warning(pop)
 
 // Adopted raster owner. Its reservation and held Raster survive the producing job. MipsComplete reports only
 // acknowledged mip initialization; future graphics users still need their own completion before retirement.
@@ -95,6 +100,10 @@ class GpuRasterCreatedResidency final
 // never publishes a display or mutates a document. Caller options MUST set deferredRetirement and reserve the
 // complete CPU graph; externally created resources keep external GPU admission.
 // Both the queue and the caller's device owner survive this job and the shutdown owner cleanup hook.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class GpuRasterUploadJob : public Job, public GpuUploadReceiver
 {
   public:
@@ -196,3 +205,4 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     bool _completeMips = false;
     bool _mipsComplete = false;
 };
+#pragma warning(pop)

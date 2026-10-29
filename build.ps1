@@ -24,6 +24,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$nativeEntryElapsed = [Diagnostics.Stopwatch]::StartNew()
+Import-Module (Join-Path $PSScriptRoot 'Build/BuildConsole.psm1') -ErrorAction Stop
 
 if ($Clean -and $Rebuild) {
     throw 'Choose either -Clean or -Rebuild, not both.'
@@ -139,6 +141,7 @@ try {
         throw "MSBuild failed with exit code $exitCode."
     }
 
+    Assert-NativeBuildDiagnostics -LogPath $logPath
     if ($Analyze) {
         Write-Host 'Validating native concurrency analysis controls...' -ForegroundColor Cyan
         & (Join-Path $repoRoot 'Tests\BuildProcessTests\CodeAnalysisTests.ps1') `
@@ -162,7 +165,7 @@ try {
             }
             & (Join-Path $repoRoot 'Tests\BuildProcessTests\IsaScanTests.ps1') -MSBuildPath $msbuild -Configuration $Configuration
         }
-        Write-Host "Ready: $executable" -ForegroundColor Green
+
         Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
         $provenance = Write-RedPrismDxUiProvenance -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration
         Write-Host "DxUi provenance: $provenance" -ForegroundColor DarkGray
@@ -171,6 +174,7 @@ try {
             throw 'Source/toolchain environment changed during build; no build attestation was published.'
         }
         Write-ScopedReceipt (Join-Path (Split-Path $executable) 'build-attestation.json') (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $BuildNumber)
+        Write-NativeBuildResult -Project RedPrism -Platform $Platform -Configuration $Configuration -LogPath $logPath -Artifacts @($executable) -Executable $executable -Duration $nativeEntryElapsed.Elapsed
         if ($Run) {
             $native = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
             if ($Platform -eq 'ARM64' -and $native -ne 'Arm64') {

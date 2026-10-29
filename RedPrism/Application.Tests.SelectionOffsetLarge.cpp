@@ -87,13 +87,19 @@ int Application::RunSelectionOffsetLargeOutputSelfTest() noexcept
     gate->observeOffsetOutputLifetime = true;
     _selectionOffsetTestGate = gate;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct Large final
     {
         Application& owner;
         std::shared_ptr<const void> copiedOutline;
         ContinuationReceipt receipt;
         bool heldAtGate = false;
-    } large{*this};
+    }
+#pragma warning(pop)
+    large{*this};
 
     const auto pump = [](void* raw, void* native) noexcept
     {

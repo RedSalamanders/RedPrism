@@ -43,6 +43,10 @@ constexpr std::uint64_t kMaximum = (std::numeric_limits<std::uint64_t>::max)();
     return true;
 }
 } // namespace
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct PreparedLassoDraftRaster::Storage final
 {
     BoundedLassoGesture::Display source;
@@ -51,6 +55,8 @@ struct PreparedLassoDraftRaster::Storage final
     std::size_t bytes = 0;
     std::uint64_t outputBytes = 0;
 };
+#pragma warning(pop)
+
 std::int32_t PreparedLassoDraftRaster::PlanMemory(const BoundedLassoGesture::Display& source, const GridKey& grid,
                                                   MemoryPlan& output) noexcept
 {

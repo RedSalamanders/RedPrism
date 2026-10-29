@@ -1,6 +1,6 @@
 #include "Host.Tests.SelectionCursorRequests.h"
 
-#include "../../RedPrism/SelectionCursorRequests.h"
+#include "RedPrism/SelectionCursorRequests.h"
 
 #include <cstdint>
 #include <cstdio>

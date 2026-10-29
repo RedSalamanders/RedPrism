@@ -16,6 +16,10 @@ enum class ImageImportTestPhase
     Probe,
     Prepare
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ImageImportTestGate final
 {
     static constexpr UINT kMessage = WM_APP + 0x4B8;
@@ -39,3 +43,4 @@ struct ImageImportTestGate final
     std::uint64_t preparationReservationBytes = 0; // owner-only assertion
     JobResult result{};
 };
+#pragma warning(pop)

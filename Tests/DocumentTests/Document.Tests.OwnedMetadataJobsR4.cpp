@@ -1,10 +1,10 @@
 #include "Document.Tests.OwnedMetadataJobsR4.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Jobs.h"
 #include "LayerMetadataWork.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -134,6 +134,10 @@ const ImageLayer* Target(const DocumentSession& session) noexcept
     return nullptr;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct JobState final
 {
     JobTicket ticket{};
@@ -174,6 +178,12 @@ struct JobState final
     std::shared_ptr<SharedPublicationMemory> heldTemporary;
     std::optional<PreparedLayerMetadata> heldPublication;
 };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class OwnedMetadataJob final : public Job
 {
   public:
@@ -394,6 +404,8 @@ class OwnedMetadataJob final : public Job
     bool _captured = false;
     const LayerMetadataKind _kind;
 };
+#pragma warning(pop)
+
 std::uint64_t DescriptorBytes(const DocumentSession& session, LayerMetadataKind kind = LayerMetadataKind::SetOpacity)
 {
     const std::uint64_t estimate = IsLayerFlipMetadata(kind) ? session.LayerMetadataMemoryBytes(kind)
@@ -458,6 +470,10 @@ struct ObserverState final
     bool completed = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ObserverJob final : public Job
 {
   public:
@@ -489,6 +505,7 @@ class ObserverJob final : public Job
     JobScheduler& _scheduler;
     ObserverState& _state;
 };
+#pragma warning(pop)
 
 void StartObserverLease(JobScheduler& scheduler, ObserverState& state)
 {

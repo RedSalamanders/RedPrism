@@ -42,6 +42,12 @@ class BoundedLassoPoints final
         }
         Arena(const Arena&) = delete;
         Arena& operator=(const Arena&) = delete;
+        // The worker's private page touches are not synchronization; retain the target volatile model.
+        // Keep the ARM64 notice annotation on this definition only. Owner: raster maintainers; review: 2027-01-31.
+#if defined(_M_ARM64)
+#pragma warning(push)
+#pragma warning(disable : 4746)
+#endif
         [[nodiscard]] bool PreparePagesForWork(CancelToken cancel) noexcept
         {
             // Move demand-zero page faults to the admitted worker before publishing an owner writer.
@@ -56,6 +62,9 @@ class BoundedLassoPoints final
             }
             return !cancel.IsCancelled();
         }
+#if defined(_M_ARM64)
+#pragma warning(pop)
+#endif
         [[nodiscard]] bool SealOwner(const std::array<Vec2, kChunkPoints>& points, std::uint32_t previous,
                                      std::uint32_t count, SelectionBounds bounds, std::uint32_t& result) noexcept
         {

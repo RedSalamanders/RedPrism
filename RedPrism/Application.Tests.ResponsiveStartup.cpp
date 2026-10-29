@@ -1,8 +1,8 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -218,6 +218,10 @@ int Application::RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noex
             if (!owner->_startupPaths)
                 return 5;
         }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             Application& owner;
@@ -235,7 +239,9 @@ int Application::RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noex
             std::optional<CanvasDocument> document;
             std::uint64_t generation = 0;
             Guid revision;
-        } state{*owner, scenario, inertRoutes};
+        }
+#pragma warning(pop)
+        state{*owner, scenario, inertRoutes};
         ApplicationProcessingTestProbe probe;
         probe.context = &state;
         probe.responsiveSourcesForTest = true;

@@ -205,6 +205,10 @@ constexpr std::uint64_t kMaximum = (std::numeric_limits<std::uint64_t>::max)();
 }
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct PreparedSelectionOutlineRaster::Storage final
 {
     SelectionLoops source;
@@ -213,6 +217,7 @@ struct PreparedSelectionOutlineRaster::Storage final
     std::size_t planeBytes = 0;
     std::uint64_t outputBytes = 0;
 };
+#pragma warning(pop)
 
 std::int32_t PreparedSelectionOutlineRaster::PlanMemory(const GridKey& grid, std::uint64_t loopCount,
                                                         std::uint64_t pointCount, MemoryPlan& output) noexcept

@@ -1,7 +1,7 @@
 #include "Document.Tests.ImportHistory.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -140,6 +140,17 @@ const char* StageName(DocumentHistory::PrepareStage stage) noexcept
         return "pending-record";
     case Stage::RestoreSnapshot:
         return "restore-snapshot";
+    case ::DocumentHistory::PrepareStage::AdjustmentSnapshot:
+    case ::DocumentHistory::PrepareStage::ReplacementSnapshot:
+    case ::DocumentHistory::PrepareStage::SelectionSnapshot:
+    case ::DocumentHistory::PrepareStage::StorageIndexBounds:
+    case ::DocumentHistory::PrepareStage::StorageIndexClone:
+    case ::DocumentHistory::PrepareStage::StorageIndexHistoryEdge:
+    case ::DocumentHistory::PrepareStage::StorageIndexLiveEdge:
+    case ::DocumentHistory::PrepareStage::StorageIndexMembership:
+    case ::DocumentHistory::PrepareStage::StorageIndexResidencyFullScan:
+    case ::DocumentHistory::PrepareStage::StorageIndexResidencyRecord:
+        break;
     }
     return "invalid-stage";
 }

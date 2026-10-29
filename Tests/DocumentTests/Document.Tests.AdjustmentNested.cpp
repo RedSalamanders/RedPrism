@@ -1,8 +1,8 @@
 #include "Document.Tests.AdjustmentNested.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "AdjustmentClosureWork.h"
 #include "AdjustmentOpeningWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>

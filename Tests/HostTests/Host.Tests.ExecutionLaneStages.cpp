@@ -66,6 +66,10 @@ JobResult WaitForOwnerRelease(JobContext& context, HANDLE release) noexcept
     return wait == WAIT_OBJECT_0 || wait == WAIT_OBJECT_0 + 1 ? JobResult{} : JobResult{JobStatus::Failed, E_FAIL};
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ChainState final
 {
     explicit ChainState(JobScheduler& owner) noexcept
@@ -95,7 +99,12 @@ struct ChainState final
     std::atomic<bool> successorSawFinalized{false};
     bool successorCompleted = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ThreeStageJob final : public Job
 {
   public:
@@ -159,7 +168,12 @@ class ThreeStageJob final : public Job
   private:
     ChainState& _state;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class SerialSuccessor final : public Job
 {
   public:
@@ -181,7 +195,12 @@ class SerialSuccessor final : public Job
   private:
     ChainState& _state;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class IndependentCompute final : public Job
 {
   public:
@@ -198,6 +217,7 @@ class IndependentCompute final : public Job
   private:
     bool& _completed;
 };
+#pragma warning(pop)
 
 void RunThreeStageChain()
 {
@@ -350,6 +370,10 @@ void RunThreeStageChain()
            "retained-original-charge-refunds-after-explicit-release");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct SuspendedState final
 {
     explicit SuspendedState(JobScheduler& owner) noexcept : scheduler(owner) {}
@@ -363,7 +387,12 @@ struct SuspendedState final
     bool completed = false;
     JobResult result{};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class SuspendOnceJob final : public Job
 {
   public:
@@ -392,6 +421,7 @@ class SuspendOnceJob final : public Job
   private:
     SuspendedState& _state;
 };
+#pragma warning(pop)
 
 void RunDisabledAndInvalidResumeCase()
 {
@@ -447,6 +477,10 @@ void RunDisabledAndInvalidResumeCase()
            "valid-original-resume-completes-and-refunds-after-invalid-attempts");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct CancelHandoffState final
 {
     explicit CancelHandoffState(JobScheduler& owner) noexcept : scheduler(owner) {}
@@ -463,7 +497,12 @@ struct CancelHandoffState final
     JobResult result{};
     std::uint64_t completionCharge = 0;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CancelDuringHandoffJob final : public Job
 {
   public:
@@ -505,6 +544,7 @@ class CancelDuringHandoffJob final : public Job
   private:
     CancelHandoffState& _state;
 };
+#pragma warning(pop)
 
 void RunCancellationHandoffCase()
 {
@@ -564,6 +604,10 @@ void RunCancellationHandoffCase()
            "cancelled-original-refunds-and-cannot-resume-again");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ShutdownLaneState final
 {
     explicit ShutdownLaneState(JobScheduler& owner) noexcept : scheduler(owner) {}
@@ -576,7 +620,12 @@ struct ShutdownLaneState final
     std::atomic<DWORD> retireThread{0};
     bool completed = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class ShutdownBlockedJob final : public Job
 {
   public:
@@ -604,6 +653,7 @@ class ShutdownBlockedJob final : public Job
     ShutdownLaneState& _state;
     wil::unique_handle _release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
 };
+#pragma warning(pop)
 
 void RunShutdownPoolJoinCase()
 {

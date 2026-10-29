@@ -9,6 +9,19 @@ Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 This contract owns how RedPrism is proven. Domain specs name the behavior; this file names the gates that MUST pass
 before a phase is Done. Screenshot policy for chrome lives here so later phases do not invent a second rule.
 
+Runtime capacity controls keep their literal static assertions and observable reads through
+`Tests/Support/Support.Tests.Capacity.h`. Its noinline helper confines ARM64 C4746 annotations to an intentional
+private volatile read; it does not alter the target volatile model or provide synchronization. The worker arena's
+page-prefault annotation is similarly definition-local. Native zero-warning builds must still detect every
+unreviewed C4746 outside those scopes. `Document.Tests.CropLifetime.cpp` additionally checks charged metadata,
+pixel preservation after source/caller release and final lifetime release; the private charged storage size is
+checked at compile time on both target architectures.
+
+The shared isolated sanitizer probe deliberately reads freed storage. Its ARM64 sanitizer-only, definition-local
+C4746 annotation preserves the allocation, release and faulting read; the child must still produce a real
+AddressSanitizer diagnostic. Ordinary builds keep the probe's refusal return, and native ARM64 runtime proof
+remains separate from cross-compilation.
+
 ### Skill package and example integrity
 
 Skill metadata grammar and package usability are separate checks. `Build/SkillPackageIntegrity.psm1` checks
@@ -3908,7 +3921,10 @@ events cannot invalidate its empty-router baseline. It retains the original idle
 original routing predicate. Three additional controls explicitly call NotifyMemoryChanged: the empty
 scheduler has ready UI work and is non-idle, the utility service stays quiescent, and one drain restores
 idle. Receiver readiness is never queried for an empty service. Ordinary live OS notification behavior
-is unchanged. The complete predecessor roster plus exactly these three controls must pass on the
+is unchanged. The sampler uses named `MemorySource` members (callback, then context); every original
+job requests one synthetic byte so admission must invoke that sampler once per original record and
+retain all 128 bytes until retirement. These two controls detect an accidentally null callback rather
+than relying on a quiet OS to hide it. The complete predecessor roster plus these five controls must pass on the
 required profiles; the [failed attempt and adoption](../TestRuns/P1UtilityIdleNotification_2026-10-20.md)
 remain separate from subsequent qualification.
 
@@ -3939,3 +3955,10 @@ The hosted native CI fixture runs `Tests/Tooling.Tests.WindowFixture.ps1` before
 [Generated test-run evidence](Testing_RunEvidence.md) owns completed, failed and interrupted run storage, verification and CI collection.
 
 The WAND fixture's startup job-settlement check retains its 10,000 ms bound and exit code 5. Any non-settled result emits the fixture name and the actual result category (TimedOut, Quit/WM_QUIT, or Failed) through the existing self-test debugger/stderr channel. Diagnostics do not extend the deadline or classify an earlier silent exit's cause.
+
+## Loaded-selection refusal diagnostics
+
+The checkerboard Load Mask / Layer Selection refusal fixture retains its original edge limit, expected error ids,
+selection-state checks and settlement deadlines. A failure records each stage's acknowledgement, error count,
+last error id, selection presence and canvas dimensions. Its existing Wand/Layer worker trace is scoped to this
+fixture and restored on exit. Diagnostics do not establish a repaired runtime result or authorize a rebaseline.

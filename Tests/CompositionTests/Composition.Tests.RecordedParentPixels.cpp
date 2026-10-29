@@ -135,7 +135,7 @@ CanvasDocument MakeSource(bool sparse)
 bool ImageMatches(const Raster& image) noexcept
 {
     if (image.Width() != kWidth || image.Height() != kHeight || image.Format() != RasterFormat::Bgra8888 ||
-        !image.Data() || image.Stride() < static_cast<std::size_t>(kWidth) * 4)
+        !image.Data() || image.Stride() < kWidth * 4)
         return false;
     for (unsigned y = 0; y < kHeight; ++y)
         if (std::memcmp(image.Data() + static_cast<std::size_t>(y) * image.Stride(),
@@ -161,6 +161,10 @@ bool Memory(void*, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Observation final
 {
     const DWORD ownerThread = GetCurrentThreadId();
@@ -203,6 +207,8 @@ struct Observation final
     std::atomic<bool> retiringPixelsIntact{false};
     std::atomic<bool> retiringAccountingIntact{false};
 };
+#pragma warning(pop)
+
 struct ActualWorkerBody final
 {
     Observation* observation = nullptr;
@@ -236,6 +242,10 @@ void ObserveExecution(void* opaque, JobExecutionNotice notice) noexcept
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct Retirement final : DeferredReleaseNode
 {
     explicit Retirement(Observation& value, std::uint64_t expected) noexcept
@@ -271,6 +281,12 @@ struct Retirement final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Probe final : public RecordedDocumentReadbackJob
 {
   public:
@@ -396,6 +412,7 @@ class Probe final : public RecordedDocumentReadbackJob
     JobTicket& _original;
     const std::uint64_t _expectedCpuBytes;
 };
+#pragma warning(pop)
 
 struct StartupPrefix final
 {
@@ -448,6 +465,10 @@ bool StartInfrastructure(CaseLabel label, JobScheduler& jobs, OwnerWorkMultiplex
     return prefix.serviceInitialized;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4625 4626 5026 5027)
 struct CloseContext final
 {
     JobScheduler& jobs;
@@ -469,6 +490,7 @@ struct CloseContext final
     bool workerSawClosedOwnerInfrastructure = false;
     std::atomic<unsigned> closeSequence{0};
 };
+#pragma warning(pop)
 
 void JoinedOwnerClose(void* opaque) noexcept
 {

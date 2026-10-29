@@ -1,6 +1,6 @@
 #include "Host.Tests.PreviewMailbox.h"
 
-#include "../../Common/PreviewMailbox.h"
+#include "Common/PreviewMailbox.h"
 
 #include <cstdio>
 #include <memory>

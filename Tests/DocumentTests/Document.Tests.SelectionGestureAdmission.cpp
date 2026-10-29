@@ -1,7 +1,7 @@
 #include "Document.Tests.SelectionGestureAdmission.h"
-#include "../../RedPrism/SelectionOutlineGestureJob.h"
-#include "../../RedPrism/SelectionOutlineGestureMemory.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "RedPrism/SelectionOutlineGestureJob.h"
+#include "RedPrism/SelectionOutlineGestureMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "TransformEdit.h"
 
 #include <atomic>
@@ -32,6 +32,10 @@ void Settle(JobScheduler& scheduler)
     if (SettleJobs(scheduler, 10000) != SettleResult::Settled)
         SetupFailure("event-settlement");
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Memory final
 {
     std::atomic<std::uint64_t> queries{0};
@@ -45,6 +49,8 @@ struct Memory final
         return true;
     }
 };
+#pragma warning(pop)
+
 void Install(DocumentSession& session, bool large = false)
 {
     DocumentFixture document;

@@ -89,6 +89,8 @@ KernelSelection ValidateKernelIsa(KernelIsa isa, KernelCapabilities capabilities
     case KernelIsa::Neon:
         supported = capabilities.neon;
         break;
+    case ::KernelIsa::Auto:
+    case ::KernelIsa::Scalar:
     default:
         return KernelSelection::NotImplemented;
     }

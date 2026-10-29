@@ -1,8 +1,8 @@
 #include "Document.Tests.CapturedCloneOffset.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "Document.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>

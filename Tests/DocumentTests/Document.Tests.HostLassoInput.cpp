@@ -1,7 +1,7 @@
 #include "Document.Tests.HostLassoInput.h"
 
-#include "../../Common/Document.h"
-#include "../../RedPrism/HostLassoInput.h"
+#include "Common/Document.h"
+#include "RedPrism/HostLassoInput.h"
 
 #include <cmath>
 #include <cstddef>

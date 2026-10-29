@@ -14,6 +14,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct OpeningPayload final : DeferredReleaseNode
 {
     std::optional<StrokeOpeningInput> input;
@@ -36,6 +40,8 @@ struct OpeningPayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireOpeningPayload final
 {
     void operator()(OpeningPayload* payload) const noexcept
@@ -48,6 +54,10 @@ struct RetireOpeningPayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Application::StrokeOpeningJob final : public Job
 {
   public:
@@ -299,6 +309,7 @@ class Application::StrokeOpeningJob final : public Job
     std::shared_ptr<BrushStroke> _liveStroke;    // Owner-only empty graphics borrow, never destroyed on worker.
     std::shared_ptr<BrushStroke> _retiredStroke; // Detached whole CPU owner, original worker cleanup only.
 };
+#pragma warning(pop)
 
 HRESULT Application::StartStrokeOpening(std::uint64_t opening) noexcept
 {

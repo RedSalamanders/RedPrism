@@ -1,4 +1,5 @@
 #include "Composition.Tests.UtilitySourceCapacity.h"
+#include "Tests/Support/Support.Tests.Capacity.h"
 
 #include "GpuCommandPump.h"
 #include "OwnerWorkMultiplexer.h"
@@ -72,6 +73,10 @@ struct Warp final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class SourceParent final : public GpuCommandSourceReceiver
 {
   public:
@@ -356,9 +361,14 @@ class SourceParent final : public GpuCommandSourceReceiver
     unsigned int _sourceFailures = 0;
     unsigned int _acknowledgements = 0;
 };
+#pragma warning(pop)
 
 // The fixture owns each logical source beyond wrapper destruction, including joined Close hooks.
 // Scheduler wrappers forward the exact original stage/callbacks, and never own the observation lifetime.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Recorder final : public Job
 {
   public:
@@ -383,7 +393,12 @@ class Recorder final : public Job
   private:
     SourceParent& _parent;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CapacityLeaf final : public OwnerWorkPump
 {
   public:
@@ -422,6 +437,7 @@ class CapacityLeaf final : public OwnerWorkPump
     unsigned int _pumpCalls = 0;
     bool _pumped = false;
 };
+#pragma warning(pop)
 
 struct Shutdown final
 {
@@ -626,7 +642,7 @@ int RunUtilitySourceCapacityTests()
 {
     gFailures = 0;
     static_assert(GpuCommandPump::kCapacity == 2);
-    const volatile std::size_t observedCapacity = GpuCommandPump::kCapacity;
+    const std::size_t observedCapacity = RedPrismTestCapacity::Observe(GpuCommandPump::kCapacity);
     Expect(observedCapacity == 2, "literal-source-capacity-is-two");
     RunCapacityFixture();
     return gFailures;

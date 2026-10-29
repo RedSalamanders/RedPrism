@@ -50,6 +50,10 @@ int Application::RunCanvasBrushOpacitySelfTest() noexcept
         Failure,
         Overflow,
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -60,6 +64,8 @@ int Application::RunCanvasBrushOpacitySelfTest() noexcept
         bool responsive = false;
         bool terminalOwned = false;
     };
+#pragma warning(pop)
+
     const auto pump = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<State*>(opaque);
@@ -113,11 +119,11 @@ int Application::RunCanvasBrushOpacitySelfTest() noexcept
             if (state.kind == Kind::Capture || state.kind == Kind::CancelMode || state.kind == Kind::Focus ||
                 state.kind == Kind::Deactivate)
             {
-                const UINT loss = state.kind == Kind::Capture      ? WM_CAPTURECHANGED
+                const auto loss = state.kind == Kind::Capture      ? WM_CAPTURECHANGED
                                   : state.kind == Kind::CancelMode ? WM_CANCELMODE
                                   : state.kind == Kind::Focus      ? WM_KILLFOCUS
                                                                    : WM_ACTIVATEAPP;
-                (void)SendMessageW(owner._window.get(), loss, 0, 0);
+                (void)SendMessageW(owner._window.get(), static_cast<UINT>(loss), 0, 0);
                 pointer(WM_MOUSEMOVE, MK_LBUTTON, Vec2{20, 8});
                 pointer(WM_LBUTTONUP, 0, Vec2{20, 8});
             }

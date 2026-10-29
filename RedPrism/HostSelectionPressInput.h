@@ -11,6 +11,10 @@
 // Owner-only accepted physical prefix while an admitted selection press waits for exact worker containment.
 // No geometry, document, control or GPU owner is held here. The original job owns and validates those roots.
 // Replay uses these event-time document coordinates and modifier values, never current keyboard/view state.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class HostSelectionPressInput final
 {
   public:
@@ -190,3 +194,4 @@ class HostSelectionPressInput final
     Stream _stream;
     Sample _lastAccepted{};
 };
+#pragma warning(pop)

@@ -50,6 +50,10 @@ bool Wait(HANDLE event) noexcept
     return WaitForSingleObject(event, kWaitMs) == WAIT_OBJECT_0;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Calls final
 {
     std::atomic<unsigned int> count{0};
@@ -62,6 +66,7 @@ struct Calls final
         return {Notify, this};
     }
 };
+#pragma warning(pop)
 
 void ScopedTokenSemantics()
 {
@@ -69,7 +74,7 @@ void ScopedTokenSemantics()
     Calls inner;
     std::stop_source local;
     std::stop_source shutdown;
-    const CancelToken token{local.get_token(), shutdown.get_token()};
+    const CancelToken token(local.get_token(), shutdown.get_token());
     {
         const CancellationObservation::Scope scope{outer.Binding()};
         bool unchanged = true;
@@ -100,7 +105,7 @@ void ScopedTokenSemantics()
                "retained-token-in-next-run-uses-next-run-binding");
     }
     std::stop_source nextLocal;
-    const CancelToken shuttingDown{nextLocal.get_token(), shutdown.get_token()};
+    const CancelToken shuttingDown(nextLocal.get_token(), shutdown.get_token());
     (void)shutdown.request_stop();
     {
         const CancellationObservation::Scope scope{outer.Binding()};
@@ -121,6 +126,10 @@ void InheritedJoinedParticipants()
     Calls calls;
     CancelSource stop;
     (void)stop.Cancel();
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Context final
     {
         CancelToken token;
@@ -128,7 +137,9 @@ void InheritedJoinedParticipants()
         HANDLE helperDone;
         std::atomic<bool> helperObserved{false};
         std::atomic<bool> callerObserved{false};
-    } context{stop.Token(), GetCurrentThreadId(), helperDone.get()};
+    }
+#pragma warning(pop)
+    context{stop.Token(), GetCurrentThreadId(), helperDone.get()};
     {
         const CancellationObservation::Scope scope{calls.Binding()};
         pool.RunParticipants(
@@ -152,6 +163,10 @@ void InheritedJoinedParticipants()
     pool.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Log final
 {
     std::array<JobExecutionNotice, 3> notices{};
@@ -180,7 +195,12 @@ struct Log final
         }
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ParallelStopJob final : public Job
 {
   public:
@@ -212,7 +232,12 @@ class ParallelStopJob final : public Job
   private:
     Log& _log;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class AllocationFailureJob final : public Job
 {
   public:
@@ -239,6 +264,7 @@ class AllocationFailureJob final : public Job
   private:
     Log& _log;
 };
+#pragma warning(pop)
 
 void AllocationUnwindRestoresBinding()
 {

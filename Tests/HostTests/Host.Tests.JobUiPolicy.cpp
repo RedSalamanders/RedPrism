@@ -1,7 +1,7 @@
 #include "Host.Tests.JobUiPolicy.h"
 
-#include "../../Common/JobUiPolicy.h"
-#include "../../Common/Jobs.h"
+#include "Common/JobUiPolicy.h"
+#include "Common/Jobs.h"
 
 #include <array>
 #include <cstddef>

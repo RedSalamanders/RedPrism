@@ -1,7 +1,7 @@
 #include "Host.Tests.CompletedPreviewMemory.h"
 
-#include "../../Common/Jobs.h"
-#include "../../Common/SharedPublicationMemory.h"
+#include "Common/Jobs.h"
+#include "Common/SharedPublicationMemory.h"
 
 #include <windows.h>
 
@@ -65,6 +65,10 @@ struct SuccessfulState final
     unsigned int callbacks = 0;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class SuccessfulPreviewJob final : public Job
 {
   public:
@@ -93,6 +97,7 @@ class SuccessfulPreviewJob final : public Job
   private:
     SuccessfulState& _state;
 };
+#pragma warning(pop)
 
 struct FailedState final
 {
@@ -105,6 +110,10 @@ struct FailedState final
     unsigned int callbacks = 0;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class FailedPreviewJob final : public Job
 {
   public:
@@ -127,6 +136,7 @@ class FailedPreviewJob final : public Job
   private:
     FailedState& _state;
 };
+#pragma warning(pop)
 
 void Submit(JobScheduler& scheduler, std::unique_ptr<Job>& job, JobTicket& ticket)
 {

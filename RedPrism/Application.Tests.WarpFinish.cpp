@@ -8,7 +8,7 @@
 #include "WarpOpeningWork.h"
 #include "WarpSampleWork.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>

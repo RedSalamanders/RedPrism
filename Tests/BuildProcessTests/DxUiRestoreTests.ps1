@@ -166,7 +166,7 @@ try {
             if ($LASTEXITCODE -eq 0) { $cloneFrom = $sibling }
         }
         $realRoot = New-DeepRoot (Join-Path $fixture 'real') 142
-        $realDestination = Join-Path $realRoot ".build/dependencies/DxUi/source/$($pin.commit)"
+        $realDestination = Join-Path $realRoot ".build/dependencies/DxUi/source/$($pin.commit.Substring(0,16))"
         Write-Host "Restoring DxUi $($pin.commit) from $(if ($cloneFrom) { $cloneFrom } else { $pin.repository }) into a root of $($realDestination.Length) characters"
         [void](Restore-RedPrismDxUiSource -Repository $pin.repository -Commit $pin.commit -Destination $realDestination -CloneFrom $cloneFrom)
         Assert-RestoredCleanly $realDestination $pin.commit 'real pin' @('capabilities.json', 'Tools/validate_consumer.ps1', 'src/DxUi.vcxproj', 'include/DxUi/DxUi.h') @('Specs', 'Measurements', 'docs/gallery')

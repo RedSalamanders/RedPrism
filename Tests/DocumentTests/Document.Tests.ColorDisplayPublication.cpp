@@ -1,10 +1,10 @@
 #include "Document.Tests.ColorDisplayPublication.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "ColorDisplayPublication.h"
 #include "ColorEditHistory.h"
 #include "Document.h"
 #include "Selection.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -117,7 +117,7 @@ const ImageLayer* Layer(const CanvasDocument* document, std::size_t index = 0)
 std::uint8_t Pixel(const Raster& raster, std::size_t byte)
 {
     const std::uint8_t* pixels = raster.Data();
-    return pixels == nullptr ? 0 : pixels[byte];
+    return pixels == nullptr ? std::uint8_t{0} : pixels[byte];
 }
 
 Raster SmallSparseRamp()

@@ -1,6 +1,6 @@
 #include "Host.Tests.UiFrameLatency.h"
 
-#include "../../Common/UiTiming.h"
+#include "Common/UiTiming.h"
 
 #include <cstdio>
 #include <limits>

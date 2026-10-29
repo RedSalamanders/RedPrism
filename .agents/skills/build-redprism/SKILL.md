@@ -43,12 +43,12 @@ When diagnosing a failure:
 
 1. For dependency failures, run `vcpkg-install.ps1` for the exact platform.
 2. Re-run `build.ps1` with the failing configuration and platform.
-3. Fix the first project-code diagnostic; warnings are errors.
+3. Fix every project-code diagnostic; `/WX` stays disabled and build validation requires zero warnings.
 4. Run `test.ps1` after a successful host-architecture build. ARM64 runtime tests require a native ARM64 host.
 5. Build Debug, Release, and ASan Debug when changing project properties. ASan Debug tests must produce a real
    AddressSanitizer diagnostic from the isolated probe.
 
 DxUi restore is C2 work. Do not add an unpinned sibling checkout to the build. A normal build asks DxUi whether
 `main` is newer than the lock and prints that advisory without changing the pin. The restore is a sparse checkout with Git
-long paths (no `Measurements/`, `docs/gallery` or `Specs/`); if `.build/dependencies/DxUi/source/<commit>` is damaged,
+long paths (no `Measurements/`, `docs/gallery` or `Specs/`); if `.build/dependencies/DxUi/source/<first-16-commit-hex>` is damaged,
 delete that directory and restore again.

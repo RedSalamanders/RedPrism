@@ -1,10 +1,11 @@
 #include "Application.h"
+#include <cstddef>
 
 #include "ChromeHost.h"
 #include "Prompts.h"
 #include "Runtime.Tests.LayerMetadataTestGate.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -141,6 +142,10 @@ int Application::RunCanvasBrushLifetimeCancelSelfTest() noexcept
                         MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
                                    static_cast<int>(std::lround(hole.top + view.y))));
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct GateState final
     {
         Application& owner;
@@ -158,6 +163,8 @@ int Application::RunCanvasBrushLifetimeCancelSelfTest() noexcept
         bool closeMessageConsumed = false;
         bool preflightDispatched = false;
     };
+#pragma warning(pop)
+
     static constexpr auto requestLifecycle = [](GateState& state) noexcept
     {
         auto& owner = state.owner;

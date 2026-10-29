@@ -182,6 +182,10 @@ void BindForTerminalRetirement(TicketState& state, JobScheduler& scheduler, JobT
     state.reservedAtCompletion = scheduler.ReservedMemoryBytes();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CancelledArenaJob final : public Job
 {
   public:
@@ -254,7 +258,12 @@ class CancelledArenaJob final : public Job
     bool _beginArena = false;
     bool _contextAdmissionHeld = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct SuccessfulTicketState final
 {
     JobScheduler* scheduler = nullptr;
@@ -277,7 +286,12 @@ struct SuccessfulTicketState final
     bool allocationsSealed = false;
     bool exposedAfterBinding = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class SuccessfulArenaJob final : public Job
 {
   public:
@@ -359,6 +373,8 @@ class SuccessfulArenaJob final : public Job
     bool _beginArena = false;
     bool _contextAdmissionHeld = false;
 };
+#pragma warning(pop)
+
 void RestoreSink(DeferredSink& sink, DeferredReleaseDetail::Sink prior, bool installed) noexcept
 {
     if (installed)

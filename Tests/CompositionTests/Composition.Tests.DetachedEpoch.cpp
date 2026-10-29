@@ -1,4 +1,4 @@
-﻿#include "Composition.Tests.DetachedEpoch.h"
+#include "Composition.Tests.DetachedEpoch.h"
 
 #include "BrushCompute.h"
 #include "GpuWork.h"
@@ -64,6 +64,10 @@ struct Device final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Rig final
 {
   public:
@@ -105,7 +109,12 @@ class Rig final
     JobScheduler scheduler;
     GpuWorkQueue queue;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct EpochWorker final
 {
     wil::unique_handle ready;
@@ -186,6 +195,7 @@ struct EpochWorker final
                published.load(std::memory_order_acquire) == nullptr;
     }
 };
+#pragma warning(pop)
 
 struct ReadbackState final
 {
@@ -214,6 +224,10 @@ struct ReadbackState final
     bool epochRetiredAfterAck = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class EpochReadbackJob final : public Job, public GpuBufferReadbackReceiver
 {
   public:
@@ -306,6 +320,7 @@ class EpochReadbackJob final : public Job, public GpuBufferReadbackReceiver
     EpochWorker* _epochWorker;
     bool _submitted = false;
 };
+#pragma warning(pop)
 
 void SubmitAndSettle(Rig& rig, ID3D11Buffer* source, ReadbackState& state, EpochWorker* epochWorker = nullptr)
 {

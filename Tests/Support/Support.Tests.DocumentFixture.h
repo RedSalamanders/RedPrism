@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../Common/Document.h"
+#include "Common/Document.h"
 
 #include <exception>
 #include <functional>

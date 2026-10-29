@@ -10,6 +10,10 @@
 // Fixed owner storage for event-time lasso input while the admitted opening worker is pending.
 // The caller admits this whole member and its job before Begin; this descriptor holds no geometry owner.
 // Point values already use the physical event's document mapping. Later headers/views never reinterpret them.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class HostLassoInput final
 {
   public:
@@ -282,3 +286,4 @@ class HostLassoInput final
     std::uint64_t _lastTakenOpening = 0;
     std::optional<SelectedTerminal> _selectedTerminal;
 };
+#pragma warning(pop)

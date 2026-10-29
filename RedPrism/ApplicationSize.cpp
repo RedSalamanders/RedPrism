@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "CanvasSize.h"
 #include "ChromeHost.h"
@@ -217,6 +217,16 @@ void Application::OnSizeAction(SizeAction action, double value) noexcept
         CancelSizeCard();
         ImportImages();
         return;
+    case ::SizeAction::SetAnchor:
+    case ::SizeAction::SetExtension:
+    case ::SizeAction::SetHeight:
+    case ::SizeAction::SetLocked:
+    case ::SizeAction::SetRelative:
+    case ::SizeAction::SetResample:
+    case ::SizeAction::SetResolution:
+    case ::SizeAction::SetSampling:
+    case ::SizeAction::SetUnit:
+    case ::SizeAction::SetWidth:
     default:
         break;
     }
@@ -273,6 +283,13 @@ void Application::OnSizeAction(SizeAction action, double value) noexcept
                 _chrome->OpenColorPicker(PickerTarget::SizeExtension, _sizeDialog.customArgb);
             }
             break;
+        case ::SizeAction::Apply:
+        case ::SizeAction::Cancel:
+        case ::SizeAction::ImportImage:
+        case ::SizeAction::OpenProject:
+        case ::SizeAction::SetResample:
+        case ::SizeAction::SetResolution:
+        case ::SizeAction::SetSampling:
         default:
             break;
         }
@@ -304,6 +321,13 @@ void Application::OnSizeAction(SizeAction action, double value) noexcept
         case SizeAction::SetSampling:
             draft.sampling = static_cast<LayerSampling>(std::clamp(static_cast<int>(value), 0, 2));
             break;
+        case ::SizeAction::Apply:
+        case ::SizeAction::Cancel:
+        case ::SizeAction::ImportImage:
+        case ::SizeAction::OpenProject:
+        case ::SizeAction::SetAnchor:
+        case ::SizeAction::SetExtension:
+        case ::SizeAction::SetRelative:
         default:
             break;
         }

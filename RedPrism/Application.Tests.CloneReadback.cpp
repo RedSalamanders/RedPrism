@@ -1,11 +1,11 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 #include "Runtime.Tests.CloneReadbackTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -61,6 +61,10 @@ int Application::RunCloneReadbackSelfTest() noexcept
     constexpr std::array<const char*, 12> names{"success",      "cancel",   "failure",       "capture-failure",
                                                 "stale",        "rebind",   "restart-limit", "live-lease",
                                                 "capture-loss", "pan-live", "pan-loss",      "pan-cancel"};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -80,6 +84,8 @@ int Application::RunCloneReadbackSelfTest() noexcept
         std::optional<JobTicket> ticket;
         std::uint64_t bytes = 0;
     };
+#pragma warning(pop)
+
     const auto pointer = [](Application& owner, UINT message, WPARAM modifiers, Vec2 pixel) noexcept
     {
         const auto hole = owner._chrome->HolePixels();
@@ -249,7 +255,7 @@ int Application::RunCloneReadbackSelfTest() noexcept
         if (!gate->release)
             return 5;
         gate->throwCaptureFailure = mode == Mode::CaptureFailure;
-        gate->rebindsBeforeCopy = mode == Mode::Rebind ? 1 : mode == Mode::RestartLimit ? 3 : 0;
+        gate->rebindsBeforeCopy = mode == Mode::Rebind ? 1u : mode == Mode::RestartLimit ? 3u : 0u;
         gate->holdAfterCopy = mode != Mode::CaptureFailure && mode != Mode::Rebind && mode != Mode::RestartLimit;
         gate->observeAdoption = mode == Mode::LiveLease;
         if (mode == Mode::Failure)
@@ -442,6 +448,10 @@ int Application::RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) 
                          MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
                                     static_cast<int>(std::lround(hole.top + view.y))));
         const auto receipt = owner->_canvasBrushReceipt;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             Application& owner;
@@ -452,7 +462,9 @@ int Application::RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) 
             std::uint64_t openingBytes = 0;
             bool documentUnchangedAtDetach = false;
             bool sampleChargedAtDetach = false;
-        } state{*owner, live, revision};
+        }
+#pragma warning(pop)
+        state{*owner, live, revision};
         const auto dispatch = [](void* opaque, void* native) noexcept
         {
             auto& state = *static_cast<State*>(opaque);

@@ -14,6 +14,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct SelectionNudgePayload final : DeferredReleaseNode
 {
     std::optional<SelectionNudgeInput> input;
@@ -36,6 +40,8 @@ struct SelectionNudgePayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireSelectionNudgePayload final
 {
     void operator()(SelectionNudgePayload* payload) const noexcept
@@ -48,6 +54,10 @@ struct RetireSelectionNudgePayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class Application::SelectionNudgeJob final : public Job
 {
   public:
@@ -234,6 +244,7 @@ class Application::SelectionNudgeJob final : public Job
     bool _refreshResidency = false;
     std::int32_t _captureError = 0;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartSelectionNudge(int dx, int dy) noexcept
 {

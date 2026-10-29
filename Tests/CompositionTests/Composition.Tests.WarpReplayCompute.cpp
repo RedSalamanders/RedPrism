@@ -1,4 +1,5 @@
 #include "Composition.Tests.WarpReplayCompute.h"
+#include <cstddef>
 
 #include "BrushCompute.h"
 #include "SharedPublicationMemory.h"
@@ -202,7 +203,7 @@ void RunFixture(D3D_DRIVER_TYPE driver, const char* label)
     const auto pixelAt = [&](int x, int y, const std::array<std::uint8_t, 4>& expected)
     {
         const auto offset = static_cast<std::size_t>((y * kSide + x) * 4);
-        return std::equal(expected.begin(), expected.end(), actual.begin() + offset);
+        return std::equal(expected.begin(), expected.end(), actual.begin() + static_cast<std::ptrdiff_t>(offset));
     };
     Expect(committed && pixelAt(8, 8, {}) && pixelAt(31, 31, kOriginal),
            "transparent-tip-clears-and-far-original-retains-independent-literal-bytes");

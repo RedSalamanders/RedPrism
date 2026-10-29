@@ -12,6 +12,10 @@
 #pragma warning(pop)
 
 // Immutable harness controls captured by one job. Production holds no gate. The owner releases only the event.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct FileWorkTestGate final
 {
     static constexpr std::uint32_t kMessage = WM_APP + 0x4B4;
@@ -21,3 +25,4 @@ struct FileWorkTestGate final
     JobResult result;
     std::atomic<unsigned int> visits{0};
 };
+#pragma warning(pop)

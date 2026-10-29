@@ -167,6 +167,9 @@ bool ChromeHost::FilterOptionsVisible() const noexcept
     case FilterKind::ContentAwareFill:
         option = _fillHint;
         break;
+    case ::FilterKind::HueSaturation:
+    case ::FilterKind::Levels:
+        break;
     }
     if (option == nullptr || !option->IsVisible())
     {
@@ -423,7 +426,8 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
     const auto placeButtons = [&](std::span<DxUi::Button* const> buttons, float height)
     {
         const float gap = 6.0f;
-        const float each = (innerRight - innerLeft - gap * (buttons.size() - 1)) / static_cast<float>(buttons.size());
+        const float each = (innerRight - innerLeft - gap * static_cast<float>(buttons.size() - 1)) /
+                           static_cast<float>(buttons.size());
         float x = innerLeft;
         for (DxUi::Button* control : buttons)
         {

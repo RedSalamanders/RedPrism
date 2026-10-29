@@ -1,8 +1,8 @@
 #include "Document.Tests.SelectionPixelJournal.h"
 
-#include "../../RedPrism/SelectionOutlineGestureJob.h"
-#include "../../RedPrism/SelectionOutlineGestureMemory.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "RedPrism/SelectionOutlineGestureJob.h"
+#include "RedPrism/SelectionOutlineGestureMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -72,6 +72,10 @@ struct Memory
         return true;
     }
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture
 {
     Memory memory;
@@ -181,6 +185,8 @@ struct Fixture
             Broken("event-driven-settlement");
     }
 };
+#pragma warning(pop)
+
 void Chained(bool duplicate, bool secondPixels, SelectionMode firstMode)
 {
     Fixture fixture(duplicate, firstMode);

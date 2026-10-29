@@ -1,9 +1,9 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.SelectionCommandTestGate.h"
 #include "Runtime.Tests.SelectionMoveCloseTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -28,6 +28,10 @@ DocumentSelection SelectionMoveHeaderRectangle(double left, double top, double r
 // Production-route controls for the three selection-header actions that close an eligible idle outline move.
 int Application::RunSelectionMoveHeaderSelfTest() noexcept
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -67,6 +71,7 @@ int Application::RunSelectionMoveHeaderSelfTest() noexcept
         bool reservationObserved = false;
         bool staleReplacementSurvived = false;
     };
+#pragma warning(pop)
 
     const auto originalViewport = _viewport;
     const auto originalTool = _tool;

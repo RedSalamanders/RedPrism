@@ -1,9 +1,9 @@
 #include "Document.Tests.TransformPreviewWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "DistortWork.h"
 #include "Document.h"
 #include "Executor.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "TransformPreviewWork.h"
 
 #include <algorithm>

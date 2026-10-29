@@ -1,9 +1,9 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
-#include "../Tests/Support/Support.Tests.HistoryWorkFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.ColorWorkTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.HistoryWorkFixture.h"
 
 #include <array>
 #include <cmath>

@@ -1,8 +1,8 @@
 #include "IO.Tests.ClipboardTransfer.h"
 #include "IO.Tests.ClipboardBindingTransfer.h"
 
-#include "../../RedPrism/ClipboardTransfer.h"
-#include "../../RedPrism/SystemClipboard.h"
+#include "RedPrism/ClipboardTransfer.h"
+#include "RedPrism/SystemClipboard.h"
 
 #include <Windows.h>
 #include <objbase.h>
@@ -88,6 +88,10 @@ auto RetryFixtureAcquisition(Attempt attempt, Retryable retryable, Wait wait)
     }
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct FixtureRetryWait final
 {
     wil::unique_handle timer;
@@ -119,6 +123,7 @@ struct FixtureRetryWait final
         return result == WAIT_OBJECT_0;
     }
 };
+#pragma warning(pop)
 
 void TestFixtureRetryPolicy()
 {
@@ -306,6 +311,10 @@ bool PutClipboard(std::span<const std::uint8_t> png, std::span<const std::uint8_
     }
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct DelayedProducer final
 {
     HANDLE entered = nullptr;
@@ -318,6 +327,7 @@ struct DelayedProducer final
     std::atomic<unsigned> pngRenders{0}, dibRenders{0};
     std::atomic<DWORD> renderError{0}, renderWait{WAIT_TIMEOUT};
 };
+#pragma warning(pop)
 
 constexpr wchar_t kDelayedProducerClass[] = L"RedPrismClipboardTransferDelayedProducer";
 
@@ -627,7 +637,7 @@ void TestPreparation()
 
     for (const auto fault : {ClipboardTransfer::Fault::PngGlobal, ClipboardTransfer::Fault::DibGlobal})
     {
-        for (const DWORD error : {ERROR_GEN_FAILURE, ERROR_NOT_ENOUGH_MEMORY})
+        for (const auto error : {DWORD{ERROR_GEN_FAILURE}, DWORD{ERROR_NOT_ENOUGH_MEMORY}})
         {
             DWORD sourceSequence = 0;
             Expect(SequenceWhileOpen(sourceSequence), "prepare.fault-source-sequence-captured-before-prepare");
@@ -799,18 +809,23 @@ void TestSequenceAndRetry()
         Expect(heldControl.reached[static_cast<std::size_t>(ClipboardTransfer::Stage::DibPlaced)] == 1 &&
                    held.sequence == heldControl.dibPlacedSequence,
                "sequence.reported-value-is-exact-after-last-placement-while-held");
-        std::printf("DIAG clipboardtransfer sequence held=%lu later-open=%lu\n", held.sequence, insideOpen);
+        std::printf("DIAG clipboardtransfer sequence held=%u later-open=%lu\n", held.sequence, insideOpen);
     }
     else
         Expect(false, "sequence.open-for-held-value");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ClipboardHolder final
 {
     HANDLE entered = nullptr;
     HANDLE release = nullptr;
     std::atomic<bool> opened{false};
 };
+#pragma warning(pop)
 
 DWORD WINAPI HoldClipboard(void* raw) noexcept
 {
@@ -872,6 +887,10 @@ void TestActualOpenBusy()
     Expect(true, "busy-holder.release-and-close-acknowledged");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ConcurrentInspection final
 {
     HANDLE entered;
@@ -880,6 +899,7 @@ struct ConcurrentInspection final
     ClipboardTransfer::Inspection inspection;
     ClipboardTransfer::Status status = ClipboardTransfer::Status::Invalid;
 };
+#pragma warning(pop)
 
 DWORD WINAPI HoldInspection(void* raw) noexcept
 {
@@ -1150,12 +1170,17 @@ void TestReadFaultFallbacks()
            "readfault.missing-dib-does-not-discard-valid-png");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct InspectRequest final
 {
     ClipboardTransfer::Status status = ClipboardTransfer::Status::Invalid;
     ClipboardTransfer::Inspection inspection;
     HANDLE complete = nullptr;
 };
+#pragma warning(pop)
 
 DWORD WINAPI InspectWorker(void* raw) noexcept
 {
@@ -1250,7 +1275,7 @@ void TestDelayedRenderer()
     Expect(true, "delayed.producer-thread-closed");
     if (request.status != ClipboardTransfer::Status::Ok || !request.inspection || request.inspection.Sequence() == 0 ||
         request.inspection.Png().width != 2 || request.inspection.Dib().width != 2 || producer.renderCalls.load() < 2)
-        std::printf("DIAG clipboardtransfer.delayed.inspect status=%u valid=%d sequence=%lu current=%lu "
+        std::printf("DIAG clipboardtransfer.delayed.inspect status=%u valid=%d sequence=%u current=%lu "
                     "png=%dx%d dib=%dx%d renders=%u png-renders=%u dib-renders=%u wait=%lu render-error=%lu\n",
                     static_cast<unsigned int>(request.status), static_cast<bool>(request.inspection),
                     request.inspection.Sequence(), GetClipboardSequenceNumber(), request.inspection.Png().width,
@@ -1268,7 +1293,7 @@ void TestDelayedRenderer()
     Expect(copyStatus == ClipboardTransfer::Status::Ok && copied.RetainedBytes() > 0,
            "delayed.copy-uses-post-render-inspection-sequence");
     if (copyStatus != ClipboardTransfer::Status::Ok || copied.RetainedBytes() == 0)
-        std::printf("DIAG clipboardtransfer.delayed.copy status=%u inspected-sequence=%lu current=%lu bytes=%llu\n",
+        std::printf("DIAG clipboardtransfer.delayed.copy status=%u inspected-sequence=%u current=%lu bytes=%llu\n",
                     static_cast<unsigned int>(copyStatus), request.inspection.Sequence(), GetClipboardSequenceNumber(),
                     static_cast<unsigned long long>(copied.RetainedBytes()));
     Raster delayedPixels;

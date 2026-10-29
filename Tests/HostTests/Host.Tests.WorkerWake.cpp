@@ -1,5 +1,5 @@
 #include "Host.Tests.WorkerWake.h"
-#include "../../Common/WorkerPool.h"
+#include "Common/WorkerPool.h"
 
 #include <array>
 #include <atomic>
@@ -55,6 +55,10 @@ void Wait(HANDLE event)
     if (WaitForSingleObject(event, 5000) != WAIT_OBJECT_0)
         std::_Exit(91);
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Queue final
 {
     DWORD owner = GetCurrentThreadId();
@@ -74,6 +78,8 @@ struct Queue final
             (void)SetEvent(queue.done.get());
     }
 };
+#pragma warning(pop)
+
 void TestQueues()
 {
     WorkerPool pool;
@@ -106,6 +112,10 @@ void TestQueues()
     Expect(!pool.Wake(WorkPriority::Normal) && FAILED(pool.Initialize(1)),
            "closed-endpoint-refuses-wake-and-reinitialize");
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Closing final
 {
     DWORD owner = GetCurrentThreadId();
@@ -128,7 +138,10 @@ struct Closing final
         }
     };
     std::unique_ptr<Payload> payload;
-    Closing() : payload(std::make_unique<Payload>(this)) {}
+    Closing()
+    {
+        payload = std::make_unique<Payload>(this);
+    }
     static void Dispatch(void* context, WorkPriority, CancelToken) noexcept
     {
         auto& state = *static_cast<Closing*>(context);
@@ -151,6 +164,8 @@ struct Closing final
         state.payload.reset(); // actual off-owner C++ destruction, not bookkeeping substitution
     }
 };
+#pragma warning(pop)
+
 void TestClose()
 {
     WorkerPool pool;

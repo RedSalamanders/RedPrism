@@ -17,6 +17,10 @@ namespace
 // graph together; per-Raster deferral alone would walk and free all those small owners on the UI thread.
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct RasterEditPayload final : DeferredReleaseNode
 {
     bool workerTargetCapture = false;
@@ -102,6 +106,8 @@ struct RasterEditPayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetireRasterEditPayload final
 {
     void operator()(RasterEditPayload* payload) const noexcept
@@ -114,6 +120,10 @@ struct RetireRasterEditPayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::RasterEditJob final : public Job
 {
   public:
@@ -305,6 +315,9 @@ class Application::RasterEditJob final : public Job
                 outcome = HostOutcome::Cancelled;
                 error = E_ABORT;
                 break;
+            case ::RasterEditStatus::Invalid:
+            case ::RasterEditStatus::Memory:
+            case ::RasterEditStatus::TooLarge:
             default:
                 outcome = HostOutcome::Failed;
                 error = status == RasterEditStatus::TooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
@@ -370,6 +383,7 @@ class Application::RasterEditJob final : public Job
     std::unique_ptr<RasterEditPayload, RetireRasterEditPayload> _payload;
     HRESULT _captureError = S_OK;
 };
+#pragma warning(pop)
 
 void Application::ExecuteRasterEditCommand(RasterEditKind kind, FillSource fill) noexcept
 {

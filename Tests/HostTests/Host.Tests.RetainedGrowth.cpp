@@ -123,6 +123,10 @@ struct AcquireState final
     bool exerciseGrowth = true;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class AcquireJob final : public Job
 {
   public:
@@ -159,6 +163,7 @@ class AcquireJob final : public Job
   private:
     AcquireState& _state;
 };
+#pragma warning(pop)
 
 void SubmitAcquire(JobScheduler& scheduler, AcquireState& state, std::uint64_t bytes, const char* name)
 {
@@ -390,6 +395,10 @@ void TestWorkerFinalReset(Checks& checks)
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct RetainedGraph final
 {
     explicit RetainedGraph(SharedRetainedMemoryLease&& value) noexcept : lease(std::move(value)) {}
@@ -402,6 +411,7 @@ struct RetainedGraph final
     std::uint64_t readableMarker = 0x52455441494E4544ULL;
     SharedRetainedMemoryLease lease;
 };
+#pragma warning(pop)
 
 void TestCloseWithGrownGraph(Checks& checks)
 {

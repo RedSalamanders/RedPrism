@@ -1,5 +1,5 @@
 #include "Document.Tests.GradientState.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "BrushStroke.h"
 #include "Document.h"

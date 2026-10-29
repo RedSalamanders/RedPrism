@@ -14,6 +14,10 @@
 #pragma warning(pop)
 
 // Null in production; immutable after submission except the event/atomics and owner-only capture evidence.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct RasterEditTestGate final
 {
     static constexpr UINT kMessage = WM_APP + 0x4B9;
@@ -37,3 +41,4 @@ struct RasterEditTestGate final
     std::optional<RasterEditStatus> status;
     JobResult result{};
 };
+#pragma warning(pop)

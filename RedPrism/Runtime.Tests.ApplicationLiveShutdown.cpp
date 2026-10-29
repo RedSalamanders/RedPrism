@@ -346,6 +346,10 @@ int Application::RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept
                 case LiveEdit::MaskBlur:
                     kind = BrushKind::Blur;
                     break;
+                case ::LiveEdit::ImagePaint:
+                case ::LiveEdit::Liquify:
+                case ::LiveEdit::MaskPaint:
+                case ::LiveEdit::Smudge:
                 default:
                     break;
                 }

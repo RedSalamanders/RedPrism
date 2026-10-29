@@ -693,6 +693,10 @@ std::optional<BrushStroke::SampleCoverage> BrushStroke::PrepareSampleCoverage(Ca
         return std::nullopt;
     _workCancellation = std::move(cancellation);
     _sampleCoveragePrepared = true;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626)
     struct PreparationGuard final
     {
         bool& failed;
@@ -702,7 +706,9 @@ std::optional<BrushStroke::SampleCoverage> BrushStroke::PrepareSampleCoverage(Ca
             if (!ready)
                 failed = true;
         }
-    } guard{_failed};
+    }
+#pragma warning(pop)
+    guard{_failed};
     if (_workCancellation.IsCancelled())
         return std::nullopt;
     SampleCoverage sample;
@@ -1656,7 +1662,8 @@ bool BrushStroke::ComposeTile(Tile& tile)
                 // The sample replaces what is under the tip, so it can also clear pixels.
                 for (int channel = 0; channel < 4; ++channel)
                 {
-                    out[channel] = round8(sample[channel] * c + under[channel] * keep);
+                    out[channel] = round8(sample[static_cast<std::size_t>(channel)] * c +
+                                          under[static_cast<std::size_t>(channel)] * keep);
                 }
             }
             else
@@ -1665,7 +1672,8 @@ bool BrushStroke::ComposeTile(Tile& tile)
                 const double hold = 1.0 - sample[3] / 255.0 * c;
                 for (int channel = 0; channel < 4; ++channel)
                 {
-                    out[channel] = round8(sample[channel] * c + under[channel] * hold);
+                    out[channel] = round8(sample[static_cast<std::size_t>(channel)] * c +
+                                          under[static_cast<std::size_t>(channel)] * hold);
                 }
             }
         }
@@ -1686,7 +1694,7 @@ bool BrushStroke::ComposeTile(Tile& tile)
             // Erasing takes the coverage out of the layer's alpha, leaving the pixels under it transparent.
             for (int channel = 0; channel < 4; ++channel)
             {
-                out[channel] = round8(under[channel] * keep);
+                out[channel] = round8(under[static_cast<std::size_t>(channel)] * keep);
             }
         }
         else
@@ -4916,7 +4924,7 @@ std::optional<PixelClipboard> DocumentSession::RenderSelectedPixels(const ImageL
         const std::uint8_t background =
             layer.mask->placement.has_value()
                 ? static_cast<std::uint8_t>(std::lround(MaskEdgeBackground(layer.mask->asset.thumbnail) * 255.0))
-                : 0;
+                : std::uint8_t{0};
         shown = GrayAsPixels(
             ImageFilters::RenderMaskPixels(layer.mask->asset.image, MaskTransform(layer), width, height, background));
     }
@@ -5134,10 +5142,16 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324) // SLIST node requires 16-byte alignment.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct RetiredBrushOwner final : DeferredReleaseNode
 {
     std::unique_ptr<BrushStroke> stroke;
 };
+#pragma warning(pop)
+
 #pragma warning(pop)
 
 void DestroyRetiredBrushOwner(DeferredReleaseNode* node) noexcept

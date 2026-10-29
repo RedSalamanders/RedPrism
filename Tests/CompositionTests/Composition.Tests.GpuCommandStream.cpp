@@ -73,6 +73,10 @@ struct WarpDevice final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Published final
 {
     wil::unique_handle event{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -84,6 +88,7 @@ struct Published final
     std::atomic<HRESULT> thirdResult{E_PENDING};
     HRESULT producerResult = E_PENDING;
 };
+#pragma warning(pop)
 
 void RecordThree(GpuCommandStream& stream, WarpDevice& warp, Published& published,
                  CancelToken cancellation = {}) noexcept
@@ -129,6 +134,10 @@ void RecordThree(GpuCommandStream& stream, WarpDevice& warp, Published& publishe
     stream.FinishProducerForWork(published.thirdResult.load(std::memory_order_acquire));
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class OrdinaryJob final : public Job
 {
   public:
@@ -159,7 +168,12 @@ class OrdinaryJob final : public Job
         return bytes;
     }();
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class OriginalCompletion final : public GpuReadbackReceiver
 {
   public:
@@ -187,6 +201,7 @@ class OriginalCompletion final : public GpuReadbackReceiver
   private:
     GpuWorkQueue* _queue = nullptr;
 };
+#pragma warning(pop)
 
 [[nodiscard]] bool RetireOnWorker(GpuCommandStream& stream) noexcept
 {
@@ -355,7 +370,7 @@ void TestCapacityCancellation(bool shutdownCancellation)
     CancelSource localCancellation;
     std::stop_source shutdownCancellationSource;
     const CancelToken cancellation = shutdownCancellation
-                                         ? CancelToken{std::stop_token{}, shutdownCancellationSource.get_token()}
+                                         ? CancelToken(std::stop_token{}, shutdownCancellationSource.get_token())
                                          : localCancellation.Token();
     const bool initialized =
         SUCCEEDED(warp.Initialize()) && scheduler.Initialize(2) == S_OK && receiver.delivered && published.event &&

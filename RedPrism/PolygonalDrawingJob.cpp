@@ -14,6 +14,10 @@
 #include <utility>
 #include <windows.h>
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct PolygonalDrawingPayload final
 {
     std::optional<LassoOpeningInput> input;
@@ -23,6 +27,7 @@ struct PolygonalDrawingPayload final
     std::optional<LassoFinishInput> finishInput;
     std::optional<PreparedLassoFinish> finish;
 };
+#pragma warning(pop)
 
 std::optional<PolygonalDrawingPlan> DescribePolygonalDrawing(const DocumentSession& session,
                                                              SelectionMode mode) noexcept

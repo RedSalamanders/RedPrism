@@ -1,4 +1,5 @@
 #include "Composition.Tests.UtilityOwnerService.h"
+#include "Tests/Support/Support.Tests.Capacity.h"
 
 #include "OwnerWorkMultiplexer.h"
 #include "UtilityReadbackOwnerService.h"
@@ -34,9 +35,10 @@ void FailFast(const char* name, DWORD result) noexcept
     std::_Exit(1);
 }
 
-bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
+bool StableMemory(void* context, MemorySnapshot& snapshot) noexcept
 {
-    // Routing assertions control memory notifications; a real OS notification is independent ready work.
+    ++*static_cast<std::size_t*>(context);
+    // This injected sampler disables live system-pressure waits for the routing fixture.
     constexpr std::uint64_t available = 8ULL * 1024 * 1024 * 1024;
     snapshot = {available, available};
     return true;
@@ -103,6 +105,10 @@ struct Entry final
     std::size_t completed = 0;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class AdmittedRoutingJob final : public Job
 {
   public:
@@ -148,6 +154,7 @@ class AdmittedRoutingJob final : public Job
     JobScheduler& _scheduler;
     bool _deferred = false;
 };
+#pragma warning(pop)
 
 bool DrainUntilDeferred(JobScheduler& scheduler, const std::vector<Entry>& entries) noexcept
 {
@@ -194,7 +201,7 @@ int RunUtilityOwnerServiceRoutingTests()
 {
     g_failures = 0;
     static_assert(JobScheduler::kCapacity == 128);
-    const volatile std::size_t observedCapacity = JobScheduler::kCapacity;
+    const std::size_t observedCapacity = RedPrismTestCapacity::Observe(JobScheduler::kCapacity);
     Expect(observedCapacity == 128, "literal-original-record-capacity-is-128");
 
     // The fixed-capacity fixture is heap-backed; only the small router handles live on this stack.
@@ -203,7 +210,9 @@ int RunUtilityOwnerServiceRoutingTests()
     OwnerWorkMultiplexer routes;
     JobScheduler scheduler;
 
-    Expect(scheduler.Initialize(2, {}, {nullptr, StableMemory}) >= 0, "scheduler-initialized");
+    std::size_t memorySamples = 0;
+    const MemorySource memory{.sample = StableMemory, .context = &memorySamples};
+    Expect(scheduler.Initialize(2, {}, memory) >= 0, "scheduler-initialized");
     Expect(scheduler.RegisterOwnerWork(routes), "scheduler-routes-registered");
     Expect(SUCCEEDED(service->InitializeOwner(scheduler, routes)), "service-initialized");
 
@@ -232,13 +241,17 @@ int RunUtilityOwnerServiceRoutingTests()
 
         std::unique_ptr<Job> job = std::make_unique<AdmittedRoutingJob>(entry, *service, scheduler);
         JobTicket ticket{};
-        const std::int32_t submitted = scheduler.Submit(job, {}, ticket);
+        JobOptions options{};
+        options.memoryBytes = 1; // Exercise the installed sampler through actual admission.
+        const std::int32_t submitted = scheduler.Submit(job, options, ticket);
         allAdmitted = allAdmitted && submitted >= 0 && !job;
         if (submitted < 0 || job)
             FailFast("original-job-admission-failed", static_cast<DWORD>(submitted));
         entry.ticket = ticket;
     }
     Expect(allAdmitted, "all-original-jobs-admitted");
+    Expect(memorySamples == entries->size(), "injected-memory-sampled-for-every-original-admission");
+    Expect(scheduler.ReservedMemoryBytes() == entries->size(), "original-admissions-retain-synthetic-memory");
 
     if (!DrainUntilDeferred(scheduler, *entries))
         FailFast("original-owner-callback-timeout", WAIT_TIMEOUT);

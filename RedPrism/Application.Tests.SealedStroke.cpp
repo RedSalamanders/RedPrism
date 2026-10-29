@@ -5,7 +5,7 @@
 #include "Runtime.Tests.LayerMetadataTestGate.h"
 #include "Runtime.Tests.StrokeOpeningTestGate.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -182,6 +182,10 @@ int Application::RunSealedStrokeHostSelfTest() noexcept
     std::shared_ptr<StrokeOpeningTestGate> escapeGate;
     if (!heldOpeningGate(escapeGate))
         return 5;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct EscapeState final
     {
         Application& owner;
@@ -199,8 +203,10 @@ int Application::RunSealedStrokeHostSelfTest() noexcept
         bool upSealed = false;
         bool escapePreservedOriginal = false;
         bool youngerCancelled = false;
-    } escape{*this, escapeGate,        _canvasBrushReceipt,   {}, _canvasBrushInput.Opening(), 0, {},
-             {},    findStrokeOrdinal, clientAt(kStrokePoint)};
+    }
+#pragma warning(pop)
+    escape{*this, escapeGate,        _canvasBrushReceipt,   {}, _canvasBrushInput.Opening(), 0, {},
+           {},    findStrokeOrdinal, clientAt(kStrokePoint)};
     const auto escapePump = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<EscapeState*>(opaque);
@@ -272,6 +278,10 @@ int Application::RunSealedStrokeHostSelfTest() noexcept
     std::shared_ptr<StrokeOpeningTestGate> undoGate;
     if (!heldOpeningGate(undoGate))
         return 5;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct UndoState final
     {
         Application& owner;
@@ -285,8 +295,10 @@ int Application::RunSealedStrokeHostSelfTest() noexcept
         LPARAM upPosition;
         bool visited = false;
         bool undoWaitsBehindSealedStroke = false;
-    } undo{*this, undoGate,          _canvasBrushReceipt,   {}, _canvasBrushInput.Opening(), 0,
-           0,     findStrokeOrdinal, clientAt(kStrokePoint)};
+    }
+#pragma warning(pop)
+    undo{*this, undoGate,          _canvasBrushReceipt,   {}, _canvasBrushInput.Opening(), 0,
+         0,     findStrokeOrdinal, clientAt(kStrokePoint)};
     const auto undoPump = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<UndoState*>(opaque);
@@ -351,6 +363,10 @@ int Application::RunSealedStrokeHostSelfTest() noexcept
     if (!_layerMetadataTestGate->release)
         return 5;
     OnLayerOpacity(.25, ChromeEditPhase::Preview);
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct OpacityState final
     {
         Application& owner;
@@ -370,18 +386,20 @@ int Application::RunSealedStrokeHostSelfTest() noexcept
         bool strokeQueuedSealed = false;
         bool escapeRetainedStroke = false;
         bool youngerCancelled = false;
-    } opacity{*this,
-              _layerMetadataTestGate,
-              {},
-              {},
-              {},
-              {},
-              {},
-              0,
-              0,
-              findStrokeOrdinal,
-              clientAt(kStrokePoint),
-              clientAt(kStrokePoint)};
+    }
+#pragma warning(pop)
+    opacity{*this,
+            _layerMetadataTestGate,
+            {},
+            {},
+            {},
+            {},
+            {},
+            0,
+            0,
+            findStrokeOrdinal,
+            clientAt(kStrokePoint),
+            clientAt(kStrokePoint)};
     const auto opacityPump = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<OpacityState*>(opaque);
@@ -464,6 +482,10 @@ int Application::RunSealedStrokeHostSelfTest() noexcept
     std::shared_ptr<StrokeOpeningTestGate> unsealedGate;
     if (!heldOpeningGate(unsealedGate))
         return 5;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct UnsealedState final
     {
         Application& owner;
@@ -473,7 +495,9 @@ int Application::RunSealedStrokeHostSelfTest() noexcept
         bool visited = false;
         bool remainedUnsealed = false;
         bool cancellationRecorded = false;
-    } unsealed{*this, unsealedGate, _canvasBrushReceipt, _canvasBrushInput.Opening()};
+    }
+#pragma warning(pop)
+    unsealed{*this, unsealedGate, _canvasBrushReceipt, _canvasBrushInput.Opening()};
     const auto unsealedPump = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<UnsealedState*>(opaque);

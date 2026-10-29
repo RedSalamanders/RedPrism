@@ -1,6 +1,7 @@
 #include "ChromeHost.h"
 #include "LucideToolButton.h"
 #include "PaletteControl.h"
+#include <cstddef>
 
 #include "Resources.h"
 #include "ThemePalette.h"
@@ -339,7 +340,12 @@ void ChromeHost::LayerTreeModel::OnTreeToggleExpanded(uint64_t itemId, bool expa
     events.OnLayerExpanded(visibleRows[index.value()].id, expanded);
 }
 
+// ShortcutListModel stores the reference only; it does not observe the host during construction.
+// Owner: RedPrism maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4355)
 ChromeHost::ChromeHost(ChromeEvents& events) noexcept : _events(events), _shortcutModel(*this), _treeModel(events) {}
+#pragma warning(pop)
 
 ChromeHost::~ChromeHost()
 {
@@ -3036,8 +3042,9 @@ void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection, bo
     rename(edit, kCommandFreeTransform, transformsSelection ? IDS_CMD_TRANSFORM_SELECTION : IDS_CMD_FREE_TRANSFORM);
     rename(layer, kCommandDeleteLayer, masksTargeted ? IDS_CMD_DELETE_LAYER_MASK : IDS_CMD_DELETE_LAYER);
     rename(layer, kCommandClipToggle, clipped ? IDS_CMD_CLIP_RELEASE : IDS_CMD_CLIP_CREATE);
-    rename(layer, kCommandMergeDown,
-           merge == 1 ? IDS_CMD_MERGE_GROUP : (merge == 2 ? IDS_CMD_MERGE_LAYERS : IDS_CMD_MERGE_DOWN));
+    rename(
+        layer, kCommandMergeDown,
+        static_cast<UINT>(merge == 1 ? IDS_CMD_MERGE_GROUP : (merge == 2 ? IDS_CMD_MERGE_LAYERS : IDS_CMD_MERGE_DOWN)));
 }
 
 void ChromeHost::SetMaskCommands(bool present, bool targeted, bool linked, bool enabled)
@@ -4337,7 +4344,7 @@ void ChromeHost::SetCommandChecked(int command, bool checked) noexcept
         if (menu)
         {
             (void)CheckMenuItem(menu.get(), static_cast<UINT>(command),
-                                MF_BYCOMMAND | (checked ? MF_CHECKED : MF_UNCHECKED));
+                                static_cast<UINT>(MF_BYCOMMAND | (checked ? MF_CHECKED : MF_UNCHECKED)));
         }
     }
 }

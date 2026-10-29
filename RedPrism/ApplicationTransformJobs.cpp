@@ -68,10 +68,18 @@ struct Application::TransformRestoreOwner final : DeferredReleaseNode
 
 // The selected ordinal owns the job through its admission, capture, worker work, completion and retirement.
 // A successful floating opening retains a separate preallocated restoration node until its edit settles.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::TransformJob final : public Job
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
     struct Payload final : DeferredReleaseNode
     {
         std::optional<FloatingOpeningInput> openingInput;
@@ -103,6 +111,8 @@ class Application::TransformJob final : public Job
             }
         }
     };
+#pragma warning(pop)
+
 #pragma warning(pop)
 
   public:
@@ -446,6 +456,7 @@ class Application::TransformJob final : public Job
     std::unique_ptr<Payload, RetireTransformOwner<Payload>> _payload;
     HRESULT _captureError = S_OK;
 };
+#pragma warning(pop)
 
 void Application::RetireTransformRestore() noexcept
 {

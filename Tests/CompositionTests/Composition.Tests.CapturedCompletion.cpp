@@ -52,6 +52,10 @@ struct WarpDevice final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Rig final
 {
   public:
@@ -93,6 +97,7 @@ class Rig final
     JobScheduler scheduler;
     GpuWorkQueue queue;
 };
+#pragma warning(pop)
 
 struct Delivery final
 {

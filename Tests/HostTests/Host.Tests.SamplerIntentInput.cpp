@@ -1,6 +1,6 @@
 #include "Host.Tests.SamplerIntentInput.h"
 
-#include "../../Common/SamplerIntentInput.h"
+#include "Common/SamplerIntentInput.h"
 
 #include <cstdint>
 #include <cstdio>

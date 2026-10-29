@@ -46,12 +46,6 @@ Raster SolidBgra(int width, int height, std::array<std::uint8_t, 4> pixel)
     return Bgra(width, height, bytes);
 }
 
-Raster SolidGray(int width, int height, std::uint8_t value)
-{
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), value);
-    return Gray(width, height, bytes);
-}
-
 WandSettings Settings(int tolerance = 0, bool contiguous = true, WandSampleSize sample = WandSampleSize::Point)
 {
     WandSettings settings;
@@ -164,8 +158,8 @@ void PreCancelledTokens()
     static_cast<void>(local.Cancel());
     std::stop_source shutdown;
     static_cast<void>(shutdown.request_stop());
-    const CancelToken shutdownOnly{{}, shutdown.get_token()};
-    const CancelToken localAndShutdown{local.Token().LocalToken(), shutdown.get_token()};
+    const CancelToken shutdownOnly({}, shutdown.get_token());
+    const CancelToken localAndShutdown(local.Token().LocalToken(), shutdown.get_token());
 
     long count = 9;
     const auto mask = MagicWand::Mask(image, 0, 0, Settings(), count, local.Token());
@@ -205,6 +199,10 @@ void PreCancelledTokens()
     Expect(!RenderLayerPixels(image, transform, 4, 4, local.Token()).HasStorage(), "pre-cancel.render-layer-is-empty");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct OwnerStopGate final
 {
     std::mutex mutex;
@@ -212,6 +210,7 @@ struct OwnerStopGate final
     bool entered = false;
     bool released = false;
 };
+#pragma warning(pop)
 
 void EnterOwnerStopGate(void* opaque, MagicWand::WorkStage stage, std::size_t offset) noexcept
 {
@@ -235,7 +234,7 @@ void OwnerCancelsReachedWorker()
         OwnerStopGate gate;
         long count = 0;
         std::vector<std::uint8_t> output;
-        const CancelToken token{local.Token().LocalToken(), stop.get_token()};
+        const CancelToken token(local.Token().LocalToken(), stop.get_token());
         std::jthread worker(
             [&]
             { output = MagicWand::Mask(image, 0, 0, Settings(0, false), count, token, {&gate, EnterOwnerStopGate}); });

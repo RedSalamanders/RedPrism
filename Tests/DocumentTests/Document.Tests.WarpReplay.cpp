@@ -119,11 +119,11 @@ PreparedPreview PreparePreviewOnJoinedWorker(const Raster& image, std::thread::i
             placement.sampling = LayerSampling::Nearest;
             auto stroke = WarpStroke::MakePlacedForWork(WarpSourceView{image, placement, kCanvasSide, kCanvasSide},
                                                         SmearMode::Liquify, BrushSettings{6, 1, 0, 0, 0, 1}, owner,
-                                                        CancelToken{std::stop_token{}, std::stop_token{}}, memory);
+                                                        CancelToken(std::stop_token{}, std::stop_token{}), memory);
             if (!stroke || !stroke->IsValid() || !stroke->Points().empty() || !memory)
                 return;
             result.preview = PrepareWarpPreviewForWork(
-                *stroke, owner, CancelToken{std::stop_token{}, std::stop_token{}}, std::move(memory));
+                *stroke, owner, CancelToken(std::stop_token{}, std::stop_token{}), std::move(memory));
             result.validNoDabSource =
                 result.preview && result.preview->source.image == image && result.preview->tiles.empty();
         });
@@ -173,7 +173,7 @@ ReplayResult RunPairedReplayOnJoinedWorker(std::shared_ptr<const PreparedWarpPre
         [&result, preview = std::move(preview), layer = std::move(layer), sampleImage = std::move(sampleImage),
          selection = std::move(selection), scenario]
         {
-            const CancelToken live{std::stop_token{}, std::stop_token{}};
+            const CancelToken live(std::stop_token{}, std::stop_token{});
             auto replay = BrushStroke::MakeForWork(layer, false, kBrushSettings, kCanvasSide, kCanvasSide);
             if (replay && replay->IsValid())
             {
@@ -236,7 +236,7 @@ RefusalResults ExerciseWorkerRefusals(const std::shared_ptr<const PreparedWarpPr
     std::thread worker(
         [&result, preview, layer]
         {
-            const CancelToken live{std::stop_token{}, std::stop_token{}};
+            const CancelToken live(std::stop_token{}, std::stop_token{});
 
             auto missing = BrushStroke::MakeForWork(layer, false, kBrushSettings, kCanvasSide, kCanvasSide);
             result.missingPreviewRefused =
@@ -264,7 +264,7 @@ RefusalResults ExerciseWorkerRefusals(const std::shared_ptr<const PreparedWarpPr
                 CancelSource stop;
                 static_cast<void>(stop.Cancel());
                 const auto refused = cancelled->PrepareWarpReplaySampleForWork(
-                    Vec2{8, 8}, CancelToken{stop.Token().LocalToken(), std::stop_token{}});
+                    Vec2{8, 8}, CancelToken(stop.Token().LocalToken(), std::stop_token{}));
                 result.cancelledPrefixHasNoSnapshot =
                     composed && !refused.has_value() && !cancelled->PaintSnapshot().has_value();
             }
@@ -346,7 +346,7 @@ int RunWarpReplayTests()
     Expect(refusals.cancelledPrefixHasNoSnapshot, "worker-cancellation-invalidates-private-prefix-snapshot");
     const bool ownerRefused = prepared.preview && refusals.ownerProbe &&
                               !refusals.ownerProbe->BeginWarpReplayForWork(
-                                  prepared.preview, false, CancelToken{std::stop_token{}, std::stop_token{}});
+                                  prepared.preview, false, CancelToken(std::stop_token{}, std::stop_token{}));
     Expect(ownerRefused, "known-preview-owner-refuses-replay-mutation-after-worker-join");
 
     std::printf("SUMMARY warp-replay checks=%d failures=%d\n", gChecks, gFailures);

@@ -60,7 +60,7 @@ int RunPublicationAllocationTests()
     {
         auto original = SharedPublicationMemory::CreateForWork();
         auto foreign = SharedPublicationMemory::CreateForWork();
-        auto value = MakeAccountedPublicationObject<Bytes>(original, 16384, 257, 257);
+        auto value = MakeAccountedPublicationObject<Bytes>(original, 16384, 257, std::size_t{257});
         const auto strong = original->LocalAllocationBytes();
         Expect(value->pixels.size() == 257 && value->pixels.front() == 37 && value->pixels.back() == 37,
                "literal-published-data-remains-readable");
@@ -78,7 +78,7 @@ int RunPublicationAllocationTests()
     }
     {
         auto original = SharedPublicationMemory::CreateForWork();
-        auto older = MakeAccountedPublicationObject<Bytes>(original, 16384, 19, 19);
+        auto older = MakeAccountedPublicationObject<Bytes>(original, 16384, 19, std::size_t{19});
         const auto oldBytes = original->LocalAllocationBytes();
         bool refused = false;
         try
@@ -109,7 +109,7 @@ int RunPublicationAllocationTests()
     }
     {
         auto original = SharedPublicationMemory::CreateForWork();
-        auto older = MakeAccountedPublicationObject<Bytes>(original, 16384, 23, 23);
+        auto older = MakeAccountedPublicationObject<Bytes>(original, 16384, 23, std::size_t{23});
         const auto previous = original->LocalAllocationBytes();
         bool refused = false;
         try
@@ -131,7 +131,7 @@ int RunPublicationAllocationTests()
         try
         {
             (void)MakeAccountedPublicationObject<Bytes>(original, 16384, (std::numeric_limits<std::uint64_t>::max)(),
-                                                        0);
+                                                        std::size_t{0});
         }
         catch (const std::bad_alloc&)
         {

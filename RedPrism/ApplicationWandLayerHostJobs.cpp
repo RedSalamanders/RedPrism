@@ -18,6 +18,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct WandLayerHostPayload final : DeferredReleaseNode
 {
     // Fields precede every source/output graph: their actual/control destruction precedes the leases.
@@ -46,6 +50,8 @@ struct WandLayerHostPayload final : DeferredReleaseNode
         }
     }
 };
+#pragma warning(pop)
+
 #pragma warning(pop)
 struct RetireWandLayerHostPayload final
 {
@@ -82,6 +88,10 @@ bool Application::PanelWandBusyOwner() const noexcept
     return false;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::WandLayerHostJob final : public Job
 {
   public:
@@ -279,9 +289,9 @@ class Application::WandLayerHostJob final : public Job
             if (_source != LayerSelectionSource::ColorMatch)
             {
                 ++_owner._errorsShown;
-                _owner._lastErrorId = message;
+                _owner._lastErrorId = static_cast<UINT>(message);
             }
-            _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, message);
+            _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, static_cast<UINT>(message));
         }
         _owner._wandLayerHostTicket.reset();
         _owner._wandLayerHostStamp.reset();
@@ -329,6 +339,7 @@ class Application::WandLayerHostJob final : public Job
     std::int32_t _captureError = 0;
     bool _captureAttempted = false;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartLoadedLayerSelection(bool mask) noexcept
 {

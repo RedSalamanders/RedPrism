@@ -1,8 +1,8 @@
 #include "Document.Tests.WarpOpening.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Executor.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "WarpOpeningWork.h"
 
 #include <array>
@@ -589,7 +589,7 @@ void CancellationAndNoMutation()
         const auto documentGeneration = fixture.session.Generation();
         std::optional<WorkerResult> work;
         if (input)
-            work.emplace(PrepareDetached(std::move(input.value()), CancelToken{local.get_token(), shutdown.get_token()},
+            work.emplace(PrepareDetached(std::move(input.value()), CancelToken(local.get_token(), shutdown.get_token()),
                                          observer));
         const auto* layerAfter = fixture.session.ActiveLayer();
         Expect(input.has_value() && state.observed && work && work->joined && work->result &&

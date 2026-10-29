@@ -252,7 +252,8 @@ void SparseGrayBandRoundTrip()
         {
             for (int x = 0; x < width; ++x)
             {
-                const std::uint8_t expected = y < width ? static_cast<std::uint8_t>((x * 13 + y * 29) % 251) : 7;
+                const std::uint8_t expected =
+                    y < width ? static_cast<std::uint8_t>((x * 13 + y * 29) % 251) : std::uint8_t{7};
                 if (bytes[static_cast<std::size_t>(y) * width + x] != expected)
                 {
                     matches = false;

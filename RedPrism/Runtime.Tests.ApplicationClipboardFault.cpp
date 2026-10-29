@@ -1,9 +1,9 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -160,6 +160,10 @@ int Application::RunClipboardFaultSelfTest() noexcept
             (void)SystemClipboard::RestoreContents(_window.get(), saved);
         });
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct PumpState
     {
         Application& owner;
@@ -169,6 +173,8 @@ int Application::RunClipboardFaultSelfTest() noexcept
         bool barrierHeld = false;
         bool injectOpenAfterInspection = false;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* raw, void* native) noexcept
     {
         auto& state = *static_cast<PumpState*>(raw);

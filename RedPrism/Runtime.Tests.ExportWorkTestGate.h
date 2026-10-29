@@ -12,6 +12,10 @@
 #pragma warning(pop)
 
 // Owned event-gated harness state; absent from production. Publication occurs on the worker before its message.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ExportWorkTestGate final
 {
     static constexpr UINT kMessage = WM_APP + 0x4b6;
@@ -28,3 +32,4 @@ struct ExportWorkTestGate final
     bool throwAllocationFailure = false;
     bool throwAdmissionFailure = false;
 };
+#pragma warning(pop)

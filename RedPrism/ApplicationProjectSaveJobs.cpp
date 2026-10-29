@@ -21,6 +21,10 @@
 #include <string_view>
 #include <utility>
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Application::ProjectSaveJob final : public Job
 {
   public:
@@ -53,12 +57,18 @@ class Application::ProjectSaveJob final : public Job
         const auto attributes = GetFileAttributesW(_path.c_str());
         const bool folder = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
         const bool zip = !folder && PathLooksLikeZipProject(_path.c_str());
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4625 4626 5027)
         struct Progress final
         {
             ProjectSaveJob& job;
             JobContext& context;
             wil::unique_hfile recoveryReader;
-        } progress{*this, context, {}};
+        }
+#pragma warning(pop)
+        progress{*this, context, {}};
         const ProjectIoObserver observer{[](void* state, ProjectIoStage stage, unsigned int value) noexcept
                                          {
                                              auto& stateValue = *static_cast<Progress*>(state);
@@ -247,8 +257,8 @@ class Application::ProjectSaveJob final : public Job
                                       ? IDS_ERROR_TOO_LARGE
                                       : IDS_ERROR_SAVE_PROJECT;
             ++_owner._errorsShown;
-            _owner._lastErrorId = stringId;
-            _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, stringId);
+            _owner._lastErrorId = static_cast<UINT>(stringId);
+            _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, static_cast<UINT>(stringId));
         }
         _owner._projectSaveWrite.reset();
         _owner.ClearEndSessionWriteBlock();
@@ -284,6 +294,7 @@ class Application::ProjectSaveJob final : public Job
     ProjectIoStatus _status = ProjectIoStatus::Encode;
     bool _published = false; // worker-only writes, owner reads only after final acknowledged completion
 };
+#pragma warning(pop)
 
 HRESULT Application::StartProjectSave() noexcept
 {
@@ -379,6 +390,10 @@ int Application::RunProjectSaveSelfTest() noexcept
         Admission,
         PathBudget
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -390,6 +405,8 @@ int Application::RunProjectSaveSelfTest() noexcept
         std::optional<Guid> laterRevision;
         std::optional<Guid> settledRevision;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<State*>(context);

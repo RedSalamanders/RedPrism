@@ -1,9 +1,9 @@
 #include "Document.Tests.DuplicateOpeningWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "DuplicateOpeningWork.h"
 #include "Executor.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "TransformCancellationWork.h"
 #include "TransformCommitWork.h"
 

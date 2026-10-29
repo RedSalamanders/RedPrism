@@ -1,12 +1,12 @@
 #include "Document.Tests.OptionalImageThumbnail.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "CanvasSize.h"
 #include "ColorEditHistory.h"
 #include "ColorEditWork.h"
 #include "Document.h"
 #include "Executor.h"
 #include "RasterEditWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

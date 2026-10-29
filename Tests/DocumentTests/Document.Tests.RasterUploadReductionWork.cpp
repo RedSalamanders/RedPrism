@@ -1,7 +1,7 @@
 #include "Document.Tests.RasterUploadReductionWork.h"
 
-#include "../../Common/Document.h"
-#include "../../Common/RasterUploadReductionWork.h"
+#include "Common/Document.h"
+#include "Common/RasterUploadReductionWork.h"
 
 #include <algorithm>
 #include <array>
@@ -343,7 +343,7 @@ void CancellationAndRowObserver()
     channelSums.fill(0x12345678U);
     const auto shutdownStatus = ReduceRasterBlocksForUpload(
         raster, region, destination.data(), destination.size(), 2, sourceRow, channelSums,
-        CancelToken{activeLocal.get_token(), shutdownStop.get_token()}, ObserveRows, &preObserver);
+        CancelToken(activeLocal.get_token(), shutdownStop.get_token()), ObserveRows, &preObserver);
     Expect(shutdownStatus == RasterUploadWorkStatus::Cancelled && preObserver.calls == 0 &&
                destination == std::array<std::uint8_t, 4>{0xD3, 0xD3, 0xD3, 0xD3} &&
                sourceRow == std::array<std::uint8_t, 3>{0xA5, 0xA5, 0xA5} &&

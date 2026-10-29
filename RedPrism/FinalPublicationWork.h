@@ -35,6 +35,10 @@ struct DestroyFinalParentForWork final
 // Construct/move/destroy only on the original worker. The caller admits the complete CPU/output overlap
 // and both accounting owners before capture. A parent payload retains all old source/history/result
 // aliases for worker retirement, including construction failure, cancellation and joined shutdown.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4625 4626)
 struct SizeFinalPublicationWork final
 {
     std::shared_ptr<SharedPublicationMemory> finalMemory;
@@ -45,3 +49,4 @@ struct SizeFinalPublicationWork final
     std::uint32_t ownerThread = 0;
     std::uint64_t displayCpuBytes = 0, displayGpuBytes = 0;
 };
+#pragma warning(pop)

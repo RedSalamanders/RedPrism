@@ -37,7 +37,7 @@ class CancelToken final
     }
     [[nodiscard]] CancelToken WithShutdown(std::stop_token shutdown) const noexcept
     {
-        return shutdown.stop_possible() ? CancelToken{_local, shutdown} : *this;
+        return shutdown.stop_possible() ? CancelToken(_local, shutdown) : *this;
     }
 
   private:
@@ -148,6 +148,10 @@ template <typename Fn>
     {
         return !token.IsCancelled();
     }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4625 4626 5026 5027)
     struct State final
     {
         TileGrid grid;
@@ -157,7 +161,9 @@ template <typename Fn>
         std::atomic<std::uint64_t> next{0};
         std::atomic<std::uint64_t> completed{0};
         std::atomic<bool> aborted{false};
-    } state{grid, token, body, count};
+    }
+#pragma warning(pop)
+    state{grid, token, body, count};
     const auto run = [](void* context) noexcept
     {
         auto& work = *static_cast<State*>(context);

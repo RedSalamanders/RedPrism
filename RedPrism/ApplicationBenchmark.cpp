@@ -1,4 +1,5 @@
 #include "Application.h"
+#include <cstddef>
 
 #include "DocumentDraft.h"
 
@@ -172,7 +173,7 @@ BenchmarkMonitorSnapshot ReadBenchmarkMonitor(HWND window)
     const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
     MONITORINFOEXW info{};
     info.cbSize = sizeof(info);
-    if (!monitor || !GetMonitorInfoW(monitor, reinterpret_cast<MONITORINFO*>(&info)))
+    if (!monitor || !GetMonitorInfoW(monitor, static_cast<MONITORINFO*>(&info)))
         return result;
     result.monitorIdentity = reinterpret_cast<std::uintptr_t>(monitor);
     result.deviceName = Utf8(info.szDevice);
@@ -222,7 +223,7 @@ BenchmarkMonitorSnapshot ReadBenchmarkMonitor(HWND window)
             return {};
         MONITORINFOEXW current{};
         current.cbSize = sizeof(current);
-        if (!GetMonitorInfoW(monitor, reinterpret_cast<MONITORINFO*>(&current)) ||
+        if (!GetMonitorInfoW(monitor, static_cast<MONITORINFO*>(&current)) ||
             CompareStringOrdinal(info.szDevice, -1, current.szDevice, -1, TRUE) != CSTR_EQUAL)
             return {};
         result.refresh = SelectBenchmarkRefreshRate(candidates);
@@ -606,7 +607,7 @@ void Report(const UiBenchmarkState& state)
         readback.readinessBarriers += state.samples[run].readback.readinessBarriers;
         readback.busyFailures += state.samples[run].readback.busyFailures;
     }
-    std::sort(elapsed.begin(), elapsed.begin() + runs);
+    std::sort(elapsed.begin(), elapsed.begin() + static_cast<std::ptrdiff_t>(runs));
     const auto dispatch = Summarize(state, UiTimingKind::MessageDispatch);
     const auto message = Summarize(state, UiTimingKind::WindowMessage);
     const auto drain = Summarize(state, UiTimingKind::CompletionDrain);

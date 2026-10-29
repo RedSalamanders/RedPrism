@@ -118,22 +118,22 @@ LONG WINAPI UnhandledFilter(EXCEPTION_POINTERS* pointers) noexcept
     ExitProcess(code);
 }
 
-void __cdecl OnInvalidParameter(const wchar_t*, const wchar_t*, const wchar_t*, unsigned int, uintptr_t)
+void __cdecl OnInvalidParameter(const wchar_t*, const wchar_t*, const wchar_t*, unsigned int, uintptr_t) noexcept
 {
     FailFast(kInvalidParameterCode);
 }
 
-void __cdecl OnPureCall()
+void __cdecl OnPureCall() noexcept
 {
     FailFast(kPureCallCode);
 }
 
-void OnTerminate()
+void OnTerminate() noexcept
 {
     FailFast(kTerminateCode);
 }
 
-void __cdecl OnAbort(int)
+void __cdecl OnAbort(int) noexcept
 {
     FailFast(kAbortCode);
 }
