@@ -4,6 +4,10 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Publish the production-readiness review of the 2026-10-21..2026-10-28 merges (`0ce2070..85eaef7`, PRs #4–#18) as a
+  DECISION plan with WIP index routing: verified High/Medium/Low production rows, latent P1 rows, CI/tooling rows,
+  simplification items AR-1–AR-11, open questions Q1–Q12 and work packages WP0–WP6. Documentation only; no product
+  code changed, nothing was built or run for the review, and every fix waits on the recorded decisions.
 - Record the validated build-policy matrix, preserved binary-size evidence, completed quiet performance study and explicit merge handoff; retain unresolved performance uncertainty and any hosted CI limits.
 - Record passing local x64 runtime qualification and ARM64 cross-builds for the common build policy, with immutable Release size evidence and remaining performance/CI gates explicit.
 - Correct the utility routing fixture's reversed memory-source fields; prove that all 128 original admissions use its injected sampler and retain their synthetic charges, while preserving the explicit memory-notification and one-drain idle assertions. Native and full runtime requalification remain required.
