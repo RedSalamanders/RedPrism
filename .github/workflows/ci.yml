@@ -41,6 +41,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Changelog changes are fragments or exact folds
+        shell: pwsh
+        run: ./Tools/Test-Changelog.ps1 -Base HEAD^1
       - name: Prepare required MSVC 14.52 tools
         uses: ./.github/actions/setup-msvc
         with:

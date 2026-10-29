@@ -70,6 +70,6 @@ When a spec, implementation, test, or document disagrees:
 
 `Core/Core_DxUiIntegration.md` is the consumer pin contract.
 
-The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and immediate folding before PrePush/final handoff and after integration.
+The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and the fold of merged fragments into `CHANGELOG.md` on the default branch.
 
 [RedMonitor integration](Core/Core_RedMonitorIntegration.md) owns the optional diagnostic client, SDK pin and viewer command.

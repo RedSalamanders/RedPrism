@@ -1,7 +1,7 @@
 
 ## Recording changes
 
-Follow the [Changes workflow](Changes/README.md): validate while editing, then fold before PrePush/final handoff and immediately after integration, even for one fragment.
+Follow the [Changes workflow](Changes/README.md): each change adds one fragment under `Changes/` and never edits `CHANGELOG.md`; after merges, `Tools/Submit-ChangelogFold.ps1` folds the fragments on `main` through a pull request of its own.
 
 ## Testing
 
