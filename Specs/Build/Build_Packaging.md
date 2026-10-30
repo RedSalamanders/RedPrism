@@ -15,8 +15,9 @@ is no auto-update: RedPrism never contacts a server ([`Core_CrashHandling.md`](.
 
 `.\package.ps1 [-Platform x64|ARM64] [-SkipBuild] [-SkipSmoke] [-OutputDirectory <dir>] [-BuildNumber <n>]`
 
-1. Builds `Release` for the platform through `build.ps1` (the same preflight: a running `RedPrism.exe` blocks the
+1. Builds test-disabled `Release -ProductionOnly` for the platform through `build.ps1` (the same preflight: a running `RedPrism.exe` blocks the
    build and is never terminated), unless `-SkipBuild`.
+   The exact source, artifacts, profile, frozen build number and disabled test role must match the build receipt.
 2. Reads the version from the built executable (`OriginalFilename` `RedPrism.exe`, `ProductName` `RedPrism`,
    file version `0.1.<build>.0` from [`Build_Toolchain.md`](Build_Toolchain.md), where `<build>` is the Git commit
    count of `HEAD`). The package version is `major.minor.build`; `Common/Version.h` stays authoritative and the
@@ -45,12 +46,12 @@ Nothing else: no settings template (the app writes it), no crash folder, no regi
 
 ## Clean-extraction smoke
 
-The ZIP is expanded into a fresh folder and the extracted executable runs twice with a `Path` reduced to
+The ZIP is expanded into a fresh folder and the extracted executable runs with a `Path` reduced to
 `%SystemRoot%\System32`, `%SystemRoot%` and `System32\Wbem`, so a DLL the package forgot cannot be found on the
-developer's machine: `--help` MUST exit 0 and print the command catalog; `--self-test --warp` MUST exit 0 (the
-hidden WARP self-test of [`Testing_Validation.md`](../Testing/Testing_Validation.md), which never touches the user's
-settings or crash folders); the extracted executable MUST carry the packaged file version. The folder is removed
-afterwards. The smoke is skipped with a notice when the host cannot run the platform (ARM64 packaged on x64) or
+developer's machine: `--help` MUST exit 0 and print the command catalog; `--self-test --warp` MUST refuse with exit 2;
+`--screenshot <owned-path> --warp` MUST exit 0 and create a nonempty hidden native capture. The extracted executable
+MUST carry the packaged file version. Smoke evidence is retained. The full in-product regression suite belongs to
+the preceding test-enabled Release role; see [unified CI](Build_UnifiedCI.md). The smoke is skipped with a notice when the host cannot run the platform (ARM64 packaged on x64) or
 with `-SkipSmoke`.
 
 ## What the user gets

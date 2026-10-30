@@ -52,6 +52,7 @@ if ($Phase -eq 'Static') {
 }
 if ($Phase -ne 'Qualification') { $Configuration = 'Release' }
 $number = [string]$context.batch.buildNumber
+$env:RedPrismEnableTests = if ($Phase -eq 'Production') { 'false' } else { 'true' }
 $profile = @('-Platform',$Platform,'-Configuration',$Configuration)
 $started = [DateTime]::UtcNow
 $receiptDirectory = Join-Path $root ".build/ci/regression/$Platform"

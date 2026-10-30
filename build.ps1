@@ -26,6 +26,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($env:CI_NATIVE_BUILDS_DISABLED -eq 'true') { throw 'Native builds are forbidden in compiler-free PR checks.' }
+$env:RedPrismEnableTests = if ($ProductionOnly) { 'false' } else { 'true' }
 $nativeEntryElapsed = [Diagnostics.Stopwatch]::StartNew()
 Import-Module (Join-Path $PSScriptRoot 'Build/BuildConsole.psm1') -ErrorAction Stop
 
@@ -112,6 +113,7 @@ try {
         "/p:Configuration=$Configuration",
         "/p:Platform=$Platform",
         "/p:RedPrismBuildNumber=$BuildNumber",
+        "/p:RedPrismEnableTests=$env:RedPrismEnableTests",
         $workerArgument,
         '/nologo',
         '/verbosity:minimal',

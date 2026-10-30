@@ -24,6 +24,7 @@
     <VcpkgEnabled>false</VcpkgEnabled>
 
     <RedPrismBuildNumber Condition="'$(RedPrismBuildNumber)'==''">0</RedPrismBuildNumber>
+    <RedPrismEnableTests Condition="'$(RedPrismEnableTests)'==''">true</RedPrismEnableTests>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='ASan Debug'">
@@ -43,6 +44,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/utf-8 /permissive- /Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32_LEAN_AND_MEAN;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(RedPrismEnableTests)'=='true'">REDPRISM_ENABLE_TESTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)Common;$(MSBuildThisFileDirectory)RedPrism;$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
