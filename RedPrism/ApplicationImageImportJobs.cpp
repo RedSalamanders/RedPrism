@@ -491,6 +491,7 @@ HRESULT Application::StartImageImport(std::span<const std::wstring_view> paths, 
     return S_OK;
 }
 
+#if defined(REDPRISM_ENABLE_TESTS)
 int Application::RunImageImportSelfTest() noexcept
 {
     enum class Target
@@ -1109,3 +1110,4 @@ int Application::RunImageImportSelfTest() noexcept
     const std::array<std::wstring_view, 2> residencyPaths{first, second};
     return RunImageImportResidencySelfTest(residencyPaths);
 }
+#endif
