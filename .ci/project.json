@@ -37,7 +37,7 @@
     "identifier": "RedSalamanders.RedPrism",
     "executable": "RedPrism.exe",
     "alias": "redprism",
-    "license": "",
+    "license": "MIT",
     "minimumOSVersion": "10.0.22000.2600"
   }
 }

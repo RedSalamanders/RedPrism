@@ -527,9 +527,9 @@ function Get-ScopedProjectRules {
 Export-ModuleMember -Function Get-ScopedProjectRules
 
 function Get-ScopedBuildAttestationKey {
-    param([string]$Root,[string]$Platform,[string]$Configuration,[int]$BuildNumber)
+    param([string]$Root,[string]$Platform,[string]$Configuration,[int]$BuildNumber,[bool]$EnableTests=$true)
     return Get-ScopedDigest (@('canonical-build-v1',[IO.Path]::GetFullPath($Root),$Platform,$Configuration,$BuildNumber,
-        ('tests-enabled='+[string]($env:RedPrismEnableTests -ne 'false')),
+        ('tests-enabled='+[string]$EnableTests),
         (Get-ScopedSourceIdentity $Root -CompiledOnly),(Get-ScopedArtifactIdentity $Root $Platform $Configuration),
         (Get-ScopedEnvironmentIdentity)) -join "`n")
 }

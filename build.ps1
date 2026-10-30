@@ -190,7 +190,7 @@ try {
         if ((Get-ScopedSourceIdentity $repoRoot -CompiledOnly) -cne $scopedSourceBefore -or (Get-ScopedEnvironmentIdentity) -cne $scopedEnvironmentBefore) {
             throw 'Source/toolchain environment changed during build; no build attestation was published.'
         }
-        Write-ScopedReceipt (Join-Path (Split-Path $executable) 'build-attestation.json') (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $BuildNumber)
+        Write-ScopedReceipt (Join-Path (Split-Path $executable) 'build-attestation.json') (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $BuildNumber -EnableTests (-not $ProductionOnly))
         Write-NativeBuildResult -Project RedPrism -Platform $Platform -Configuration $Configuration -LogPath $logPath -Artifacts @($executable) -Executable $executable -Duration $nativeEntryElapsed.Elapsed
         if ($Run) {
             $native = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()

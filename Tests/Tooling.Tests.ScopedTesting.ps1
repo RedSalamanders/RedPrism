@@ -110,6 +110,21 @@ try{
         Assert ($message -eq 'No executable build artifacts were found.') 'JSON-only profile accepted'
         Put (Join-Path $gitRoot '.build/x64/Debug/example.exe') 'binary'
     }
+    Case 'a production build receipt never delegates test-enabled native work' {
+        $old=$env:RedPrismEnableTests
+        try {
+            $env:RedPrismEnableTests='false'
+            $normal=Get-ScopedBuildAttestationKey $gitRoot x64 Debug 17
+            $explicit=Get-ScopedBuildAttestationKey $gitRoot x64 Debug 17 -EnableTests $true
+            $production=Get-ScopedBuildAttestationKey $gitRoot x64 Debug 17 -EnableTests $false
+            Assert ($normal -ceq $explicit) 'A normal test request inherited a production-only environment flag'
+            Assert ($normal -cne $production) 'Build roles have identical receipt identities'
+            $path=Join-Path $gitRoot '.build/production-role.json'
+            Write-ScopedReceipt $path $production
+            Assert (Test-ScopedReceipt $path $production) 'The identical production role cannot reuse its own success'
+            Assert (-not(Test-ScopedReceipt $path $normal)) 'A production-only receipt qualified native test work'
+        } finally { $env:RedPrismEnableTests=$old }
+    }
     Case 'only intact identical successful receipts are reusable' {
         $path=Join-Path $gitRoot '.build/pass.json';$key=Get-ScopedDigest 'identity'
         Assert (-not(Test-ScopedReceipt $path $key)) 'Missing receipt reused'

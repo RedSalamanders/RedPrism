@@ -98,7 +98,7 @@ if (-not $SkipBuild) {
 Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
 $effectiveBuildNumber = if ($BuildNumber -gt 0) { $BuildNumber } else { Get-ScopedBuildNumber $repoRoot }
 $attestation = Join-Path $outputRoot 'build-attestation.json'
-if (-not (Test-ScopedReceipt $attestation (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $effectiveBuildNumber))) {
+if (-not (Test-ScopedReceipt $attestation (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $effectiveBuildNumber -EnableTests $false))) {
     throw 'Packaging requires an exact current test-disabled production build receipt.'
 }
 if (-not (Test-Path -LiteralPath $executable)) {
@@ -197,6 +197,7 @@ Copy-Item -LiteralPath $dxUiLicense.FullName -Destination (Join-Path $notices 'd
 
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\README.md') -Destination (Join-Path $stage 'README.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\usage.md') -Destination (Join-Path $stage 'usage.md')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE.txt') -Destination (Join-Path $stage 'LICENSE.txt')
 
 # ── ZIP + checksum ───────────────────────────────────────────────────────────
 $zipPath = Join-Path $OutputDirectory "$packageName.zip"

@@ -40,6 +40,7 @@ is no auto-update: RedPrism never contacts a server ([`Core_CrashHandling.md`](.
 | `ThirdPartyNotices\lucide.txt` | `ThirdParty/Lucide/LICENSE` (ISC, plus the MIT notice for the Feather-derived icons) |
 | `ThirdPartyNotices\dxui.txt` | DxUi's own license (MIT), read from the pinned source `restore-dxui.ps1` leaves at `.build\dependencies\DxUi\source\<first-16-commit-hex>\LICENSE*`; packaging fails if it is missing rather than shipping `DxUi.lib` without its notice |
 | `README.md`, `usage.md` | `docs/README.md` and `docs/usage.md` as shipped |
+| `LICENSE.txt` | The project's MIT license; third-party notices retain their own licenses |
 | `Languages\<tag>\RedPrism.resources.dll` | Not staged in v1 (no translation exists); a release with one adds the folder ([`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md), Strings) |
 
 Nothing else: no settings template (the app writes it), no crash folder, no registry work.
