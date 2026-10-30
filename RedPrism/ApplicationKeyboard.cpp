@@ -34,7 +34,6 @@ namespace
 constexpr LPARAM kKeyAltContext = static_cast<LPARAM>(1) << 29; // a system key pressed with Alt held
 constexpr LPARAM kKeyRepeatFlag = static_cast<LPARAM>(1) << 30; // the key was already down
 constexpr LPARAM kKeyUpFlags = (static_cast<LPARAM>(1) << 30) | (static_cast<LPARAM>(1) << 31);
-constexpr UINT_PTR kMenuLoopGuardTimerId = 9;
 
 // Whether the active layout types a character for the key with the keyboard state as it is: with Ctrl and Alt held,
 // AltGr text (€, @, Polish ż) rather than a chord. Flag bit 2 leaves the keyboard state, dead keys included, as it
@@ -128,6 +127,8 @@ constexpr UINT_PTR kMenuLoopGuardTimerId = 9;
     return virtualKey == VK_TAB || (virtualKey >= VK_PRIOR && virtualKey <= VK_DOWN);
 }
 
+#if defined(REDPRISM_ENABLE_TESTS)
+constexpr UINT_PTR kMenuLoopGuardTimerId = 9;
 bool gMenuLoopGuardFired = false;
 bool gMenuLoopGuardArmed = false;
 
@@ -155,6 +156,7 @@ void CALLBACK EndMenuLoopForTest(HWND, UINT, UINT_PTR, DWORD) noexcept
             (void)KillTimer(window, kMenuLoopGuardTimerId);
         });
 }
+#endif
 } // namespace
 
 LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
@@ -643,6 +645,7 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     return handled;
 }
 
+#if defined(REDPRISM_ENABLE_TESTS)
 int Application::RunKeyboardSelfTest() noexcept
 {
     if (!_chrome || !_window)
@@ -1860,3 +1863,4 @@ int Application::RunKeyboardSelfTest() noexcept
     _chrome->SetCanvasFocused(true);
     return 0;
 }
+#endif

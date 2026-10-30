@@ -205,6 +205,13 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         return 2;
     }
 
+#if !defined(REDPRISM_ENABLE_TESTS)
+    if (parsed.selfTest || parsed.crashProbeDirectory != nullptr)
+    {
+        return 2;
+    }
+#endif
+
     // Settings, the language, and the user's real crash folder belong to ordinary runs: every harness switch
     // (self-test, a screenshot, a demo, a benchmark) keeps the defaults (dark chrome, English) and its own crash
     // dumps out of the user's directories (RF-708).
@@ -267,6 +274,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     wil::unique_couninitialize_call comScope{SUCCEEDED(com)};
 
     const bool forceWarp = parsed.warp || parsed.selfTest;
+#if defined(REDPRISM_ENABLE_TESTS)
     if (parsed.selfTest)
     {
         (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -457,6 +465,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         if (const int failed = Application::RunStandalonePolygonalPressSelfTest(instance); failed != 0)
             return failed;
     }
+#endif
     const std::unique_ptr<Application> application{new (std::nothrow) Application(
         instance, forceWarp, parsed.screenshotPath, parsed.screenshotDpi, parsed.demo, parsed.bench)};
     if (!application)
@@ -517,10 +526,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         {
             OutputDebugStringW(L"Command-line paths could not be queued.\n");
         }
+#if defined(REDPRISM_ENABLE_TESTS)
         else if (parsed.selfTest)
         {
             exitCode = application->RunSelfTest();
         }
+#endif
         else if (parsed.bench != nullptr)
         {
             exitCode = application->RunBenchmark();

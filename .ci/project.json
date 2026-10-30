@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "1",
+  "repository": "RedSalamanders/RedPrism",
+  "engine": {
+    "repository": "RedSalamanders/.github",
+    "ref": "c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c"
+  },
+  "kind": "application",
+  "adapter": "Tools/Invoke-ProjectCi.ps1",
+  "include": [
+    "Tests/Fixtures/**"
+  ],
+  "exclude": [
+    "**/*.md",
+    "Specs/Plans/**",
+    "Specs/TestRuns/**",
+    "Specs/Mockups/**",
+    "Measurements/**",
+    "docs/**",
+    "Changes/**",
+    ".agents/**",
+    ".claude/**",
+    ".vscode/**",
+    ".github/ISSUE_TEMPLATE/**",
+    ".github/dependabot.yml",
+    ".github/CODEOWNERS"
+  ],
+  "formatRoots": [
+    "Common",
+    "RedPrism",
+    "Tests"
+  ],
+  "formatExclude": [],
+  "versionBase": "0.1",
+  "winget": {
+    "identifier": "RedSalamanders.RedPrism",
+    "executable": "RedPrism.exe",
+    "alias": "redprism",
+    "license": "MIT",
+    "minimumOSVersion": "10.0.22000.2600"
+  }
+}

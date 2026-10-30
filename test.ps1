@@ -436,6 +436,10 @@ foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ 
 }
 
 Write-Host ('Selected suites passed: '+($Suites -join ', ')+'. Unselected/manual/platform/resource coverage remains NOT_EVALUATED.') -ForegroundColor Green
+Publish-TestRunEvidenceReceipt -Run $evidence -Name 'normal-suites.json' -Receipt ([ordered]@{
+    schemaVersion=1; platform=$Platform; configuration=$Configuration; passed=$true
+    countUnit='suite'; discovered=@($Suites); executed=@($Suites); filtered=$false
+})
 $runPassed = $true
 } finally { Complete-TestRunEvidence -Run $evidence -Passed $runPassed }
 exit 0

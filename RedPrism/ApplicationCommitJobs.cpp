@@ -385,6 +385,7 @@ void Application::CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t open
     }
 }
 
+#if defined(REDPRISM_ENABLE_TESTS)
 int Application::RunColorCommitSelfTest() noexcept
 {
     const auto fail = [](const wchar_t* message) noexcept
@@ -733,3 +734,4 @@ int Application::RunColorCommitSelfTest() noexcept
     }
     return 0;
 }
+#endif

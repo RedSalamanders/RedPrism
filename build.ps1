@@ -14,6 +14,7 @@ param(
     [switch] $Rebuild,
     [switch] $Analyze,
     [switch] $Run,
+    [switch] $ProductionOnly,
 
     [ValidateRange(0, 256)]
     [int] $MaxCpuCount = 0,
@@ -24,6 +25,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($env:CI_NATIVE_BUILDS_DISABLED -eq 'true') { throw 'Native builds are forbidden in compiler-free PR checks.' }
+$env:RedPrismEnableTests = if ($ProductionOnly) { 'false' } else { 'true' }
 $nativeEntryElapsed = [Diagnostics.Stopwatch]::StartNew()
 Import-Module (Join-Path $PSScriptRoot 'Build/BuildConsole.psm1') -ErrorAction Stop
 
@@ -83,6 +86,15 @@ try {
 
     $msbuild = Find-RedPrismMSBuild
     $target = if ($Clean) { 'Clean' } elseif ($Rebuild -or $Analyze) { 'Rebuild' } else { 'Build' }
+    if ($ProductionOnly) {
+        if ($Configuration -ne 'Release' -or $Clean -or $Analyze) { throw 'ProductionOnly requires an ordinary Release build.' }
+        $productionTargets = @([regex]::Matches([IO.File]::ReadAllText($solutionPath),
+            'Project\("\{[^}]+\}"\)\s*=\s*"(?<name>[^"]+)",\s*"(?<path>[^"]+\.vcxproj)"') |
+            Where-Object { $_.Groups['path'].Value -notmatch '^Tests[\\/]' } |
+            ForEach-Object { $_.Groups['name'].Value })
+        if (-not $productionTargets.Count) { throw 'No production solution targets were selected.' }
+        $productionTargetArgument = (@($productionTargets | ForEach-Object { if ($Rebuild) { $_ + ':Rebuild' } else { $_ } }) -join ';')
+    }
     if (-not $Clean) {
         Write-Host '[1/2] Dependencies' -ForegroundColor Cyan
         & (Join-Path $repoRoot 'vcpkg-install.ps1') -Platform $Platform -Asan:($Configuration -eq 'ASan Debug') -MSBuildPath $msbuild
@@ -97,10 +109,11 @@ try {
     $logPath = Join-Path $logDir ("{0}-{1}-{2}{3}-{4}-{5}.log" -f $target, $Platform, ($Configuration -replace '\s', ''), $logFlavor, [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'), [guid]::NewGuid().ToString('N'))
     $arguments = @(
         $solutionPath,
-        "/t:$target",
+        $(if ($ProductionOnly) { "/t:$productionTargetArgument" } else { "/t:$target" }),
         "/p:Configuration=$Configuration",
         "/p:Platform=$Platform",
         "/p:RedPrismBuildNumber=$BuildNumber",
+        "/p:RedPrismEnableTests=$env:RedPrismEnableTests",
         $workerArgument,
         '/nologo',
         '/verbosity:minimal',
@@ -159,11 +172,15 @@ try {
             Write-Host 'Checking linked x64 instructions and ISA gate controls...' -ForegroundColor Cyan
             Import-Module (Join-Path $repoRoot 'Build\IsaScan.psm1') -Force
             $scanRoot = Join-Path $repoRoot ".build\IsaScan\x64\$($Configuration -replace '\s', '')"
-            foreach ($name in @('RedPrism', 'HostTests', 'DocumentTests', 'CompositionTests', 'IoTests')) {
+            $scanNames = if ($ProductionOnly) { @('RedPrism') } else { @('RedPrism', 'HostTests', 'DocumentTests', 'CompositionTests', 'IoTests') }
+            foreach ($name in $scanNames) {
                 $binary = Join-Path (Split-Path -Parent $executable) "$name.exe"
                 $null = Invoke-RedPrismIsaScan -Binary $binary -OutputDirectory (Join-Path $scanRoot $name)
             }
-            & (Join-Path $repoRoot 'Tests\BuildProcessTests\IsaScanTests.ps1') -MSBuildPath $msbuild -Configuration $Configuration
+            if (-not $ProductionOnly) {
+                & (Join-Path $repoRoot 'Tests\BuildProcessTests\IsaScanTests.ps1') -MSBuildPath $msbuild -Configuration $Configuration
+                if ($LASTEXITCODE -ne 0) { throw 'ISA compiler controls failed.' }
+            }
         }
 
         Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
@@ -173,7 +190,7 @@ try {
         if ((Get-ScopedSourceIdentity $repoRoot -CompiledOnly) -cne $scopedSourceBefore -or (Get-ScopedEnvironmentIdentity) -cne $scopedEnvironmentBefore) {
             throw 'Source/toolchain environment changed during build; no build attestation was published.'
         }
-        Write-ScopedReceipt (Join-Path (Split-Path $executable) 'build-attestation.json') (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $BuildNumber)
+        Write-ScopedReceipt (Join-Path (Split-Path $executable) 'build-attestation.json') (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $BuildNumber -EnableTests (-not $ProductionOnly))
         Write-NativeBuildResult -Project RedPrism -Platform $Platform -Configuration $Configuration -LogPath $logPath -Artifacts @($executable) -Executable $executable -Duration $nativeEntryElapsed.Elapsed
         if ($Run) {
             $native = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()

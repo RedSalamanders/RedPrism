@@ -110,6 +110,21 @@ try{
         Assert ($message -eq 'No executable build artifacts were found.') 'JSON-only profile accepted'
         Put (Join-Path $gitRoot '.build/x64/Debug/example.exe') 'binary'
     }
+    Case 'a production build receipt never delegates test-enabled native work' {
+        $old=$env:RedPrismEnableTests
+        try {
+            $env:RedPrismEnableTests='false'
+            $normal=Get-ScopedBuildAttestationKey $gitRoot x64 Debug 17
+            $explicit=Get-ScopedBuildAttestationKey $gitRoot x64 Debug 17 -EnableTests $true
+            $production=Get-ScopedBuildAttestationKey $gitRoot x64 Debug 17 -EnableTests $false
+            Assert ($normal -ceq $explicit) 'A normal test request inherited a production-only environment flag'
+            Assert ($normal -cne $production) 'Build roles have identical receipt identities'
+            $path=Join-Path $gitRoot '.build/production-role.json'
+            Write-ScopedReceipt $path $production
+            Assert (Test-ScopedReceipt $path $production) 'The identical production role cannot reuse its own success'
+            Assert (-not(Test-ScopedReceipt $path $normal)) 'A production-only receipt qualified native test work'
+        } finally { $env:RedPrismEnableTests=$old }
+    }
     Case 'only intact identical successful receipts are reusable' {
         $path=Join-Path $gitRoot '.build/pass.json';$key=Get-ScopedDigest 'identity'
         Assert (-not(Test-ScopedReceipt $path $key)) 'Missing receipt reused'
@@ -137,16 +152,18 @@ try{
         Assert ($null -eq (Read-ScopedIteration $path $gitRoot x64 Debug changed)) 'Wrong environment accepted'
         Put $path '{}';Assert ($null -eq (Read-ScopedIteration $path $gitRoot x64 Debug environment)) 'Corrupt state accepted'
     }
-    Case 'CI covers six exact native profiles and tooling once with no duplicate main-push run' {
-        $workflow=[IO.File]::ReadAllText((Join-Path $root '.github/workflows/ci.yml')) -replace "`r`n","`n"
-        Assert ((Get-ScopedDigest $workflow) -ceq $manifest.prWorkflowDigest) 'Workflow contract digest stale'
-        Assert ($workflow.Contains('test.ps1 -Full -SkipTooling') -and $workflow.Contains('platform: [x64, ARM64]')) 'Full native matrix narrowed'
-        Assert ($workflow -notmatch '(?m)^  push:') 'Identical merged tree automatically repeats the PR matrix'
-        Assert ((@($manifest.prCoverage|Where-Object{$_.PSObject.Properties['platform']})).Count -eq 6) 'Missing native profile contracts'
-        foreach($platform in @('x64','ARM64')){foreach($configuration in @('Debug','Release','ASan Debug')){
-            $declared=@($manifest.prCoverage|Where-Object{$_.PSObject.Properties['platform'] -and $_.platform -eq $platform -and $_.configuration -eq $configuration})
-            Assert ($declared.Count -eq 1) "Profile duplicated/omitted: $platform $configuration"
-        }}
+    Case 'current CI delegates no native PR work and qualifies both architectures after main batching' {
+        Assert ($manifest.prCoverage.Count -eq 0) 'Compiler-dependent execution is incorrectly delegated to PRs'
+        $engine=Join-Path $root '.ci-engine'
+        Import-Module (Join-Path $engine 'Tools/Modules/Ci.Policy.psm1')
+        Import-Module (Join-Path $engine 'Tools/Modules/Ci.Project.psm1')
+        $project=Read-CiProject $root
+        Test-CiProjectConfiguration @{root=$root;engineRoot=$engine;project=$project;development=$false}
+        $adapter=[IO.File]::ReadAllText((Join-Path $root 'Tools/Invoke-ProjectCi.ps1'))
+        Assert ($adapter.Contains('Invoke-ToolingTests.ps1') -or $adapter.Contains('Tooling.Tests.ScopedTesting.ps1')) 'Main tooling owner missing'
+        $native=[IO.File]::ReadAllText((Join-Path $engine '.github/workflows/native.yml'))
+        Assert ($native.Contains('platform: x64') -and $native.Contains('platform: ARM64')) 'Both native architectures are required'
+        Assert ($native.Contains('needs: [admission, test-gate]')) 'Production must wait for both test branches'
     }
     Case 'live project/include consumers follow added dependencies and terminate include cycles' {
         $graph=Join-Path $fixture 'graph'
@@ -226,7 +243,7 @@ try{
     }
 
     Case 'retained CI proof requires all six actual successful native executions' {
-        $expected=@($manifest.prCoverage|Where-Object{$_.PSObject.Properties['platform']}|ForEach-Object check)
+        $expected=@(foreach($platform in @('x64','ARM64')){foreach($configuration in @('Debug','Release','ASan Debug')){"native ($platform, $configuration)"}})
         $jobs=@($expected|ForEach-Object{[pscustomobject]@{name=$_;status='completed';conclusion='success';steps=@([pscustomobject]@{name='Full native qualification';conclusion='success'})}})
         Assert (Test-ScopedNativeCiProof $expected $jobs) 'Complete native matrix rejected'
         Assert (-not(Test-ScopedNativeCiProof @($expected[0],$expected[0],$expected[0],$expected[0],$expected[0],$expected[0]) @($jobs[0]))) 'One successful profile counted six times'

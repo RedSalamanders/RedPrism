@@ -348,6 +348,7 @@ HRESULT Application::StartAdjustmentOpening() noexcept
     return S_OK;
 }
 
+#if defined(REDPRISM_ENABLE_TESTS)
 int Application::RunAdjustmentOpeningSelfTest() noexcept
 {
     std::fprintf(stderr, "EXPECTED adjustment-opening-lifetime records: 48\n");
@@ -610,3 +611,4 @@ int Application::RunAdjustmentOpeningSelfTest() noexcept
     }
     return 0;
 }
+#endif

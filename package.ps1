@@ -36,6 +36,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$env:RedPrismEnableTests = 'false'
 
 $repoRoot = Split-Path -Parent $PSCommandPath
 $Configuration = 'Release' # the Debug CRT is not redistributable: a package is always Release
@@ -89,10 +90,16 @@ function Get-Dependents([string] $Module, [string] $Dumpbin) {
 
 # ── Build ────────────────────────────────────────────────────────────────────
 if (-not $SkipBuild) {
-    & (Join-Path $repoRoot 'build.ps1') -Platform $Platform -Configuration $Configuration -BuildNumber $BuildNumber
+    & (Join-Path $repoRoot 'build.ps1') -Platform $Platform -Configuration $Configuration -BuildNumber $BuildNumber -ProductionOnly
     if ($LASTEXITCODE -ne 0) {
         throw "build.ps1 failed with exit code $LASTEXITCODE."
     }
+}
+Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
+$effectiveBuildNumber = if ($BuildNumber -gt 0) { $BuildNumber } else { Get-ScopedBuildNumber $repoRoot }
+$attestation = Join-Path $outputRoot 'build-attestation.json'
+if (-not (Test-ScopedReceipt $attestation (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $effectiveBuildNumber -EnableTests $false))) {
+    throw 'Packaging requires an exact current test-disabled production build receipt.'
 }
 if (-not (Test-Path -LiteralPath $executable)) {
     throw "No Release build to package: $executable"
@@ -181,7 +188,8 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty/RedMonitor/LICENSE.txt')
 # DxUi.lib is linked into RedPrism.exe, so its own license ships too. restore-dxui.ps1 (run by build.ps1 above)
 # leaves the pinned source under .build\dependencies\DxUi\source\<commit>, with its license at that root.
 $dxUiLock = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'Dependencies\DxUi.lock.json') | ConvertFrom-Json
-$dxUiSource = Join-Path $repoRoot ".build\dependencies\DxUi\source\$($dxUiLock.commit)"
+Import-Module (Join-Path $repoRoot 'Build/DxUiPaths.psm1') -Force
+$dxUiSource = Get-DxUiSourcePath -DependencyRoot (Join-Path $repoRoot '.build/dependencies/DxUi') -Commit $dxUiLock.commit
 $dxUiLicense = Get-ChildItem -LiteralPath $dxUiSource -Filter 'LICENSE*' -File -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $dxUiLicense) {
     throw "DxUi's license file was not found under $dxUiSource. Run restore-dxui.ps1 -Platform $Platform before packaging."
@@ -190,6 +198,7 @@ Copy-Item -LiteralPath $dxUiLicense.FullName -Destination (Join-Path $notices 'd
 
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\README.md') -Destination (Join-Path $stage 'README.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\usage.md') -Destination (Join-Path $stage 'usage.md')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE.txt') -Destination (Join-Path $stage 'LICENSE.txt')
 
 # ── ZIP + checksum ───────────────────────────────────────────────────────────
 $zipPath = Join-Path $OutputDirectory "$packageName.zip"
@@ -225,16 +234,22 @@ if ($SkipSmoke) {
     $selfErr = Join-Path $smoke 'self-test.err.log'
     $self = Start-Process -FilePath $extracted -ArgumentList @('--self-test', '--warp') -WindowStyle Hidden -Wait -PassThru `
         -RedirectStandardError $selfErr -Environment @{ Path = $systemPath }
-    if ($self.ExitCode -ne 0) {
+    if ($self.ExitCode -ne 2) {
         $selfText = Get-Content -LiteralPath $selfErr -Raw -ErrorAction SilentlyContinue
-        throw "The extracted RedPrism.exe --self-test --warp exited with $($self.ExitCode). $selfText"
+        throw "The extracted production binary did not refuse test mode (exit $($self.ExitCode)). $selfText"
+    }
+    $capture = Join-Path $smoke 'portable-startup.png'
+    $captureErr = Join-Path $smoke 'portable-startup.err.log'
+    $startup = Start-Process -FilePath $extracted -ArgumentList @('--screenshot', ('"'+$capture+'"'), '--warp') -WindowStyle Hidden -Wait -PassThru `
+        -RedirectStandardError $captureErr -Environment @{ Path = $systemPath }
+    if ($startup.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $capture -PathType Leaf) -or (Get-Item -LiteralPath $capture).Length -eq 0) {
+        throw "The extracted production binary failed its hidden native startup/capture (exit $($startup.ExitCode))."
     }
     $extractedInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($extracted)
     if ($extractedInfo.FileVersion -ne $info.FileVersion) {
         throw 'The extracted executable does not carry the packaged version.'
     }
-    Remove-Item -LiteralPath $smoke -Recurse -Force
-    Write-Host 'PASS clean-extraction smoke (--help, --self-test --warp, version identity)' -ForegroundColor Green
+    Write-Host 'PASS clean-extraction smoke (help, test-mode refusal, hidden WARP capture, version identity)' -ForegroundColor Green
 }
 
 # ── Summary ──────────────────────────────────────────────────────────────────

@@ -320,49 +320,49 @@
     <ClCompile Include="ApplicationProjectOpenJobs.cpp" />
     <ClCompile Include="ApplicationHistoryRestoreJobs.cpp" />
     <ClCompile Include="ApplicationHistoryResidencyJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationHistoryResidency.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationHistoryResidencyShutdown.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationHistoryResidency.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationHistoryResidencyShutdown.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationSelectionCommandJobs.cpp" />
     <ClCompile Include="ApplicationLayerMetadataJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationLayerMetadata.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationLayerOpacity.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationLayerOpacityContexts.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationLayerMetadata.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationLayerOpacity.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationLayerOpacityContexts.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationSelectionNudgeJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionNudge.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionSizeOutlineLiteral.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionSizeOutlineFault.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionNewCanvasLiteral.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionNewCanvasFault.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionCloseProjectLiteral.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionCloseProjectFault.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionLifecycleOutlineLiteral.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionLifecycleOutlineFault.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionNudgeFault.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionNudge.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionSizeOutlineLiteral.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionSizeOutlineFault.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionNewCanvasLiteral.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionNewCanvasFault.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionCloseProjectLiteral.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionCloseProjectFault.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionLifecycleOutlineLiteral.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionLifecycleOutlineFault.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionNudgeFault.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationSelectionMoveCloseJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveClose.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveCaller.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveFollowup.cpp" />
-    <ClCompile Include="Application.Tests.PanelWandHost.cpp" />
-    <ClCompile Include="Application.Tests.PanelWandLifecycle.cpp" />
-    <ClCompile Include="Application.Tests.PanelWandFollowthrough.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveHeader.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSelectionCommand.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveClose.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveCaller.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveFollowup.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.PanelWandHost.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.PanelWandLifecycle.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.PanelWandFollowthrough.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveHeader.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionCommand.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationWandLayerHostJobs.cpp" />
     <ClCompile Include="ApplicationWandCompositeHostJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationWandCompositeHost.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSamplerIntent.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationWandCompositeHost.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSamplerIntent.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationSamplerInput.cpp" />
     <ClCompile Include="ApplicationSamplerJobs.cpp" />
     <ClCompile Include="ApplicationHueReadbackJobs.cpp" />
     <ClCompile Include="ApplicationHueReadbackPublication.cpp" />
     <ClCompile Include="ApplicationHueInput.cpp" />
-    <ClCompile Include="Application.Tests.HueReadbackHost.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSamplerHost.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationSamplerCaller.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationWandLayerHost.cpp" />
+    <ClCompile Include="Application.Tests.HueReadbackHost.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSamplerHost.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationSamplerCaller.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationWandLayerHost.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationImageImportJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationImageImportResidency.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationImageWrapperResidency.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationImageImportResidency.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationImageWrapperResidency.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationExportJobs.cpp" />
     <ClCompile Include="..\Common\Crop.cpp" />
     <ClCompile Include="..\Common\DocumentHistory.cpp" />
@@ -386,30 +386,30 @@
     <ClInclude Include="..\Common\LayerRowsWork.h" />
     <ClCompile Include="ApplicationPreparedLayerRowsJobs.cpp" />
     <ClCompile Include="PreparedLayerRows.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsIdentity.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsAccessibility.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsNotification.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRows.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsBoundary.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsInteraction.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsRetry.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsEdit.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsIdentity.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsAccessibility.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsNotification.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRows.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsBoundary.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsInteraction.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsRetry.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsEdit.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClInclude Include="Runtime.Tests.LayerRowsTestGate.h" />
     <ClInclude Include="PreparedLayerRows.h" />
     <ClInclude Include="../Tests/Support/Support.Tests.PreparedLayerRowsStressFixture.h" />
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="ApplicationClipboardJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationClipboard.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationClipboardPrefill.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationClipboardDelayed.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationClipboardFault.cpp" />
-    <ClCompile Include="Application.Tests.ClipboardEndSession.cpp" />
-    <ClCompile Include="Application.Tests.FileEndSession.cpp" />
-    <ClCompile Include="..\Tests\Runtime.Tests.ClipboardMergedBudget.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationClipboard.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationClipboardPrefill.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationClipboardDelayed.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationClipboardFault.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.ClipboardEndSession.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.FileEndSession.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="..\Tests\Runtime.Tests.ClipboardMergedBudget.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="..\Common\ClipboardEncodingBudget.cpp" />
     <ClCompile Include="ApplicationBenchmark.cpp" />
     <ClCompile Include="ApplicationCancellationBenchmark.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCancellationBenchmark.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCancellationBenchmark.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClInclude Include="UiCancellationBenchmark.h" />
     <ClInclude Include="UiCancellationObservation.h" />
     <ClInclude Include="UiCancellationBody.h" />
@@ -419,43 +419,43 @@
     <ClCompile Include="ApplicationJobs.cpp" />
     <ClCompile Include="ApplicationAdjust.cpp" />
     <ClCompile Include="ApplicationAdjustJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationColorDisplayHost.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationColorDisplayAdmissionHost.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationColorDisplayHost.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationColorDisplayAdmissionHost.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationCommitJobs.cpp" />
     <ClCompile Include="ApplicationAdjustmentClosureJobs.cpp" />
     <ClCompile Include="ApplicationAdjustmentOpeningJobs.cpp" />
     <ClCompile Include="ApplicationColorCancellationJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationColorCancellation.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationColorCancellation.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationContinuations.cpp" />
     <ClCompile Include="ApplicationCanvasBrushInput.cpp" />
     <ClCompile Include="ApplicationStrokeOpeningJobs.cpp" />
     <ClCompile Include="ApplicationStrokeFinishJobs.cpp" />
-    <ClCompile Include="Application.Tests.StrokeOpening.cpp" />
-    <ClCompile Include="Application.Tests.SealedStroke.cpp" />
-    <ClCompile Include="Application.Tests.SealedClone.cpp" />
+    <ClCompile Include="Application.Tests.StrokeOpening.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.SealedStroke.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.SealedClone.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationCloneReadbackJobs.cpp" />
     <ClCompile Include="ApplicationCloneLayerSourceJobs.cpp" />
-    <ClCompile Include="Application.Tests.CloneLayerSource.cpp" />
-    <ClCompile Include="Application.Tests.CloneLayerSourceFaults.cpp" />
-    <ClCompile Include="Application.Tests.PreparedLayerRowsGroupSelection.cpp" />
-    <ClCompile Include="Application.Tests.CloneReadback.cpp" />
-    <ClCompile Include="Application.Tests.CloneInputPolicy.cpp" />
+    <ClCompile Include="Application.Tests.CloneLayerSource.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.CloneLayerSourceFaults.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.PreparedLayerRowsGroupSelection.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.CloneReadback.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.CloneInputPolicy.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClInclude Include="CloneReadbackState.h" />
     <ClInclude Include="Runtime.Tests.CloneReadbackTestGate.h" />
     <ClInclude Include="Runtime.Tests.StrokeOpeningTestGate.h" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushInput.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushCancellation.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushPalette.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushCompeting.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushBoundary.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushMaskPaletteExtension.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushInput.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushCancellation.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushPalette.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushCompeting.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushBoundary.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushMaskPaletteExtension.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationCanvasLifetime.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeCancel.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeAccepted.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeModal.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeAuthority.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeWindow.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeShutdown.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeCancel.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeAccepted.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeModal.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeAuthority.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeWindow.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeShutdown.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationChromeSync.cpp" />
     <ClCompile Include="ApplicationCrop.cpp" />
     <ClCompile Include="ApplicationFiles.cpp" />
@@ -467,37 +467,37 @@
     <ClCompile Include="ApplicationRasterEditJobs.cpp" />
     <ClCompile Include="ApplicationShapeJobs.cpp" />
     <ClCompile Include="ApplicationMaskJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationMask.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationMask.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationLayerCopyJobs.cpp" />
     <ClCompile Include="ApplicationTransformJobs.cpp" />
     <ClCompile Include="ApplicationDuplicateGesture.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationDuplicateGesture.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationTransform.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationTransformShapeRedraw.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationDuplicateGesture.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationTransform.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationTransformShapeRedraw.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationTransformPreviewJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationTransformPreview.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationTransformPolicy.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationTransformPreview.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationTransformPolicy.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationLifecycleJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationLifecycle.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationLifecycleRefusal.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationLifecycleClose.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationShutdown.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationProcessing.cpp" />
-    <ClCompile Include="Application.Tests.ResponsiveStartup.cpp" />
-    <ClCompile Include="Application.Tests.ResponsiveSelectionStartup.cpp" />
-    <ClCompile Include="Application.Tests.OpacityClosureGuard.cpp" />
-    <ClCompile Include="Application.Tests.SelectionOutlineTiming.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationLifecycle.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationLifecycleRefusal.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationLifecycleClose.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationShutdown.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationProcessing.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.ResponsiveStartup.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.ResponsiveSelectionStartup.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.OpacityClosureGuard.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.SelectionOutlineTiming.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationResponsiveSources.cpp" />
-    <ClCompile Include="Application.Tests.HistoryResidencyStartup.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationLiveShutdown.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationLeaseShutdown.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationLayerCopy.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationShape.cpp" />
+    <ClCompile Include="Application.Tests.HistoryResidencyStartup.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationLiveShutdown.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationLeaseShutdown.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationLayerCopy.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationShape.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationGradientJobs.cpp" />
     <ClCompile Include="ApplicationPixelMoveJobs.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationGradient.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationPixelMove.cpp" />
-    <ClCompile Include="Runtime.Tests.ApplicationRasterEdit.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationGradient.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationPixelMove.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Runtime.Tests.ApplicationRasterEdit.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="AccessibilityRoot.cpp" />
     <ClCompile Include="ChromeHostAccessibility.cpp" />
     <ClCompile Include="ChromeHostAdjust.cpp" />
@@ -535,7 +535,7 @@
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="..\Common\MonitorDiagnostics.cpp" />
     <ClCompile Include="Renderer.cpp" />
-    <ClCompile Include="Application.Tests.SizeFinalPublication.cpp" />
+    <ClCompile Include="Application.Tests.SizeFinalPublication.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shaders\CompositionVertex.hlsl">
@@ -604,25 +604,25 @@
     <ClInclude Include="RecordedUtilityGraph.h" />
     <ClCompile Include="CommittedDisplayController.cpp" />
     <ClCompile Include="ApplicationCommittedDisplay.cpp" />
-    <ClCompile Include="Application.Tests.CommittedDisplay.cpp" />
-    <ClCompile Include="Application.Tests.PendingDisplay.cpp" />
-    <ClCompile Include="Application.Tests.PendingRasterDisplay.cpp" />
-    <ClCompile Include="Application.Tests.PendingDisplayTransport.cpp" />
-    <ClCompile Include="Application.Tests.RowPublication.cpp" />
+    <ClCompile Include="Application.Tests.CommittedDisplay.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.PendingDisplay.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.PendingRasterDisplay.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.PendingDisplayTransport.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.RowPublication.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClInclude Include="Application.Tests.RowPublication.h" />
-    <ClCompile Include="Application.Tests.StrokeFinish.cpp" />
-    <ClCompile Include="Application.Tests.WarpFinish.cpp" />
-    <ClCompile Include="Application.Tests.WarpLive.cpp" />
-    <ClCompile Include="Application.Tests.WarpLiveFault.cpp" />
-    <ClCompile Include="Application.Tests.WarpLiveInput.cpp" />
-    <ClCompile Include="Application.Tests.WarpLiveTargets.cpp" />
-    <ClCompile Include="Application.Tests.WarpLiveAdmission.cpp" />
-    <ClCompile Include="Application.Tests.WarpLiveStale.cpp" />
-    <ClCompile Include="Application.Tests.StrokeSample.cpp" />
-    <ClCompile Include="Application.Tests.StrokeSampleFault.cpp" />
-    <ClCompile Include="Application.Tests.StrokeSampleInput.cpp" />
-    <ClCompile Include="Application.Tests.StrokeSampleAdmission.cpp" />
-    <ClCompile Include="Application.Tests.StrokeSampleParity.cpp" />
+    <ClCompile Include="Application.Tests.StrokeFinish.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.WarpFinish.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.WarpLive.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.WarpLiveFault.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.WarpLiveInput.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.WarpLiveTargets.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.WarpLiveAdmission.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.WarpLiveStale.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.StrokeSample.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.StrokeSampleFault.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.StrokeSampleInput.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.StrokeSampleAdmission.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.StrokeSampleParity.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClInclude Include="Runtime.Tests.StrokeFinishTestGate.h" />
     <ClInclude Include="RecordedDisplayGraph.h" />
     <ClInclude Include="RecordedPixelPreview.h" />
@@ -632,8 +632,8 @@
     <ClCompile Include="..\Common\InverseSelectionWork.cpp" />
     <ClInclude Include="..\Common\InverseSelectionWork.h" />
     <ClCompile Include="ApplicationInverseSelectionJobs.cpp" />
-    <ClCompile Include="Application.Tests.InverseSelection.cpp" />
-    <ClCompile Include="Application.Tests.InverseSelectionFailures.cpp" />
+    <ClCompile Include="Application.Tests.InverseSelection.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.InverseSelectionFailures.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Common\SelectionOffsetWork.cpp" />
@@ -644,18 +644,18 @@
     <ClInclude Include="..\Common\BoundedClipper\clipper.offset.h" />
     <ClCompile Include="ApplicationSelectionOffsetJobs.cpp" />
     <ClInclude Include="Runtime.Tests.SelectionOffsetTestGate.h" />
-    <ClCompile Include="Application.Tests.SelectionOffset.cpp" />
-    <ClCompile Include="Application.Tests.SelectionOffsetFailures.cpp" />
-    <ClCompile Include="Application.Tests.SelectionOffsetLarge.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOffset.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.SelectionOffsetFailures.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.SelectionOffsetLarge.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Common\SelectionOutlineRasterWork.cpp" />
     <ClCompile Include="PreparedSelectionOutlineGpu.cpp" />
     <ClCompile Include="SelectionOutlineDisplayController.cpp" />
     <ClCompile Include="ApplicationSelectionOutlineDisplay.cpp" />
-    <ClCompile Include="Application.Tests.SelectionOutlineGpuHost.cpp" />
-    <ClCompile Include="Application.Tests.SelectionOutlineGpuParity.cpp" />
-    <ClCompile Include="Application.Tests.SelectionOutlineOwnerCapacity.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOutlineGpuHost.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.SelectionOutlineGpuParity.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.SelectionOutlineOwnerCapacity.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClInclude Include="..\Common\SelectionOutlineRasterWork.h" />
     <ClInclude Include="PreparedSelectionOutlineGpu.h" />
     <ClInclude Include="SelectionOutlineDisplayController.h" />
@@ -668,7 +668,7 @@
     <ClCompile Include="..\Common\PathClassificationRead.cpp" />
     <ClInclude Include="..\Common\PathReadWait.h" />
     <ClCompile Include="..\Common\PathReadWait.cpp" />
-    <ClCompile Include="Application.Tests.PathReadContinuation.cpp" />
+    <ClCompile Include="Application.Tests.PathReadContinuation.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Common\LassoOpeningWork.cpp" />
@@ -680,30 +680,30 @@
     <ClCompile Include="PreparedLassoDraftGpu.cpp" />
     <ClCompile Include="LassoDraftDisplayController.cpp" />
     <ClCompile Include="ApplicationLassoDraftDisplay.cpp" />
-    <ClCompile Include="Application.Tests.LassoDraftDisplay.cpp" />
+    <ClCompile Include="Application.Tests.LassoDraftDisplay.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="ApplicationLassoOpeningJobs.cpp" />
     <ClCompile Include="ApplicationLassoFinishJobs.cpp" />
     <ClCompile Include="ApplicationLassoInput.cpp" />
     <ClCompile Include="ApplicationSelectionPressJobs.cpp" />
     <ClCompile Include="ApplicationPolygonalJobs.cpp" />
     <ClCompile Include="ApplicationPolygonalPressJobs.cpp" />
-    <ClCompile Include="Application.Tests.PolygonalDispatch.cpp" />
-    <ClCompile Include="Application.Tests.PolygonalPress.cpp" />
+    <ClCompile Include="Application.Tests.PolygonalDispatch.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.PolygonalPress.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClCompile Include="PolygonalDrawingJob.cpp" />
     <ClCompile Include="ApplicationSelectionCursorJobs.cpp" />
     <ClCompile Include="SelectionOutlineGestureJob.cpp" />
     <ClInclude Include="SelectionOutlineGestureState.h" />
     <ClInclude Include="SelectionOutlineGestureMemory.h" />
-    <ClCompile Include="Application.Tests.SelectionPressGesture.cpp" />
-    <ClCompile Include="Application.Tests.CtrlPixelPress.cpp" />
-    <ClCompile Include="Application.Tests.DisplayOpeningRetirement.cpp" />
-    <ClCompile Include="Application.Tests.RectanglePress.cpp" />
-    <ClCompile Include="Application.Tests.ClipboardContention.cpp" />
-    <ClCompile Include="Application.Tests.MarqueeModes.cpp" />
-    <ClCompile Include="Application.Tests.SelectionCursor.cpp" />
-    <ClCompile Include="Application.Tests.FreehandPress.cpp" />
-    <ClCompile Include="Application.Tests.SelectionPressShutdown.cpp" />
-    <ClCompile Include="Application.Tests.LassoHostInput.cpp" />
+    <ClCompile Include="Application.Tests.SelectionPressGesture.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.CtrlPixelPress.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.DisplayOpeningRetirement.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.RectanglePress.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.ClipboardContention.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.MarqueeModes.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.SelectionCursor.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.FreehandPress.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.SelectionPressShutdown.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
+    <ClCompile Include="Application.Tests.LassoHostInput.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
     <ClInclude Include="..\Common\LassoFinishWork.h" />
     <ClInclude Include="..\Common\BoundedLassoGesture.h" />
     <ClInclude Include="HostLassoInput.h" />
@@ -725,7 +725,7 @@
     <ClInclude Include="SelectionOutlineGestureJob.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Application.Tests.ScalarSelectionClosure.cpp" />
+    <ClCompile Include="Application.Tests.ScalarSelectionClosure.cpp" Condition="'$(RedPrismEnableTests)'=='true'" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ApplicationPixelFinalPublication.cpp" />

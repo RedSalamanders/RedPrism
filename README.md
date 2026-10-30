@@ -22,3 +22,7 @@ links and a quoted launch command. OSC 8 capable terminals can open the local
 file links. Cross-built ARM64 applications still need ARM64 Windows to run.
 
 Repository skill validation and its regression tests run on PowerShell 7 without Python or PyYAML. Manual Clipper source regeneration and archived analysis retain their documented prerequisites.
+
+CI behavior and manual actions: [Unified CI contract](Specs/Build/Build_UnifiedCI.md).
+
+Project license: [MIT](LICENSE.txt). Third-party notices retain their respective licenses.
