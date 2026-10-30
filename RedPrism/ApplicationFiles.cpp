@@ -184,6 +184,7 @@ class QuietPromptsImpl final : public Prompts
     }
 };
 
+#if defined(REDPRISM_ENABLE_TESTS)
 // Another thread holding the clipboard open, as another app does while it reads or writes: a copy's write fails.
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
@@ -226,6 +227,7 @@ DWORD WINAPI HoldClipboard(void* context) noexcept
     return 0;
 }
 
+#endif
 } // namespace
 
 const Prompts& RealPrompts() noexcept
