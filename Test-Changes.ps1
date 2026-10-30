@@ -17,7 +17,8 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-if (-not $Explain -and $Mode -eq 'PrePush') { & (Join-Path $PSScriptRoot 'Tools/Fold-Changelog.ps1') -Check }
+# Pending fragments are expected: they are folded on the default branch after merge. CHANGELOG.md may change only by such a fold.
+if (-not $Explain -and $Mode -eq 'PrePush') { & (Join-Path $PSScriptRoot 'Tools/Test-Changelog.ps1') -Base $(if ($BaseRef) { $BaseRef } else { 'origin/main' }) }
 $root=$PSScriptRoot;$module=Join-Path $root 'Build/ScopedTesting.psm1'
 Import-Module $module -Force
 $manifest=Read-ScopedTestManifest $root

@@ -41,6 +41,12 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Changelog changes are fragments or exact folds
+        shell: pwsh
+        env:
+          # A pull request's merge commit compares with its first parent; a push compares with the tip it replaced.
+          CHANGELOG_BASE: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || 'HEAD^1' }}
+        run: ./Tools/Test-Changelog.ps1 -Base $env:CHANGELOG_BASE
       - name: Prepare required MSVC 14.52 tools
         uses: ./.github/actions/setup-msvc
         with:

@@ -50,7 +50,9 @@ if('Tooling' -in $Suites){
     if($LASTEXITCODE -ne 0){throw 'Independent validation failed.'}
 }
 if(-not @($Suites|Where-Object{$_ -ne 'Tooling'}).Count){Write-Host 'Independent tooling passed; native coverage NOT_EVALUATED';exit 0}
-& (Join-Path $repoRoot 'Tools/Fold-Changelog.ps1') -Check
+# Fragment and heading validation only. Pending fragments are normal (they are folded on the default branch after merge),
+# and the -Base comparison belongs to PrePush and CI: this script may run in a checkout without origin/main.
+& (Join-Path $repoRoot 'Tools/Test-Changelog.ps1')
 $buildArguments = @{
     Configuration = $Configuration
     Platform = $Platform
