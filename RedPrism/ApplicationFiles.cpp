@@ -1008,6 +1008,7 @@ void Application::EndPointerInteractions() noexcept
     }
 }
 
+#if defined(REDPRISM_ENABLE_TESTS)
 int Application::RunFilesSelfTest() noexcept
 {
     if (!_chrome || !_window)
@@ -2232,3 +2233,4 @@ int Application::RunSessionSelfTest() noexcept
     OnTool(EditorTool::Move);
     return 0;
 }
+#endif

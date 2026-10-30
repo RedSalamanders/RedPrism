@@ -2006,6 +2006,7 @@ class CountContinuationAction final : public UiAction
 
 } // namespace
 
+#if defined(REDPRISM_ENABLE_TESTS)
 int Application::RunHostContinuationSelfTest() noexcept
 {
     const auto fail = [](const wchar_t* message) noexcept
@@ -2794,3 +2795,4 @@ int Application::RunHostFlowSelfTest() noexcept
     std::printf("PASS host-flow.shape-release-after-commit-with-owned-color\n");
     return 0;
 }
+#endif

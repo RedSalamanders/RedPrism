@@ -643,6 +643,7 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     return handled;
 }
 
+#if defined(REDPRISM_ENABLE_TESTS)
 int Application::RunKeyboardSelfTest() noexcept
 {
     if (!_chrome || !_window)
@@ -1860,3 +1861,4 @@ int Application::RunKeyboardSelfTest() noexcept
     _chrome->SetCanvasFocused(true);
     return 0;
 }
+#endif
