@@ -188,7 +188,8 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty/RedMonitor/LICENSE.txt')
 # DxUi.lib is linked into RedPrism.exe, so its own license ships too. restore-dxui.ps1 (run by build.ps1 above)
 # leaves the pinned source under .build\dependencies\DxUi\source\<commit>, with its license at that root.
 $dxUiLock = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'Dependencies\DxUi.lock.json') | ConvertFrom-Json
-$dxUiSource = Join-Path $repoRoot ".build\dependencies\DxUi\source\$($dxUiLock.commit)"
+Import-Module (Join-Path $repoRoot 'Build/DxUiPaths.psm1') -Force
+$dxUiSource = Get-DxUiSourcePath -DependencyRoot (Join-Path $repoRoot '.build/dependencies/DxUi') -Commit $dxUiLock.commit
 $dxUiLicense = Get-ChildItem -LiteralPath $dxUiSource -Filter 'LICENSE*' -File -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $dxUiLicense) {
     throw "DxUi's license file was not found under $dxUiSource. Run restore-dxui.ps1 -Platform $Platform before packaging."
