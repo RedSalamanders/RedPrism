@@ -1,11 +1,5 @@
 name: Native ARM64 Release feasibility
 on:
-  push:
-    branches:
-      - codex/p1-opacity-host-proof
-    paths:
-      - .github/workflows/native-arm64-feasibility.yml
-      - .github/scripts/Run-NativeArm64.ps1
   workflow_dispatch:
     inputs:
       configuration:

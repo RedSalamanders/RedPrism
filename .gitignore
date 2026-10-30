@@ -28,3 +28,6 @@ outputs/
 # Changes workflow fold lease and staged changelog, removed when a fold finishes
 /.changelog-fold.lock
 /.changelog-*.tmp
+
+# Shared CI engine checkout (exact pin lives in .ci/project.json)
+/.ci-engine/

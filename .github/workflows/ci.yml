@@ -1,120 +1,125 @@
-name: Scoped validation
+name: CI
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR to recheck after an explicit formatting commit
+        type: string
+        required: true
+      expected_head:
+        description: Exact new PR head SHA
+        type: string
+        required: true
 permissions:
   contents: read
-  actions: read
 concurrency:
-  group: scoped-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.event_name == 'push' && 'main-coordinator' || github.event.pull_request.number || inputs.pr_number }}
   cancel-in-progress: true
 jobs:
-  native-scope:
-    runs-on: windows-2025-vs2026
+  resolve:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: write
     outputs:
-      native: ${{ steps.scope.outputs.native }}
-      proof_run: ${{ steps.scope.outputs.proof_run }}
-      build_number: ${{ steps.scope.outputs.build_number }}
-      input_key: ${{ steps.scope.outputs.input_key }}
+      head: ${{ steps.pr.outputs.head }}
+      base: ${{ steps.pr.outputs.base }}
+      check_id: ${{ steps.pr.outputs.check_id }}
+      codeql_id: ${{ steps.pr.outputs.codeql_id }}
+      dependency_id: ${{ steps.pr.outputs.dependency_id }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Enable long Windows checkout paths
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: git config --global core.longpaths true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          repository: RedSalamanders/.github
+          ref: fcf723f54140eabb69ef5017c32c971deb117ada
+          path: .ci-engine
           persist-credentials: false
-      - id: scope
-        name: Determine new native obligations
+      - id: pr
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./Tools/Get-CiNativeScope.ps1
-      - name: Retain native input descriptor
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: ci-native-inputs
-          path: .build/ci-scope/ci-native-inputs.json
-          retention-days: 14
-  tooling:
-    runs-on: windows-2025-vs2026
+          CI_PR: ${{ inputs.pr_number }}
+          CI_HEAD: ${{ inputs.expected_head }}
+        run: ./.ci-engine/Tools/Resolve-PrCheck.ps1 -PullRequest $env:CI_PR -ExpectedHead $env:CI_HEAD
+  checks:
+    needs: resolve
+    if: always() && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && needs.resolve.result == 'success'))
+    uses: RedSalamanders/.github/.github/workflows/pr.yml@fcf723f54140eabb69ef5017c32c971deb117ada
+    with:
+      engine_ref: fcf723f54140eabb69ef5017c32c971deb117ada
+      head: ${{ github.event.pull_request.head.sha || needs.resolve.outputs.head }}
+      base: ${{ github.event.pull_request.base.sha || needs.resolve.outputs.base }}
+    permissions:
+      contents: read
+  security-recheck:
+    needs: resolve
+    if: github.event_name == 'workflow_dispatch' && needs.resolve.result == 'success'
+    uses: RedSalamanders/.github/.github/workflows/security.yml@fcf723f54140eabb69ef5017c32c971deb117ada
+    with:
+      engine_ref: fcf723f54140eabb69ef5017c32c971deb117ada
+      head: ${{ needs.resolve.outputs.head }}
+      base: ${{ needs.resolve.outputs.base }}
+      pr_number: ${{ inputs.pr_number }}
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+  report:
+    needs: [resolve, checks, security-recheck]
+    if: always() && github.event_name == 'workflow_dispatch' && needs.resolve.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Changelog changes are fragments or exact folds
+      - name: Enable long Windows checkout paths
+        if: runner.os == 'Windows'
         shell: pwsh
+        run: git config --global core.longpaths true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: RedSalamanders/.github
+          ref: fcf723f54140eabb69ef5017c32c971deb117ada
+          path: .ci-engine
+          persist-credentials: false
+      - shell: pwsh
         env:
-          # A pull request's merge commit compares with its first parent; a push compares with the tip it replaced.
-          CHANGELOG_BASE: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || 'HEAD^1' }}
-        run: ./Tools/Test-Changelog.ps1 -Base $env:CHANGELOG_BASE
-      - name: Prepare required MSVC 14.52 tools
-        uses: ./.github/actions/setup-msvc
-        with:
-          platform: x64
-      - name: Independent tooling
-        shell: pwsh
-        run: ./validate.ps1
-      - name: Native formatting
-        shell: pwsh
-        run: ./format.ps1 -Check
-  native:
-    name: native (${{ matrix.platform }}, ${{ matrix.configuration }})
-    needs: native-scope
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [x64, ARM64]
-        configuration: [Debug, Release, ASan Debug]
-        include:
-          - platform: x64
-            runner: windows-2025-vs2026
-          - platform: ARM64
-            runner: windows-11-vs2026-arm
-    steps:
-      - if: needs.native-scope.outputs.native == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Prepare required MSVC 14.52 tools
-        if: needs.native-scope.outputs.native == 'true'
-        uses: ./.github/actions/setup-msvc
-        with:
-          platform: ${{ matrix.platform }}
-      - name: Verify native checkout inputs
-        if: needs.native-scope.outputs.native == 'true'
-        shell: pwsh
-        run: ./Tools/Get-CiNativeScope.ps1 -VerifyInputs "${{ needs.native-scope.outputs.input_key }}" -BuildNumber ${{ needs.native-scope.outputs.build_number }}
-      - name: Verify hidden window fixture
-        if: needs.native-scope.outputs.native == 'true'
-        shell: pwsh
-        run: ./Tests/Tooling.Tests.WindowFixture.ps1
-      - name: Build native profile
-        if: needs.native-scope.outputs.native == 'true'
-        shell: pwsh
-        run: ./build.ps1 -Platform ${{ matrix.platform }} -Configuration "${{ matrix.configuration }}" -MaxCpuCount 2 -BuildNumber ${{ needs.native-scope.outputs.build_number }}
-      - name: Retain original native qualification
-        if: needs.native-scope.outputs.native != 'true'
-        shell: pwsh
-        run: Write-Host 'NATIVE_UNCHANGED - original qualification retained from run ${{ needs.native-scope.outputs.proof_run }}; no new native/resource/environment execution.'
-      - name: Full native qualification
-        if: needs.native-scope.outputs.native == 'true'
-        shell: pwsh
-        run: ./test.ps1 -Full -SkipTooling -SkipBuild -Platform ${{ matrix.platform }} -Configuration "${{ matrix.configuration }}" -MaxCpuCount 2 -BuildNumber ${{ needs.native-scope.outputs.build_number }}
-      - name: Retain source-profile test diagnostics
-        if: always() && needs.native-scope.outputs.native == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: native-${{ matrix.platform }}-${{ matrix.configuration }}
-          include-hidden-files: true
-          path: |
-            .build/logs/**
-            .build/evidence/test-runs/**
-            .build/reports/**/*.json
-            .build/tests/**/*.json
-            .build/tests/**/*.log
-            .build/screenshots/*.png
-            .build/${{ matrix.platform }}/${{ matrix.configuration }}/*.log
-          retention-days: 14
+          GH_TOKEN: ${{ github.token }}
+          CI_CHECK_ID: ${{ needs.resolve.outputs.check_id }}
+          CI_RESULT: ${{ needs.checks.result }}
+          CODEQL_CHECK_ID: ${{ needs.resolve.outputs.codeql_id }}
+          DEPENDENCY_CHECK_ID: ${{ needs.resolve.outputs.dependency_id }}
+          CODEQL_RESULT: ${{ needs.security-recheck.outputs.codeql_result || 'failure' }}
+          DEPENDENCY_RESULT: ${{ needs.security-recheck.outputs.dependency_result || 'failure' }}
+        run: |
+          # Complete every exact-head check even when another check fails.
+          $failed = $false
+          foreach ($check in @(
+            @{Id=$env:CI_CHECK_ID;Kind='CI';Result=$env:CI_RESULT},
+            @{Id=$env:CODEQL_CHECK_ID;Kind='CodeQL';Result=$env:CODEQL_RESULT},
+            @{Id=$env:DEPENDENCY_CHECK_ID;Kind='Dependency';Result=$env:DEPENDENCY_RESULT}
+          )) {
+            try { ./.ci-engine/Tools/Complete-PrCheck.ps1 -CheckId $check.Id -Kind $check.Kind -Result $check.Result }
+            catch { Write-Host $_.Exception.Message; $failed = $true }
+          }
+          if ($failed) { throw 'One or more compiler-free PR rechecks failed.' }
+  coordinate:
+    if: github.event_name == 'push'
+    uses: RedSalamanders/.github/.github/workflows/coordinate.yml@fcf723f54140eabb69ef5017c32c971deb117ada
+    with:
+      engine_ref: fcf723f54140eabb69ef5017c32c971deb117ada
+    permissions:
+      contents: read
+      statuses: write
+      actions: write

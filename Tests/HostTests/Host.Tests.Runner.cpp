@@ -1873,6 +1873,11 @@ int wmain(int argc, wchar_t** argv)
     // Before anything can fail a check: a CRT report ends the run with exit code 3 and no dialog (RF-702,
     // Tests/Support/Support.Tests.FailureReports.h). The hidden switch below proves it.
     RedPrismTestFailureReports::RouteAwayFromDialogs();
+    if (argc == 2 && std::wstring_view{argv[1]} == L"--ci-assertion-probe")
+    {
+        Expect(false, "CI_ASSERTION_PROBE");
+        return gFailures == 1 ? 21 : 0;
+    }
     if (argc == 2 && std::wstring_view{argv[1]} == L"--failure-report-self-test")
     {
         return RedPrismTestFailureReports::RunSelfTest();
