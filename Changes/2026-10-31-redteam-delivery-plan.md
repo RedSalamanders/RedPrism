@@ -1,0 +1,1 @@
+- Record the 31 October red-team delivery plan: re-confirm the 21–28 October merge-review findings at `a7e81222`, add the leftover test-isolation and always-on benchmark gaps, and keep the WP0–WP6 work sequence. No product code changed; MergeReview questions and the DxUi pin action stay open.
