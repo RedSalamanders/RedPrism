@@ -1,5 +1,7 @@
 # Asynchronous file processing (P1.7)
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Current delivery checklist — 2026-10-17
 
 - [x] Qualify and adopt real external clipboard contention: four native Copy/Paste release/exhaust cases, all 53 new facts and the complete 148-stage predecessor roster pass exact Release and real ASan (342 App TUs), including actual UAF detection. Saved clipboard, original ticket/history/reservation and joined holder/worker lifetime are checked; retained reader refusal is corrected without runtime replay. [Evidence](../../TestRuns/P1ClipboardRealContention_2026-10-17.md).

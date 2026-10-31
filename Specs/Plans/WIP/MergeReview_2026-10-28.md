@@ -1,5 +1,11 @@
 # Merge review (merges of 21–30 October 2026)
 
+> Correction (2026-11-01, `main` `e79a83a`). Line anchors below were read at `b6ec336`.
+> - **CI-8:** `package.ps1` calls `Get-DxUiSourcePath` since `18fd8ba`. That is not a ZIP blocker. `VcpkgToolsetTests.ps1:165` still joins the 40-hex commit and skips if the folder is missing. The `package.ps1` comment still says `source\<commit>`.
+> - **CI-10:** `.github/workflows/ci.yml` lines 4–6 trigger `push` to `main`. Line 48 is not `CHANGELOG_BASE`. The `coordinate` job calls shared `coordinate.yml`. `Core_Changes.md` lines 29–32 still describe a push comparison with `github.event.before`. That comparison was not re-read in the shared engine.
+> - **Dropped files:** more than 256 paths still refuse. The cap is `HostInputBudget::kMaxPaths` in `ContinuationRequests.h`. The drop handler uses `ERROR_NOT_ENOUGH_QUOTA` and `ERROR_INVALID_DATA`, not `E_INVALIDARG` at `Application.cpp:6139`.
+> - **CI-3's `ci.yml:44-49` and CI-7's `ci.yml:106-120`** no longer describe this workflow. CI-6's pin to `codex/p1-opacity-host-proof` and `C:\P1NativeTools1452` still match.
+>
 > Spawned on 2026-10-28 from the request "review all the code merge in the last 10 days for any bugs problem or
 > architecture misfit … review the code around the modification for side effect … study if you could find some
 > simplification in code or architecture … all this code must be ready for production from resiliency, quality and
@@ -550,18 +556,12 @@ Record these in the owning P1 plans when P1 resumes.
     `.build/evidence/test-runs/**` (`ci.yml:106-120`), which holds the crash-probe folder (`test.ps1:144`);
   - a `Complete-TestRunEvidence` failure in `finally` masks the real error (`test.ps1:440`);
   - the ISA scan runs on every build with no hash skip (`build.ps1:159-166`).
-- [ ] **CI-8** · High (release blocker) · CONFIRMED — **`package.ps1` looks for DxUi's license in the old
-  folder.**
-  - **Mechanism**: PR #19 moved the restored source to `source/<first-16-hex>` (`restore-dxui.ps1:34` →
-    `Get-DxUiSourcePath`, `Build/DxUiPaths.psm1:80-87`). `Build_Packaging.md` was updated to match.
-    `package.ps1:184` still joins `source\<40-hex commit>`. Only `source\a059e07c39c58cbf` exists.
-  - **Impact**: any `package.ps1` run throws "DxUi's license file was not found" (`:186-187`), so no package
-    can be built. That failure was read from source and the folder listing, not executed.
-  - **Hidden**: `Tests/BuildProcessTests/VcpkgToolsetTests.ps1:165` builds the same stale path behind a
-    `Test-Path` guard. The DxUi toolset parity test therefore skips silently.
-  - **Fix**: call `Get-DxUiSourcePath` in both places. Correct the comments at `package.ps1:182`,
-    `restore-dxui.ps1:6` and `DxUiRestore.psm1:2`. Make the parity test fail when the restored source is
-    missing.
+- [ ] **CI-8** · Medium · residue after `18fd8ba` — **the packaging join is fixed; the parity test still skips.**
+  - At `b6ec336`, `package.ps1` joined `source\<40-hex commit>` after PR #19 had moved the clone to `source/<first-16-hex>` (`Get-DxUiSourcePath`).
+  - On `e79a83a`, `package.ps1` calls `Get-DxUiSourcePath`. A missing license under the 40-hex folder does not block the ZIP.
+  - The comment above that call still describes `source\<commit>`.
+  - `Tests/BuildProcessTests/VcpkgToolsetTests.ps1:165` still joins `.build/dependencies/DxUi/source/$($lock.commit)` and skips when `Test-Path` fails.
+  - **Remaining fix**: point that test at `Get-DxUiSourcePath` and fail when the restored source is missing. Correct the `package.ps1` comment. Do not change the `Get-DxUiSourcePath` call that already ships the license.
 - [ ] **CI-9** · Medium · CONFIRMED — **The zero-warning gate passes on a second build.**
   - **Mechanism**: PR #19 replaced `/W4 /WX` (`TreatWarningAsError=true` at its base) with `/Wall` and no `/WX`.
     Warnings now fail only through the log scan (`build.ps1:144`, `Assert-NativeBuildDiagnostics`). A warning
@@ -571,15 +571,11 @@ Record these in the owning P1 plans when P1 resumes.
     reuses that attestation, and CI's clean builds are not running (CI-0). Read from source, not executed.
   - **Fix** (Q15): when the diagnostic gate fails, write a marker beside the log that forces the next run to
     rebuild (or deletes the offending objects), and add a two-run tooling test.
-- [ ] **CI-10** · Medium · CONFIRMED — **The Changes spec says CI checks pushes; CI has no push trigger.**
-  - **Mismatch**: `Core_Changes.md:29-32` says CI compares "a push with the tip it replaced". But `ci.yml:2-5`
-    triggers only on `pull_request` and `workflow_dispatch`. The `github.event_name == 'push'` branch of
-    `CHANGELOG_BASE` (`ci.yml:48`) is dead.
-  - **Impact**: a direct push to `main` is never checked.
-  - **Self-validation**: the step runs the pull request's own `Test-Changelog.ps1`, so a change can weaken its
-    own gate.
-  - **Fix** (Q16): add a `push: branches: [main]` trigger, or correct the spec and remove the dead expression.
-    Also run the base revision's validator, or add CODEOWNERS for `Tools/` and `.github/`.
+- [ ] **CI-10** · Medium · partially stale — **`ci.yml` now has a push trigger; the spec's comparison is unverified.**
+  - `Core_Changes.md:29-32` still says CI compares a push with the tip it replaced (`github.event.before`).
+  - On `e79a83a`, `.github/workflows/ci.yml` lines 4–6 trigger `push` to `main`. The `coordinate` job calls shared `coordinate.yml`. Line 48 is not `CHANGELOG_BASE`.
+  - At `b6ec336` the "no push trigger" sentence matched this file. It does not match `e79a83a`.
+  - **Remaining** (Q16): read the shared engine. Record that it performs the comparison `Core_Changes.md` describes, or change that spec to the check that actually runs. Do not add a second push trigger.
 - [ ] **CI-11** · Low · CONFIRMED — **A fold silently drops a fragment whose text matches an unreleased entry.**
   - `Merge-ChangelogFragments` seeds its duplicate set with every Unreleased entry
     (`Tools/Modules/Documentation/Changelog.psm1:224-231`). The set exists for retry idempotence. Any fragment

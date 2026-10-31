@@ -1,5 +1,7 @@
 # Cached layer-record ownership bounds (P1.9 H2.2)
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Implementation checklist
 
 - [x] Identify deferred color display's missing prerequisite: root capture is constant-time, but preview admission and final display retirement still need record/child ownership bounds.

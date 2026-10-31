@@ -1,0 +1,1 @@
+- Correct the WIP index and the 28–31 October review notes against `main` `e79a83a`: `package.ps1` already calls `Get-DxUiSourcePath`, `ci.yml` triggers pushes to `main`, and P1 with its child plans stays HOLD. No product code changed. DX-2, the busy string, the admission ceilings, the format-7 writer, and the parity-test path skip remain open.

@@ -1,5 +1,7 @@
 # Bounded lasso input, display and completion (P1 / S5)
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Current delivery checklist — 2026-10-20
 
 - [x] Commit/push the six-profile qualified Ctrl CPU/GPU foundation as `ac17fee` and verify the remote SHA.

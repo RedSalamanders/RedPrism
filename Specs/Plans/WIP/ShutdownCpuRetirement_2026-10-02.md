@@ -1,5 +1,7 @@
 # Shutdown CPU retirement (P1.7 F5d)
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Implementation checklist
 
 - [x] Reproduce the standalone scheduler failure with its own deferred-release sink, real 16 MiB CPU payloads,

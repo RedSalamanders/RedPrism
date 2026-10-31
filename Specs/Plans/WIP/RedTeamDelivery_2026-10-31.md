@@ -6,6 +6,7 @@
 
 - **Status**: DECISION. Findings are verified at source; MergeReview questions Q1–Q16 remain
   open; no product fix has started from this file.
+- **Correction (2026-11-01, `e79a83a`)**: CI-8 is no longer "no ZIP can be built". `package.ps1` already calls `Get-DxUiSourcePath`. The open residue is `VcpkgToolsetTests.ps1:165` and the stale comment. CI-2 and CI-3 stay closed in MergeReview. `ci.yml` now has a push trigger; see that plan's CI-10 correction.
 - **Reviewed**: last 15 days of product C++ and the surrounding host/tooling, from
   `eb7bcee5` (main @ 2026-10-16) through `96d0fb96` (`ej/unified-ci-20261030`). That branch
   is an ancestor of `origin/main` `a7e81222` (31 Oct 2026, PR #31). Product C++ at
@@ -165,9 +166,11 @@ MergeReview row closes.
 - [ ] **CI-0** · process · Every recent hosted run of `main` / PRs still fails in
   3–4 s at `coordinate`; `native` is skipped. Shared pin `c3c778ca` exists.
   Logs of the 31 October runs were purged (`BlobNotFound`).
-- [ ] **CI-8** · High (release blocker) · `package.ps1` still looks for DxUi's
-  license under `source\<40-hex>` after the short-folder move. No ZIP can be
-  built. Owned by MergeReview; sequenced here because it blocks WP6 packaging.
+- [ ] **CI-8** · residue · `package.ps1` calls `Get-DxUiSourcePath` since `18fd8ba`
+  (16 hex digits). A missing license under the 40-hex folder is not why a ZIP fails.
+  `Tests/BuildProcessTests/VcpkgToolsetTests.ps1:165` still joins the full commit and
+  skips when that folder is absent. The `package.ps1` comment still describes
+  `source\<commit>`. Owned by MergeReview.
 
 MR-04, MR-05, MR-06, MR-08, MR-09, MR-13, MR-14, MR-15, MR-16, MR-17, MR-19–MR-25
 and CI-1–CI-7 / CI-9–CI-13 were not re-litigated. Treat them as still open unless
@@ -249,8 +252,9 @@ Must happen before anyone calls this a release.
 
 ### WP1 — quick wins
 
-- [ ] **CI-8** (MergeReview) — `package.ps1` / `VcpkgToolsetTests.ps1` use
-  `Get-DxUiSourcePath`. A `package.ps1` run produces a ZIP.
+- [ ] **CI-8 residue** (MergeReview) — `VcpkgToolsetTests.ps1` uses
+  `Get-DxUiSourcePath` and fails when the restored source is missing. The
+  `package.ps1` comment matches that helper. `package.ps1` already calls it.
 - [ ] **MR-01** — rendered busy text has no leftover `{0}`. Test asserts the
   rendered string.
 - [ ] **MR-12** — failed OS clipboard publish is not `Succeeded`.
@@ -261,7 +265,9 @@ Must happen before anyone calls this a release.
   multiplexer has headroom or a `static_assert`.
 - [ ] **DX-2** — port + re-pin API 3 (DeliveryReview). Hover submenu, arrow
   keys, `WM_TIMER`: one popup on the focused row. Same for UIA focus.
-- [ ] **CI-1, CI-2, CI-3, CI-6, CI-7, CI-9** (MergeReview).
+- [ ] **CI-1, CI-6, CI-7, CI-9** (MergeReview). CI-2 is fixed and CI-3 is
+  superseded in that plan. Do not reopen them. Their `ci.yml:44-49` anchor is
+  stale: those lines are the shared-engine checkout.
 - [ ] **RT-01 (minimum)** — `RedPrismEnableTests=false` build has zero
   `Run*SelfTest` bodies in product TUs.
 

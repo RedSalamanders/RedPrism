@@ -1,5 +1,7 @@
 # Deferred color display construction and retirement (P1.9 H2.2)
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Implementation checklist
 
 - [x] Identify owner-side `DisplayDocument` record cloning and final-owner release for deferred destructive previews.

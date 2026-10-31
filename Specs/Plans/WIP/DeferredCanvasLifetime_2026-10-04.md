@@ -1,5 +1,7 @@
 # Deferred canvas lifetime closure (P1.9 H2.2)
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Implementation checklist
 
 - [x] Identify the deadlock: an admitted live brush owns its ordinal until Up/Lost, while a later close waits behind it.

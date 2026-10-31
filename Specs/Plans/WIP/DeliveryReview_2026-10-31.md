@@ -1,12 +1,19 @@
 # Delivery review 2026-10-31
 
-Status: not started
+Status: ACTIVE. DX-2 has not started.
 Date: 2026-10-31
+
+> Correction (2026-11-01, `main` `e79a83a`): "no product defect" and "no other work item"
+> apply only to the mechanisms this file checked. They do not retire
+> [`MergeReview_2026-10-28.md`](MergeReview_2026-10-28.md) or
+> [`RedTeamDelivery_2026-10-31.md`](RedTeamDelivery_2026-10-31.md). DX-2 is the only item
+> owned here. The busy string, admission ceilings, selection cursor, and
+> `DriverConcurrentCreates` refusal stay open in those plans.
 
 This file is a non-normative execution record. It does not override
 [`Core_DxUiIntegration.md`](../../Core/Core_DxUiIntegration.md) or any other domain contract.
-The review found no product defect to implement in RedPrism. It exists so that conclusion
-and the one pin action are not lost.
+The mechanisms checked below did not show a new Critical hole. This file exists so that
+DX-2 is not lost.
 
 ## Coordinates
 
@@ -39,7 +46,7 @@ commit (`Dependencies/DxUi.lock.json`, [`Core_DxUiIntegration.md`](../../Core/Co
   ([`UI_Windowing.md`](../../UI/UI_Windowing.md)). The frame presents once with `Present(1, 0)`
   (`RedPrism/Renderer.cpp`). Native menus use DxUi's modal loop. The product posts no menu-bar hover.
 
-No other work item is open.
+No other item is owned by this file.
 
 ## Closed
 

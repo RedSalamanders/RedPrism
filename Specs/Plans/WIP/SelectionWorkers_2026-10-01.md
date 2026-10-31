@@ -1,8 +1,10 @@
 # Ordered selection workers (P1.6)
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Current delivery checklist — 2026-10-20
 
-This child plan and parent P1 remain **WIP**. Earlier dated notes are historical.
+This child remains WIP and **HOLD** with the parent. Earlier dated notes are historical.
 
 - [x] Qualify independent ordinary cursor startup and its two actual Run controls in full x64 Debug/Release/real ASan, preserving all 50 worker/host predecessors. All three ARM64 cross-builds and canonical Release analysis also pass. [Evidence](../../TestRuns/P1MonitorAndCursor_2026-10-20.md). Only the CPU cursor route is ordinarily enabled; native ARM64 runtime for this source, other prepared consumers and measured S5/G1 remain open.
 

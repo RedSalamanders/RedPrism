@@ -1,5 +1,7 @@
 # Deferred canvas input during opacity closure (P1.9 H2.2)
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Implementation checklist
 
 - [x] Back up the qualified immutable layer/typed opacity candidate on `codex/p1-opacity-host-proof` (`7dd28d7`).
