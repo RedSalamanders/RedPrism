@@ -4,6 +4,24 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Adopt shared CI v1.0.6: DxUi SDK ZIPs stay internal with no publication workflow; application publication remains manual and artifact-only. Document the organization token route and separate implementation closeout from source-bound hosted acceptance; no product or winget publication is performed.
+- Pin the common CI engine to v1.0.5: verify native portable winget registration, every installed command alias, declared smoke probes and owned cleanup; retain the compiler-free custom dependency status observer and recorded owner-only emergency PR merge route. Publication remains an explicit action requiring both matching native Release regression and production ZIP receipts.
+- Retain stdout/stderr and real exit codes for windowless hosted native commands through the common pinned CI engine v1.0.4.
+- Introduce the pinned organization CI adapter: compiler-free PR feedback, quiet-window main admission, native Release test-to-production gates, ZIP qualification and explicit publication. Preserve canonical project test, dependency, toolchain and evidence contracts; hosted rollout acceptance remains in progress. Production ZIPs now require test-disabled build evidence and prove test-entry refusal plus hidden startup capture.
+- Extend the merge-review plan to PRs #19–#22 and re-anchor every row at `b6ec336`. PR #19 changed no product
+  behavior. The pass adds:
+  - **CI-8**: `package.ps1` still reads DxUi's license from the old 40-character source folder, so packaging
+    fails.
+  - **CI-9**: with `/WX` off, a second incremental build passes the zero-warning gate.
+  - **CI-10**: `Core_Changes.md` describes push checks that `ci.yml` never runs.
+  - **MR-24**: hand-edited generated BoundedClipper sources whose manifest no longer matches.
+  - **MR-25**: the checkerboard fixture's unexplained Release failure matches MR-03's memory admission.
+  - **AR-12**: replace 767 scoped implicitly-deleted suppressions (about 3,900 lines) with a policy entry.
+  - **AR-13**: tooling consolidation.
+  - **Q13–Q16**: questions on these items.
+
+  It closes CI-2 and CI-3 and corrects four first-pass counts. Review only: nothing was built or run.
+- Document the explicit organization-owner, PR-only emergency merge route with a recorded reason and exact-head match; preserve actual checks and native publication qualification.
 - Fold changelog fragments on `main` after merge, identically in DxUi, RedSalamander, RedXe, RedPrism, RedTilde and RedMonitor. A change keeps its fragment and never edits `CHANGELOG.md`, so parallel pull requests no longer conflict on it; `Tools/Submit-ChangelogFold.ps1` folds the default branch in a temporary worktree and opens a fold pull request without touching the caller's checkout. `Test-Changes.ps1 -Mode PrePush` (`-Base` the base ref, `origin/main` by default) and the CI tooling job (`HEAD^1` for a pull request) refuse any `CHANGELOG.md` change that is not an exact fold of fragments already on `main`, while `test.ps1` validates fragments without requiring them to be folded. The fold also flushes its staged changelog, reads it as strict UTF-8, limits reparse checks to the repository and ignores its lock and stage files in Git. Validation: the 27 shared changelog cases pass through `Tests/BuildProcessTests/ChangelogWorkflow.Tests.ps1`, including this repository's PrePush runner and a fold submission to a local bare remote; `Tools/Test-Changelog.ps1` (with and without `-Base origin/main`), `validate-skills.ps1`, the 60 skill-package integrity controls and the 26 scoped-testing cases pass, the last with the reviewed CI workflow digest in `Tests/test-scopes.json` refreshed for the new step. The first real fold pull request, the hosted CI step and native qualification remain unrun.
 - Publish the production-readiness review of the 2026-10-21..2026-10-28 merges (`0ce2070..85eaef7`, PRs #4–#18) as a
   DECISION plan with WIP index routing: verified High/Medium/Low production rows, latent P1 rows, CI/tooling rows,
