@@ -4,9 +4,9 @@
 > for architecture problems, bugs in and around new code, and anything fishy; launch a
 > red team; re-check from a second angle; and produce a detailed plan of remaining work.
 
-- **Status**: DECISION. Findings are verified at source; MergeReview questions Q1–Q16 remain
-  open; no product fix has started from this file.
-- **Correction (2026-11-01, `e79a83a`)**: CI-8 is no longer "no ZIP can be built". `package.ps1` already calls `Get-DxUiSourcePath`. The open residue is `VcpkgToolsetTests.ps1:165` and the stale comment. CI-2 and CI-3 stay closed in MergeReview. `ci.yml` now has a push trigger; see that plan's CI-10 correction.
+- **Status**: DECISION. Findings are verified at source; MergeReview questions Q1–Q15 remain
+  open; CI-10 / Q16 are resolved by the 1 November documentation reconciliation; no product fix has started from this file.
+- **Correction (2026-11-01, `e79a83a`)**: CI-8 is no longer "no ZIP can be built". `package.ps1` already calls `Get-DxUiSourcePath`. The open residue is `VcpkgToolsetTests.ps1:165` and the stale comment. CI-2 and CI-3 stay closed in MergeReview. CI-10 / Q16 are also resolved: the pinned engine runs PR changelog checks against the supplied base and coordinates native qualification on main pushes; `Core_Changes.md` now agrees.
 - **Reviewed**: last 15 days of product C++ and the surrounding host/tooling, from
   `eb7bcee5` (main @ 2026-10-16) through `96d0fb96` (`ej/unified-ci-20261030`). That branch
   is an ancestor of `origin/main` `a7e81222` (31 Oct 2026, PR #31). Product C++ at
@@ -25,7 +25,7 @@
   `Build/Build_Toolchain.md`, `Build/Build_Packaging.md`, `Testing/Testing_Validation.md`.
 - **Coordinates with**:
   - [`MergeReview_2026-10-28.md`](MergeReview_2026-10-28.md) (DECISION; PRs #4–#22;
-    Q1–Q16). This file re-confirms that review at a later tip and adds RT-01, RT-02 and
+    Q1–Q15 open, Q16 resolved). This file re-confirms that review at a later tip and adds RT-01, RT-02 and
     the 31 October CI observation. Do not duplicate MergeReview rows here as a second
     source of truth: fix them from MergeReview, then tick the matching row below.
   - [`DeliveryReview_2026-10-31.md`](DeliveryReview_2026-10-31.md) (ACTIVE; DX-2 only).
@@ -236,7 +236,7 @@ change.
 
 Must happen before anyone calls this a release.
 
-- [ ] Answer MergeReview **Q1–Q5, Q8, Q10, Q11, Q13–Q16**.
+- [ ] Answer MergeReview **Q1–Q5, Q8, Q10, Q11, Q13–Q15**. Q16 is resolved in that plan.
 - [ ] Restore hosted CI billing **or** write the local-Full authorization into
   `AGENTS.md` / `Build_UnifiedCI.md`.
 - [ ] Measure on 8 GB and 16 GB machines: Inverse / Offset / Wand

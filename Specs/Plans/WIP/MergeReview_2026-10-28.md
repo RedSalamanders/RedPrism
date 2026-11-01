@@ -2,7 +2,7 @@
 
 > Correction (2026-11-01, `main` `e79a83a`). Line anchors below were read at `b6ec336`.
 > - **CI-8:** `package.ps1` calls `Get-DxUiSourcePath` since `18fd8ba`. That is not a ZIP blocker. `VcpkgToolsetTests.ps1:165` still joins the 40-hex commit and skips if the folder is missing. The `package.ps1` comment still says `source\<commit>`.
-> - **CI-10:** `.github/workflows/ci.yml` lines 4–6 trigger `push` to `main`. Line 48 is not `CHANGELOG_BASE`. The `coordinate` job calls shared `coordinate.yml`. `Core_Changes.md` lines 29–32 still describe a push comparison with `github.event.before`. That comparison was not re-read in the shared engine.
+> - **CI-10 / Q16:** verified shared engine `19710a8aeac979a82e83bec82e8b866cee3d3deb`. PR static checks validate the exact head against the supplied immutable base; pushes to `main` invoke the quiet-window coordinator. `Core_Changes.md` now describes that routing. No second push trigger or `github.event.before` changelog comparison is needed.
 > - **Dropped files:** more than 256 paths still refuse. The cap is `HostInputBudget::kMaxPaths` in `ContinuationRequests.h`. The drop handler uses `ERROR_NOT_ENOUGH_QUOTA` and `ERROR_INVALID_DATA`, not `E_INVALIDARG` at `Application.cpp:6139`.
 > - **CI-3's `ci.yml:44-49` and CI-7's `ci.yml:106-120`** no longer describe this workflow. CI-6's pin to `codex/p1-opacity-host-proof` and `C:\P1NativeTools1452` still match.
 >
@@ -12,7 +12,7 @@
 > user experience … if you have some question write them in the plan". The same request on 2026-10-30 asked for
 > this plan to be reviewed and updated; that second pass is folded in below.
 
-- **Status**: DECISION. Findings are verified at `b6ec336`; questions Q1–Q16 are open; no fix has started.
+- **Status**: DECISION. Findings are verified at `b6ec336`, with the corrections above; questions Q1–Q15 are open; Q16 is resolved; no product fix has started.
 - **Reviewed**:
   - First pass (2026-10-28): `0ce2070..85eaef7` on `main`, 15 merges (PRs #4–#18). That is 1,716 files,
     +296,939/−11,027 lines: about 66k production lines in `RedPrism/` and `Common/` (7k of them the generated
@@ -108,8 +108,9 @@ it hand-edits generated sources (MR-24).
    - It holds about 12–14k lines of dormant P1 code.
    - 317 new `std::terminate()` sites were added to product code. There is no document recovery, so any
      invariant slip loses unsaved work.
-5. **Packaging is broken.** `package.ps1` cannot find the DxUi license since PR #19 shortened the source folder,
-   so no release package can be produced (CI-8).
+5. **The DxUi toolset parity test can skip.** `package.ps1` already uses `Get-DxUiSourcePath` since `18fd8ba`;
+   the remaining CI-8 work is the test's stale 40-hex path and the packaging comment. This is not proof that a ZIP
+   was built or that release qualification passed.
 
 ## Production activation map
 
@@ -519,8 +520,8 @@ Record these in the owning P1 plans when P1 resumes.
     - `ApplicationClipboardJobs.cpp:544-620` scopes C4355 over the whole class rather than the constructor.
 - [ ] **AR-13** · Build-path tooling (PR #19).
   - Make `Get-DxUiSourcePath` the only spelling of the source-folder convention. It is hard-coded in
-    `DxUiProvenance.psm1:21` and `ReleaseBuildPolicy.Tests.ps1:21`, and stale in `package.ps1` and
-    `VcpkgToolsetTests.ps1` (CI-8).
+    `DxUiProvenance.psm1:21` and `ReleaseBuildPolicy.Tests.ps1:21`, and stale in
+    `VcpkgToolsetTests.ps1` (CI-8). `package.ps1` already calls the helper; only its source-folder comment is stale.
   - Fold `DxUiOutputPath.psm1`, a rename wrapper with three callers, into `DxUiPaths.psm1`.
   - Drop the duplicate settings in `Directory.Build.props:39-40` and `Directory.Build.targets:7`, which
     `NativeBuildPolicy.targets` already sets. ASan `/Zi` is set both there and in `NativeBuildPolicy.targets:49`.
@@ -542,7 +543,7 @@ Record these in the owning P1 plans when P1 resumes.
 - [x] **CI-2** · FIXED by PR #20 — `test.ps1:53` now runs `Tools/Test-Changelog.ps1` (fragment validation only),
   so pending fragments no longer fail Affected runs.
 - [x] **CI-3** · SUPERSEDED by PR #20 — fragments now reach `main` by design and are folded afterwards. The
-  `tooling` job runs `Test-Changelog.ps1 -Base` (`ci.yml:44-49`). CI-10 covers what remains.
+  PR static adapter runs `Test-Changelog.ps1 -Base`; CI-10 records the reconciled workflow routing.
 - [ ] **CI-4** · Low · CONFIRMED — native-gated `Tests/BuildProcessTests` scripts (`FailureReportTests`,
   `Ui*Benchmark*`, `LayerRowsBenchmarkSmokeTests`, `IsaScanTests`, `CodeAnalysisTests`) map to Tooling only
   (`Tests/test-scopes.json:120-126`).
@@ -571,11 +572,11 @@ Record these in the owning P1 plans when P1 resumes.
     reuses that attestation, and CI's clean builds are not running (CI-0). Read from source, not executed.
   - **Fix** (Q15): when the diagnostic gate fails, write a marker beside the log that forces the next run to
     rebuild (or deletes the offending objects), and add a two-run tooling test.
-- [ ] **CI-10** · Medium · partially stale — **`ci.yml` now has a push trigger; the spec's comparison is unverified.**
-  - `Core_Changes.md:29-32` still says CI compares a push with the tip it replaced (`github.event.before`).
-  - On `e79a83a`, `.github/workflows/ci.yml` lines 4–6 trigger `push` to `main`. The `coordinate` job calls shared `coordinate.yml`. Line 48 is not `CHANGELOG_BASE`.
-  - At `b6ec336` the "no push trigger" sentence matched this file. It does not match `e79a83a`.
-  - **Remaining** (Q16): read the shared engine. Record that it performs the comparison `Core_Changes.md` describes, or change that spec to the check that actually runs. Do not add a second push trigger.
+- [x] **CI-10** · RESOLVED (2026-11-01) — **the changelog contract now matches the pinned shared engine.**
+  - At `b6ec336`, the "no push trigger" sentence matched the workflow. On `e79a83a`, `ci.yml` already triggers pushes to `main` and delegates them to shared `coordinate.yml`.
+  - Verified engine [`19710a8aeac979a82e83bec82e8b866cee3d3deb`](https://github.com/RedSalamanders/.github/tree/19710a8aeac979a82e83bec82e8b866cee3d3deb): [`pr.yml`](https://github.com/RedSalamanders/.github/blob/19710a8aeac979a82e83bec82e8b866cee3d3deb/.github/workflows/pr.yml) checks out the exact PR head and supplies its immutable base to the project's Static adapter, which runs `Test-Changelog.ps1 -Base`.
+  - Shared [`coordinate.yml`](https://github.com/RedSalamanders/.github/blob/19710a8aeac979a82e83bec82e8b866cee3d3deb/.github/workflows/coordinate.yml) calls `Invoke-Coordinator.ps1` / `Invoke-CiCoordinator`; main pushes coordinate native qualification and do not perform a `github.event.before` changelog comparison.
+  - [`Core_Changes.md`](../../Core/Core_Changes.md) is reconciled with that routing. Q16 is resolved without changing workflow code. CI-0 and native/release qualification remain open.
 - [ ] **CI-11** · Low · CONFIRMED — **A fold silently drops a fragment whose text matches an unreleased entry.**
   - `Merge-ChangelogFragments` seeds its duplicate set with every Unreleased entry
     (`Tools/Modules/Documentation/Changelog.psm1:224-231`). The set exists for retry idempotence. Any fragment
@@ -648,8 +649,9 @@ Record these in the owning P1 plans when P1 resumes.
 - **Q15 — Zero-warning gate (CI-9).** The agreed policy keeps `/WX` off. Is a failure marker that forces the
   next `build.ps1` run to rebuild an acceptable repair? Or should `build.ps1` pass `/WX` for compiler warnings
   while the log scan keeps covering linker and D9xxx diagnostics?
-- **Q16 — Pushes to `main` (CI-10).** Add a `push` trigger on `main` to `ci.yml`, or change `Core_Changes.md` to
-  state that only pull requests are checked?
+- **Q16 — CI routing (CI-10), RESOLVED 2026-11-01.** Preserve the existing unified routing: PR static checks
+  validate the exact head against its supplied immutable base; main pushes invoke the quiet-window native
+  coordinator. The pinned engine was traced and `Core_Changes.md` now agrees. No additional push trigger is needed.
 
 ## Proposed execution order
 
@@ -657,7 +659,7 @@ Each package lands with its spec text, its test (a legacy numeric golden where t
 one `Changes/` fragment, and the AGENTS.md validation matrix. Folding happens on `main` after merge.
 
 1. **WP0 — decisions and measurements (no code).**
-   - Answer Q1–Q5 and Q13–Q16.
+   - Answer Q1–Q5 and Q13–Q15. Q16 is resolved above.
    - Measure, on 8 GB and 16 GB machines:
      - the actual Inverse/Offset/Wand/Load-selection reservations (the existing test gates record
        `reservationBytes`);
@@ -669,7 +671,7 @@ one `Changes/` fragment, and the AGENTS.md validation matrix. Folding happens on
    - Release and gate blockers first: CI-8, CI-9 and CI-1.
    - User-facing messages: MR-01, MR-12, MR-17, MR-18.
    - Provenance and robustness: MR-21 with MR-24, MR-23.
-   - Tooling: CI-6, CI-7, CI-10, CI-11, CI-12, CI-13.
+   - Tooling: CI-6, CI-7, CI-11, CI-12, CI-13. CI-10 is resolved by the documentation reconciliation.
 3. **WP2 — admission model.** AR-4, fixing MR-02 to MR-07, MR-25 and MR-06's retained charge, with spec updates
    in `Core_PerformanceAndResources.md`.
 4. **WP3 — feedback and input.** MR-08 (central failure notice), MR-07, MR-13, MR-14, MR-10, MR-09.
