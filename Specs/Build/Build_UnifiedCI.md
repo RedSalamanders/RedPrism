@@ -69,6 +69,13 @@ that all six native product pipelines passed.
 
 The adapter retains Full normal regression, hidden WARP smoke, normal bounded performance/capture coverage and independent native tooling. Long/repeated studies remain manual. ProductionOnly excludes standalone Tests projects and preserves the production x64 ISA gate; compiler ISA control fixtures stay in the test role. The Release canary calls the same always-on Expect used by HostTests. package.ps1 -SkipBuild retains runtime/import closure and native clean-extraction smoke. winget publication is blocked until this product's own license is explicitly configured.
 
+The shared adapter requests the documented 5,400-second hidden self-test observation bound on native ARM64,
+matching the dedicated native ARM64 helper. x64 keeps the 1,200-second default. This applies to normal Release
+regression and explicit qualification; all suites, failure propagation, the assertion probe and matching
+successful receipts remain mandatory. Routing controls execute byte-identical adapter copies with isolated
+engine stand-ins and fixture-contained job outputs; they establish argument/error handling only, never
+hosted execution or native acceptance.
+
 RedPrism production sets RedPrismEnableTests=false, excludes embedded test translation units and standalone test projects, and refuses self-test/crash-probe dispatch before startup. Ordinary local and CI test builds keep the complete existing tests enabled. Build receipts bind that role; ZIP smoke checks refusal plus a real hidden WARP startup capture.
 
 ## Emergency PR merge

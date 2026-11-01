@@ -989,7 +989,11 @@ ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 bina
 The hidden WARP self-test failure bound defaults to 1,200 seconds. Optional
 `-SelfTestTimeoutSeconds` accepts 1,200–5,400 seconds; values above the default require `-Platform ARM64`
 on a native ARM64 host and are rejected before build on every other route. The hosted native ARM64 Release
-helper requests 5,400 seconds as a failure backstop. This extends observation only: it does not establish
+helper and shared native CI adapter request 5,400 seconds as a failure backstop. The shared x64 adapter
+retains the default. Byte-identical adapter routing controls verify both phases and architectures, complete
+suite arguments, the assertion probe, suppression of success receipts after test failure, and isolation of
+child job outputs from the caller's GitHub output file.
+This extends observation only: it does not establish
 a prior stall's cause, a performance fix, a G1 pass or successful runtime completion. A timeout fails with
 the process id reported, never killed.
 
@@ -3520,8 +3524,8 @@ Check New/present-empty clearing once versus unchanged Add/Subtract and no histo
 a direct header callback, and screenshot-DPI override plus native `WM_DPICHANGED` with restored bounds.
 Before opening the original Polygonal drawing, the DPI-message fixture MUST submit its startup outer size
 through an ordinary non-activating `SetWindowPos`, allowing native tracking limits to establish the fixture's
-restorable bounds on small hosted desktops. The synthetic native-message fixture MUST use a positive rectangle contained in the already accepted
-native bounds and at least the live owner's minimum at the proposed harness scale. Restore the old override
+restorable bounds on small hosted desktops. The synthetic native-message fixture MUST use a positive rectangle
+contained in the already accepted native bounds and at least the live owner's minimum at the proposed harness scale. Restore the old override
 after querying that minimum and fail an unsuitable setup explicitly, once in each New/Add/Subtract case.
 Retain every exact bounds/DPI, original writer/ticket, selection/history, point-count, current-view click and
 restore assertion. On a combined-predicate failure, print its typed DPI/state terms and requested/actual

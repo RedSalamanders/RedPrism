@@ -21,6 +21,7 @@ Allows a local engine under development for compiler-free checks only.
 Canonical test evidence, source-bound receipts and qualified ZIPs; GitHub job output paths.
 .NOTES
 Requires PowerShell 7.4 and Git. Native work is hosted-only and uses the matching architecture.
+Native ARM64 requests the documented 5400-second self-test observation bound; x64 retains its default.
 Static never invokes compiler fixtures. No publication or source/pin updates.
 See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual actions.
 .EXAMPLE
@@ -71,7 +72,10 @@ if ($Phase -eq 'Production') {
     return
 }
 if ($Platform -eq 'x64') { Run 'Tests/BuildProcessTests/Invoke-ToolingTests.ps1' }
-Run 'test.ps1' ($profile + @('-Full','-SkipTooling','-SkipBuild','-BuildNumber',$number,'-MaxCpuCount','2'))
+$testArguments = $profile + @('-Full','-SkipTooling','-SkipBuild','-BuildNumber',$number,'-MaxCpuCount','2')
+# Match the native ARM64 helper's documented observation bound; every suite and receipt gate stays mandatory.
+if ($Platform -eq 'ARM64') { $testArguments += @('-SelfTestTimeoutSeconds','5400') }
+Run 'test.ps1' $testArguments
 $probe = Invoke-CiAssertionProbe -Context $context -Executable ".build/$Platform/$Configuration/HostTests.exe" -ExpectedExitCode 21
 if ($Phase -eq 'Qualification') { Write-Host 'Explicit native qualification finished.'; return }
 $evidence = Get-CiSuiteEvidence -Context $context -StartedAt $started
