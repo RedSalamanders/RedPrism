@@ -1,2 +1,0 @@
-# Legal text is downloaded and hashed as exact bytes; do not convert it on Windows checkout.
-Tests/Fixtures/Licenses/CC0-1.0.txt -text

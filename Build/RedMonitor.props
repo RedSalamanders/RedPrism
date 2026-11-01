@@ -1,8 +1,0 @@
-<Project>
-  <ItemDefinitionGroup Condition="'$(MSBuildProjectName)'=='RedPrism' or '$(MSBuildProjectName)'=='HostPluginTests'">
-    <ClCompile><AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\ThirdParty\RedMonitor\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
-  </ItemDefinitionGroup>
-  <Target Name="RequirePinnedRedMonitorClient" BeforeTargets="PrepareForBuild" Condition="'$(MSBuildProjectName)'=='RedPrism' or '$(MSBuildProjectName)'=='HostPluginTests'">
-    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)..\Verify-RedMonitorClient.ps1&quot;" />
-  </Target>
-</Project>
