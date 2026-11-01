@@ -27,6 +27,9 @@ struct SizingWorkTestGate final
     bool throwCaptureFailure = false;
     std::optional<DocumentHistory::PrepareStage> historyFailure;
     std::uint64_t reservationBytes = 0;
+    std::atomic<std::size_t> workerSlot{JobScheduler::kCapacity};
+    std::atomic<std::uint64_t> workerGeneration{0};
+    std::atomic<std::uint64_t> workerReservationBytes{0};
     std::atomic<bool> captureReservationHeld{false};
     std::atomic<unsigned int> historyFaultHits{0};
     std::atomic<bool> payloadAllocatedOffOwner{false};

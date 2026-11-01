@@ -387,6 +387,9 @@ class Application::SizingJob final : public Job
     }
     JobResult PassGate(JobContext& context) noexcept
     {
+        _gate->workerSlot.store(_original.slot);
+        _gate->workerGeneration.store(_original.generation);
+        _gate->workerReservationBytes.store(context.reservedMemoryBytes);
         _gate->visits.fetch_add(1);
         if (!PostThreadMessageW(_ownerThread, SizingWorkTestGate::kMessage, 0, 0))
             return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
@@ -565,6 +568,37 @@ int Application::RunSizingWorkSelfTest() noexcept
         HistoryTrim,
         HistoryEpoch
     };
+    // A real retained scalar reservation makes unrelated residency explicit in this composed fixture.
+    // It owns no document/pixels, and its shared state survives a failed fixture through scheduler Close.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
+    struct IndependentCharge final
+    {
+        JobScheduler* scheduler = nullptr;
+        JobTicket original;
+        SharedRetainedMemoryLease retained;
+        HRESULT result = E_PENDING;
+    };
+    class RetainFixtureCharge final : public Job
+    {
+      public:
+        explicit RetainFixtureCharge(std::shared_ptr<IndependentCharge> state) noexcept : _state(std::move(state)) {}
+        JobResult Run(JobContext&) override
+        {
+            return {};
+        }
+        void Completed(JobResult result) noexcept override
+        {
+            _state->result =
+                result.status == JobStatus::Finished
+                    ? static_cast<HRESULT>(_state->scheduler->RetainMemory(_state->original, _state->retained))
+                    : static_cast<HRESULT>(result.error);
+        }
+
+      private:
+        const std::shared_ptr<IndependentCharge> _state;
+    };
+#pragma warning(pop)
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
 #pragma warning(push)
@@ -579,6 +613,7 @@ int Application::RunSizingWorkSelfTest() noexcept
         bool held = false;
         bool visited = false;
         bool cancelPending = false;
+        std::uint64_t independentBytes = 0;
     };
 #pragma warning(pop)
 
@@ -593,16 +628,42 @@ int Application::RunSizingWorkSelfTest() noexcept
             return;
         }
         state.visited = true;
-        state.held =
-            owner._session.Document() && owner._session.Document()->width == 8 &&
-            owner._session.Document()->height == 4 && owner._historyWork.Busy() && owner._sizingTicket &&
-            owner._jobs.ReservedMemoryBytes() >= state.retainedBaseline &&
-            owner._jobs.ReservedMemoryBytes() - state.retainedBaseline == owner._sizingWorkTestGate->reservationBytes &&
-            state.receipt.Read().outcome == HostOutcome::Pending;
+        const auto gate = owner._sizingWorkTestGate;
+        const auto reserved = owner._jobs.ReservedMemoryBytes();
+        const bool originalHeld = owner._sizingTicket && gate->workerSlot.load() == owner._sizingTicket->slot &&
+                                  gate->workerGeneration.load() == owner._sizingTicket->generation &&
+                                  gate->workerReservationBytes.load() == gate->reservationBytes;
+        const bool ownChargeHeld =
+            reserved >= state.retainedBaseline && reserved - state.retainedBaseline >= gate->reservationBytes;
+        const bool aggregateHeld =
+            ownChargeHeld && (state.mode == Mode::PanelThenSizeThenUndo
+                                  ? reserved - state.retainedBaseline - gate->reservationBytes >= state.independentBytes
+                                  : reserved - state.retainedBaseline == gate->reservationBytes);
+        state.held = owner._session.Document() && owner._session.Document()->width == 8 &&
+                     owner._session.Document()->height == 4 && owner._historyWork.Busy() && owner._sizingTicket &&
+                     originalHeld && aggregateHeld && state.receipt.Read().outcome == HostOutcome::Pending;
         if (state.mode == Mode::PanelThenSizeThenUndo)
             state.held = state.held && owner._session.history.UndoName() == L"Levels";
         else
             state.held = state.held && owner._session.history.CurrentRevision() == state.revision;
+        if (state.mode == Mode::PanelThenSizeThenUndo || !state.held)
+        {
+            std::fprintf(
+                stderr,
+                "INFO sizing-held mode=%u dimensions=%dx%d busy=%u ticket=%u reserved=%llu "
+                "baseline=%llu declared=%llu worker=%llu slot=%zu generation=%llu "
+                "pending=%u levels=%u independent=%llu held=%u\n",
+                static_cast<unsigned int>(state.mode), owner._session.Document() ? owner._session.Document()->width : 0,
+                owner._session.Document() ? owner._session.Document()->height : 0, owner._historyWork.Busy() ? 1u : 0u,
+                owner._sizingTicket ? 1u : 0u, static_cast<unsigned long long>(owner._jobs.ReservedMemoryBytes()),
+                static_cast<unsigned long long>(state.retainedBaseline),
+                static_cast<unsigned long long>(gate->reservationBytes),
+                static_cast<unsigned long long>(gate->workerReservationBytes.load()), gate->workerSlot.load(),
+                static_cast<unsigned long long>(gate->workerGeneration.load()),
+                state.receipt.Read().outcome == HostOutcome::Pending ? 1u : 0u,
+                owner._session.history.UndoName() == L"Levels" ? 1u : 0u,
+                static_cast<unsigned long long>(state.independentBytes), state.held ? 1u : 0u);
+        }
         if (state.mode == Mode::CancelBefore || state.mode == Mode::CancelAfter)
         {
             if (state.mode == Mode::CancelBefore)
@@ -719,18 +780,34 @@ int Application::RunSizingWorkSelfTest() noexcept
             _sizeDialog.canvas.Set(mode == Mode::TooLarge ? 30000 : 10, true);
             _sizeDialog.canvas.Set(mode == Mode::TooLarge ? 30000 : 6, false);
         }
+        std::shared_ptr<IndependentCharge> independent;
         if (mode == Mode::PanelThenSizeThenUndo)
         {
+            independent = std::make_shared<IndependentCharge>();
+            independent->scheduler = &_jobs;
+            std::unique_ptr<Job> charge = std::make_unique<RetainFixtureCharge>(independent);
+            if (FAILED(static_cast<HRESULT>(_jobs.Submit(charge, {.memoryBytes = 65536, .reserveRetainedMemory = true},
+                                                         independent->original))) ||
+                SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled ||
+                FAILED(independent->result) || independent->retained.Bytes() != 65536)
+                return 5;
             if (!BeginColorEdit(ChromeHost::kCommandLevels))
                 return 5;
             OnAdjustAction(AdjustAction::SetInputGamma, 2);
         }
         State state{*this, mode, QueueHostInput(HostSizeApplyInput{_sizeDialog, _sizeInvocation}), revision,
                     retainedBaseline};
+        state.independentBytes = independent ? independent->retained.Bytes() : 0;
         std::optional<ContinuationReceipt> undo;
         if (mode == Mode::PanelThenSizeThenUndo)
             undo = QueueHostInput(HostCommandInput{ChromeHost::kCommandUndo});
-        const auto settled = SettleJobs(_jobs, 15000, dispatch, &state);
+        auto settled = SettleJobs(_jobs, 15000, dispatch, &state);
+        if (independent)
+        {
+            independent->retained.Reset();
+            if (settled == SettleResult::Settled)
+                settled = SettleJobs(_jobs, 15000, dispatch, &state);
+        }
         const auto actual = state.receipt.Read();
         const auto expected = mode == Mode::CancelBefore || mode == Mode::CancelAfter ? HostOutcome::Cancelled
                               : mode == Mode::Stale || mode == Mode::Restore || mode == Mode::Replace ||

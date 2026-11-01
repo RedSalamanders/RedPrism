@@ -1670,6 +1670,11 @@ shutdown owners add 14. The 15 `clone-input-policy.*` checks establish literal A
 readback/history, mask refusal, event-time Shift continuation from the prior endpoint, exact red/green pixels,
 one entry per Clone, Undo/Redo and missing-composite refusal. At zoom 1 the policy fixture aligns its document
 grid to whole client pixels after layout, so odd canvas extents cannot alter its literal pointer coordinates.
+Each policy fixture first settles the actual owner, requires its new document identity, active image target and
+unselected mask before pointer input, and owns a scoped synthetic keyboard. Three installation controls bring
+the policy total to 18; the original 15 literal expectations remain unchanged. Diagnostics report installation,
+modifiers, endpoint, literal pixel, history and original receipt without attributing an old failure to an
+unobserved precondition.
 
 The registered single-layer `clone-layer-source.*` graph has 50 controls across success, cancellation,
 worker failure, stale active target, retained live lease and capture loss. Literal red active source and
@@ -1998,6 +2003,13 @@ runner allocation failure, exact TooLarge/Invalid/Memory/failure errors, unchang
 document/card replacement, hidden completion without Present and complete terminal cleanup. Gate deadlines are
 failure bounds, not latency assertions. Kernel cancellation intervals are structural bounds; these events alone
 do not measure in-kernel stop latency.
+
+Sizing gates publish the actual original worker ticket and `JobContext` reservation before their held message.
+Require that exact ticket and complete charge. The composed panel → size → Undo case also retains a separately
+admitted 65,536-byte shared lease while sizing is held: unrelated original residency may coexist and must not
+be attributed to sizing. Other modes keep their exact aggregate delta. Release the independent control only
+after the original sequence settles, drain its real acknowledgement, and require the unchanged exact final
+clipboard baseline, original receipts, pixels/history, no hidden Present and off-owner retirement in every mode.
 
 P1.7 project durability checks inspect ZIP methods (STORE encoded PNG, DEFLATE manifest), load an independently
 rewritten legacy DEFLATE archive, exercise ZIP and folder overwrite, preserve unrelated same-prefix paths,

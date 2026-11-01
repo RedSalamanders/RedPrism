@@ -34,6 +34,7 @@ void SetSyntheticKey(int key, bool held) noexcept
 
 int Application::RunCloneInputPolicySelfTest() noexcept
 {
+    const KeyboardState::ScopedSynthetic keyboard;
     const auto originalTool = _tool;
     const auto originalBrushSettings = _session.brushSettings;
     const auto originalCloneSettings = _session.cloneSettings;
@@ -79,8 +80,10 @@ int Application::RunCloneInputPolicySelfTest() noexcept
                 KeyboardState::Write(originalKeyboard);
         });
 
-    const auto installFixture = [this]() noexcept
+    const auto installFixture = [this, &settle]() noexcept
     {
+        if (!settle())
+            return false;
         constexpr int width = 16;
         constexpr int height = 12;
         std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width * height * 4));
@@ -112,8 +115,16 @@ int Application::RunCloneInputPolicySelfTest() noexcept
                         target.name};
         const Guid targetId = target.id;
         fixture.layers.push_back(std::move(target));
+        const auto fixtureId = fixture.id;
         ReplaceDocument(std::move(fixture).Seal(), targetId, {});
+        std::fprintf(stderr, "INFO clone-policy-install active=%u mask=%u host-busy=%u queued=%zu keyboard=%u\n",
+                     _session.ActiveLayerID() == std::optional(targetId) ? 1u : 0u, _session.IsMaskSelected() ? 1u : 0u,
+                     _historyWork.Busy() ? 1u : 0u, _hostRequests.Size(),
+                     KeyboardState::Detail::g_synthetic.active ? 1u : 0u);
 
+        if (!_session.Document() || _session.Document()->id != fixtureId ||
+            _session.ActiveLayerID() != std::optional(targetId) || _session.IsMaskSelected())
+            return false;
         _tool = EditorTool::Clone;
         _spacePan = false;
         _drag = PointerDrag{};
@@ -131,6 +142,7 @@ int Application::RunCloneInputPolicySelfTest() noexcept
         const auto origin = _viewport.ViewFromDocument({}, DocumentSize());
         _viewport.pan.x += std::round(hole.left + origin.x) - (hole.left + origin.x);
         _viewport.pan.y += std::round(hole.top + origin.y) - (hole.top + origin.y);
+        return true;
     };
     const auto pointer = [](Application& owner, UINT message, WPARAM modifiers, Vec2 pixel) noexcept
     {
@@ -154,7 +166,10 @@ int Application::RunCloneInputPolicySelfTest() noexcept
     };
 
     // Alt on Clone Stamp changes the source only, including when Sample All Layers is selected.
-    installFixture();
+    const bool altInstalled = installFixture();
+    expect(altInstalled, "alt-fixture-installed-before-pointer");
+    if (!altInstalled)
+        return failures;
     _cloneReadbackTestGate = std::make_shared<CloneReadbackTestGate>();
     const auto altHistoryCount = _session.history.UndoCount();
     const auto altHistoryRevision = _session.history.CurrentRevision();
@@ -170,7 +185,10 @@ int Application::RunCloneInputPolicySelfTest() noexcept
            "alt-source-only-has-no-readback-or-history");
 
     // A mask target cannot be cloned. Prime and snapshot a real image and aligned offset before the refused press.
-    installFixture();
+    const bool maskInstalled = installFixture();
+    expect(maskInstalled, "mask-fixture-installed-before-pointer");
+    if (!maskInstalled)
+        return failures;
     _cloneReadbackTestGate = std::make_shared<CloneReadbackTestGate>();
     pointer(*this, WM_LBUTTONDOWN, MK_LBUTTON, {12, 6});
     pointer(*this, WM_LBUTTONUP, 0, {12, 6});
@@ -201,12 +219,29 @@ int Application::RunCloneInputPolicySelfTest() noexcept
 
     // Seed the previous stroke endpoint through the real host path, then Shift-click elsewhere. The captured
     // offset must be computed from that prior endpoint (12,6), not the new click (14,6).
-    installFixture();
+    const bool lineInstalled = installFixture();
+    expect(lineInstalled, "line-fixture-installed-before-pointer");
+    if (!lineInstalled)
+        return failures;
     _session.SetCloneSource({4, 6});
     _cloneReadbackTestGate = std::make_shared<CloneReadbackTestGate>();
     pointer(*this, WM_LBUTTONDOWN, MK_LBUTTON, {12, 6});
     pointer(*this, WM_LBUTTONUP, 0, {12, 6});
     expect(settle(), "prior-host-clone-settles");
+    const auto endpoint = _session.ShiftLineStart();
+    const auto priorPixel = activePixel(12, 6);
+    std::fprintf(stderr,
+                 "INFO clone-policy-prior endpoint=%u %.6f,%.6f pixel=%u,%u,%u,%u history=%zu "
+                 "named=%u captures=%u outcome=%u error=%08X mask=%u keys=%u,%u,%u zoom=%.6f pan=%.6f,%.6f\n",
+                 endpoint ? 1u : 0u, endpoint ? endpoint->x : 0.0, endpoint ? endpoint->y : 0.0,
+                 static_cast<unsigned int>(priorPixel[0]), static_cast<unsigned int>(priorPixel[1]),
+                 static_cast<unsigned int>(priorPixel[2]), static_cast<unsigned int>(priorPixel[3]),
+                 static_cast<std::size_t>(_session.history.UndoCount()),
+                 _session.history.UndoName() == L"Clone Stamp" ? 1u : 0u, _cloneReadbackTestGate->captures.load(),
+                 static_cast<unsigned int>(_canvasBrushReceipt.Read().outcome),
+                 static_cast<unsigned int>(_canvasBrushReceipt.Read().error), _session.IsMaskSelected() ? 1u : 0u,
+                 KeyboardState::Held(VK_SHIFT) ? 1u : 0u, KeyboardState::Held(VK_CONTROL) ? 1u : 0u,
+                 KeyboardState::Held(VK_MENU) ? 1u : 0u, _viewport.zoom, _viewport.pan.x, _viewport.pan.y);
     expect(_session.ShiftLineStart() == std::optional<Vec2>{Vec2{12, 6}} && activePixel(12, 6) == kRed &&
                _session.history.UndoCount() == 1 && _session.history.UndoName() == L"Clone Stamp",
            "prior-host-stroke-establishes-literal-red-endpoint-and-one-entry");

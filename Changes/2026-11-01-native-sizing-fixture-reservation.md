@@ -1,0 +1,1 @@
+- Bind sizing's held-state check to its original worker ticket and exact reservation. A composed panel/size/Undo control retains a separate real reservation while sizing is held, then requires the unchanged exact final clipboard baseline after both retire.
