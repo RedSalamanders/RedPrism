@@ -635,6 +635,24 @@ int Application::RunWandCompositeHostSelfTest() noexcept
         }
 
         const SettleResult settled = SettleJobs(_jobs, 15000, pump, &state);
+        if (mode == Mode::BooleanOrdered || settled != SettleResult::Settled)
+        {
+            const auto original = state.receipt.Read();
+            const auto first = state.queued[0].Read();
+            const auto second = state.queued[1].Read();
+            std::fprintf(stderr,
+                         "INFO wand-composite-host.settlement mode=%s result=%u original=%u/%08X "
+                         "first=%u/%08X second=%u/%08X queued=%u ring=%zu active=%u ticket=%u stamp=%u "
+                         "busy=%u reserved=%llu releasing=%llu outputs=%u outputBytes=%llu visits=%u\n",
+                         name(mode), static_cast<unsigned int>(settled), static_cast<unsigned int>(original.outcome),
+                         static_cast<unsigned int>(original.error), static_cast<unsigned int>(first.outcome),
+                         static_cast<unsigned int>(first.error), static_cast<unsigned int>(second.outcome),
+                         static_cast<unsigned int>(second.error), state.queuedCount, _hostRequests.Size(),
+                         _activeHostRequest ? 1u : 0u, _wandLayerHostTicket ? 1u : 0u, _wandLayerHostStamp ? 1u : 0u,
+                         _historyWork.Busy() ? 1u : 0u, static_cast<unsigned long long>(_jobs.ReservedMemoryBytes()),
+                         static_cast<unsigned long long>(_jobs.ReleasingMemoryBytes()), gate->publishedOutputs,
+                         static_cast<unsigned long long>(gate->publishedOutputBytes), gate->visits.load());
+        }
         (void)expect(name(mode), "bounded-settlement", settled == SettleResult::Settled,
                      "SettleJobs did not acknowledge the worker and queued host work within 15 seconds");
         const bool expectedGate =

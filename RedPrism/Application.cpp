@@ -2749,12 +2749,6 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionNudgeFaultSelfTest\n");
     if (const int nudgeFaults = RunSelectionNudgeFaultSelfTest(); nudgeFaults != 0)
         return nudgeFaults;
-    std::printf("BEGIN self-test.RunWandLayerHostSelfTest\n");
-    if (const int wand = RunWandLayerHostSelfTest(); wand != 0)
-        return wand;
-    std::printf("BEGIN self-test.RunWandCompositeHostSelfTest\n");
-    if (const int wandComposite = RunWandCompositeHostSelfTest(); wandComposite != 0)
-        return wandComposite;
     std::printf("BEGIN self-test.RunRasterEditSelfTest\n");
     if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
         return rasterEdits;

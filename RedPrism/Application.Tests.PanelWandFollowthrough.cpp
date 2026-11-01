@@ -58,7 +58,7 @@ bool FollowthroughPixels(const Raster& raster, const std::array<std::uint8_t, 8>
 int Application::RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance) noexcept
 {
     // Functional pixel/history cases need a stable declared-capacity envelope, not ambient runner pressure.
-    // The final real-host control lowers only this fixture's snapshot and must refuse Add before capture.
+    // Explicit low-capacity controls lower only this fixture's snapshot and must refuse Add before capture.
     std::uint64_t availableBytes = 16ULL << 30;
     ApplicationProcessingTestProbe processing;
     processing.workerCount = 2; // One real histogram callback may wait while the real Wand worker completes.
@@ -356,5 +356,101 @@ int Application::RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance)
         return 5;
     owner->_wandLayerHostTestGate.reset();
     std::printf("panel-wand-admission-host.assertions=%d failures=0\n", admissionAssertions);
+
+    availableBytes = 16ULL << 30;
+    owner->CancelColorEditForTest();
+    owner->_session.ClearDocument();
+    owner->DocumentChanged();
+    if (!settle())
+        return 5;
+    int functionalAdmissionAssertions = 0;
+    for (const bool composite : {false, true})
+    {
+        const auto check = [&](bool condition, const char* fact) noexcept
+        {
+            ++functionalAdmissionAssertions;
+            std::printf("%s wand-functional-admission-host.%s.%s\n", condition ? "PASS" : "FAIL",
+                        composite ? "composite" : "layer", fact);
+            return condition;
+        };
+        DocumentFixture fixture;
+        fixture.id = Guid::Generate();
+        const auto fixtureId = fixture.id;
+        fixture.width = 2;
+        fixture.height = 1;
+        fixture.selection = FollowthroughRect(0);
+        auto layer = ImageLayer::Blank(L"Functional Wand admission", {2, 1});
+        const auto active = layer.id;
+        layer.asset =
+            RasterAsset{Raster::Make(2, 1, RasterFormat::Bgra8888, kSource.data(), kSource.size()), {}, layer.name};
+        layer.transform.sampling = LayerSampling::Nearest;
+        fixture.layers.push_back(std::move(layer));
+        owner->ReplaceDocument(std::move(fixture).Seal(), active, {});
+        if (!check(settle() && owner->_session.Document() && owner->_session.Document()->id == fixtureId &&
+                       owner->_session.ActiveLayerID() == std::optional(active) &&
+                       FollowthroughPixels(owner->_session.ActiveLayer()->asset->image, kSource) &&
+                       owner->_jobs.ReservedMemoryBytes() == 0 && owner->_session.history.UndoCount() == 0,
+                   "literal-fixture-has-no-other-reservation"))
+            return 5;
+        const auto selected = owner->_session.Selection();
+        const auto input = owner->_session.ActiveLayer()->asset->image;
+        const auto savedRevision = owner->_session.history.CurrentRevision();
+        auto refusedGate = std::make_shared<WandLayerHostTestGate>();
+        refusedGate->hold = false;
+        owner->_wandLayerHostTestGate = refusedGate;
+        WandSettings settings;
+        settings.tolerance = 0;
+        settings.sampleSize = WandSampleSize::Point;
+        settings.contiguous = true;
+        settings.sampleAllLayers = composite;
+        availableBytes = 2ULL << 30;
+        const auto refused =
+            composite ? owner->QueueHostInput(HostWandCompositeNewInput{{1.5, .5}, settings, false, SelectionMode::Add})
+                      : owner->QueueHostInput(HostWandLayerNewInput{{1.5, .5}, settings, false, SelectionMode::Add});
+        if (!check(refused.Read().outcome == HostOutcome::Pending, "original-intent-precedes-memory-decision"))
+            return 5;
+        const bool joined = settle();
+        const auto outcome = refused.Read();
+        std::printf("INFO wand-functional-admission-host.%s snapshot=%llu required=%llu captures=%u "
+                    "readbacks=%u outcome=%u error=%08X\n",
+                    composite ? "composite" : "layer", static_cast<unsigned long long>(availableBytes),
+                    static_cast<unsigned long long>(refusedGate->reservationBytes), refusedGate->captures.load(),
+                    refusedGate->readbackPrepares.load(), static_cast<unsigned int>(outcome.outcome),
+                    static_cast<unsigned int>(outcome.error));
+        if (!check(joined && outcome.outcome == HostOutcome::Failed && outcome.error == E_OUTOFMEMORY,
+                   "unaffordable-original-refuses-with-exact-error"))
+            return 5;
+        if (!check(refusedGate->reservationBytes > availableBytes - kMemoryAdmissionHeadroomBytes &&
+                       refusedGate->captures.load() == 0 && refusedGate->visits.load() == 0 &&
+                       refusedGate->readbackPrepares.load() == 0,
+                   "complete-boolean-envelope-refuses-before-capture-or-readback"))
+            return 5;
+        if (!check(owner->_session.Selection() == selected && owner->_session.ActiveLayer()->asset->image == input &&
+                       FollowthroughPixels(owner->_session.ActiveLayer()->asset->image, kSource) &&
+                       owner->_session.history.CurrentRevision() == savedRevision &&
+                       owner->_session.history.UndoCount() == 0,
+                   "refusal-preserves-literal-source-selection-and-history"))
+            return 5;
+        if (!check(owner->_jobs.IsIdle() && owner->_jobs.ReservedMemoryBytes() == 0 && !owner->_wandLayerHostTicket &&
+                       !owner->_wandLayerHostStamp && !owner->_historyWork.Busy() && owner->_hostRequests.Size() == 0 &&
+                       !owner->_activeHostRequest,
+                   "original-refusal-joins-without-new-reservation"))
+            return 5;
+        owner->_wandLayerHostTestGate.reset();
+        availableBytes = 16ULL << 30;
+        owner->_session.ClearDocument();
+        owner->DocumentChanged();
+        if (!settle())
+            return 5;
+    }
+    std::printf("wand-functional-admission-host.assertions=%d failures=0\n", functionalAdmissionAssertions);
+    // These are functional FIFO/pixel/history cases; the complete Boolean envelopes need a stable capacity.
+    // Reuse this original isolated owner and its declared 16 GiB snapshot before the main owner's startup.
+    std::printf("BEGIN self-test.RunWandLayerHostSelfTest\n");
+    if (const auto result = owner->RunWandLayerHostSelfTest(); result != 0)
+        return result;
+    std::printf("BEGIN self-test.RunWandCompositeHostSelfTest\n");
+    if (const auto result = owner->RunWandCompositeHostSelfTest(); result != 0)
+        return result;
     return 0;
 }

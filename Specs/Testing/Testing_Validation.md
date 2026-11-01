@@ -1333,6 +1333,16 @@ Close and final strong/weak output retirement under the original charge. Composi
 readback and original-ticket capture/rebind behavior. UI Wand modes are New, Add and Subtract; the arena's
 internal Intersect clips to the canvas and does not add a UI mode.
 
+Both functional Wand suites run on the existing isolated startup owner with two actual workers and a declared
+16 GiB memory snapshot, before the main owner acquires its retirement sink. The successful Boolean cases need
+their complete conservative envelopes; ordinary admission may correctly wait under lower available capacity
+while an earlier published output remains charged. Preserve every original FIFO, pixel/history, original-ticket,
+retirement and 15-second settlement assertion. This logical fixture capacity makes no physical-memory claim.
+Twelve additional layer/composite Add controls use a 2 GiB snapshot with no other reservation: require the exact
+original `E_OUTOFMEMORY` before capture/readback, unchanged literal source/selection/history and joined zero-charge
+cleanup. Production memory sampling and waiting/refusal policy remain unchanged. Settlement diagnostics retain
+all three receipts, queue/active/ticket/stamp state and actual reserved, releasing and published-output charges.
+
 The clipboard host preserves its previous 268 controls and adds six `paste-unavailable-sequence` controls,
 for 274 checks across 53 scenarios. Require real foreign DIB bytes and placement, one actual paste history entry,
 independent private clipboard ownership, unavailable sequence inspection, the original two initial busy attempts,
