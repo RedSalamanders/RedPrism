@@ -3034,7 +3034,17 @@ Keep all predecessor DocumentTests, HostTests, Application WARP, and legacy nume
 
 The actual Application call to `RunHueReadbackHostSelfTest` remains in the sampler caller sequence. Its `hue-admission.*` assertions require invalid purpose and mode to leave the request queue empty, avoid readback/source capture, and preserve the Hue opening and actual shared history-work ordinal. The following valid press must use the exact next opening. Its `hue-host.*` assertions use the original committed document readback and literal color references, including hue 220 producing `HueBand{175, 205, 235, 265}`; preserve original-ticket admission, physical input ordering, cancellation, stale-panel refusal, acknowledgement, unchanged pixels/history, and complete owner retirement.
 
-The ordered Application WARP run adds `BEGIN self-test.RunPanelWandHostSelfTest` followed by `BEGIN self-test.RunPanelWandLifecycleSelfTest`. Require every emitted `panel-wand-host.*` and `panel-wand-lifecycle.*` fact and the source's exact summary: 126 assertions across 30 panel/route/action combinations, and 32 assertions across eight lifecycle combinations. Host cases cover Levels, Hue/Saturation, and Exposure; layer and committed-composite sources; New, Add, Subtract, zero-offset closure, and nested history. Lifecycle cases cover cancellation, worker failure, equal-panel reopen, and panel Cancel for both source routes. Preserve the original selection/history/source and charge through acknowledgement, and keep Cancel's own receipt distinct.
+The standalone panel/Wand owner emits `BEGIN self-test.RunPanelWandHostSelfTest` followed by `BEGIN self-test.RunPanelWandLifecycleSelfTest`, before the main Application acquires the scheduler/TLS retirement sink. Require every emitted `panel-wand-host.*` and `panel-wand-lifecycle.*` fact and the source's exact summary: 126 assertions across 30 panel/route/action combinations, and 32 assertions across eight lifecycle combinations. Host cases cover Levels, Hue/Saturation, and Exposure; layer and committed-composite sources; New, Add, Subtract, zero-offset closure, and nested history. Lifecycle cases cover cancellation, worker failure, equal-panel reopen, and panel Cancel for both source routes. Preserve the original selection/history/source and charge through acknowledgement, and keep Cancel's own receipt distinct.
+
+This owner's startup-only memory source supplies a fixed 16 GiB physical/commit snapshot for functional pixel,
+history and lifetime assertions. The conservative boolean plan includes maximum output/coexistence storage even
+for tiny fixture geometry; ambient host availability must not turn a required successful functional case into
+an admission refusal. The same actual host then uses a 2 GiB snapshot for six `panel-wand-admission-host.*`
+controls. Require original-receipt `Failed/E_OUTOFMEMORY`, a complete declaration exceeding capacity after the
+unchanged 1 GiB headroom, zero source captures, preserved selection/source/panel/history, and joined cleanup
+without a new reservation. This is deterministic policy coverage, not a claim about allocator capacity,
+physical peak/RSS, or the cause of an earlier run without admission-stage telemetry. Production OS sampling,
+the main Application's real memory source, complete reservations and refusal behavior remain unchanged.
 
 `Document.Tests.PanelWandFollowthrough` adds 28 `panel-wand-followthrough.*` assertions and its exact
 28-assertion/zero-failure summary. Both layer and detached-composite routes use a two-pixel literal red/blue

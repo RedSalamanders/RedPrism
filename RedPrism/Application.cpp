@@ -2714,12 +2714,6 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionMoveFollowupSelfTest\n");
     if (const int followup = RunSelectionMoveFollowupSelfTest(); followup != 0)
         return followup;
-    std::printf("BEGIN self-test.RunPanelWandHostSelfTest\n");
-    if (const int panelWand = RunPanelWandHostSelfTest(); panelWand != 0)
-        return panelWand;
-    std::printf("BEGIN self-test.RunPanelWandLifecycleSelfTest\n");
-    if (const int panelWandLifecycle = RunPanelWandLifecycleSelfTest(); panelWandLifecycle != 0)
-        return panelWandLifecycle;
     std::printf("BEGIN self-test.RunSelectionMoveHeaderSelfTest\n");
     if (const int header = RunSelectionMoveHeaderSelfTest(); header != 0)
         return header;

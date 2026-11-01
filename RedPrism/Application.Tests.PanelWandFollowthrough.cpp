@@ -4,6 +4,7 @@
 #include "Prompts.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.ColorWorkTestGate.h"
+#include "Runtime.Tests.WandLayerHostTestGate.h"
 #include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
@@ -56,8 +57,18 @@ bool FollowthroughPixels(const Raster& raster, const std::array<std::uint8_t, 8>
 
 int Application::RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance) noexcept
 {
+    // Functional pixel/history cases need a stable declared-capacity envelope, not ambient runner pressure.
+    // The final real-host control lowers only this fixture's snapshot and must refuse Add before capture.
+    std::uint64_t availableBytes = 16ULL << 30;
     ApplicationProcessingTestProbe processing;
     processing.workerCount = 2; // One real histogram callback may wait while the real Wand worker completes.
+    processing.memory = {[](void* raw, MemorySnapshot& snapshot) noexcept
+                         {
+                             const auto bytes = *static_cast<std::uint64_t*>(raw);
+                             snapshot = {bytes, bytes};
+                             return true;
+                         },
+                         &availableBytes};
     auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
     const auto cleanup = wil::scope_exit(
         [&]() noexcept
@@ -261,5 +272,89 @@ int Application::RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance)
                 return 5;
         }
     std::printf("panel-wand-followthrough-host.assertions=%d failures=0\n", assertions);
+
+    // Reuse this startup-only owner before the main Application acquires the scheduler/TLS retirement sink.
+    owner->CancelColorEditForTest();
+    if (!settle())
+        return 5;
+    std::printf("BEGIN self-test.RunPanelWandHostSelfTest\n");
+    if (const auto result = owner->RunPanelWandHostSelfTest(); result != 0)
+        return result;
+    std::printf("BEGIN self-test.RunPanelWandLifecycleSelfTest\n");
+    if (const auto result = owner->RunPanelWandLifecycleSelfTest(); result != 0)
+        return result;
+
+    owner->CancelColorEditForTest();
+    if (!settle())
+        return 5;
+    owner->_session.SetSelection(FollowthroughRect(0), L"Seed refused panel Wand Add");
+    owner->_session.history.Reset();
+    owner->_session.history.MarkSaved();
+    owner->_tool = EditorTool::Wand;
+    owner->_viewport.zoom = 1;
+    owner->_viewport.followsFit = false;
+    owner->_session.selectionModeChoice = SelectionMode::Add;
+    owner->_session.selectionAntialiased = false;
+    owner->_session.wandSettings = {};
+    owner->_session.wandSettings.tolerance = 0;
+    owner->_session.wandSettings.sampleSize = WandSampleSize::Point;
+    owner->_session.wandSettings.contiguous = true;
+    owner->_session.wandSettings.sampleAllLayers = false;
+    int admissionAssertions = 0;
+    const auto admission = [&](bool condition, const char* fact) noexcept
+    {
+        ++admissionAssertions;
+        std::printf("%s panel-wand-admission-host.%s\n", condition ? "PASS" : "FAIL", fact);
+        return condition;
+    };
+    if (!admission(owner->BeginColorEdit(ChromeHost::kCommandLevels) && settle() &&
+                       owner->_session.PendingColorEdit().has_value(),
+                   "literal-panel-opening-settled"))
+        return 5;
+    const auto opening = owner->_session.PendingColorEdit()->openingSequence;
+    const auto selection = owner->_session.Selection();
+    const auto source = owner->_session.ActiveLayer()->asset->image;
+    const auto revision = owner->_session.history.CurrentRevision();
+    const auto reserved = owner->_jobs.ReservedMemoryBytes();
+    auto gate = std::make_shared<WandLayerHostTestGate>();
+    gate->hold = false; // An unexpectedly admitted job must still finish and fail the refusal assertion.
+    owner->_wandLayerHostTestGate = gate;
+    availableBytes = 2ULL << 30;
+    const auto view = owner->_viewport.ViewFromDocument({1.5, 0.5}, owner->DocumentSize());
+    DxUi::PointerEvent pointer;
+    pointer.action = DxUi::PointerAction::Down;
+    owner->PressCanvas(pointer, WM_LBUTTONDOWN, view, POINT{42, 42});
+    const auto* pending =
+        owner->_hostRequests.Size() ? owner->_hostRequests.PendingAt(owner->_hostRequests.Size() - 1) : nullptr;
+    const auto receipt = pending ? pending->input.Receipt() : ContinuationReceipt::Failure(E_UNEXPECTED);
+    if (!admission(pending && receipt.Read().outcome == HostOutcome::Pending && owner->ColorControlsFrozen(),
+                   "physical-intent-admitted-before-memory-decision"))
+        return 5;
+    const auto settled = settle();
+    const auto observed = receipt.Read();
+    std::printf("INFO panel-wand-admission-host snapshot=%llu required=%llu captures=%u outcome=%u error=%08X\n",
+                static_cast<unsigned long long>(availableBytes),
+                static_cast<unsigned long long>(gate->reservationBytes), gate->captures.load(),
+                static_cast<unsigned int>(observed.outcome), static_cast<unsigned int>(observed.error));
+    if (!admission(settled && observed.outcome == HostOutcome::Failed && observed.error == E_OUTOFMEMORY,
+                   "insufficient-declared-capacity-fails-original-receipt"))
+        return 5;
+    if (!admission(gate->reservationBytes > availableBytes - kMemoryAdmissionHeadroomBytes &&
+                       gate->captures.load() == 0 && gate->visits.load() == 0,
+                   "complete-boolean-envelope-refused-before-source-capture"))
+        return 5;
+    if (!admission(owner->_session.Selection() == selection && owner->_session.ActiveLayer()->asset->image == source &&
+                       owner->_session.history.CurrentRevision() == revision &&
+                       owner->_session.history.UndoCount() == 0 && owner->_session.PendingColorEdit() &&
+                       owner->_session.PendingColorEdit()->openingSequence == opening,
+                   "refusal-preserves-selection-source-panel-and-history"))
+        return 5;
+    if (!admission(owner->_jobs.IsIdle() && owner->_jobs.ReservedMemoryBytes() == reserved &&
+                       !owner->_wandLayerHostTicket && !owner->_historyWork.Busy() &&
+                       owner->_hostRequests.Size() == 0 && !owner->_activeHostRequest,
+                   "refused-request-joins-without-new-reservation-or-live-work"))
+        return 5;
+    owner->_wandLayerHostTestGate.reset();
+    std::printf("panel-wand-admission-host.assertions=%d failures=0\n", admissionAssertions);
     return 0;
 }
