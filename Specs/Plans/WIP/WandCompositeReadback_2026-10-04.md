@@ -1,5 +1,7 @@
 # P1.3 — All Layers wand New-selection readback
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Latest receipts (r17–r21)
 
 - [x] Full x64 Release r19 passes on freeze `D8F949825F1769BF6A18FDFF5175D91CD9AE2E8A7C832CD319C9D469B5A45826`.

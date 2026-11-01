@@ -1,5 +1,7 @@
 # Private immutable layer and typed opacity host candidate
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Implementation checklist
 
 - [x] Preserve the reviewed Common, application, document suite and fixture source from the completed private archive.

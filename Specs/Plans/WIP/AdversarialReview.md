@@ -2,10 +2,12 @@
 
 > Publication note (2026-10-21): historical, non-normative static review of the paused
 > `97dd25b70e83f81c339a4b4e7e7b7589268f2510` snapshot, retained for follow-up triage.
-> Findings and line anchors below describe that snapshot; they have not been revalidated
-> against current `main` or the concurrent P1 integration. Source-traced labels are not
-> runtime reproduction, measured performance, or current release qualification. Reassess
-> each proposed fix against current contracts and tests before implementation.
+> Index status is **RETIRED** as a work queue. Findings and line anchors below describe
+> that snapshot. A 1 November 2026 check on `e79a83a` found `ComposeReadbackRows`,
+> `CenterCoverage`, `LoadZip`, and `SaveContents` still present at later lines, and found
+> `CompositionTests.cpp` and `HostTests.cpp` gone as single files. Do not patch from the
+> line numbers in this file. Source-traced labels are not runtime reproduction, measured
+> performance, or current release qualification.
 
 Date: 2026-10-16. Branch reviewed: `codex/ui-never-blocks-paused-2026-10-03`
 at HEAD `97dd25b`. Scope: Common/, RedPrism/, Tests/, build scripts,

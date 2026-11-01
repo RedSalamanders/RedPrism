@@ -23,14 +23,16 @@ Before a PR push, full coverage is required across local and CI execution. Deleg
 
 ## Original implementation sequence (superseded by resumed checklist)
 
-- [ ] Inventory active source files, test scopes, dependencies, desktop/network requirements and CI coverage.
-- [ ] Rename active native tests/helpers and reconcile all current callers; enforce naming.
-- [ ] Provide explainable affected/default iteration and explicit full/pre-push entrypoints.
-- [ ] Prove conservative fallback, rename/delete/untracked discovery, dependency fan-out and invalid selectors.
-- [ ] Prove unchanged reuse, source/binary/configuration/environment invalidation, failures and post-run mutations.
-- [ ] Align CI commands and pre-push delegation without weakening existing main/release gates.
-- [ ] Run focused tooling/scenario checks, applicable builds and noninteractive native tests; record unavailable/manual gates separately.
-- [ ] Persist durable requirements in the owning contract and agent guidance; close only after required qualification.
+Do not execute this list. The resumed checklist of 21 October 2026 replaced it. The unchecked boxes were the original sequence, not remaining work.
+
+- Superseded: inventory active source files, test scopes, dependencies, desktop/network requirements and CI coverage.
+- Superseded: rename active native tests and helpers and reconcile callers.
+- Superseded: explainable affected iteration and explicit full and pre-push entrypoints.
+- Superseded: conservative fallback, discovery, dependency fan-out and invalid selectors.
+- Superseded: unchanged reuse, invalidation, failures and post-run mutations.
+- Superseded: CI commands and pre-push delegation.
+- Superseded: focused tooling and noninteractive native tests, with manual gates recorded separately.
+- Superseded: durable requirements in the owning contract. Closeout still waits on the resumed checklist's native and CI qualification row.
 
 ## Qualification constraints
 

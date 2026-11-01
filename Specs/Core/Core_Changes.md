@@ -1,7 +1,7 @@
 # Changes workflow
 
 Status: normative repository workflow contract
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-01
 
 DxUi, RedSalamander, RedXe, RedPrism, RedTilde and RedMonitor use the same fragment format, commands and behavioral
 fixtures. Each repository owns its local changelog; changing one repository never updates a consumer's notes or
@@ -26,11 +26,14 @@ honored), missing `Changes/README.md`, and a missing or duplicate `## Unreleased
 renamed, and `CHANGELOG.md` must equal the exact fold `Fold-Changelog.ps1` would write of the fragments that the merge
 base holds and the checkout no longer has. Hand edits, entries folded from fragments the same change adds, edited,
 removed, reordered or duplicated entries, any other change outside the Unreleased entries, and fragments removed
-without their entry are refused; line endings never count. PrePush entrypoints run it with `-Base origin/main`. CI
-compares a pull request's merge commit with its first parent (`HEAD^1`, from a two-commit checkout) and a push with
-the tip it replaced (`github.event.before`, from a full-history checkout), so every commit of a multi-commit push is
-covered; repositories without PrePush run the same command before handoff. Existing
-validation/tooling entrypoints invoke it or its shared module. Explanation-only runs never mutate files.
+without their entry are refused; line endings never count. PrePush entrypoints run it with `-Base origin/main`.
+Compiler-free PR checks check out the exact PR head with full history and pass the immutable PR base SHA to
+`Tools/Invoke-ProjectCi.ps1 -Phase Static`, which runs `Tools/Test-Changelog.ps1 -Base <base SHA>`. Explicit
+exact-head PR rechecks resolve that same head/base pair before invoking the shared workflow. The validator
+compares the checkout with its merge base with the supplied base SHA. Main pushes invoke the quiet-window
+coordinator described in [Build_UnifiedCI.md](../Build/Build_UnifiedCI.md); they do not run a separate changelog
+comparison with `github.event.before`. Repositories without PrePush run the same validator before handoff.
+Existing validation/tooling entrypoints invoke it or its shared module. Explanation-only runs never mutate files.
 
 [`Tools/Fold-Changelog.ps1`](../../Tools/Fold-Changelog.ps1) validates all input before writing. It inserts entries
 under Unreleased in descending ordinal filename order (newest date first, topic breaking ties), preserves the

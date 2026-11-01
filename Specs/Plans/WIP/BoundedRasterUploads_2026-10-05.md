@@ -1,5 +1,7 @@
 # P1.9 H4 — Bounded raster uploads and first display
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Implementation checklist
 
 - [ ] U5 chrome: prepare immutable hierarchy rows/localized labels/ID lookup on a worker under complete metadata/source admission; preserve collapse/locale/source authority and atomically adopt. Qualify actual pinned DxUi notification/layout/accessibility costs and largest layer-count G1.

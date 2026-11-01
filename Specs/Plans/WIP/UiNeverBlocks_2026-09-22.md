@@ -3032,7 +3032,7 @@ ASan includes the extended 256-round concurrency stress and a real detection pro
 thumbnails and history. P0.3 removes redundant large allocations; it does not introduce the recoverable job
 boundary. P0.5/P0.6a and P1.1/P1.7 must replace those failure paths before G1/reliability closes.
 
-- **Status**: ACTIVE, P1 delivery milestone; the opening checklist is the current execution status.
+- **Status**: HOLD since 21 October 2026. The opening consolidation is the execution status. This footer previously said ACTIVE, which contradicted that hold.
 - **Planned at**: 2026-09-22; detailed survey and adversarial reviews on 2026-09-23. Split into P1 and P2–P6 on 2026-10-04 at the user's request.
-- **Pinned dependency**: DxUi `8e8994079e82f79e6765e6a885c03fc687957591`, API revision 3.
+- **Pinned dependency at the 21 October checkpoint**: DxUi `8e8994079e82f79e6765e6a885c03fc687957591`, API revision 3. On `main` `e79a83a` the lock is `a059e07c39c58cbf5218c34f7b9f1a9ac29baf3b`, still API revision 3 (`Dependencies/DxUi.lock.json`).
 - **Authority**: This is a non-normative execution record. Current behavior lives in the owning domain specs; durable requirements land there with implementation.

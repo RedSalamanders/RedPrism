@@ -1,6 +1,6 @@
 # P2–P6 — CPU/GPU acceleration, RAW and nondestructive development
 
-**Status: ACTIVE roadmap / queued after P1.** Current implementation priority is the
+**Status: HOLD, queued after P1.** Current implementation priority is the
 [P1 raster editor milestone](UiNeverBlocks_2026-09-22.md). The user already authorized implementation through
 P6, cheaper-agent delegation and commit/push after qualified steps; this split preserves that authorization.
 Open decisions still gate their named slices. This plan is non-normative and is not yet qualified.

@@ -1,5 +1,7 @@
 # Document lifecycle workers (P1.9 H1)
 
+> **HOLD** with [P1](UiNeverBlocks_2026-09-22.md) since 21 October 2026. Do not resume this file until that plan leaves HOLD. Checked boxes below are historical qualification, not permission to continue.
+
 ## Implementation checklist
 
 - [x] N1 — Prepare optional New/Close document/history publication primitives; all six native profiles qualify.
