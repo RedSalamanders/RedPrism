@@ -402,3 +402,14 @@ ProjectSaveMemoryBytes borrows this fixed-size projection in constant time befor
 Manifests identify this application with `format: "com.redprism.project"`. Loading requires that exact marker;
 other markers are rejected as an invalid format. Existing packages with a different marker require explicit
 conversion before loading. This naming change preserves the documented version range and field semantics.
+
+## Canonical project extension
+
+Project archive filenames use `.prism`. Suffix detection compares it case-insensitively and derives the suffix
+length from the complete extension. Missing names with that suffix route to project loading; a longer suffix
+such as `.prism.png` does not. Open/Save project filters, the Save default extension, and the initial project
+name use the same extension.
+
+Renaming an existing archive changes only its filename. The ZIP layout, `com.redprism.project` marker,
+supported manifest versions and image encodings are unchanged. Existing ZIP files remain discoverable by their
+signature independently of their suffix. Exploded project directories retain folder saves.

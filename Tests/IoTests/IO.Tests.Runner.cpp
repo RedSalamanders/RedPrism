@@ -1086,6 +1086,16 @@ void TestProjectAggregatePixelBudget()
 }
 void TestExplodedGolden()
 {
+    // The suffix alone classifies missing projects; an existing ZIP would hide a suffix-length regression.
+    const std::wstring missingProjectPrefix = ScratchRoot() + L"\\missing-extension-" + Guid::Generate().ToString();
+    Expect(PathLooksLikeZipProject((missingProjectPrefix + L".prism").c_str()), "project-extension.missing-lowercase");
+    Expect(PathLooksLikeZipProject((missingProjectPrefix + L".PRISM").c_str()), "project-extension.missing-uppercase");
+    Expect(PathLooksLikeZipProject((missingProjectPrefix + L".PrIsM").c_str()), "project-extension.missing-mixed-case");
+    Expect(!PathLooksLikeZipProject((missingProjectPrefix + L".prism.png").c_str()),
+           "project-extension.requires-final-suffix");
+    Expect(!PathLooksLikeZipProject((missingProjectPrefix + L".pris").c_str()),
+           "project-extension.rejects-short-prefix");
+
     const std::wstring fixture = MaterializeV7Fixture();
     const ProjectLoadResult loaded = LoadProject(fixture.c_str());
     std::printf("     fixture -> status %d\n", static_cast<int>(loaded.status));

@@ -537,8 +537,9 @@ int Application::RunProjectSaveSelfTest() noexcept
         _projectSaveTestGate->throwAllocationFailure = mode == Mode::Allocation;
         _projectSaveTestGate->throwAdmissionFailure = mode == Mode::Admission;
         const std::wstring output =
-            mode == Mode::PathBudget ? L"C:\\" + std::wstring(32635, L'a')
-                                     : (root / (std::to_wstring(static_cast<unsigned int>(mode)) + L".prism")).wstring();
+            mode == Mode::PathBudget
+                ? L"C:\\" + std::wstring(32635, L'a')
+                : (root / (std::to_wstring(static_cast<unsigned int>(mode)) + L".prism")).wstring();
         const bool close = mode == Mode::CancelClosePublished;
         _documentPath = close ? output : L"before-save.prism";
         _forcedDiscardAnswer = Prompts::Answer::First;
