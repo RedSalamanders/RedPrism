@@ -1,0 +1,1 @@
+- Preserve retryable device recovery when an owner stops an attached command source before recording begins. Return `E_ABORT` for that valid stopped producer while keeping invalid inputs strict, with controlled pre-start coverage and the original two-restart, one-capture and joined-retirement bounds.

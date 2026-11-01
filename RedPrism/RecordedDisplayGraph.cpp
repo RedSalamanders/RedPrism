@@ -64,8 +64,11 @@ HRESULT RecordedDisplayGraph::PrepareAdjustmentForWork(ID3D11Device* device, Can
                                                        GpuCommandStream& stream, CancelToken cancellation,
                                                        const RecordedDisplayGraph* publishedSeed) noexcept
 {
-    if (IsOwner() || _phase != Phase::Empty || !device || !stream.CanRecordForWork())
+    if (IsOwner() || _phase != Phase::Empty || !device)
         return E_INVALIDARG; // Refuse the owner before any metadata traversal or settings validation.
+    const HRESULT recordingStatus = stream.RecordingStatusForWork();
+    if (FAILED(recordingStatus))
+        return recordingStatus;
     if (cancellation.IsCancelled())
         return E_ABORT;
     if (!std::isfinite(preview.previewScale) || !(preview.previewScale > 0 && preview.previewScale <= 1) ||
@@ -115,8 +118,11 @@ HRESULT RecordedDisplayGraph::PrepareInternalForWork(ID3D11Device* device, Canva
                                                      std::span<const RasterTile> tiles,
                                                      const CanvasRenderer::AdjustmentPreview* adjustment) noexcept
 {
-    if (IsOwner() || _phase != Phase::Empty || !device || !stream.CanRecordForWork())
+    if (IsOwner() || _phase != Phase::Empty || !device)
         return E_INVALIDARG;
+    const HRESULT recordingStatus = stream.RecordingStatusForWork();
+    if (FAILED(recordingStatus))
+        return recordingStatus;
     if (cancellation.IsCancelled())
         return E_ABORT;
     if (preview && preview->pixelSource && (!tiles.empty() || !RecordedPixelPreviewMatchesForWork(source, *preview)))

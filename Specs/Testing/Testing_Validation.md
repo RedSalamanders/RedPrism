@@ -1654,8 +1654,13 @@ They retain literal source pixels and Undo/Redo expectations, verify view input 
 capture/ticket/charge, no hidden Present, and full off-owner aggregate and reservation retirement. The live
 sample case checks bound SharedPublicationMemory with no second lease: the original admission remains charged
 after the utility job retires. Recorded recovery prepares once per actual graph attempt, so one rebind requires
-two preparations and exhausting two restarts requires three. Before-copy faults hold a real private source;
-pixel/history expectations and the original two-restart limit are unchanged. Timing and
+two preparations and exhausting two restarts requires three. Before-copy faults hold a real private source.
+The command-pump Composition control also stops an actual attached source before resuming its original recorder.
+Require retryable `E_ABORT` from recording-policy, utility and display entry, while uninitialized recording inputs
+remain `E_INVALIDARG`. No upload or command executes; the original live token, independent compute progress,
+exact zero GPU acknowledgements, held charge and joined worker retirement remain required. This deterministic
+ordering control complements the unchanged Clone recovery/restart-limit cases; it asserts no latency target.
+Pixel/history expectations and the original two-restart limit are unchanged. Timing and
 other live-context callers remain separate P1 requirements. Sampler transparent-tail failure diagnostics
 report actual receipt, slot/sequence/color and foreground values without changing its literal expectation.
 Three additional actual pointer cases start a separate physical Space pan after the original Clone producer

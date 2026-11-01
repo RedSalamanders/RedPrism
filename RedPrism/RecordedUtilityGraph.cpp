@@ -31,8 +31,11 @@ bool RecordedUtilityGraph::ValidRegion(D3D11_BOX region) const noexcept
 HRESULT RecordedUtilityGraph::PrepareForWork(ID3D11Device* device, CanvasDocument source, D3D11_BOX region,
                                              GpuCommandStream& original, CancelToken cancellation) noexcept
 {
-    if (!_ownerThread || IsOwner() || _phase != Phase::Empty || !device || !original.CanRecordForWork())
+    if (!_ownerThread || IsOwner() || _phase != Phase::Empty || !device)
         return E_INVALIDARG;
+    const HRESULT recordingStatus = original.RecordingStatusForWork();
+    if (FAILED(recordingStatus))
+        return recordingStatus;
     if (cancellation.IsCancelled())
         return E_ABORT;
     // Concurrent creation is checked before acquiring a device/resource prefix. Unsupported creation refuses.
@@ -81,9 +84,11 @@ HRESULT RecordedUtilityGraph::RecordRegionForWork(D3D11_BOX region) noexcept
 HRESULT RecordedUtilityGraph::RecordNextForWork(D3D11_BOX region, GpuCommandStream& original,
                                                 CancelToken cancellation) noexcept
 {
-    if (IsOwner() || _phase != Phase::Excluded || &original != _originalStream || !ValidRegion(region) || !_recording ||
-        !original.CanRecordForWork())
+    if (IsOwner() || _phase != Phase::Excluded || &original != _originalStream || !ValidRegion(region) || !_recording)
         return E_INVALIDARG;
+    const HRESULT recordingStatus = original.RecordingStatusForWork();
+    if (FAILED(recordingStatus))
+        return recordingStatus;
     // Retain shaders and require the next epoch of the original acknowledged stream.
     const HRESULT result = _recording->RestartForWork(_deferred.get(), original, cancellation);
     if (FAILED(result))

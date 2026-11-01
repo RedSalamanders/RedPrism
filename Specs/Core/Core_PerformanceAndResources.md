@@ -1410,6 +1410,15 @@ Stopped, failed, foreign, unjoined or exhausted streams refuse. An old command l
 command occupying the same physical slot. This API does not establish GPU completion or permit reusing a
 device generation after replacement.
 
+Recording eligibility preserves the distinction between an invalid caller/phase and an owner stop of a valid
+live producer. `GpuCommandStream::RecordingStatusForWork` returns `E_INVALIDARG` for uninitialized, owner-thread,
+finished or retirement-authorized use, and `E_ABORT` for a live producer whose existing stop event is signalled.
+Private recording-policy initialization/restart and utility/display graph entry propagate that reason before
+acquiring a resource prefix. Device replacement may stop a source before its recorder starts; this remains
+retryable under the original parent's existing two-restart bound, ticket, capture, charge and joined retirement.
+Do not turn arbitrary invalid arguments into recovery. The Boolean readiness query retains the same eligibility
+and probes the same existing atomics and event; this adds no queue, event, wait, allocation or polling loop.
+
 
 ### Shared recorder startup cost
 

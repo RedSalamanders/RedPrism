@@ -3,6 +3,9 @@
 #include "GpuCommandPump.h"
 #include "GpuRecordingCommands.h"
 #include "OwnerWorkMultiplexer.h"
+#include "RecordedDisplayGraph.h"
+#include "RecordedUtilityGraph.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <atomic>
 #include <cstdio>
@@ -67,6 +70,14 @@ struct State final : GpuCommandSourceReceiver
     bool exactJoinedSource = false;
     bool wrapperDestroyed = false;
     bool joinedHookReturned = false;
+    bool stopBeforeRecord = false;
+    HRESULT stoppedPolicy = E_PENDING;
+    HRESULT stoppedUtility = E_PENDING;
+    HRESULT stoppedDisplay = E_PENDING;
+    HRESULT uninitializedPolicy = E_PENDING;
+    HRESULT uninitializedUtility = E_PENDING;
+    bool stoppedGraphsRetired = false;
+    std::uint64_t stoppedUploads = 0;
     JobResult result;
     std::atomic<bool> retired{false};
     void CommandAcknowledgedOwner(JobTicket ticket, GpuCommandLease command, HRESULT status) noexcept override
@@ -123,6 +134,31 @@ class Recorder final : public Job
         wil::com_ptr_nothrow<ID3D11DeviceContext> deferred;
         HRESULT result = _state.device.CreateDeferredContext(0, deferred.put());
         GpuRecordingCommands policy;
+        if (SUCCEEDED(result) && _state.stopBeforeRecord)
+        {
+            _state.recordingTokenLive = !context.cancellation.IsCancelled();
+            DocumentFixture fixture;
+            fixture.id = Guid::Generate();
+            fixture.width = fixture.height = 1;
+            fixture.layers.push_back(ImageLayer::Blank(L"Stopped recorder source", {1, 1}));
+            const auto document = std::move(fixture).Seal();
+            const D3D11_BOX region{0, 0, 0, 1, 1, 1};
+            RecordedUtilityGraph utility(_state.ownerThread);
+            RecordedDisplayGraph display(_state.ownerThread);
+            _state.stoppedPolicy = policy.InitializeForWork(deferred.get(), _state.stream, context.cancellation);
+            _state.stoppedUtility = utility.PrepareForWork(&_state.device, document, region, _state.stream, {});
+            _state.stoppedDisplay = display.PrepareForWork(&_state.device, document, _state.stream, {});
+            _state.stoppedUploads = utility.RecordedUploadBytesForWork();
+            _state.stoppedGraphsRetired = utility.RetireUnpublishedForWork() && display.RetireUnpublishedForWork();
+            GpuCommandStream uninitialized;
+            GpuRecordingCommands invalidPolicy;
+            RecordedUtilityGraph invalidUtility(_state.ownerThread);
+            _state.uninitializedPolicy = invalidPolicy.InitializeForWork(deferred.get(), uninitialized);
+            _state.uninitializedUtility =
+                invalidUtility.PrepareForWork(&_state.device, document, region, uninitialized, {});
+            _state.stoppedGraphsRetired = invalidUtility.RetireUnpublishedForWork() && _state.stoppedGraphsRetired;
+            return {JobStatus::Failed, E_ABORT}; // The actual owner already stopped this original source.
+        }
         if (SUCCEEDED(result) && _state.disposition == GpuCommandFailureDisposition::RetainOriginalForRecovery)
         {
             result = policy.InitializeForWork(deferred.get(), _state.stream, context.cancellation);
@@ -186,13 +222,33 @@ class Recorder final : public Job
                            !_state.pump.AcknowledgeSourceJoinedShutdownOwner(_state.source),
                        "ordinary-successful-opening-cannot-acknowledge-a-joined-close-source");
             _state.stage = State::Stage::Record;
+            if (_state.stopBeforeRecord)
+                _state.pump.DeviceChangedOwner(); // Signal the real source stop before the recorder can run.
             Expect(_state.scheduler.Resume(ticket), "recording-resumes-same-original-ticket");
             return true;
         }
         if (_state.stage == State::Stage::Record)
         {
             _state.recorderJoined = true;
-            if (_state.disposition == GpuCommandFailureDisposition::RetainOriginalForRecovery)
+            if (_state.stopBeforeRecord)
+            {
+                std::printf("INFO recording-pump-before-record policy=%08X utility=%08X display=%08X "
+                            "uninitialized-policy=%08X uninitialized-utility=%08X uploads=%llu\n",
+                            static_cast<unsigned int>(_state.stoppedPolicy),
+                            static_cast<unsigned int>(_state.stoppedUtility),
+                            static_cast<unsigned int>(_state.stoppedDisplay),
+                            static_cast<unsigned int>(_state.uninitializedPolicy),
+                            static_cast<unsigned int>(_state.uninitializedUtility),
+                            static_cast<unsigned long long>(_state.stoppedUploads));
+                Expect(_state.stoppedPolicy == E_ABORT, "stop-before-recording-policy-is-retryable-abort");
+                Expect(_state.stoppedUtility == E_ABORT, "stop-before-recording-utility-is-retryable-abort");
+                Expect(_state.stoppedDisplay == E_ABORT, "stop-before-recording-display-is-retryable-abort");
+                Expect(_state.uninitializedPolicy == E_INVALIDARG && _state.uninitializedUtility == E_INVALIDARG,
+                       "uninitialized-recording-inputs-remain-invalid-arguments");
+                Expect(_state.stoppedGraphsRetired && _state.stoppedUploads == 0 && _state.recordingTokenLive,
+                       "stop-before-recording-acquires-no-upload-and-keeps-original-live-token");
+            }
+            else if (_state.disposition == GpuCommandFailureDisposition::RetainOriginalForRecovery)
             {
                 Expect(_state.policyInitialized, "private-policy-initializes-on-original-live-record");
                 Expect(_state.policyStopped && _state.recordingTokenLive,
@@ -288,7 +344,7 @@ template <typename Predicate> bool Until(JobScheduler& scheduler, Predicate read
 }
 
 void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool retainOriginal = false,
-         bool userCancellation = false, bool joinedSource = false)
+         bool userCancellation = false, bool joinedSource = false, bool stopBeforeRecord = false)
 {
     recoveryCase = retainOriginal;
     joinedSourceCase = joinedSource;
@@ -348,6 +404,7 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool ret
     }
     State state{scheduler, pump, *(foreignDevice ? recordedDevice.get() : device.get()), queue.DeviceGeneration()};
     state.testJoinedSource = joinedSource;
+    state.stopBeforeRecord = stopBeforeRecord;
     state.disposition = retainOriginal ? GpuCommandFailureDisposition::RetainOriginalForRecovery
                                        : GpuCommandFailureDisposition::CancelOriginal;
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -417,7 +474,7 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool ret
     if (FAILED(admitted))
         return;
     // The registered owner router executes batches and drains their real original completion events.
-    const bool fails = failFirst || foreignDevice;
+    const bool fails = failFirst || foreignDevice || stopBeforeRecord;
     const bool joined =
         Until(scheduler,
               [&]() { return state.recorderJoined && (fails ? state.failures == 1 : state.acknowledgements == 3); });
@@ -449,9 +506,9 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool ret
     }
     Expect(Until(scheduler, [&]() { return state.stream.CanRetireOwner(); }),
            "all-submitted-uses-resolve-before-retirement");
-    Expect(state.acknowledgements == (foreignDevice ? 0u
-                                      : failFirst   ? 1u
-                                                    : 3u),
+    Expect(state.acknowledgements == (foreignDevice || stopBeforeRecord ? 0u
+                                      : failFirst                       ? 1u
+                                                                        : 3u),
            "exact-original-acknowledgement-count");
     if (foreignDevice)
         Expect(state.failure == E_INVALIDARG && state.failures == 1 && state.acknowledgements == 0,
@@ -496,5 +553,6 @@ int RunGpuCommandPumpTests()
     Run(true, false, false, true, true);
     Run(true, true, false, true);
     Run(true, true, false, true, false, true);
+    Run(false, false, false, true, false, false, true);
     return gFailures;
 }

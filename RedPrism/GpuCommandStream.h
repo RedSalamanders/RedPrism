@@ -51,6 +51,9 @@ class GpuCommandStream final
                                           const GpuCompletionContext& current) noexcept;
     // One producer only. Capacity blocks this dedicated recorder on events, never the general compute pool.
     [[nodiscard]] bool CanRecordForWork() const noexcept;
+    // Same readiness probe with a reason: a valid live producer stopped by its owner returns E_ABORT.
+    // Uninitialized, owner-thread, finished or retirement-authorized use remains E_INVALIDARG.
+    [[nodiscard]] HRESULT RecordingStatusForWork() const noexcept;
     // Fresh private recording stage only; the original joined RestartOwner advances this epoch.
     [[nodiscard]] std::uint64_t ProductionEpochForWork() const noexcept;
     [[nodiscard]] bool BelongsToOwner(const JobScheduler& scheduler, JobTicket source,

@@ -64,8 +64,15 @@ bool GpuCommandStream::IsStopped() const noexcept
 
 bool GpuCommandStream::CanRecordForWork() const noexcept
 {
-    return _scheduler && !IsOwner() && !_finished.load(std::memory_order_acquire) &&
-           !_retirementAuthorized.load(std::memory_order_acquire) && !IsStopped();
+    return SUCCEEDED(RecordingStatusForWork());
+}
+
+HRESULT GpuCommandStream::RecordingStatusForWork() const noexcept
+{
+    if (!_scheduler || IsOwner() || _finished.load(std::memory_order_acquire) ||
+        _retirementAuthorized.load(std::memory_order_acquire))
+        return E_INVALIDARG;
+    return IsStopped() ? E_ABORT : S_OK;
 }
 
 std::uint64_t GpuCommandStream::ProductionEpochForWork() const noexcept

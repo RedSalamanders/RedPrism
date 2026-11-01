@@ -156,8 +156,11 @@ bool OnDevice(ID3D11Resource* resource, ID3D11Device* expected) noexcept
 HRESULT GpuRecordingCommands::InitializeForWork(ID3D11DeviceContext* context, GpuCommandStream& stream,
                                                 CancelToken cancellation) noexcept
 {
-    if (_stream || !stream.CanRecordForWork() || !context || context->GetType() != D3D11_DEVICE_CONTEXT_DEFERRED)
+    if (_stream || !context || context->GetType() != D3D11_DEVICE_CONTEXT_DEFERRED)
         return E_INVALIDARG;
+    const HRESULT recordingStatus = stream.RecordingStatusForWork();
+    if (FAILED(recordingStatus))
+        return recordingStatus;
     if (cancellation.IsCancelled())
         return E_ABORT;
     _workerThread = GetCurrentThreadId();
@@ -212,8 +215,11 @@ HRESULT GpuRecordingCommands::RestartForWork(ID3D11DeviceContext* context, GpuCo
                                              CancelToken cancellation) noexcept
 {
     if (_stream != &original || !_context || !_device || _result != S_OK ||
-        context != static_cast<ID3D11DeviceContext*>(_context.get()) || !original.CanRecordForWork())
+        context != static_cast<ID3D11DeviceContext*>(_context.get()))
         return E_INVALIDARG;
+    const HRESULT recordingStatus = original.RecordingStatusForWork();
+    if (FAILED(recordingStatus))
+        return recordingStatus;
     if (cancellation.IsCancelled())
         return E_ABORT;
     if (_productionEpoch == (std::numeric_limits<std::uint64_t>::max)())
