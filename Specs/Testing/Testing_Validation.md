@@ -2519,6 +2519,15 @@ detects null-window scopes accepting a second open that invalidates the first cl
 render, source-sequence, fallback and cancellation checks remain unchanged. Failure diagnostics retain the
 native call, format and immediate error before cleanup; they never renew a source token or alter retry policy.
 
+The delayed-render producer reports successful readiness only from its owned window's dispatched startup
+message, after clipboard installation. A preparation event and separate pump-release event let the first
+scenario prove that installation alone has not signalled readiness while dispatch is held, then require exactly
+one actual startup dispatch before the deliberate early read. These two controls bring the delayed suite to 47
+checks and preserve all original 45 assertions. Keep the native early-read condition, worker-only render gate,
+literal foreign pixels, history, cancellation, source preservation, shutdown and joined retirement unchanged.
+Early-read diagnostics retain the immediate native error, returned-handle presence, owner/opener identity,
+sequence, worker flag and render counters. Event deadlines detect failure and assert no timing target.
+
 ### P1 worker upload and image-wrapper residency foundations
 
 `RasterUploadWorkTests` requires 73 literal pitched-row/crop/guard/invalid/sparse/cancellation controls.

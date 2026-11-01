@@ -1,0 +1,1 @@
+- Wait for the delayed-clipboard test producer's actual message dispatch before its native early read. Add event-controlled startup checks and immediate read diagnostics while preserving all original clipboard, pixel, history, cancellation and retirement assertions.

@@ -17,6 +17,7 @@
 namespace
 {
 constexpr UINT kRenderEnteredMessage = WM_APP + 56;
+constexpr UINT kProducerReadyMessage = WM_APP + 57;
 constexpr wchar_t kProducerClass[] = L"RedPrismClipboardHostDelayedProducer";
 constexpr std::array<std::uint8_t, 44> kDib{40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 32, 0, 0, 0, 0,  0,  4,  0,
                                             0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0, 0, 17, 33, 65, 255};
@@ -27,6 +28,8 @@ constexpr std::array<std::uint8_t, 44> kDib{40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
 struct DelayedClipboard final
 {
     wil::unique_handle ready{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    wil::unique_handle prepared{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    wil::unique_handle startPump{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     DWORD ownerThread = 0;
     std::shared_ptr<ClipboardWorkTestGate> gate;
@@ -35,6 +38,7 @@ struct DelayedClipboard final
     std::atomic<bool> installed{false}, rendered{false};
     std::atomic<unsigned int> renders{0};
     std::atomic<unsigned int> unrelatedReads{0};
+    std::atomic<unsigned int> readyDispatches{0};
     std::atomic<ULONGLONG> enteredAt{0}, releasedAt{0}, completedAt{0};
     std::atomic<DWORD> releaseWait{WAIT_FAILED}, publicationError{ERROR_SUCCESS};
 };
@@ -66,6 +70,12 @@ LRESULT CALLBACK ProducerProc(HWND window, UINT message, WPARAM wParam, LPARAM l
     {
         producer = static_cast<DelayedClipboard*>(reinterpret_cast<const CREATESTRUCTW*>(lParam)->lpCreateParams);
         SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(producer));
+    }
+    if (message == kProducerReadyMessage && producer)
+    {
+        producer->readyDispatches.fetch_add(1);
+        (void)SetEvent(producer->ready.get());
+        return 0;
     }
     if (message == WM_RENDERFORMAT && producer && wParam == CF_DIB)
     {
@@ -126,6 +136,7 @@ DWORD WINAPI ProducerMain(void* raw) noexcept
     if (!registered && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
     {
         (void)SetEvent(producer.ready.get());
+        (void)SetEvent(producer.prepared.get());
         return 1;
     }
     auto unregister = wil::scope_exit(
@@ -146,9 +157,18 @@ DWORD WINAPI ProducerMain(void* raw) noexcept
         const bool closed = CloseClipboard() != FALSE;
         producer.installed.store(offered && closed);
     }
-    (void)SetEvent(producer.ready.get());
+    (void)SetEvent(producer.prepared.get());
     if (!window)
+    {
+        (void)SetEvent(producer.ready.get());
         return 1;
+    }
+    if (!PostMessageW(window.get(), kProducerReadyMessage, 0, 0) ||
+        WaitForSingleObject(producer.startPump.get(), 15000) != WAIT_OBJECT_0)
+    {
+        (void)SetEvent(producer.ready.get());
+        return 1;
+    }
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
     {
@@ -356,7 +376,7 @@ int Application::RunClipboardDelayedSelfTest() noexcept
         DelayedClipboard producer;
         producer.ownerThread = GetCurrentThreadId();
         producer.gate = gate;
-        if (!producer.ready || !producer.release)
+        if (!producer.ready || !producer.prepared || !producer.startPump || !producer.release)
             return 5;
         wil::unique_handle producerThread(CreateThread(nullptr, 0, ProducerMain, &producer, 0, nullptr));
         if (!producerThread)
@@ -365,17 +385,30 @@ int Application::RunClipboardDelayedSelfTest() noexcept
             [&]() noexcept
             {
                 (void)SetEvent(producer.release.get());
+                (void)SetEvent(producer.startPump.get());
                 if (const HWND window = producer.window.load())
                     (void)PostMessageW(window, WM_CLOSE, 0, 0);
                 else if (const DWORD thread = producer.thread.load())
                     (void)PostThreadMessageW(thread, WM_QUIT, 0, 0);
                 JoinClipboardThread(producerThread.get());
             });
+        if (WaitForSingleObject(producer.prepared.get(), 15000) != WAIT_OBJECT_0)
+            std::_Exit(5);
+        if (scenario.action == Action::Paste && scenario.mode == Mode::Success)
+            expect(WaitForSingleObject(producer.ready.get(), 0) == WAIT_TIMEOUT &&
+                       producer.readyDispatches.load() == 0 && !gate->workerDibRead.load() &&
+                       producer.renders.load() == 0,
+                   scenario.name, "producer-not-ready-while-message-pump-held");
+        (void)SetEvent(producer.startPump.get());
         if (WaitForSingleObject(producer.ready.get(), 15000) != WAIT_OBJECT_0)
             std::_Exit(5);
-        if (!producer.installed.load())
+        if (scenario.action == Action::Paste && scenario.mode == Mode::Success)
+            expect(producer.readyDispatches.load() == 1, scenario.name, "producer-ready-after-owned-message-dispatch");
+        if (!producer.installed.load() || producer.readyDispatches.load() != 1)
         {
-            std::printf("FAIL clipboard-delayed.%s.producer-install\n", scenario.name);
+            std::printf("FAIL clipboard-delayed.%s.producer-install installed=%u pump=%u window=%u\n", scenario.name,
+                        producer.installed.load() ? 1u : 0u, producer.readyDispatches.load(),
+                        producer.window.load() ? 1u : 0u);
             return 5;
         }
         if (scenario.action == Action::Paste && scenario.mode == Mode::Success)
@@ -383,7 +416,20 @@ int Application::RunClipboardDelayedSelfTest() noexcept
             if (!OpenProducer(_window.get()))
                 return 5;
             const auto close = wil::scope_exit([]() noexcept { (void)CloseClipboard(); });
+            const auto sequenceBefore = GetClipboardSequenceNumber();
+            const bool ownerMatches = GetClipboardOwner() == producer.window.load();
+            const bool openerMatches = GetOpenClipboardWindow() == _window.get();
+            const bool workerBefore = gate->workerDibRead.load();
+            const auto unrelatedBefore = producer.unrelatedReads.load();
+            SetLastError(ERROR_SUCCESS);
             const auto early = GetClipboardData(CF_DIB);
+            const DWORD earlyError = GetLastError();
+            std::printf("INFO clipboard-delayed.early handle=%u error=%lu owner=%u opener=%u sequence=%lu,%lu "
+                        "worker=%u,%u unrelated=%u,%u renders=%u pump=%u\n",
+                        early ? 1u : 0u, earlyError, ownerMatches ? 1u : 0u, openerMatches ? 1u : 0u, sequenceBefore,
+                        GetClipboardSequenceNumber(), workerBefore ? 1u : 0u, gate->workerDibRead.load() ? 1u : 0u,
+                        unrelatedBefore, producer.unrelatedReads.load(), producer.renders.load(),
+                        producer.readyDispatches.load());
             expect(!early && producer.unrelatedReads.load() != 0 && producer.renders.load() == 0, scenario.name,
                    "unrelated-read-before-worker-cannot-enter-event-gate");
             expect(IsClipboardFormatAvailable(CF_DIB) != FALSE, scenario.name,
