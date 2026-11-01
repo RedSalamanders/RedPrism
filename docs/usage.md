@@ -132,3 +132,6 @@ offers to open the folder. Nothing is sent anywhere; the newest ten reports are 
 A translated string table goes to `<RedPrism folder>\Languages\<tag>\RedPrism.resources.dll` (a resource-only
 DLL built from `RedPrism/RedPrism.rc` with the same ids); the `language` setting or Windows' display language
 picks it, and any missing string falls back to English.
+
+Project manifests use the format marker `com.redprism.project`. Packages written with a different marker require
+explicit conversion before this version can open them. The supported manifest versions and package layout are unchanged.

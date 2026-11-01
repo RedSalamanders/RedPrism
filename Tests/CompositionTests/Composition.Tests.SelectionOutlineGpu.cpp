@@ -300,7 +300,7 @@ int RunSelectionOutlineGpuTests()
                                CreateTarget(device.get(), 256, 256, {17, 34, 51, 85}, phaseTarget);
         const HRESULT result =
             resources ? composition.DrawSelectionOutlineToTarget(phaseTarget.view.get(), 256, 256, solidMask.view.get(),
-                                                                phaseMask.view.get(), 256, 256, 0, 0)
+                                                                 phaseMask.view.get(), 256, 256, 0, 0)
                       : E_FAIL;
         Expect(result == S_OK, name.data(), "actual-draw");
         Expect(result == S_OK &&
@@ -329,7 +329,7 @@ int RunSelectionOutlineGpuTests()
             const HRESULT result =
                 CreateTarget(device.get(), 256, 256, bases[baseIndex], clippedTarget)
                     ? composition.DrawSelectionOutlineToTarget(clippedTarget.view.get(), 256, 256, solidMask.view.get(),
-                                                              dashMask.view.get(), 256, 256, 0, 0, &clip)
+                                                               dashMask.view.get(), 256, 256, 0, 0, &clip)
                     : E_FAIL;
             std::array<char, 32> name{};
             std::snprintf(name.data(), name.size(), "clip-%zu-base-%zu", clipIndex, baseIndex);
@@ -337,7 +337,8 @@ int RunSelectionOutlineGpuTests()
             Expect(result == S_OK && ReadMatches(device.get(), context.get(), clippedTarget, bases[baseIndex], 256, 256,
                                                  solid, dash, 0, 0, &quarters),
                    name.data(), "independent-quarter-pixel-composite-clip-tolerance-one-unorm");
-            Expect(composition.CompositeCount() == compositeCount && composition.UtilityCompositeCount() == utilityCount,
+            Expect(composition.CompositeCount() == compositeCount &&
+                       composition.UtilityCompositeCount() == utilityCount,
                    name.data(), "no-document-or-utility-composition");
             Expect(BorrowedInputsRetired(context.get()), name.data(), "mask-srvs-and-blend-unbound");
         }
@@ -354,8 +355,8 @@ int RunSelectionOutlineGpuTests()
             std::array<char, 32> name{};
             std::snprintf(name.data(), name.size(), "clip-invalid-%zu", index);
             Expect(composition.DrawSelectionOutlineToTarget(guardTarget.view.get(), 8, 8, solidMask.view.get(),
-                                                           dashMask.view.get(), 256, 256, 0, 0,
-                                                           &invalidClips[index]) == E_INVALIDARG,
+                                                            dashMask.view.get(), 256, 256, 0, 0,
+                                                            &invalidClips[index]) == E_INVALIDARG,
                    name.data(), "refuses-before-recording");
         }
     }
@@ -368,7 +369,7 @@ int RunSelectionOutlineGpuTests()
         const auto draw = [&](unsigned int width, unsigned int height, float left, float top) noexcept
         {
             return composition.DrawSelectionOutlineToTarget(target.view.get(), 8, 8, solidMask.view.get(),
-                                                           dashMask.view.get(), width, height, left, top);
+                                                            dashMask.view.get(), width, height, left, top);
         };
         Expect(draw(0, 256, 0, 0) == E_INVALIDARG && draw(256, 0, 0, 0) == E_INVALIDARG, "guards", "zero-mask-refuses");
         Expect(draw(16385, 1, 0, 0) == E_INVALIDARG && draw(16384, 16384, 0, 0) == E_INVALIDARG, "guards",
@@ -379,19 +380,19 @@ int RunSelectionOutlineGpuTests()
                    draw(256, 256, 0, std::numeric_limits<float>::quiet_NaN()) == E_INVALIDARG,
                "guards", "non-finite-grid-origin-refuses");
         Expect(composition.DrawSelectionOutlineToTarget(nullptr, 8, 8, solidMask.view.get(), dashMask.view.get(), 256,
-                                                       256, 0, 0) == S_FALSE &&
+                                                        256, 0, 0) == S_FALSE &&
                    composition.DrawSelectionOutlineToTarget(target.view.get(), 8, 8, nullptr, dashMask.view.get(), 256,
-                                                           256, 0, 0) == S_FALSE &&
+                                                            256, 0, 0) == S_FALSE &&
                    composition.DrawSelectionOutlineToTarget(target.view.get(), 8, 8, solidMask.view.get(), nullptr, 256,
-                                                           256, 0, 0) == S_FALSE,
+                                                            256, 0, 0) == S_FALSE,
                "guards", "incomplete-input-is-noop");
         Expect(composition.DrawSelectionOutlineToTarget(target.view.get(), 16385, 8, solidMask.view.get(),
-                                                       dashMask.view.get(), 256, 256, 0, 0) == E_INVALIDARG &&
+                                                        dashMask.view.get(), 256, 256, 0, 0) == E_INVALIDARG &&
                    composition.DrawSelectionOutlineToTarget(target.view.get(), 8, 16385, solidMask.view.get(),
-                                                           dashMask.view.get(), 256, 256, 0, 0) == E_INVALIDARG,
+                                                            dashMask.view.get(), 256, 256, 0, 0) == E_INVALIDARG,
                "guards", "oversized-target-grid-refuses");
         Expect(composition.DrawSelectionOutlineToTarget(target.view.get(), 0, 8, solidMask.view.get(),
-                                                       dashMask.view.get(), 256, 256, 0, 0) == S_FALSE,
+                                                        dashMask.view.get(), 256, 256, 0, 0) == S_FALSE,
                "guards", "empty-target-grid-is-noop");
         composition.ReleaseDeviceResources();
         Expect(draw(256, 256, 0, 0) == S_FALSE, "guards", "released-device-is-noop");

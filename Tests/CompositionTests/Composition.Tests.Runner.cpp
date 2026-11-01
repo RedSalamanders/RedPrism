@@ -1114,7 +1114,8 @@ void TestStrokePreview(Harness& h)
            "stroke.again");
     h.composition.ReleaseDocumentSurfaces();
     Expect(h.composition.HasStroke() && h.composition.StrokeTextureMissing(), "stroke.texture-dropped-with-surfaces");
-    Expect(SUCCEEDED(h.composition.UpdateStrokeTiles(first)) && !h.composition.StrokeTextureMissing(), "stroke.rebuilt");
+    Expect(SUCCEEDED(h.composition.UpdateStrokeTiles(first)) && !h.composition.StrokeTextureMissing(),
+           "stroke.rebuilt");
     // The rebuilt texture draws the grid again from its placement: the red tile at (2, 2), nothing around it.
     pixels = h.Render(document);
     const bool rebuiltDrawn = At(pixels, 8, 2, 2, 2) == 255 && At(pixels, 8, 5, 5, 2) == 255 &&
@@ -1630,7 +1631,7 @@ void TestHslBlends(Harness& h)
     const std::array<float, 4> clear{0, 0, 0, 0};
     h.context->ClearRenderTargetView(view.get(), clear.data());
     if (FAILED(h.composition.BlitToTarget(view.get(), width, height, viewport, 0, 0, static_cast<float>(width),
-                                         static_cast<float>(height))))
+                                          static_cast<float>(height))))
     {
         return {};
     }
@@ -1863,7 +1864,8 @@ void TestOversize(Harness& h)
     EditDocumentFixture(panorama, [&](DocumentFixture& fixture)
                         { fixture.layers.push_back(LayerFrom(wideLayer, LayerBlendMode::Normal, L"Panorama")); });
     h.composition.InvalidateDocument();
-    Expect(SUCCEEDED(h.composition.Compose(panorama)) && h.composition.CanvasScale() == 2, "oversize.device-limit-proxy");
+    Expect(SUCCEEDED(h.composition.Compose(panorama)) && h.composition.CanvasScale() == 2,
+           "oversize.device-limit-proxy");
     exact = SUCCEEDED(h.composition.ComposeReadback(panorama, flat, width, height)) && width == 17000 && height == 10 &&
             std::equal(flat.begin(), flat.end(), wideBytes.begin(), wideBytes.end());
     Expect(exact, "oversize.device-limit-readback");
@@ -2085,7 +2087,8 @@ void TestLayerAdjustmentPreview(Harness& h)
         h.composition.SetAdjustmentPreview(lastPreview);
         const std::vector<std::uint8_t> shown = h.Render(document);
         const std::uint64_t settledCount = h.composition.CompositeCount();
-        const bool settled = SUCCEEDED(h.composition.Compose(document)) && h.composition.CompositeCount() == settledCount;
+        const bool settled =
+            SUCCEEDED(h.composition.Compose(document)) && h.composition.CompositeCount() == settledCount;
         std::vector<std::uint8_t> settledPixels;
         UINT width = 0;
         UINT height = 0;
@@ -2101,9 +2104,9 @@ void TestLayerAdjustmentPreview(Harness& h)
         wil::com_ptr_nothrow<ID3D11Device> reboundDevice;
         wil::com_ptr_nothrow<ID3D11DeviceContext> reboundContext;
         const HRESULT deviceResult = MakeWarp(reboundDevice, reboundContext);
-        const HRESULT rebindResult = SUCCEEDED(deviceResult)
-                                         ? h.composition.CreateDeviceResources(reboundDevice.get(), reboundContext.get())
-                                         : deviceResult;
+        const HRESULT rebindResult =
+            SUCCEEDED(deviceResult) ? h.composition.CreateDeviceResources(reboundDevice.get(), reboundContext.get())
+                                    : deviceResult;
         if (SUCCEEDED(rebindResult))
         {
             h.device = std::move(reboundDevice);

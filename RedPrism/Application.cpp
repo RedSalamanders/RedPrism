@@ -541,8 +541,8 @@ void Application::RenderFrame() noexcept
             _uiBenchmark && UiCancellationSourceSelected(_committedDisplayInitialized ? graph : nullptr, direct);
         return _committedDisplayInitialized ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr, graph,
                                                                _selectionOutlineInitialized ? this : nullptr)
-                                            : _renderer.Render(_chrome.get(), &_composition, &_viewport, direct, nullptr,
-                                                               _selectionOutlineInitialized ? this : nullptr);
+                                            : _renderer.Render(_chrome.get(), &_composition, &_viewport, direct,
+                                                               nullptr, _selectionOutlineInitialized ? this : nullptr);
     };
     HRESULT result = render();
     if (result == S_FALSE)

@@ -298,7 +298,7 @@ void CanvasRenderer::SwapUtilityView() noexcept
 }
 
 HRESULT CanvasRenderer::ComposeUtilityTile(const CanvasDocument& document, const D3D11_BOX& documentRegion,
-                                             wil::com_ptr_nothrow<ID3D11Texture2D>& texture) noexcept
+                                           wil::com_ptr_nothrow<ID3D11Texture2D>& texture) noexcept
 {
     texture.reset();
     if (!_device || !_context || _utilityUsers == 0 || _utilityRecording)
@@ -339,7 +339,7 @@ HRESULT CanvasRenderer::ComposeUtilityTile(const CanvasDocument& document, const
 }
 
 HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11DeviceContext* context,
-                                                GpuRecordingCommands* recording) noexcept
+                                              GpuRecordingCommands* recording) noexcept
 {
     if (recording)
     {
@@ -447,8 +447,7 @@ HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11Device
     return S_OK;
 }
 
-HRESULT CanvasRenderer::CreateSurface(UINT width, UINT height, DXGI_FORMAT format, bool mips,
-                                        Surface& surface) noexcept
+HRESULT CanvasRenderer::CreateSurface(UINT width, UINT height, DXGI_FORMAT format, bool mips, Surface& surface) noexcept
 {
     surface = {};
     D3D11_TEXTURE2D_DESC description{};
@@ -775,9 +774,9 @@ HRESULT CanvasRenderer::WriteTiles(GpuTexture& gpu, std::span<const RasterTile> 
     return S_OK;
 }
 
-HRESULT CanvasRenderer::CreateSparseTexture(int width, int height, bool gray, const Raster& base, int baseX,
-                                              int baseY, std::uint8_t fill, std::span<const RasterTile> tiles,
-                                              GpuTexture& gpu) noexcept
+HRESULT CanvasRenderer::CreateSparseTexture(int width, int height, bool gray, const Raster& base, int baseX, int baseY,
+                                            std::uint8_t fill, std::span<const RasterTile> tiles,
+                                            GpuTexture& gpu) noexcept
 {
     HRESULT result = CreateMippedTexture(width, height, gray, gpu);
     if (FAILED(result))
@@ -935,7 +934,7 @@ CanvasRenderer::DocumentWindow CanvasRenderer::CanvasWindow() const noexcept
 }
 
 bool CanvasRenderer::RegionFor(const LayerTransform& mapping, int width, int height, int align,
-                                 const DocumentWindow& window, PixelRect& region, int& scale) const noexcept
+                               const DocumentWindow& window, PixelRect& region, int& scale) const noexcept
 {
     region = {};
     scale = 1;
@@ -997,7 +996,7 @@ bool CanvasRenderer::RegionFor(const LayerTransform& mapping, int width, int hei
 }
 
 HRESULT CanvasRenderer::RegionTextureFor(const Raster& raster, bool gray, const PixelRect& region, int scale,
-                                           GpuTexture*& texture) noexcept
+                                         GpuTexture*& texture) noexcept
 {
     texture = nullptr;
     const void* identity = raster.Identity();
@@ -1056,7 +1055,7 @@ HRESULT CanvasRenderer::RegionTextureFor(const Raster& raster, bool gray, const 
 }
 
 HRESULT CanvasRenderer::RasterView(const Raster& raster, bool gray, const LayerTransform& mapping,
-                                     TextureView& view) noexcept
+                                   TextureView& view) noexcept
 {
     view = {};
     if (!raster.HasStorage())
@@ -1133,8 +1132,8 @@ HRESULT CanvasRenderer::BeginStroke(const StrokePreview& preview) noexcept
 }
 
 HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& document, const StrokePreview& preview,
-                                                       std::span<const RasterTile> changed,
-                                                       const CanvasRenderer* publishedSeed, bool& inherited) noexcept
+                                                     std::span<const RasterTile> changed,
+                                                     const CanvasRenderer* publishedSeed, bool& inherited) noexcept
 {
     inherited = false;
     if (!_recordingCommands || _recordedDisplaySealed || !_device || !_context ||
@@ -1491,7 +1490,7 @@ void CanvasRenderer::EndStroke(const Raster* committed, int cropX, int cropY, co
 }
 
 HRESULT CanvasRenderer::RunPass(const LayerConstants& constants, const PassInputs& inputs,
-                                  ID3D11RenderTargetView* target) noexcept
+                                ID3D11RenderTargetView* target) noexcept
 {
     const UINT fullWidth = static_cast<UINT>(constants.canvasSize[0]);
     const UINT fullHeight = static_cast<UINT>(constants.canvasSize[1]);
@@ -1562,7 +1561,7 @@ void CanvasRenderer::FillViewConstants(LayerConstants& constants) const noexcept
 }
 
 HRESULT CanvasRenderer::FillLayerConstants(const ImageLayer& layer, LayerConstants& constants,
-                                             PassInputs& inputs) noexcept
+                                           PassInputs& inputs) noexcept
 {
     constants = {};
     FillViewConstants(constants);
@@ -1791,8 +1790,8 @@ HRESULT CanvasRenderer::GroupCoverage(const Guid& groupId, int depth, int& index
 }
 
 HRESULT CanvasRenderer::DrawLayerPass(const ImageLayer& layer, std::uint32_t pass, ID3D11ShaderResourceView* destSrv,
-                                        ID3D11RenderTargetView* destRtv, int liveCoverage, int folderCoverage,
-                                        bool& drawn) noexcept
+                                      ID3D11RenderTargetView* destRtv, int liveCoverage, int folderCoverage,
+                                      bool& drawn) noexcept
 {
     drawn = false;
     LayerConstants constants{};
@@ -1826,7 +1825,7 @@ void CanvasRenderer::SwapCanvas() noexcept
 }
 
 HRESULT CanvasRenderer::FillAdjustConstants(const ImageLayer& layer, LayerConstants& constants,
-                                              PassInputs& inputs) noexcept
+                                            PassInputs& inputs) noexcept
 {
     constants = {};
     FillViewConstants(constants);
@@ -1939,7 +1938,7 @@ HRESULT CanvasRenderer::LayerAdjustmentView(TextureView& view) noexcept
 }
 
 HRESULT CanvasRenderer::AdjustmentInputs(const ImageLayer& layer, LayerConstants& constants,
-                                           PassInputs& inputs) noexcept
+                                         PassInputs& inputs) noexcept
 {
     if (!layer.adjustment.has_value() || !layer.adjustment->IsValid())
     {
@@ -1957,7 +1956,7 @@ HRESULT CanvasRenderer::AdjustmentInputs(const ImageLayer& layer, LayerConstants
 }
 
 HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustment, LayerConstants& constants,
-                                           PassInputs& inputs, const AdjustmentLookup* lookup) noexcept
+                                         PassInputs& inputs, const AdjustmentLookup* lookup) noexcept
 {
     AdjustTextures* entry = nullptr;
     try
@@ -2121,7 +2120,7 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
 }
 
 HRESULT CanvasRenderer::DrawAdjustPass(const ImageLayer& layer, std::uint32_t pass, ID3D11ShaderResourceView* destSrv,
-                                         ID3D11RenderTargetView* destRtv, int folderCoverage) noexcept
+                                       ID3D11RenderTargetView* destRtv, int folderCoverage) noexcept
 {
     LayerConstants constants{};
     PassInputs inputs{};
@@ -2146,7 +2145,7 @@ HRESULT CanvasRenderer::DrawAdjustPass(const ImageLayer& layer, std::uint32_t pa
 }
 
 HRESULT CanvasRenderer::DrawStack(const ImageLayer& base, std::size_t firstChild, std::size_t childCount,
-                                    int folderCoverage) noexcept
+                                  int folderCoverage) noexcept
 {
     HRESULT result = EnsureStackSurfaces();
     if (FAILED(result))
@@ -2456,7 +2455,7 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
 }
 
 HRESULT CanvasRenderer::ComposeReadback(const CanvasDocument& document, std::vector<std::uint8_t>& bgra, UINT& width,
-                                          UINT& height) noexcept
+                                        UINT& height) noexcept
 {
     width = 0;
     height = 0;
@@ -2562,8 +2561,8 @@ HRESULT CanvasRenderer::ComposeReadbackRows(const CanvasDocument& document, std:
 }
 
 HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT targetWidth, UINT targetHeight,
-                                       const CanvasViewport& viewport, float holeLeft, float holeTop, float holeWidth,
-                                       float holeHeight) noexcept
+                                     const CanvasViewport& viewport, float holeLeft, float holeTop, float holeWidth,
+                                     float holeHeight) noexcept
 {
     if (_recordingCommands || (_recordedDisplaySealed && _recordedOwnerThread != GetCurrentThreadId()))
         return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
@@ -2598,8 +2597,8 @@ HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT target
     constants.pan[0] = static_cast<float>(viewport.pan.x);
     constants.pan[1] = static_cast<float>(viewport.pan.y);
     constants.zoom = static_cast<float>(scale);
-    constants.blitFlags =
-        (viewport.SamplesCrisp() ? kCompositionBlitCrisp : 0u) | (viewport.ShowsPixelGrid() ? kCompositionBlitGrid : 0u);
+    constants.blitFlags = (viewport.SamplesCrisp() ? kCompositionBlitCrisp : 0u) |
+                          (viewport.ShowsPixelGrid() ? kCompositionBlitGrid : 0u);
     constants.canvasLod = reduces ? static_cast<float>(-std::log2(devicePixelsPerTexel)) : 0.0f;
 
     D3D11_MAPPED_SUBRESOURCE mapped{};
@@ -2639,27 +2638,27 @@ HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT target
 }
 
 HRESULT CanvasRenderer::DrawSelectionOutlineToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
-                                                       unsigned int targetHeight, ID3D11ShaderResourceView* solid,
-                                                       ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
-                                                       unsigned int maskHeight, float pixelLeft, float pixelTop,
-                                                       const std::array<float, 4>* clip) noexcept
+                                                     unsigned int targetHeight, ID3D11ShaderResourceView* solid,
+                                                     ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
+                                                     unsigned int maskHeight, float pixelLeft, float pixelTop,
+                                                     const std::array<float, 4>* clip) noexcept
 {
     return DrawViewOverlayToTarget(target, targetWidth, targetHeight, solid, dashes, maskWidth, maskHeight, pixelLeft,
                                    pixelTop, clip, false);
 }
 HRESULT CanvasRenderer::DrawLassoDraftToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
-                                                 unsigned int targetHeight, ID3D11ShaderResourceView* color,
-                                                 unsigned int width, unsigned int height, float pixelLeft,
-                                                 float pixelTop, const std::array<float, 4>* clip) noexcept
+                                               unsigned int targetHeight, ID3D11ShaderResourceView* color,
+                                               unsigned int width, unsigned int height, float pixelLeft, float pixelTop,
+                                               const std::array<float, 4>* clip) noexcept
 {
     return DrawViewOverlayToTarget(target, targetWidth, targetHeight, color, nullptr, width, height, pixelLeft,
                                    pixelTop, clip, true);
 }
 HRESULT CanvasRenderer::DrawViewOverlayToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
-                                                  unsigned int targetHeight, ID3D11ShaderResourceView* solid,
-                                                  ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
-                                                  unsigned int maskHeight, float pixelLeft, float pixelTop,
-                                                  const std::array<float, 4>* clip, bool colorDraft) noexcept
+                                                unsigned int targetHeight, ID3D11ShaderResourceView* solid,
+                                                ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
+                                                unsigned int maskHeight, float pixelLeft, float pixelTop,
+                                                const std::array<float, 4>* clip, bool colorDraft) noexcept
 {
     if (_recordingCommands || (_context && _context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE) ||
         (_recordedDisplaySealed && _recordedOwnerThread != GetCurrentThreadId()))
@@ -2883,7 +2882,7 @@ void CanvasRenderer::ClearRecorded(ID3D11RenderTargetView* target, const float* 
         _context->ClearRenderTargetView(target, color);
 }
 void CanvasRenderer::UpdateRecorded(ID3D11Resource* resource, UINT subresource, const D3D11_BOX* region,
-                                      const void* data, UINT rowPitch, UINT depthPitch) noexcept
+                                    const void* data, UINT rowPitch, UINT depthPitch) noexcept
 {
     if (_recordingCommands)
         _recordingCommands->UpdateForWork(resource, subresource, region, data, rowPitch, depthPitch);
@@ -2891,7 +2890,7 @@ void CanvasRenderer::UpdateRecorded(ID3D11Resource* resource, UINT subresource, 
         _context->UpdateSubresource(resource, subresource, region, data, rowPitch, depthPitch);
 }
 void CanvasRenderer::CopyRecorded(ID3D11Resource* destination, UINT destinationSubresource, UINT x, UINT y, UINT z,
-                                    ID3D11Resource* source, UINT sourceSubresource, const D3D11_BOX* region) noexcept
+                                  ID3D11Resource* source, UINT sourceSubresource, const D3D11_BOX* region) noexcept
 {
     if (_recordingCommands)
         _recordingCommands->CopyForWork(destination, destinationSubresource, x, y, z, source, sourceSubresource,

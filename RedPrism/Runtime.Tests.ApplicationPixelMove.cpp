@@ -331,7 +331,8 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
             std::array<std::uint8_t, 16> actual{};
             _session.ActiveLayer()->asset->image.ReadRegion(0, 0, 4, 1, actual.data(), 16, 0);
             if (actual != expectedBytes || _session.history.UndoCount() != 1 ||
-                _session.history.UndoName() != L"Move Pixels" || _session.PendingPixelMove() || _composition.HasStroke())
+                _session.history.UndoName() != L"Move Pixels" || _session.PendingPixelMove() ||
+                _composition.HasStroke())
                 return failure(__LINE__);
             const auto* target = _session.ActiveLayer();
             const bool metadataPreserved =

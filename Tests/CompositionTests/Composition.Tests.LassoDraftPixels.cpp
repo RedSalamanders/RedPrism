@@ -230,8 +230,8 @@ bool DrawAndMatch(CanvasRenderer& composition, ID3D11Device* device, ID3D11Devic
         constexpr std::array<std::uint8_t, kSourceWidth> dashBytes{};
         if (!CreateMask(device, solidBytes, solid) || !CreateMask(device, dashBytes, dash) ||
             composition.DrawSelectionOutlineToTarget(target.view.get(), kTargetWidth, kTargetHeight, solid.view.get(),
-                                                    dash.view.get(), kSourceWidth, 1, static_cast<float>(left),
-                                                    static_cast<float>(top)) != S_OK)
+                                                     dash.view.get(), kSourceWidth, 1, static_cast<float>(left),
+                                                     static_cast<float>(top)) != S_OK)
             return false;
     }
     std::array<Pixel, kTargetWidth * kTargetHeight> actual{};
@@ -282,14 +282,14 @@ int RunLassoDraftPixelTests()
         ordered = ordered && CreateMask(device.get(), solidBytes, solid) && CreateMask(device.get(), dashBytes, dash);
         const HRESULT draft =
             ordered ? composition.DrawLassoDraftToTarget(orderedTarget.view.get(), kTargetWidth, kTargetHeight,
-                                                        color.view.get(), kSourceWidth, kSourceHeight, 2, 1)
+                                                         color.view.get(), kSourceWidth, kSourceHeight, 2, 1)
                     : E_FAIL;
         Expect(draft == S_OK && InputsAndBlendReset(context.get()),
                "draw.draft-pass-releases-srv-and-blend-before-next-consumer");
         const HRESULT selection =
             draft == S_OK
                 ? composition.DrawSelectionOutlineToTarget(orderedTarget.view.get(), kTargetWidth, kTargetHeight,
-                                                          solid.view.get(), dash.view.get(), kSourceWidth, 1, 2, 1)
+                                                           solid.view.get(), dash.view.get(), kSourceWidth, 1, 2, 1)
                 : E_FAIL;
         std::array<Pixel, kTargetWidth * kTargetHeight> orderedPixels{};
         ordered = ordered && selection == S_OK &&
@@ -307,7 +307,7 @@ int RunLassoDraftPixelTests()
         const HRESULT invalid =
             guards
                 ? composition.DrawLassoDraftToTarget(guarded.view.get(), kTargetWidth, kTargetHeight, color.view.get(),
-                                                    kSourceWidth, kSourceHeight, 0, 0, &invalidClip)
+                                                     kSourceWidth, kSourceHeight, 0, 0, &invalidClip)
                 : E_FAIL;
         std::array<Pixel, kTargetWidth * kTargetHeight> after{};
         guards = guards && invalid == E_INVALIDARG && ReadTarget(device.get(), context.get(), guarded, after) &&
@@ -317,7 +317,7 @@ int RunLassoDraftPixelTests()
             guarded.view.get(), kTargetWidth, kTargetHeight, color.view.get(), kSourceWidth, kSourceHeight, 0.5f, 0.0f);
         const HRESULT fractionalY =
             composition.DrawLassoDraftToTarget(guarded.view.get(), kTargetWidth, kTargetHeight, color.view.get(),
-                                              kSourceWidth, kSourceHeight, 0.0f, -0.25f);
+                                               kSourceWidth, kSourceHeight, 0.0f, -0.25f);
         Expect(fractionalX == E_INVALIDARG && fractionalY == E_INVALIDARG &&
                    ReadTarget(device.get(), context.get(), guarded, after) && before == after,
                "guards.fractional-origin-x-and-y-e-invalidarg");

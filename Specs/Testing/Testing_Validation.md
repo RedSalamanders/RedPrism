@@ -3962,3 +3962,11 @@ The checkerboard Load Mask / Layer Selection refusal fixture retains its origina
 selection-state checks and settlement deadlines. A failure records each stage's acknowledgement, error count,
 last error id, selection presence and canvas dimensions. Its existing Wand/Layer worker trace is scoped to this
 fixture and restored on exit. Diagnostics do not establish a repaired runtime result or authorize a rebaseline.
+
+## Historical identifier normalization
+
+Repository history normalizes rendering identifiers and removes obsolete source-location routing. Textual
+identifiers inside retained run descriptions and compressed measurement metadata follow the normalized names.
+Recorded measurements and artifact hashes still identify their original builds; they do not qualify the renamed
+source. Original byte-for-byte history is retained separately in the verified recovery bundle for this operation.
+Current source needs fresh build, tooling and runtime evidence under the ordinary qualification contract.

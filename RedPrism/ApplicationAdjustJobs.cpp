@@ -545,11 +545,11 @@ void Application::SyncColorLookupPreview() noexcept
     {
         _composition.SetAdjustmentPreview(
             CanvasRenderer::AdjustmentPreview{edit->layerID,
-                                                {},
-                                                {},
-                                                edit->preview && !ColorCancelPending() ? edit->previewLookup : nullptr,
-                                                _session.AdjustmentOriginal(),
-                                                1.0});
+                                              {},
+                                              {},
+                                              edit->preview && !ColorCancelPending() ? edit->previewLookup : nullptr,
+                                              _session.AdjustmentOriginal(),
+                                              1.0});
     }
     else if (edit && !ColorCancelPending() && _session.ColorLookupPreviewReady() && !edit->previewLookupOnly)
     {

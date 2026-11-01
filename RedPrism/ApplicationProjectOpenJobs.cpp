@@ -927,8 +927,7 @@ int Application::RunProjectOpenSelfTest() noexcept
     const auto manifest = std::filesystem::path(unsupported) / L"manifest.json";
     const auto writeVersion = [&](int version) noexcept
     {
-        const auto invalidVersion =
-            "{\"format\":\"com.redprism.project\",\"version\":" + std::to_string(version) + "}";
+        const auto invalidVersion = "{\"format\":\"com.redprism.project\",\"version\":" + std::to_string(version) + "}";
         wil::unique_handle output{
             CreateFileW(manifest.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)};
         DWORD written = 0;

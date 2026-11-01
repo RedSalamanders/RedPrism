@@ -78,7 +78,7 @@ void Expect(bool passed, const char* name) noexcept
     {
         UiTimingCapture capture{blitStats};
         result = graph.composition.BlitToTarget(view.get(), width, height, viewport, 0, 0, static_cast<float>(width),
-                                               static_cast<float>(height));
+                                                static_cast<float>(height));
     }
     if (FAILED(result))
     {

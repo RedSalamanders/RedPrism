@@ -152,9 +152,9 @@ only a process whose `Win32_Process.ExecutablePath`, after absolute-path normali
 | File | Value |
 | --- | --- |
 | `vcpkg-tool.json` repository | `https://github.com/microsoft/vcpkg` |
-| `vcpkg-tool.json` commit and `vcpkg.json` `builtin-baseline` | `9e593bb18ea69cc5095e012465dcd675a822ed0d` |
+| `vcpkg-tool.json` commit and `vcpkg.json` `builtin-baseline` | `9eec002df1cd109f8f104cd966a763daf9751489` |
 | WIL | `version>="1.0.260126.7"` |
-| yyjson | `version>="0.12.0"` |
+| yyjson | `version>="0.13.0"` |
 | libzip | `default-features: false` (zlib is restored as its dependency) |
 | Clipper2 | `version>="2.0.1"` (static `Clipper2.lib`; no runtime DLL) |
 

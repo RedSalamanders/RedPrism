@@ -52,7 +52,7 @@ int Application::RunStandaloneSelectionOutlineOwnerCapacitySelfTest(HINSTANCE in
                     "actual-warp-window-and-chrome-initialize"))
             return 5;
         owner->BindCompositionDevice(); // Actual cold startup binds the shared device and brush before acquiring
-                                       // responsive engines.
+                                        // responsive engines.
         if (!expect(owner->_historyResidencySource.Start() && owner->_ownerWork.SourceCountForTest() == 6,
                     "actual-history-subscription-is-sixth-owner"))
             return 5;

@@ -581,7 +581,7 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
                 const ScopedUiTimingAttribution phase{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 1003};
                 return StageResult(Stage::Blit,
                                    composition->BlitToTarget(_renderTarget.get(), _width, _height, *viewport, hole.left,
-                                                            hole.top, hole.width, hole.height));
+                                                             hole.top, hole.width, hole.height));
             }();
             _canvasDrawn = canvasResult == S_OK;
         }
@@ -631,8 +631,8 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
             const HRESULT drawn =
                 draft.composition->Device() == _device.get()
                     ? draft.composition->DrawLassoDraftToTarget(_renderTarget.get(), _width, _height, draft.color,
-                                                               draft.width, draft.height, draft.pixelLeft,
-                                                               draft.pixelTop, draft.clipped ? &draft.clip : nullptr)
+                                                                draft.width, draft.height, draft.pixelLeft,
+                                                                draft.pixelTop, draft.clipped ? &draft.clip : nullptr)
                     : E_ABORT;
             _lassoDraftFailure = drawn;
             if (FAILED(drawn) && DeviceLostAfter(drawn))

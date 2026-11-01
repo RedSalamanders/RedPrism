@@ -396,3 +396,9 @@ not cancellation latency bounds or injected flush/device-fault qualification. Ro
 The layer root prepares a checked, immutable save-memory projection while its exclusive builder seals. It records per-record/name/curve validity, metadata bytes, largest source-raster footprint and asset occurrence count. Copies retain that same projection with the source root. A changed sealed root prepares its own projection; cancellation leaves the prior root and projection unchanged. Invalid serialization inputs produce a refused projection without changing general root capture semantics.
 
 ProjectSaveMemoryBytes borrows this fixed-size projection in constant time before admission. It adds the established 16 MiB manifest/codec allowance, declared path/source bookkeeping and one largest serial codec input, using checked arithmetic. Asset occurrences remain charged independently even when they share pixels, as the scalar reference requires. This query does not traverse layers, names, curves, sparse storage or thumbnails, and does not copy or materialize their data. Complete operation input/codec/retirement admission and measured Apply costs remain separate requirements.
+
+## Project-format identity
+
+Manifests identify this application with `format: "com.redprism.project"`. Loading requires that exact marker;
+other markers are rejected as an invalid format. Existing packages with a different marker require explicit
+conversion before loading. This naming change preserves the documented version range and field semantics.

@@ -86,5 +86,5 @@ class RecordedDisplayGraph final
     wil::com_ptr_nothrow<ID3D11DeviceContext> _deferred;
     wil::com_ptr_nothrow<ID3D11DeviceContext> _original;
     std::optional<GpuRecordingCommands> _recording; // Emplaced/destroyed only inside acknowledged worker stages.
-    CanvasRenderer _composition;                   // Destroy before the policies/contexts/immutable source it borrows.
+    CanvasRenderer _composition;                    // Destroy before the policies/contexts/immutable source it borrows.
 };

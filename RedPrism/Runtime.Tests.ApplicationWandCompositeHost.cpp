@@ -256,7 +256,8 @@ int Application::RunWandCompositeHostSelfTest() noexcept
                                              owner._jobs.ReservedMemoryBytes() == gate->reservationBytes;
 
             state.detachedOwnersReleased = owner._gpuWork.LentCount() == 0 && owner._gpuWork.InFlightCount() == 0 &&
-                                           !owner._gpuWork.HasPending() && owner._composition.UtilitySurfaceBytes() == 0;
+                                           !owner._gpuWork.HasPending() &&
+                                           owner._composition.UtilitySurfaceBytes() == 0;
             if (state.mode == Mode::DeviceAfterCopy)
             {
                 const auto generation = owner._renderer.DeviceGeneration();
