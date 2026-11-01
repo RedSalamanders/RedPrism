@@ -50,8 +50,8 @@ void Wait(HANDLE event) noexcept
     }
 }
 
-// Tests that inspect a published completion before draining it need a wake from that job only. An OS
-// memory notification also wakes production schedulers; deterministic admission keeps it out of these gates.
+// Tests that inspect a published completion or post-settlement idle need only their explicit readiness sources.
+// An OS memory notification also wakes production schedulers; deterministic admission keeps it out of these gates.
 bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
 {
     constexpr std::uint64_t available = 8ULL * 1024 * 1024 * 1024;
@@ -251,7 +251,8 @@ void ApplyPumpResult(void* context, Job& job, JobResult result) noexcept
 void TestMessagePumpOrdering(bool cancel)
 {
     JobScheduler scheduler;
-    Expect(scheduler.Initialize(1) >= 0, cancel ? "pump-cancel-initialize" : "pump-apply-initialize");
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) >= 0,
+           cancel ? "pump-cancel-initialize" : "pump-apply-initialize");
     auto started = Event();
     auto release = Event();
     std::atomic<unsigned int> order{0};
@@ -307,6 +308,20 @@ void TestMessagePumpOrdering(bool cancel)
         Expect(UnregisterClassW(kMessageWindowClass, GetModuleHandleW(nullptr)) != FALSE,
                cancel ? "pump-cancel-unregister-window-class" : "pump-apply-unregister-window-class");
     }
+}
+
+void TestMemoryReadinessAfterSettlement()
+{
+    JobScheduler scheduler;
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK, "settled-memory-initialize");
+    SettleAndExpect(scheduler, "settled-memory-initially-settled");
+    Expect(scheduler.IsIdle(), "settled-memory-initially-idle");
+    // A new owner notification is legitimate work even after an earlier SettleJobs returned Settled.
+    scheduler.NotifyMemoryChanged();
+    Expect(!scheduler.IsIdle() && scheduler.HasUiWork(), "settled-memory-late-notification-prevents-idle");
+    SettleAndExpect(scheduler, "settled-memory-notification-drained");
+    Expect(scheduler.IsIdle(), "settled-memory-idle-after-owner-drain");
+    scheduler.Close();
 }
 
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -476,7 +491,7 @@ JobResult RunCapacityJob(JobContext&, void* context)
 void TestCapacityAndOwnership()
 {
     JobScheduler scheduler;
-    Expect(scheduler.Initialize(1) >= 0, "capacity-initialize");
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) >= 0, "capacity-initialize");
     auto lastStarted = Event();
     auto release = Event();
     CapacityState state{lastStarted.get(), release.get(), {0}};
@@ -945,6 +960,7 @@ int RunJobTests(bool stress)
     g_failures = 0;
     TestMessagePumpOrdering(false);
     TestMessagePumpOrdering(true);
+    TestMemoryReadinessAfterSettlement();
     TestProgressOrderingAndCoalescing();
     TestBadAllocTranslation();
     TestCapacityAndOwnership();

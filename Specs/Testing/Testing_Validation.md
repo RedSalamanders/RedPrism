@@ -1732,6 +1732,13 @@ an event; a posted window-message sentinel must dispatch before its completion, 
 finished result applies once, the cancelled variant applies no successful result, and both release every payload.
 Expected values come from these independent state transitions, not the implementation's queue layout.
 
+The message-pump and capacity fixtures use the existing stable injected memory source when asserting idle
+after settlement. Ambient OS memory notifications are independent readiness and can legitimately arrive after
+`SettleJobs` returns. A separate deterministic control publishes `NotifyMemoryChanged` after settlement,
+requires non-idle owner work, then drains it through the real pump and requires idle again. Keep the original
+sentinel order, exact completion/cancellation counts, payload lifetime and capacity checks. Production OS
+memory notifications and the scheduler's idle predicate remain enabled and unchanged.
+
 Additional gates cover bounded admission with retained caller ownership on refusal, FIFO through apply/drop,
 independent serial keys, stale tickets, progress, the job-runner `bad_alloc` failure boundary, one action per
 pass, rejected reentrant drains/actions, and shutdown that joins before destroying active payloads. Gate waits
