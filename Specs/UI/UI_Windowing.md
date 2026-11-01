@@ -286,6 +286,8 @@ hidden-display scope, ordinary activation or measured presentation latency.
 
 Native Escape, Backspace-to-zero, two-corner near-first and true double-click handling preserve original
 job/input/history ownership in the selected Polygonal caller. A mode callback preserves its captured mode.
+Before accepting drawing input, the DPI fixture establishes normally tracked window bounds with a
+non-activating resize; its contained DPI suggestion and restored rectangle use those accepted bounds.
 The DPI fixture uses a screenshot-DPI override plus native `WM_DPICHANGED`, restores the override and window
 bounds, and verifies that the same writer survives with unchanged committed state. This is harness-DPI
 message-path evidence; actual monitor transitions, widget interaction and ordinary activation remain

@@ -218,6 +218,19 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
             owner->_projectSaveTestGate.reset();
             owner->_forcedDiscardAnswer.reset();
             owner->_documentPath.clear();
+            if (harnessDpiLive)
+            {
+                // Startup deliberately permits an off-screen harness canvas. Establish ordinary tracking
+                // bounds before opening the drawing so both DPI-message rectangles can be accepted and restored.
+                RECT startupBounds{};
+                const bool haveStartupBounds = GetWindowRect(owner->_window.get(), &startupBounds) != FALSE;
+                if (!expect(haveStartupBounds && SetWindowPos(owner->_window.get(), nullptr, 0, 0,
+                                                              startupBounds.right - startupBounds.left,
+                                                              startupBounds.bottom - startupBounds.top,
+                                                              SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE),
+                            "harness-dpi-fixture-establishes-normal-tracking-before-original-drawing"))
+                    return 5;
+            }
             DocumentFixture fixture;
             fixture.width = fixture.height = 64;
             for (const auto label : {L"Polygon target", L"Other target"})

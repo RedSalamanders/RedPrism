@@ -3518,7 +3518,9 @@ recording a third stored point before Escape, and a true two-corner double-click
 the prior corner and assert the accepted Move/PolygonPress double-click and not-near-first flags.
 Check New/present-empty clearing once versus unchanged Add/Subtract and no history, captured mode through
 a direct header callback, and screenshot-DPI override plus native `WM_DPICHANGED` with restored bounds.
-The synthetic native-message fixture MUST use a positive rectangle contained in the already accepted
+Before opening the original Polygonal drawing, the DPI-message fixture MUST submit its startup outer size
+through an ordinary non-activating `SetWindowPos`, allowing native tracking limits to establish the fixture's
+restorable bounds on small hosted desktops. The synthetic native-message fixture MUST use a positive rectangle contained in the already accepted
 native bounds and at least the live owner's minimum at the proposed harness scale. Restore the old override
 after querying that minimum and fail an unsuitable setup explicitly, once in each New/Add/Subtract case.
 Retain every exact bounds/DPI, original writer/ticket, selection/history, point-count, current-view click and

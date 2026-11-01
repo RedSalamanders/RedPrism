@@ -1,0 +1,1 @@
+- Establish normal native tracking bounds before the live Polygonal DPI fixture opens its drawing, preserving exact DPI, rectangle, original-owner, and restore assertions on small hosted desktops.
