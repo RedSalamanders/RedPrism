@@ -20,6 +20,8 @@ and rollback history. A skill is not a pin manifest or a successful test receipt
   `Tools/ConsumerUpdate.psm1`. Revision 3 renamed the model and delegate interfaces `IGridModel`, `IGridDelegate`, `ITreeModel`
   and `ITreeDelegate`, and registers DxUi's private window messages by name: forward every message, registered ones included,
   to `HandleMessage` of a window that attaches a `DxUi::WindowHost` (RedPrism attaches none: `Core_DxUiIntegration.md`).
+  Revision 4 (DxUi `docs/upgrade.md`) makes `AddChild`/`AddTab` nullable, splits Tree/Grid focus from selection and
+  changes C++ layouts without a new number: a pin bump inside one revision still needs `build.ps1 -Rebuild` per configuration.
 - `build.ps1` passes `-CheckUpdates` to `restore-dxui.ps1`. The pinned `Show-DxUiUpdateNotice` prints one advisory
   when DxUi `main` is not the lock. It does not edit the lock or fail a valid restore. Yellow means a validated
   newer `main`; red means `main` moved without a successful `ci.yml` run; dark yellow means the pin is ahead,
@@ -49,12 +51,20 @@ and rollback history. A skill is not a pin manifest or a successful test receipt
   `hasChildren`, `expanded`, `iconText`) and reports `OnTreeSelectionChanged` / `OnTreeToggleExpanded`.
   `SetReorderEnabled` lets a completed row drag call `ITreeDelegate::OnTreeReorder` once; the library does not move
   the model. This API exists at both the qualified commit and its nearest rollback.
-- The qualified API revision 3 header adds optional `ITreeModel::CapturePreparedAccessibilityRows()` and
-  `IPreparedTreeAccessibilityRows`. A null source keeps legacy capture; a non-null source represents the exact
-  prepared model epoch including offscreen rows. Capture only retains the existing shared owner, and its indexed
-  reads are bounded and allocation-free. Published UIA snapshots retain that owner through provider reads and
-  replacement. Since the public interface changed while the API revision stayed 3, rebuild the consumer with the
-  matching DxUi library; an API-revision match alone is insufficient.
+- Optional `ITreeModel::CapturePreparedAccessibilityRows()` and `IPreparedTreeAccessibilityRows`: a null source
+  keeps legacy capture; a non-null source represents the exact prepared model epoch including offscreen rows.
+  Capture only retains the existing shared owner, and its indexed reads are bounded and allocation-free. Published
+  UIA snapshots retain that owner through provider reads and replacement. Build `TreeAccessibilityItemView` and
+  other DxUi aggregates by member name: fields are added inside a revision (`badgeText`).
+- `Tree::Paint` reuses one `TreeItemData` for every row, so a model writes every field, new ones included
+  (`badgeIsDot`), or one row's value leaks into the next.
+- `EmbeddedHost::Prepare` clobbers PS SRV slot 0 and the OM render targets: bind what a later draw needs after it.
+  Its `E_ABORT` is a superseded frame that already asked to be prepared again; `Renderer::Render` turns it into
+  `S_FALSE` (draw again), never a failed frame.
+- An embedded host never clears or flushes the application's immediate context (revision 4 stopped the old side
+  effect in `ReplaceDevice`): the renderer flushes after releasing its swap chain, or recovery's next
+  `CreateSwapChainForHwnd` returns `E_ACCESSDENIED`.
+- DxUi controls delete copy and move; a RedPrism subclass declares its own deleted or `/Wall` reports C4625/C4626/C5026/C5027.
 - Icon-only buttons draw `_text` with `FontRole::Icon` when Segoe Fluent Icons is installed, and with `FontRole::Body`
   otherwise so a Unicode stand-in does not become a missing-glyph box.
 - Native flyouts go through `DxUi::ShowNativeHMenuContextMenu(owner, screen, HMENU, palette)`; an empty `HMENU`

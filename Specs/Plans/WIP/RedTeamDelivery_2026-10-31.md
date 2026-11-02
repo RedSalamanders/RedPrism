@@ -132,7 +132,8 @@ only names what the 31 October pass added or independently re-anchored.
   `origin/main` only (API 4). Owned by
   [`DeliveryReview_2026-10-31.md`](DeliveryReview_2026-10-31.md). Port onto
   `ej/wall-compat-redprism-20261028`, re-pin, keep API 3. Do not take DxUi
-  `origin/main`.
+  `origin/main`. Superseded 2026-11-02: at the user's request the lock is DxUi `main`
+  `f2e328a0` (API 4), which contains `762983a0`; product acceptance stays open in DeliveryReview.
 
 ### Independently re-confirmed at `a7e81222`
 

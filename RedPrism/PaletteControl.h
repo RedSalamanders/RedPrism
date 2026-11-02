@@ -31,6 +31,10 @@ class PaletteZone final : public DxUi::Button
     };
 
     PaletteZone(Kind kind, std::function<void()> onClick);
+    PaletteZone(const PaletteZone&) = delete;
+    PaletteZone& operator=(const PaletteZone&) = delete;
+    PaletteZone(PaletteZone&&) = delete;
+    PaletteZone& operator=(PaletteZone&&) = delete;
 
     void SetSwatch(std::uint32_t argb) noexcept;
     [[nodiscard]] std::uint32_t Swatch() const noexcept
@@ -61,6 +65,10 @@ class PaletteControl final : public DxUi::Panel
   public:
     PaletteControl(std::wstring foregroundName, std::wstring backgroundName, std::wstring swapName,
                    std::wstring resetName);
+    PaletteControl(const PaletteControl&) = delete;
+    PaletteControl& operator=(const PaletteControl&) = delete;
+    PaletteControl(PaletteControl&&) = delete;
+    PaletteControl& operator=(PaletteControl&&) = delete;
 
     void SetHandlers(std::function<void()> onForeground, std::function<void()> onBackground,
                      std::function<void()> onSwap, std::function<void()> onReset);

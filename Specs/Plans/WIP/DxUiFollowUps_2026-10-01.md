@@ -26,8 +26,10 @@
   (DxUi #45, API revision 3; the rollback is `c403052`). The #29 renames are applied (this product implements only
   `ITreeModel` and `ITreeDelegate`), and no Python validator is called here, so `validate-build-matrix.ps1` replaces
   nothing. On `main` `e79a83a` the lock has since moved to `a059e07c39c58cbf5218c34f7b9f1a9ac29baf3b`, still API revision 3.
-- [ ] Move the pin once more to a DxUi commit that includes Tree multi-select (DxUi #35, not merged at `271bd54`).
-  Whether `a059e07c` contains that commit was not re-checked in the DxUi repository.
+- [x] Move the pin once more to a DxUi commit that includes Tree multi-select (DxUi #35, not merged at `271bd54`).
+  Done on 2 November 2026: the lock is DxUi `main` `f2e328a0a26a18ca66bf4b2aea77bf010c9515e1`, API revision 4, whose
+  pinned `include/DxUi/DxUi.h` has `Tree::SetMultiSelectEnabled` and `ITreeDelegate::OnTreeSelectionSetChanged`
+  ([record](../../TestRuns/DxUiRevision4_2026-11-02.md)). Multi-select stays off in the product until the item below.
 - [ ] Decide where the editor uses Tree multi-select (for example the layers list) and its drag-reorder, per DxUi's
   `TreeReorder_2026-09-21`. This needs the pin above.
 - [x] Confirm that every window that attaches a `DxUi::WindowHost` forwards all messages, registered ones

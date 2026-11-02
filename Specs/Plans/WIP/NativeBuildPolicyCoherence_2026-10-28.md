@@ -47,6 +47,8 @@ RedTilde ARM64 restore and required policy/lease logs are under that task's
 RedTilde-ARM64-restore folder; both exited zero before implementation.
 
 Candidate pin: `a059e07c39c58cbf5218c34f7b9f1a9ac29baf3b` (API3). Six upstream native builds and all 54 nonforeground suite runs pass. The declined focus countdown remains an open qualification gate; this candidate lock enables independent product builds and is not a final green receipt.
+On 2026-11-02 the lock moved past this candidate to DxUi `main` `f2e328a0` (API 4,
+[record](../../TestRuns/DxUiRevision4_2026-11-02.md)); `a059e07c` is now the rollback pin.
 
 The user subsequently authorized the 30-second automatic start and resumed focus qualification. All three upstream
 focus configurations now pass with restoration; the earlier declined run remains retained as historical evidence.

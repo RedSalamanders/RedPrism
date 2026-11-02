@@ -211,9 +211,13 @@ std::optional<DxUi::TreeAccessibilityItemView> PreparedLayerRows::GetItem(std::s
 
     const HierarchyEntry& row = rows[visibleIndex];
     const bool isGroup = row.isGroup;
-    return DxUi::TreeAccessibilityItemView{
-        visibleIndex, ItemIdAt(visibleIndex),   DisplayText()[visibleIndex], static_cast<std::size_t>(row.depth),
-        isGroup,      isGroup && !row.collapsed};
+    // By member: the view grows fields (DxUi API revision 4 added badgeText, which this source leaves empty).
+    return DxUi::TreeAccessibilityItemView{.visibleIndex = visibleIndex,
+                                           .itemId = ItemIdAt(visibleIndex),
+                                           .text = DisplayText()[visibleIndex],
+                                           .depth = static_cast<std::size_t>(row.depth),
+                                           .hasChildren = isGroup,
+                                           .expanded = isGroup && !row.collapsed};
 }
 
 std::optional<DxUi::TreeAccessibilityItemView> PreparedLayerRows::FindItem(std::uint64_t itemId) const noexcept
