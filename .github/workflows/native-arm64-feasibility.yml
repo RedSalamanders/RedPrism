@@ -1,7 +1,12 @@
-name: Native ARM64 Release feasibility
+name: Manual native feasibility and x64 production
 on:
   workflow_dispatch:
     inputs:
+      operation:
+        description: Explicit native operation; x64 production uses preserved regression receipts
+        type: choice
+        default: ARM64Feasibility
+        options: [ARM64Feasibility, X64ProductionContinuation]
       configuration:
         description: "Single-profile feasibility run; expand only after review"
         type: choice
@@ -10,18 +15,20 @@ on:
           - Release
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: native-arm64-feasibility-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   native-arm64-release:
     if: >-
-      (github.event_name == 'push' &&
+      inputs.operation != 'X64ProductionContinuation' &&
+      ((github.event_name == 'push' &&
        github.ref == 'refs/heads/codex/p1-opacity-host-proof' &&
        contains(github.event.head_commit.message, '[arm64-validation]')) ||
       (github.event_name == 'workflow_dispatch' &&
        github.ref == 'refs/heads/codex/p1-opacity-host-proof' &&
-       inputs.configuration == 'Release')
+       inputs.configuration == 'Release'))
     name: Native ARM64 Release feasibility
     runs-on: windows-11-vs2026-arm
     timeout-minutes: 180
@@ -61,4 +68,96 @@ jobs:
             .build/dependencies/DxUi/*/ARM64/Release/DxUi.pdb
             .build/screenshots/**
             !.build/**/*.dmp
-
+  verify-and-produce-x64:
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'X64ProductionContinuation'
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 180
+    steps:
+      - name: Enable long Windows checkout paths
+        shell: pwsh
+        run: git config --global core.longpaths true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 4895cae73c325ff43adf71735fb9ccd1dd194d22
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: RedSalamanders/.github
+          ref: 19710a8aeac979a82e83bec82e8b866cee3d3deb
+          path: .ci-engine
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41404048861
+          name: admission
+          path: .build/ci/native-evidence
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41404048861
+          pattern: regression-*
+          merge-multiple: true
+          path: .build/ci/native-evidence
+      - name: Verify both original native regression receipts and bind exact production inputs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $qualified = '4895cae73c325ff43adf71735fb9ccd1dd194d22'
+          $comparison = gh api "repos/RedSalamanders/RedPrism/compare/$qualified...main" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $comparison.merge_base_commit.sha -cne $qualified -or (git rev-parse HEAD).Trim() -cne $qualified) { throw 'Qualified source is not an ancestor of current main or the exact checkout differs.' }
+          & ./.ci-engine/Tools/Test-Qualification.ps1 -Directory .build/ci/native-evidence -Phase Regression
+          $old = Get-Content .build/ci/native-evidence/batch.json -Raw | ConvertFrom-Json -AsHashtable
+          if ($old.runId -cne '41404048861') { throw 'Unexpected native evidence producer.' }
+          Import-Module ./.ci-engine/Tools/Modules/Ci.Policy.psm1
+          $production = New-CiInputDescriptor -Root .
+          foreach ($field in 'repository','commit','nativeDigest','buildNumber','version') {
+            if ($production[$field] -cne $old[$field]) { throw "Frozen source identity mismatch: $field" }
+          }
+          if ($production.engine.ref -cne $old.engine.ref) { throw 'Engine identity differs.' }
+          $production.runId = $env:GITHUB_RUN_ID
+          $production | ConvertTo-Json -Depth 20 | Set-Content .build/ci/x64-production.json -Encoding utf8
+          $proof = [ordered]@{ qualifiedCommit=$qualified; nativeRunId=$old.runId; productionRunId=$env:GITHUB_RUN_ID; workflowCommit=$env:GITHUB_SHA; deferred='ARM64 production'; nativeInputs=@(Get-ChildItem .build/ci/native-evidence -File | ForEach-Object { @{ file=$_.Name; sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash } }) }
+          $proof | ConvertTo-Json -Depth 20 | Set-Content .build/ci/x64-continuation.json -Encoding utf8
+      - uses: ./.github/actions/setup-msvc
+        with:
+          platform: x64
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: .build/ci/vcpkg-cache
+          key: ci-deps-${{ runner.os }}-${{ runner.arch }}-x64-19710a8aeac979a82e83bec82e8b866cee3d3deb-${{ hashFiles('.ci/project.json', 'Build/**', 'Tools/**', '*.ps1', '**/*.props', '**/*.targets', '**/vcpkg*.json', '**/*lock.json', '.github/actions/setup-msvc/**') }}
+      - name: Build production Release and smoke-test x64 ZIP
+        id: package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.build/ci/vcpkg-cache,readwrite
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./Tools/Invoke-ProjectCi.ps1 -Phase Production -Platform x64 -EngineRoot (Join-Path $PWD '.ci-engine') -Descriptor .build/ci/x64-production.json
+          Import-Module ./.ci-engine/Tools/Modules/Ci.Artifacts.psm1
+          $descriptor = Get-Content .build/ci/x64-production.json -Raw | ConvertFrom-Json -AsHashtable
+          $receipt = Get-Content .build/ci/production/x64/production-x64.json -Raw | ConvertFrom-Json -AsHashtable
+          $null = Test-CiProductionReceipt -Receipt $receipt -Descriptor $descriptor -Platform x64 -Directory .build/ci/production/x64
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: x64-production-continuation
+          path: |
+            .build/ci/production/x64/**
+            .build/ci/x64-production.json
+            .build/ci/x64-continuation.json
+            .build/ci/native-evidence/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: x64-production-continuation-logs
+          path: .build/logs/**
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 90

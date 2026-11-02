@@ -1,1 +1,1 @@
-- Add a separate manual x64 production continuation that verifies both preserved native regression receipts and builds the exact qualified source, while retaining the existing extended-qualification workflow and explicit provenance for deferred ARM64 production.
+- Add an explicit x64 production-continuation option to the approved manual native workflow, verifying both preserved regression receipts and the exact qualified source while preserving ARM64 feasibility and extended qualification.
