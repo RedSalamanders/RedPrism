@@ -4022,6 +4022,16 @@ selection-state checks and settlement deadlines. A failure records each stage's 
 last error id, selection presence and canvas dimensions. Its existing Wand/Layer worker trace is scoped to this
 fixture and restored on exit. Diagnostics do not establish a repaired runtime result or authorize a rebaseline.
 
+The unchanged complete `RunRefusalSelfTest` executes in the existing isolated two-worker owner with its stable
+16 GiB declared snapshot, before the main Application startup. This lets the 2100-square checkerboard reach
+the original 8,000,000-edge tracer limit. Retain both exact `IDS_ERROR_SELECTION_DETAILED` results, the blank
+layer's silent no-op, all pixel-budget refusal checks and every original settlement deadline. The main owner's
+production OS sampler is unchanged. The standalone owner also supplies 2 GiB for actual Load Layer and Load
+Mask command controls: both must fail the original receipt with `E_OUTOFMEMORY` before source capture or
+readback, preserve source, mask, selection and history, and join with zero reservation. Together with the
+unchanged layer/composite Add controls, require 24 `wand-functional-admission-host.*` assertions and the exact
+zero-failure summary. These logical capacity controls make no physical-memory or performance claim.
+
 ## Historical identifier normalization
 
 Repository history normalizes rendering identifiers and removes obsolete source-location routing. Textual

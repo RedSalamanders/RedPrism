@@ -364,13 +364,18 @@ int Application::RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance)
     if (!settle())
         return 5;
     int functionalAdmissionAssertions = 0;
-    for (const bool composite : {false, true})
+    for (int route = 0; route != 4; ++route)
     {
+        const bool composite = route == 1;
+        const bool loaded = route >= 2;
+        const bool mask = route == 3;
+        const char* const routeName = loaded      ? (mask ? "loaded-mask" : "loaded-layer")
+                                      : composite ? "composite"
+                                                  : "layer";
         const auto check = [&](bool condition, const char* fact) noexcept
         {
             ++functionalAdmissionAssertions;
-            std::printf("%s wand-functional-admission-host.%s.%s\n", condition ? "PASS" : "FAIL",
-                        composite ? "composite" : "layer", fact);
+            std::printf("%s wand-functional-admission-host.%s.%s\n", condition ? "PASS" : "FAIL", routeName, fact);
             return condition;
         };
         DocumentFixture fixture;
@@ -383,6 +388,13 @@ int Application::RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance)
         const auto active = layer.id;
         layer.asset =
             RasterAsset{Raster::Make(2, 1, RasterFormat::Bgra8888, kSource.data(), kSource.size()), {}, layer.name};
+        if (mask)
+        {
+            constexpr std::array<std::uint8_t, 2> values{0, 255};
+            layer.mask = LayerMask{
+                RasterAsset{Raster::Make(2, 1, RasterFormat::Gray8, values.data(), values.size()), {}, layer.name},
+                true, std::nullopt, true};
+        }
         layer.transform.sampling = LayerSampling::Nearest;
         fixture.layers.push_back(std::move(layer));
         owner->ReplaceDocument(std::move(fixture).Seal(), active, {});
@@ -394,6 +406,7 @@ int Application::RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance)
             return 5;
         const auto selected = owner->_session.Selection();
         const auto input = owner->_session.ActiveLayer()->asset->image;
+        const auto inputMask = owner->_session.ActiveLayer()->mask;
         const auto savedRevision = owner->_session.history.CurrentRevision();
         auto refusedGate = std::make_shared<WandLayerHostTestGate>();
         refusedGate->hold = false;
@@ -405,15 +418,18 @@ int Application::RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance)
         settings.sampleAllLayers = composite;
         availableBytes = 2ULL << 30;
         const auto refused =
-            composite ? owner->QueueHostInput(HostWandCompositeNewInput{{1.5, .5}, settings, false, SelectionMode::Add})
-                      : owner->QueueHostInput(HostWandLayerNewInput{{1.5, .5}, settings, false, SelectionMode::Add});
+            loaded ? owner->QueueHostInput(HostCommandInput{mask ? ChromeHost::kCommandLoadMaskSelection
+                                                                 : ChromeHost::kCommandLoadLayerSelection})
+            : composite
+                ? owner->QueueHostInput(HostWandCompositeNewInput{{1.5, .5}, settings, false, SelectionMode::Add})
+                : owner->QueueHostInput(HostWandLayerNewInput{{1.5, .5}, settings, false, SelectionMode::Add});
         if (!check(refused.Read().outcome == HostOutcome::Pending, "original-intent-precedes-memory-decision"))
             return 5;
         const bool joined = settle();
         const auto outcome = refused.Read();
         std::printf("INFO wand-functional-admission-host.%s snapshot=%llu required=%llu captures=%u "
                     "readbacks=%u outcome=%u error=%08X\n",
-                    composite ? "composite" : "layer", static_cast<unsigned long long>(availableBytes),
+                    routeName, static_cast<unsigned long long>(availableBytes),
                     static_cast<unsigned long long>(refusedGate->reservationBytes), refusedGate->captures.load(),
                     refusedGate->readbackPrepares.load(), static_cast<unsigned int>(outcome.outcome),
                     static_cast<unsigned int>(outcome.error));
@@ -426,6 +442,7 @@ int Application::RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance)
                    "complete-boolean-envelope-refuses-before-capture-or-readback"))
             return 5;
         if (!check(owner->_session.Selection() == selected && owner->_session.ActiveLayer()->asset->image == input &&
+                       owner->_session.ActiveLayer()->mask == inputMask &&
                        FollowthroughPixels(owner->_session.ActiveLayer()->asset->image, kSource) &&
                        owner->_session.history.CurrentRevision() == savedRevision &&
                        owner->_session.history.UndoCount() == 0,
@@ -452,5 +469,11 @@ int Application::RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance)
     std::printf("BEGIN self-test.RunWandCompositeHostSelfTest\n");
     if (const auto result = owner->RunWandCompositeHostSelfTest(); result != 0)
         return result;
+    // The original checkerboard must reach the tracer edge limit, rather than an ambient admission refusal.
+    // Keep the complete original refusal suite, exact error identifiers and 15-second settlement bounds.
+    std::printf("BEGIN self-test.RunRefusalSelfTest\n");
+    if (const auto result = owner->RunRefusalSelfTest(); result != 0)
+        return result;
+    std::printf("PASS loaded-selection-refusal-host.original-complexity-and-pixel-budget-checks\n");
     return 0;
 }

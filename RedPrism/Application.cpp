@@ -2940,12 +2940,6 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"SELF-TEST STAGE failed: session.\n");
         return session;
     }
-    // Refusals the host reports (review fixes wave 1b: RF-1102, RF-1103).
-    std::printf("BEGIN self-test.RunRefusalSelfTest\n");
-    if (const int refusals = RunRefusalSelfTest(); refusals != 0)
-    {
-        return refusals;
-    }
     // Rendering, viewport and frame loop (review fixes WP4).
     std::printf("BEGIN self-test.RunRenderingSelfTest\n");
     if (const int rendering = RunRenderingSelfTest(); rendering != 0)
