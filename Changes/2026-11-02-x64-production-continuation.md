@@ -1,0 +1,1 @@
+- Add a manual branch-only x64 production continuation that verifies both preserved native regression receipts, builds the exact qualified source, and retains explicit provenance while ARM64 production is deferred.

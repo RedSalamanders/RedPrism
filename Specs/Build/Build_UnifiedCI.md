@@ -89,3 +89,15 @@ Follow the common [emergency merge runbook](https://github.com/RedSalamanders/.g
 The organization's shared engine runs a weekly and explicit manual metadata observer across all six default branches. It inventories the coordinated engine SHA, vcpkg baseline/tool/floors/overrides and custom dependency locks, and reports available producer updates as advisories. It never restores or compiles native dependencies, edits pins or treats an upstream main commit as qualified. Missing/private or undeployed repositories remain explicit incomplete coverage. Built-in dependency review and security alerts retain their supported scopes; custom lock inventory is not a native/transitive vulnerability scan. See the common [dependency status contract](https://github.com/RedSalamanders/.github/blob/main/Specs/CI.md).
 
 Application publication uses WINGET_TOKEN, selected at organization level for the five applications and excluded from DxUi. Existing repository overrides remain effective. The explicitly dispatched trusted-main RedSalamander promote-publication-credential.yml action may encrypt the existing repository token into that organization secret after checking its organization-secret administration permission; it retains metadata only and never publishes a product. Missing permissions or failed native eligibility remain open acceptance gates.
+
+
+## Explicit x64 production continuation (2026-11-02)
+
+The temporary `ej/x64-production-continuation-20261102` workflow uses the existing native Windows x64 runner
+and the exact clean qualified source `4895cae73c325ff43adf71735fb9ccd1dd194d22`. It verifies both native
+regression receipts from run `41404048861` through the unchanged pinned Regression verifier before building.
+A new production descriptor retains the identical source/native digest, build number, version and engine,
+with the actual continuation run id. The old descriptor and receipts remain unchanged. Production uses the
+canonical test-disabled build, package smoke and receipt verifier. Explicit provenance binds the two runs.
+ARM64 production is deferred at the user's request. This continuation does not update automatic `ci-state`,
+authorize publication, or claim complete two-platform production qualification. Default-main CI is unchanged.
