@@ -93,11 +93,14 @@ Application publication uses WINGET_TOKEN, selected at organization level for th
 
 ## Explicit x64 production continuation (2026-11-02)
 
-The temporary `ej/x64-production-continuation-20261102` workflow uses the existing native Windows x64 runner
+The manually dispatched `.github/workflows/x64-production-continuation.yml` uses the existing native Windows x64 runner
 and the exact clean qualified source `4895cae73c325ff43adf71735fb9ccd1dd194d22`. It verifies both native
 regression receipts from run `41404048861` through the unchanged pinned Regression verifier before building.
 A new production descriptor retains the identical source/native digest, build number, version and engine,
 with the actual continuation run id. The old descriptor and receipts remain unchanged. Production uses the
 canonical test-disabled build, package smoke and receipt verifier. Explicit provenance binds the two runs.
+The pinned qualified commit must be an ancestor of current `main`; the checkout and production descriptor
+remain bound to that exact qualified commit. A later main commit is not implicitly qualified by this workflow.
 ARM64 production is deferred at the user's request. This continuation does not update automatic `ci-state`,
-authorize publication, or claim complete two-platform production qualification. Default-main CI is unchanged.
+authorize publication, or claim complete two-platform production qualification. The existing extended
+qualification workflow and automatic main CI remain available with their original behavior.
