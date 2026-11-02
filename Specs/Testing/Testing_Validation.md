@@ -4032,6 +4032,23 @@ readback, preserve source, mask, selection and history, and join with zero reser
 unchanged layer/composite Add controls, require 24 `wand-functional-admission-host.*` assertions and the exact
 zero-failure summary. These logical capacity controls make no physical-memory or performance claim.
 
+## Ctrl-pixel fixture owner readiness
+
+The Ctrl/Polygonal final-publication fixture's predicate wait checks `HasUiWork()` before waiting on the
+scheduler's auto-reset wake event, as `SettleJobs` does. Draining one callback cannot require a new notification
+when another callback is already ready. Preserve the existing 15-second failure bound and all predecessor
+assertions. A settled, document-free owner posts three real UI actions, consumes the single wake signal,
+verifies that owner work remains ready, and requires all three callbacks to complete without another signal.
+Borrowed counter storage remains alive until every posted action is drained, including on a failed predicate.
+
+All six final-slot resume/Cancel/Close cases keep the hidden-display override disabled while suspended and
+deliver repeated owned `WM_SHOWWINDOW/FALSE` notifications. Require the retired source to remain unavailable,
+with no pending display work and no visible native window. Resume restores the override through the same
+visibility handler. Keep all original ticket, CPU/history/rows/GPU publication and joined-refund expectations.
+The complete fixture requires 482 assertions: 473 predecessors, three queued-action readiness facts and six
+repeated-notification facts. Record actual readiness, callback count, graph, policy and native visibility.
+These are hidden test-fixture controls; production scheduling and visibility policy remain unchanged.
+
 ## Historical identifier normalization
 
 Repository history normalizes rendering identifiers and removes obsolete source-location routing. Textual

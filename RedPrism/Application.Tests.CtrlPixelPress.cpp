@@ -780,6 +780,80 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
                         app._strokeFinishSource.Start(),
                     "real-hidden-WARP-display-and-row-owners-enabled"))
             return 5;
+        const auto finalSettle = [&]() noexcept
+        { return SettleJobs(app._jobs, 30000, DispatchMessageThunk, &app) == SettleResult::Settled; };
+        const auto finalUntil = [&](auto done) noexcept
+        {
+            const auto deadline = GetTickCount64() + 15000;
+            while (!done())
+            {
+                if (PumpMessages(DispatchMessageThunk, &app).quit)
+                    return false;
+                (void)DrainCompletions(app._jobs);
+                (void)RunUiActions(app._jobs);
+                if (done())
+                    return true;
+                const auto now = GetTickCount64();
+                if (now >= deadline)
+                    return false;
+                if (app._jobs.HasUiWork())
+                    continue; // SettleJobs also drains ready work before waiting on an auto-reset wake.
+                const HANDLE wake = app._jobs.WakeHandle();
+                if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
+                                                MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+                    return false;
+            }
+            return true;
+        };
+        if (boundary == 0)
+        {
+            if (!expect(finalSettle(), "ready-work-fixture-starts-settled"))
+                return 5;
+            // Owner-only probe: borrowed counter storage outlives all three owned callbacks below.
+            // HostTests' action probes are private and cover different reentrant callback semantics.
+            class ReadinessAction final : public UiAction
+            {
+              public:
+                explicit ReadinessAction(unsigned& count) noexcept : _count(count) {}
+                ReadinessAction(const ReadinessAction&) = delete;
+                ReadinessAction& operator=(const ReadinessAction&) = delete;
+                ReadinessAction(ReadinessAction&&) = delete;
+                ReadinessAction& operator=(ReadinessAction&&) = delete;
+                void Run() noexcept override
+                {
+                    ++_count;
+                }
+
+              private:
+                unsigned& _count;
+            };
+            unsigned actions = 0;
+            std::array<std::unique_ptr<UiAction>, 3> queued{std::make_unique<ReadinessAction>(actions),
+                                                            std::make_unique<ReadinessAction>(actions),
+                                                            std::make_unique<ReadinessAction>(actions)};
+            bool admitted = true;
+            for (auto& action : queued)
+                admitted = app._jobs.PostUiAction(action) && admitted;
+            const auto wakeConsumed = WaitForSingleObject(static_cast<HANDLE>(app._jobs.WakeHandle()), 0);
+            const auto wakeEmpty = WaitForSingleObject(static_cast<HANDLE>(app._jobs.WakeHandle()), 0);
+            const bool ready = admitted && actions == 0 && app._jobs.HasUiWork() && wakeConsumed == WAIT_OBJECT_0 &&
+                               wakeEmpty == WAIT_TIMEOUT;
+            const bool progressed = ready && finalUntil([&]() noexcept { return actions == 3; });
+            const auto observedActions = actions;
+            const bool observedReady = app._jobs.HasUiWork();
+            // Drain borrowed callbacks on either result, without waiting for another notification.
+            for (unsigned index = 0; index != 3; ++index)
+                (void)RunUiActions(app._jobs);
+            std::printf("INFO pixel-final.ready-work admitted=%d wakeConsumed=%u wakeEmpty=%u actions=%u "
+                        "ready=%d progressed=%d\n",
+                        admitted, static_cast<unsigned int>(wakeConsumed), static_cast<unsigned int>(wakeEmpty),
+                        observedActions, observedReady, progressed);
+            if (!expect(ready, "three-owner-actions-remain-ready-after-auto-reset-wake-consumed"))
+                return 5;
+            if (!expect(progressed && observedActions == 3 && !observedReady && app._jobs.IsIdle(),
+                        "queued-owner-actions-progress-without-another-notification"))
+                return 5;
+        }
         app._selectionPixelFinalPublicationEnabled = true;
         app._selectionPressTestEnabled = true;
         app._polygonalPressTestEnabled = app._polygonalPixelPressEnabled = polygonal;
@@ -797,8 +871,6 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
         app._viewport.followsFit = false;
         app._viewport.zoom = 8;
         app.DocumentChanged();
-        const auto finalSettle = [&]() noexcept
-        { return SettleJobs(app._jobs, 30000, DispatchMessageThunk, &app) == SettleResult::Settled; };
         if (!expect(finalSettle(), "source-display-and-rows-settled"))
             return 5;
         app.RenderFrame();
@@ -816,27 +888,6 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
         sendFinal(WM_LBUTTONDOWN, {1.5, 1.5}, MK_LBUTTON | MK_CONTROL);
         // A move acknowledgement supplies actual owner readiness before installing the next-stage gate.
         sendFinal(WM_MOUSEMOVE, {3.5, 2.5}, MK_LBUTTON | MK_CONTROL);
-        const auto finalUntil = [&](auto done) noexcept
-        {
-            const auto deadline = GetTickCount64() + 15000;
-            while (!done())
-            {
-                if (PumpMessages(DispatchMessageThunk, &app).quit)
-                    return false;
-                (void)DrainCompletions(app._jobs);
-                (void)RunUiActions(app._jobs);
-                if (done())
-                    return true;
-                const auto now = GetTickCount64();
-                if (now >= deadline)
-                    return false;
-                const HANDLE wake = app._jobs.WakeHandle();
-                if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
-                                                MWMO_INPUTAVAILABLE) == WAIT_FAILED)
-                    return false;
-            }
-            return true;
-        };
         auto& stateSlot = polygonal ? app._polygonalPressState : app._selectionPressState;
         if (!expect(
                 finalUntil([&]() noexcept
@@ -888,9 +939,26 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
         {
             // Exercise the controller's actual visibility transition and real cache retirement.
             // Holding the CPU closure first keeps the original from claiming a publication cell.
+            // Keep the hidden-window policy consistent with the original's display-slot wait.
+            app._committedDisplayAllowHiddenForTest = false;
             app._committedDisplay.SetSuspendedOwner(true);
+            // Replay an owned hidden-window notification while the original CPU closure is held.
+            SendMessageW(app._window.get(), WM_SHOWWINDOW, FALSE, 0);
+            (void)RunUiActions(app._jobs);
             const bool retiredSource = finalUntil([&]() noexcept { return !app._committedDisplay.HasPending(); });
+            std::printf("INFO pixel-final.visibility scenario=%s retired=%d graph=%d allowHidden=%d nativeHidden=%d "
+                        "pending=%d visits=%u waited=%u\n",
+                        scenario, retiredSource, app._committedDisplay.GraphForFrameOwner() != nullptr,
+                        app._committedDisplayAllowHiddenForTest, !IsWindowVisible(app._window.get()),
+                        app._committedDisplay.HasPending(), gate.visits.load(),
+                        static_cast<unsigned int>(gate.waited.load()));
+            SendMessageW(app._window.get(), WM_SHOWWINDOW, FALSE, 0);
+            const bool notificationPreserved =
+                !app._committedDisplayAllowHiddenForTest && !IsWindowVisible(app._window.get()) &&
+                !app._committedDisplay.HasPending() && !app._committedDisplay.GraphForFrameOwner();
             (void)SetEvent(gate.release.get());
+            if (!expect(notificationPreserved, "repeated-hidden-notification-preserves-retired-source"))
+                return 5;
             if (!expect(retiredSource && !app._committedDisplay.GraphForFrameOwner(),
                         "actual-suspension-retires-source-before-original-final-capture"))
                 return 5;
@@ -929,7 +997,8 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
                 }
                 else
                 {
-                    app._committedDisplay.SetSuspendedOwner(false);
+                    app._committedDisplayAllowHiddenForTest = true;
+                    SendMessageW(app._window.get(), WM_SHOWWINDOW, FALSE, 0);
                     if (!expect(finalSettle() && state.completed && state.closed && state.original == original &&
                                     !state.pixelFinalWaitingForDisplay && state.inputAcknowledged &&
                                     receipt.Read().outcome == HostOutcome::Succeeded &&
