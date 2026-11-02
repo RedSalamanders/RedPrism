@@ -562,7 +562,8 @@ Record these in the owning P1 plans when P1 resumes.
   - On `e79a83a`, `package.ps1` calls `Get-DxUiSourcePath`. A missing license under the 40-hex folder does not block the ZIP.
   - The comment above that call still describes `source\<commit>`.
   - `Tests/BuildProcessTests/VcpkgToolsetTests.ps1:165` still joins `.build/dependencies/DxUi/source/$($lock.commit)` and skips when `Test-Path` fails.
-  - **Remaining fix**: point that test at `Get-DxUiSourcePath` and fail when the restored source is missing. Correct the `package.ps1` comment. Do not change the `Get-DxUiSourcePath` call that already ships the license.
+  - **Fixed (2026-11-02)**: the test now resolves the pin with `Get-DxUiSourcePath`. With the source restored, `vcpkg-toolset.same-behavior-as-the-dxui-pin` passes against `a059e07c` (API 3) and `f2e328a0` (API 4). `Build/VcpkgToolset.psm1` needed no change.
+  - **Remaining fix**: correct the `package.ps1` and `restore-dxui.ps1` comments that still describe `source\<commit>`. Decide whether a missing restore fails rather than skips. The hosted `ReleaseTest` job runs the Tooling scripts, and so does a fresh checkout before its first restore. Do not change the `Get-DxUiSourcePath` call that already ships the license.
 - [ ] **CI-9** · Medium · CONFIRMED — **The zero-warning gate passes on a second build.**
   - **Mechanism**: PR #19 replaced `/W4 /WX` (`TreatWarningAsError=true` at its base) with `/Wall` and no `/WX`.
     Warnings now fail only through the log scan (`build.ps1:144`, `Assert-NativeBuildDiagnostics`). A warning
