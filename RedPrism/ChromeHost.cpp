@@ -237,6 +237,7 @@ void ChromeHost::LayerTreeModel::GetVisibleItem(size_t visibleIndex, DxUi::TreeI
     outItem.badgeTone = targeted           ? DxUi::AdornmentTone::Accent
                         : !row.maskEnabled ? DxUi::AdornmentTone::Error
                                            : DxUi::AdornmentTone::Info;
+    outItem.badgeIsDot = false;
 }
 
 void ChromeHost::LayerTreeModel::OnTreeReorder(const DxUi::TreeDrop& drop)
@@ -295,6 +296,7 @@ void ChromeHost::ShortcutListModel::GetVisibleItem(std::size_t visibleIndex, DxU
     outItem.hasChildren = false;
     outItem.expanded = false;
     outItem.badgeTone = DxUi::AdornmentTone::Accent;
+    outItem.badgeIsDot = false;
 }
 
 std::optional<std::size_t> ChromeHost::ShortcutListModel::FindVisibleItemById(uint64_t itemId) const noexcept

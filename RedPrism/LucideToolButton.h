@@ -11,6 +11,10 @@ class LucideToolButton final : public DxUi::Button
 {
   public:
     LucideToolButton(std::wstring tooltip, EditorTool tool, bool fluentFallback);
+    LucideToolButton(const LucideToolButton&) = delete;
+    LucideToolButton& operator=(const LucideToolButton&) = delete;
+    LucideToolButton(LucideToolButton&&) = delete;
+    LucideToolButton& operator=(LucideToolButton&&) = delete;
 
     void Paint(DxUi::ControlHost& host) const override;
 
@@ -47,6 +51,10 @@ class LucideIconButton final : public DxUi::Button
 {
   public:
     LucideIconButton(std::wstring tooltip, int resourceId);
+    LucideIconButton(const LucideIconButton&) = delete;
+    LucideIconButton& operator=(const LucideIconButton&) = delete;
+    LucideIconButton(LucideIconButton&&) = delete;
+    LucideIconButton& operator=(LucideIconButton&&) = delete;
 
     void Paint(DxUi::ControlHost& host) const override;
 

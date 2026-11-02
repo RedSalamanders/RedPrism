@@ -538,8 +538,19 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
         }();
         if (FAILED(chromeResult))
         {
+            if (DeviceLostAfter(chromeResult))
+            {
+                _failedStage = Stage::ChromePrepare;
+                return RecoverFromStage();
+            }
+            // DxUi E_ABORT: a callback changed the tree during the pass and the view already asked to be prepared
+            // again. The retired frame is not drawn and not a failed frame; the host draws again, as after a rebuild.
+            if (chromeResult == E_ABORT)
+            {
+                return S_FALSE;
+            }
             _failedStage = Stage::ChromePrepare;
-            return DeviceLostAfter(chromeResult) ? RecoverFromStage() : chromeResult;
+            return chromeResult;
         }
     }
 
@@ -759,12 +770,18 @@ void Renderer::ReleaseDeviceResources() noexcept
     if (_context)
     {
         _context->ClearState();
-        _context->Flush();
     }
-
     _renderTarget.reset();
     _frameLatencyWaitable.reset();
     _swapChain.reset();
+    // D3D11 destroys a released flip-model swap chain lazily, at the old context's next flush: flush after the last
+    // reference went, or the HWND stays bound to it and the next CreateSwapChainForHwnd returns E_ACCESSDENIED.
+    // DxUi's embedded host no longer flushes the application's context when it replaces its device (API revision 4),
+    // so nothing else retires it before the chrome and the HWND take the new device.
+    if (_context)
+    {
+        _context->Flush();
+    }
     _factory.reset();
     _context1.reset();
     _context.reset();

@@ -123,7 +123,8 @@ class Renderer final
     void SetChrome(ChromeHost* chrome) noexcept;
     HRESULT Resize(UINT width, UINT height) noexcept;
     // One frame. S_OK when it was drawn (presented, or occluded); S_FALSE when a stage found the device removed and
-    // the device, swap chain and target were rebuilt (the host rebinds and draws again); a failure otherwise. A
+    // the device, swap chain and target were rebuilt, or when chrome Prepare reported a superseded frame (E_ABORT),
+    // which draws nothing (the host rebinds and draws again); a failure otherwise. A
     // canvas stage that fails without device loss leaves the hole empty and still presents the chrome
     // (CanvasFailure reports it), so the window keeps working (Decision D1).
     HRESULT Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,

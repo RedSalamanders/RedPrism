@@ -43,6 +43,10 @@ class CurveEditor final : public DxUi::Button
     {
         SetFocusable(false);
     }
+    CurveEditor(const CurveEditor&) = delete;
+    CurveEditor& operator=(const CurveEditor&) = delete;
+    CurveEditor(CurveEditor&&) = delete;
+    CurveEditor& operator=(CurveEditor&&) = delete;
     void SetCurves(const CurvesSettings& settings, int channel) noexcept;
     [[nodiscard]] std::optional<std::size_t> SelectedIndex() const noexcept
     {
@@ -92,6 +96,10 @@ class LevelsBar final : public DxUi::Button
     {
         SetFocusable(false);
     }
+    LevelsBar(const LevelsBar&) = delete;
+    LevelsBar& operator=(const LevelsBar&) = delete;
+    LevelsBar(LevelsBar&&) = delete;
+    LevelsBar& operator=(LevelsBar&&) = delete;
     enum class Kind : std::uint8_t
     {
         Input,  // histogram plus black / gamma / white handles
@@ -144,6 +152,10 @@ class SpectrumEditor final : public DxUi::Button
     {
         SetFocusable(false);
     }
+    SpectrumEditor(const SpectrumEditor&) = delete;
+    SpectrumEditor& operator=(const SpectrumEditor&) = delete;
+    SpectrumEditor(SpectrumEditor&&) = delete;
+    SpectrumEditor& operator=(SpectrumEditor&&) = delete;
     void SetSettings(const HueSaturationSettings& settings) noexcept;
     void SetOnHandle(std::function<void(int, double)> onHandle)
     {
@@ -182,6 +194,12 @@ class SpectrumEditor final : public DxUi::Button
 class GradientRamp final : public DxUi::Label
 {
   public:
+    GradientRamp() = default;
+    GradientRamp(const GradientRamp&) = delete;
+    GradientRamp& operator=(const GradientRamp&) = delete;
+    GradientRamp(GradientRamp&&) = delete;
+    GradientRamp& operator=(GradientRamp&&) = delete;
+
     void SetEnds(const AdjustmentColor& dark, const AdjustmentColor& light) noexcept;
     void Paint(DxUi::ControlHost& host) const override;
 

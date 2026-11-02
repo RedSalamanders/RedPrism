@@ -421,7 +421,12 @@ A frame never closes the window on its own (RF-401):
 - **Device removal at any stage**: when chrome `Prepare`, the composition, the blit, chrome `Composite` or `Present`
   fails and either the result or `GetDeviceRemovedReason` says the device is gone, the renderer rebuilds the device,
   swap chain and target (the chrome follows through `ReplaceDevice`), returns `S_FALSE`, and the host rebinds the
-  composition and the brush engine and draws again on the new device.
+  composition and the brush engine and draws again on the new device. Releasing the old device's objects clears the
+  immediate context, drops the target view and the swap chain, and only then flushes that context: D3D11 destroys a
+  released flip-model swap chain at the next flush, and until then the window stays bound to it and creating the new
+  one fails with `E_ACCESSDENIED`. Nothing else may be relied on to flush it (DxUi's embedded host does not).
+- **Superseded chrome frame**: chrome `Prepare` returning `E_ABORT` draws nothing of that frame; the renderer returns
+  `S_FALSE` on the same device and the host draws again. It is not a failed frame.
 - **Canvas failure** (the composition or the blit fails without device loss, for example out of memory): the frame
   still presents the chrome with the hole empty, and a notice says the canvas could not be drawn and that the
   document is intact (`IDS_ERROR_CANVAS_DRAW`, once per failure run). The next frame tries the canvas again.

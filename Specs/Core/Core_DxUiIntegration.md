@@ -1,7 +1,7 @@
 # DxUi integration
 
 Status: current normative consumer contract
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-02
 Owner: `restore-dxui.ps1`, `Build/DxUiRestore.psm1`, `Build/DxUiOutputPath.psm1`, `Dependencies/DxUi.lock.json`, `RedPrism/ChromeHost.*`, `build.ps1` provenance
 
 ## Scope
@@ -18,34 +18,27 @@ chronologies or claim a matrix remains qualified after source, dependency or env
 ## Pin and restore
 
 `Dependencies/DxUi.lock.json` identifies `https://github.com/RedSalamanders/DxUi`, current candidate commit
-`a059e07c39c58cbf5218c34f7b9f1a9ac29baf3b`, API revision 3, and lock target `["DxUi"]`.
-This maintenance candidate preserves the predecessor's public interface and consumer behavior while repairing
-owned warning diagnostics and posted-payload type identity under identical COMDAT folding. Its six native builds
-and all three desktop-focus profiles pass with zero skips and verified restoration. The refreshed ordinary suites and fresh consumer qualification remain open in the
-indexed NativeBuildPolicyCoherence plan. Never treat a successful restore as product qualification.
+`f2e328a0a26a18ca66bf4b2aea77bf010c9515e1`, API revision 4, and lock target `["DxUi"]`. It is DxUi `main` at the
+merge of DxUi PR #161, a documentation-only descendant of the consumer upgrade guide (`5fc4d4c3`, PR #160, DxUi
+`docs/upgrade.md`) and of the 2 November 2026 runtime delivery `6df17007875ae731a3808b475b10bd056328bbdf`
+(PR #159), so its native inputs are that delivery's. DxUi `ci.yml` passed on it. `restore-dxui.ps1` requires API
+revision 4 (`$requiredApiRevision`). C++ object layouts changed under the same revision number: DxUi and every
+RedPrism module that includes its headers MUST be rebuilt from the matching headers and library
+(`build.ps1 -Rebuild` for each configuration); an unchanged revision does not establish binary compatibility. The
+qualification record for this pin is [`DxUiRevision4_2026-11-02.md`](../TestRuns/DxUiRevision4_2026-11-02.md).
+Never treat a successful restore as product qualification.
 
-The predecessor `8e8994079e82f79e6765e6a885c03fc687957591` had identical-source full
-library x64 Debug/Release/real ASan suites, three ARM64 cross-builds and paired Release common-scene comparison pass.
-The managed RedPrism consumer repair passes full x64 Debug/Release/real ASan gates, three ARM64 cross-builds and
-Release analysis on the 858-input freeze recorded in `Specs/TestRuns/P1LayerRowsCosts_2026-10-06.md`. Fresh hardware
-and WARP metadata diagnostics preserve all initial and rename costs; full preparation, production/native activation
-and external-client G1 remain open. This pin adds optional
-caller-arranged interaction acknowledgement without painting; it preserves full preparation after failure, resize,
-DPI/device changes or hide/zero extent. Library ARM64 results are cross-compilation only. Internal embedded property-event providers keep weak
-control identity and read the coherent current snapshot; public row providers retain their original source.
-Structure invalidation uses a bounded coalesced delivery slot and a GIT-marshalled provider proxy on an MTA while
-the public provider retains its STA contract. The slot holds no historical row snapshot; owner disconnect revokes
-registration without joining delivery. The property-only predecessor `36c0ff66bd7574038ed2e255f79847a81bf054c7`
-passes the library matrix but stalls the real consumer callback inline on its owner (r211). The preceding library commit
-`5f1ccdb6b5decde9f8ef6137e8b646dba51555c4` adds the optional prepared Tree accessibility source described below while
-keeping API revision 3; because the public C++ interface changed, the consumer MUST rebuild DxUi and RedPrism from
-matching headers and library. Library qualification alone does not qualify a consumer or its activation. The nearest rollback is
-`271bd54be24eadf3f03ba5221d1be7be069860f2`, also API revision 3; it retains the existing Tree reorder callback but
-does not provide the prepared accessibility-row interface. A rollback changes the lock but leaves
-`$requiredApiRevision` at 3. The consumer adapter must also return to legacy Tree accessibility capture: remove the
-optional prepared-source include and `CapturePreparedAccessibilityRows()` override (and the wrapper's implementation
-of that optional interface), and restore the preceding full-prepare input boundary instead of calling the absent
-`PrepareInteraction`, before rebuilding against the rollback headers/library. `build.ps1` runs
+The pin replaces the API revision 3 maintenance pin `a059e07c39c58cbf5218c34f7b9f1a9ac29baf3b` (DxUi
+`ej/wall-compat-redprism-20261028`, never an ancestor of DxUi `main`), so the product now also takes DxUi `main`
+fixes that branch lacked, among them the keyboard and UI Automation cancel of pending menu hover timers (DxUi
+`762983a0`, DX-2 in `DeliveryReview_2026-10-31.md`). That pin is the rollback. A rollback restores the lock **and** this
+change's adapter together: `$requiredApiRevision = 3`, and the revision-4 adapter lines that do not compile against
+revision 3 headers (the `PointerAction::MiddleDown`/`MiddleUp` cases in `Application::OnPointer` and the
+`TreeItemData::badgeIsDot` writes in `ChromeHost`) go with it; then rebuild the whole closure against the rollback
+headers and library. Never mix the old archive with new-pin headers or objects. The first revision 3 pin
+(`271bd54`) is recorded in [`DxUiRevision3_2026-10-01.md`](../TestRuns/DxUiRevision3_2026-10-01.md), the `a059e07c`
+candidate in the NativeBuildPolicyCoherence plan, and the pins between them in this file's history and the P1 test
+runs that name them. `build.ps1` runs
 `restore-dxui.ps1` for the selected platform after vcpkg. Restore clones that exact commit under
 `.build/dependencies/DxUi/source/<commit-prefix16>` (from the sibling checkout when it already has the commit, else from the
 public repository) and isolates vcpkg/library outputs under a fingerprint. It never checks out, resets, or edits a
@@ -96,6 +89,22 @@ every message, registered ones included, to `HandleMessage` of each window it at
 delegate interfaces `IGridModel`, `IGridDelegate`, `ITreeModel` and `ITreeDelegate`; `ChromeHost` implements the last two for the
 layers list and the Command List.
 
+API revision 4 (DxUi `Specs/Build/Build_ToolchainAndConsumption.md`, "Compatibility and the consumer interface") keeps the
+message rules and changes these, which RedPrism meets as follows:
+
+- `Panel::AddChild` and `TabControl::AddTab` return null when a callback retires the owner or the child during the
+  insertion. `ChromeHost::Build` inserts every control into a root that is not attached yet and only then calls
+  `SetRoot`, and nothing is inserted into the attached tree later, so no host callback can run during an insertion.
+  RedPrism takes no child or tab out (`TakeChild`, `TakeTab`, `RemoveTab`) and uses no `PageHost`.
+- `ITreeDelegate::OnTreeSelectionChanged` reports only a change of membership to a nonempty selection; a focus move
+  alone reports `OnTreeFocusedItemChanged`, which RedPrism does not need (single selection, and `SetSelectedItemId`
+  moves the focus with the selection). A press on the already selected layer row therefore reports nothing; selecting
+  the active layer again changed no document state (`DocumentSession::SelectLayer` keeps the mask target), and the
+  mask-versus-pixels target press goes through `ChromeHost::LayerTargetAt` before the tree. RedPrism has no Grid.
+- A described menu entry is named by its label and its secondary text is HelpText. RedPrism sets no `accessibleName`
+  on menu entries (native `HMENU` flyouts and the `MenuBar` titles), so nothing is spoken twice.
+- `ContextMenuSessionCallbacks` gained `flowDirection`; RedPrism does not use that aggregate.
+
 RedPrism attaches no `WindowHost`. Its main window is a plain HWND that hosts one `EmbeddedHost` (`ChromeHost`), which the
 application prepares and composites on its own frame path. `Application::WindowProcedure` hands every message, registered ones
 included, to `Application::HandleMessage`, which ends in `DefWindowProcW`, so nothing of the product's sits between a DxUi
@@ -135,19 +144,48 @@ Facts about the pinned library that the host designs around (verified against th
   full preparation on the frame path. Initial, failed, hidden, zero-sized and replaced-device views cannot resume
   interaction through acknowledgement. Dirty pixels/text geometry remain pending for the next full preparation.
 
+- `EmbeddedHost::Prepare` changes the borrowed immediate context's pixel-shader resource slot 0 and output-merger
+  render targets. Every `Renderer::Render` draw after it (the canvas blit, the selection outline, the lasso draft and
+  the chrome composite) binds its own targets, shader resources and viewport.
+- `Prepare` returns `E_ABORT` when a callback superseded the frame (the root or tree changed during the pass) and has
+  already asked for another preparation. `Renderer::Render` then draws nothing of that frame and returns `S_FALSE`,
+  which `Application::RenderFrame` answers as after a rebuilt device: it draws once more at once, and a second
+  `S_FALSE` waits for the next pass. It is not a failed frame and never counts toward closing the window. `Prepare`
+  also returns `S_FALSE` while cooperative rich content is still preparing; RedPrism hosts no rich text or image
+  content, so its preparation is never left pending. The self-test injects a superseded chrome frame and requires
+  no failed frame, the same device and exactly one Present attempt.
+- `EmbeddedHost::ReplaceDevice` (and `Detach`) no longer clear and flush the application's immediate context, which
+  the revision 3 library did as a side effect. `Renderer::ReleaseDeviceResources` therefore flushes the old context
+  itself after releasing its target view and swap chain; before that change the first device recovery at the new pin
+  failed in `CreateSwapChainForHwnd` with `E_ACCESSDENIED` (the WARP self-test's
+  `application-selection-outline-gpu.actual-renderer-device-replacement`).
+- DxUi raises embedded accessibility notifications from its own MTA work item, which does not join on detach and
+  reaches the owner's root provider through a GIT proxy. A published prepared row source can therefore outlive
+  every RedPrism owner and foreign reader until that proxy's last release reaches the owner's STA as a COM message.
+  Code that observes the source's retirement after shutdown services messages until it retires (bounded,
+  `MsgWaitForMultipleObjectsEx`, never polling); `RunStandalonePreparedLayerRowsAccessibilitySelfTest` does, and
+  without it Release (not Debug) observed the source still alive.
+- DxUi controls delete their copy and move operations. RedPrism's control subclasses (`CanvasOverlay`,
+  `LucideToolButton`, `LucideIconButton`, `PaletteZone`, `PaletteControl` and the adjustment controls) declare
+  theirs deleted, which keeps the `/Wall` build free of C4625, C4626, C5026 and C5027.
+- `PointerAction` gained `MiddleDown` and `MiddleUp`; RedPrism sends no middle button to DxUi and names both in
+  `Application::OnPointer`'s switch. `PointerEvent::device` stays `PointerDevice::Mouse` (touch feedback is not adopted).
+- `TreeItemData` gained `badgeIsDot`; both tree models write it (false) with every other field, because `Tree::Paint`
+  reuses one item for all rows. `TreeAccessibilityItemView` gained `badgeText`; the experimental prepared layer
+  rows build the view by member name and leave it empty, as before the field existed.
 - `Toolbar` is a `Panel` subclass with no child layout; consumers set every button's bounds.
 - `Toggle` paints a switch regardless of `ButtonVariant::IconOnly`; a latched tool button is an icon-only `Button`
   with `SetPressedVisual(true)`.
 - Icon-only buttons draw their text with `FontRole::Icon` (Segoe Fluent Icons); Latin letters do not render there.
 - `Tree` reports expander toggles through `ITreeDelegate::OnTreeToggleExpanded`. When reorder is enabled,
   `SetReorderEnabled` reports one completed row drag through `ITreeDelegate::OnTreeReorder`; DxUi does not move the
-  model. API revision 3 also has this callback at the nearest rollback pin.
-- The qualified commit adds `ITreeModel::CapturePreparedAccessibilityRows()` as an optional source for the current
-  visible-model epoch, including offscreen rows. Its default returns null and preserves legacy capture. A non-null
+  model. The revision 3 rollback pin has this callback too.
+- `ITreeModel::CapturePreparedAccessibilityRows()` is an optional source for the current visible-model epoch,
+  including offscreen rows. Its default returns null and preserves legacy capture. A non-null
   `IPreparedTreeAccessibilityRows` source is already prepared: capture only retains its shared owner, while
   `GetCount`, `GetItem` and `FindItem` are bounded, allocation-free reads. DxUi's UIA snapshot retains that owner
-  through provider reads and replacement. The interface addition leaves the numeric API revision at 3, but a
-  consumer MUST rebuild against the matching DxUi library.
+  through provider reads and replacement. A source publishes a new owner when row sequence, IDs, text, depth, child
+  presence, expansion or badge status change.
 - `Splitter` hit-tests only its separator plus 2 DIP of slop; the host sizes it over both panes and places the pane
   controls itself from the committed position. `NumericStepper` and `ColorPicker` are Panels with their own children;
   `ColorPicker` ships no strings, so every caption comes from the RedPrism STRINGTABLE.

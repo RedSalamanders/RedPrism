@@ -31,6 +31,12 @@ class CanvasOverlay final : public DxUi::Control
 
     using OutlineLoop = std::vector<D2D1_POINT_2F>;
 
+    CanvasOverlay() = default;
+    CanvasOverlay(const CanvasOverlay&) = delete;
+    CanvasOverlay& operator=(const CanvasOverlay&) = delete;
+    CanvasOverlay(CanvasOverlay&&) = delete;
+    CanvasOverlay& operator=(CanvasOverlay&&) = delete;
+
     // A lasso outline being drawn: freehand or polygonal corners (the polygonal one with a rubber-band cursor),
     // or the Marquee's box as four corners.
     struct Draft

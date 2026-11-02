@@ -234,7 +234,22 @@ int Application::RunStandalonePreparedLayerRowsAccessibilitySelfTest(HINSTANCE i
     (void)SetEvent(start.get());
     expect(WaitForSingleObject(finished.get(), 15000) == WAIT_OBJECT_0 && foreignRead.load(std::memory_order_acquire),
            "shutdown.fresh-mta-reads-full-source-after-owner-destruction");
-    expect(finalWitness.expired(), "shutdown.final-mta-release-retires-complete-graph-without-owner");
+    // DxUi (API revision 4) raises accessibility notifications from its own MTA work item, which does not join on
+    // detach and reaches this apartment's root provider (and through it the published source) by a GIT proxy. That
+    // proxy's last release arrives here as a COM message, possibly after the drain above. Service messages, waiting
+    // for them rather than polling, until the graph retires or the deadline passes.
+    bool quitWhileRetiring = false;
+    const ULONGLONG retireDeadline = GetTickCount64() + 15000;
+    while (!finalWitness.expired())
+    {
+        const ULONGLONG now = GetTickCount64();
+        if (now >= retireDeadline || MsgWaitForMultipleObjectsEx(0, nullptr, static_cast<DWORD>(retireDeadline - now),
+                                                                 QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+            break;
+        quitWhileRetiring = PumpMessages().quit || quitWhileRetiring;
+    }
+    expect(finalWitness.expired() && !quitWhileRetiring,
+           "shutdown.final-mta-release-retires-complete-graph-without-owner");
     std::printf("%s application-prepared-layer-rows-accessibility.summary checks=%u failures=%d\n",
                 failures ? "FAIL" : "PASS", checks, failures);
     std::fflush(stdout);

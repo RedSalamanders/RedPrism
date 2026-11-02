@@ -547,7 +547,8 @@ void Application::RenderFrame() noexcept
     HRESULT result = render();
     if (result == S_FALSE)
     {
-        // A stage found the device removed and the renderer rebuilt it: rebind and draw on the new device.
+        // A stage found the device removed and the renderer rebuilt it, or DxUi superseded the chrome frame: rebind
+        // (a no-op on the same device) and draw again.
         BindCompositionDevice();
         result = render();
     }
@@ -570,7 +571,7 @@ void Application::RenderFrame() noexcept
     _failedFrames = 0;
     if (result == S_FALSE)
     {
-        // Rebuilt twice in a row: draw again on the next pass.
+        // Rebuilt or superseded twice in a row: draw again on the next pass.
         return;
     }
     _frameInvalidated = false;
@@ -4485,6 +4486,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     case ::DxUi::PointerAction::Cancel:
     case ::DxUi::PointerAction::Move:
     case ::DxUi::PointerAction::Up:
+    case ::DxUi::PointerAction::MiddleDown: // The host sends no middle button to DxUi.
+    case ::DxUi::PointerAction::MiddleUp:
     default:
         if (!DragPointer(event, view) && event.action == DxUi::PointerAction::Move)
         {
@@ -8628,6 +8631,25 @@ int Application::RunRenderingSelfTest() noexcept
                 name, _failedFrames, static_cast<std::uint32_t>(_lastFrameFailure),
                 static_cast<int>(_renderer.FailedStage()), generation, _renderer.DeviceGeneration(),
                 _composition.Device() == _renderer.Device(), _brushEngine.Ready(), _composition.CanvasSurfaceBytes());
+            SelfTestFailure(message.c_str());
+            return 5;
+        }
+    }
+    // DxUi API revision 4: chrome Prepare's E_ABORT is a frame a callback superseded, not a failure. The retired frame
+    // never reaches Present, the host draws once more on the same device at once, and nothing counts as failed.
+    {
+        const std::uint64_t generation = _renderer.DeviceGeneration();
+        const std::uint64_t attempts = _renderer.PresentAttemptCount();
+        _renderer.FailNextStageForTest(Renderer::Stage::ChromePrepare, E_ABORT);
+        frame();
+        if (!_window || FAILED(_frameLoopFailure) || _failedFrames != 0 || _frameInvalidated ||
+            _renderer.DeviceGeneration() != generation || _renderer.PresentAttemptCount() != attempts + 1)
+        {
+            const std::wstring message = std::format(
+                L"A superseded chrome frame was not drawn again once (failed frames {}, last failure {:#010x}, "
+                L"generation {} -> {}, present attempts {} -> {}).\n",
+                _failedFrames, static_cast<std::uint32_t>(_lastFrameFailure), generation, _renderer.DeviceGeneration(),
+                attempts, _renderer.PresentAttemptCount());
             SelfTestFailure(message.c_str());
             return 5;
         }

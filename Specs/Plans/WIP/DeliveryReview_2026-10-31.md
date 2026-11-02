@@ -1,7 +1,12 @@
 # Delivery review 2026-10-31
 
-Status: ACTIVE. DX-2 has not started.
+Status: ACTIVE. DX-2's library fix is in the pin since 2 November 2026; its product acceptance has not run.
 Date: 2026-10-31
+
+> Update (2026-11-02): at the user's request the lock moved to DxUi `main`
+> `f2e328a0a26a18ca66bf4b2aea77bf010c9515e1`, API revision 4, which contains `762983a0`. That replaces the
+> API-revision-3 repair route below; the branch port is no longer wanted. DX-2 closes when its acceptance passes
+> on the product ([record](../../TestRuns/DxUiRevision4_2026-11-02.md)).
 
 > Correction (2026-11-01, `main` `e79a83a`): "no product defect" and "no other work item"
 > apply only to the mechanisms this file checked. They do not retire

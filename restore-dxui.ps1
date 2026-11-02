@@ -22,7 +22,7 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'Build/DxUiPaths.psm1') -Scope Local -ErrorAction Stop
 
 # The DxUi API revision this product's code is written against: the lock names it and the pinned capabilities.json carries it.
-$requiredApiRevision = 3
+$requiredApiRevision = 4
 $pinPath = Join-Path $PSScriptRoot 'Dependencies/DxUi.lock.json'
 $pin = Get-Content -LiteralPath $pinPath -Raw | ConvertFrom-Json
 if ($pin.repository -ne 'https://github.com/RedSalamanders/DxUi' -or $pin.commit -notmatch '^[0-9a-f]{40}$' -or
