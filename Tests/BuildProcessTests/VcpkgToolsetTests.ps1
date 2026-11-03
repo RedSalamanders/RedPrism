@@ -161,8 +161,10 @@ try {
     # --- The same behavior as DxUi's own pin, whenever that pin is restored. This repository's copy exists only so that
     # vcpkg-install.ps1 needs neither the restore nor the pin; a drift fails here. Only what the pinned capabilities.json lists in
     # its consumerInterface is called: Get-DxUiDefaultToolset and Update-DxUiVcpkgOverlayTriplet.
+    # The pin is found where restore-dxui.ps1 puts it: Get-DxUiSourcePath, never a path spelled out here.
     $lock = Get-Content -Raw -LiteralPath (Join-Path $repo 'Dependencies/DxUi.lock.json') | ConvertFrom-Json
-    $dxuiRoot = Join-Path $repo ".build/dependencies/DxUi/source/$($lock.commit)"
+    Import-Module (Join-Path $repo 'Build/DxUiPaths.psm1') -Force
+    $dxuiRoot = Get-DxUiSourcePath -DependencyRoot (Join-Path $repo '.build/dependencies/DxUi') -Commit $lock.commit
     $dxuiTools = Join-Path $dxuiRoot 'Tools'
     if ((Test-Path -LiteralPath (Join-Path $dxuiTools 'VcpkgTriplet.psm1')) -and (Test-Path -LiteralPath (Join-Path $dxuiTools 'VisualStudio.psm1'))) {
         $dxuiModules = @(Import-Module (Join-Path $dxuiTools 'VisualStudio.psm1') -Force -PassThru) + @(Import-Module (Join-Path $dxuiTools 'VcpkgTriplet.psm1') -Force -PassThru)
