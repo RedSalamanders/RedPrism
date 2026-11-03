@@ -4,6 +4,47 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Add an explicit x64 production-continuation option to the approved manual native workflow, verifying both preserved regression receipts and the exact qualified source while preserving ARM64 feasibility and extended qualification.
+- The vcpkg toolset parity check against DxUi's pinned `Get-DxUiDefaultToolset` and
+  `Update-DxUiVcpkgOverlayTriplet` now runs. `Tests/BuildProcessTests/VcpkgToolsetTests.ps1` finds the restored
+  pin with `Get-DxUiSourcePath`, the 16-character source folder `restore-dxui.ps1` uses. Before, it looked under
+  the 40-character commit and always skipped. With the source restored, `vcpkg-toolset.same-behavior-as-the-dxui-pin`
+  passes against `a059e07c` (API 3) and `f2e328a0` (API 4), and `Build/VcpkgToolset.psm1` needs no change. A
+  checkout that has not restored DxUi still skips the check.
+- Run the rectangle and ellipse press self-test fixtures on the self-test's synthetic keyboard for their whole
+  run, like the other standalone press fixtures, and hold the Shift and Alt scenarios' modifiers there, so a key
+  pressed on the desktop during the hidden WARP self-test can no longer change the press mode at button-down.
+  The native thread key state is saved and restored around the run; every assertion and expected value is
+  unchanged.
+- Run the original loaded-selection complexity and pixel-budget refusal tests in the existing isolated host
+  with stable declared memory capacity. Add real low-capacity Load Layer and Load Mask refusal controls;
+  preserve the tracer limit, exact notices, selection/history expectations and settlement deadlines.
+- Move the DxUi pin from the API revision 3 maintenance commit `a059e07c` to DxUi `main` `f2e328a0`
+  (API revision 4, the 2 November 2026 delivery with its consumer upgrade guide), which also brings the
+  keyboard cancel of pending menu hover timers (DX-2). Device recovery now flushes the old context after
+  releasing the swap chain, since the new embedded host no longer does it and the next swap chain was refused
+  with `E_ACCESSDENIED`. A superseded chrome preparation (`E_ABORT`) draws again instead of counting as a
+  failed frame; the chrome controls declare their copy and move operations deleted, tree rows write the new
+  badge field, and the prepared layer rows build their accessibility view by member. The prepared layer-row
+  accessibility fixture services the owner's messages until DxUi's notification thread lets go of the rows.
+  `test.ps1` passes in x64 Debug, Release and ASan Debug; ARM64 and DX-2's product acceptance remain open.
+  Restore requires revision 4; `a059e07c` with this adapter reverted is the rollback.
+- Drain ready owner work before the Ctrl-pixel test fixture waits for another scheduler notification. Add a
+  three-action control for consumed wake signals and keep final-display suspension consistent with the hidden
+  window policy, preserving the original publication, cancellation, history and retirement assertions.
+- Correct the WIP index and the 28–31 October review notes against `main` `e79a83a`: `package.ps1` already calls `Get-DxUiSourcePath`, including in the packaging summary and AR-13, and P1 with its child plans stays HOLD. Resolve CI-10 / Q16 and reconcile the Changes contract with pinned engine `19710a8a`: PR static checks validate the exact head against its supplied immutable base; main pushes coordinate native qualification. No product code changed. DX-2, the busy string, the admission ceilings, the format-7 writer, and the parity-test path skip remain open.
+- Rename canvas rendering components, shaders, tests, tooling and diagnostics consistently; remove the obsolete reference tree from rewritten history and use the RedPrism project-format marker. Existing packages with a different marker require explicit conversion. Align the bootstrap checkout with the manifest baseline already selected on main so its declared dependency versions resolve.
+- Use `.prism` for project filenames, open/save filters and defaults, classification, fixtures and documentation throughout rewritten history. Derive suffix length from the extension and cover missing, uppercase, mixed-case and misleading-suffix paths; retain the existing ZIP layout and `com.redprism.project` marker.
+- Run the active-layer and composite Wand functional suites on the existing isolated owner with stable declared capacity. Preserve all original Boolean FIFO, pixel/history, reservation and settlement assertions; add twelve low-capacity refusal controls and detailed settlement diagnostics.
+- Bind sizing's held-state check to its original worker ticket and exact reservation. A composed panel/size/Undo control retains a separate real reservation while sizing is held, then requires the unchanged exact final clipboard baseline after both retire.
+- Isolate scheduler message-pump and capacity fixtures from ambient OS memory notifications when checking post-settlement idle. Preserve every ordering, cancellation and lifetime assertion, and add a deterministic late-memory-notification control requiring owner drain before idle.
+- Preserve retryable device recovery when an owner stops an attached command source before recording begins. Return `E_ABORT` for that valid stopped producer while keeping invalid inputs strict, with controlled pre-start coverage and the original two-restart, one-capture and joined-retirement bounds.
+- Run panel/Wand functional and lifetime fixtures on the existing isolated startup owner with a deterministic memory snapshot. Preserve all 126 host and 32 lifecycle assertions, and require six additional real-host controls proving that insufficient declared capacity refuses before capture with unchanged panel, selection, source and history.
+- Establish normal native tracking bounds before the live Polygonal DPI fixture opens its drawing, preserving exact DPI, rectangle, original-owner, and restore assertions on small hosted desktops.
+- Settle and verify each Clone input-policy fixture installation before synthetic pointer input, and scope its keyboard independently. Preserve all original literal source/offset/pixel/history assertions and retain detailed failure diagnostics.
+- Wait for the delayed-clipboard test producer's actual message dispatch before its native early read. Add event-controlled startup checks and immediate read diagnostics while preserving all original clipboard, pixel, history, cancellation and retirement assertions.
+- Use the existing 90-minute native ARM64 self-test observation bound in the shared CI adapter, retaining the x64 default, complete suites, failure propagation, assertion probes, and successful-evidence requirements.
+- Record the 31 October red-team delivery plan: re-confirm the 21–28 October merge-review findings at `a7e81222`, add the leftover test-isolation and always-on benchmark gaps, and keep the WP0–WP6 work sequence. No product code changed; MergeReview questions and the DxUi pin action stay open.
 - Adopt shared CI v1.0.6: DxUi SDK ZIPs stay internal with no publication workflow; application publication remains manual and artifact-only. Document the organization token route and separate implementation closeout from source-bound hosted acceptance; no product or winget publication is performed.
 - Pin the common CI engine to v1.0.5: verify native portable winget registration, every installed command alias, declared smoke probes and owned cleanup; retain the compiler-free custom dependency status observer and recorded owner-only emergency PR merge route. Publication remains an explicit action requiring both matching native Release regression and production ZIP receipts.
 - Retain stdout/stderr and real exit codes for windowless hosted native commands through the common pinned CI engine v1.0.4.

@@ -1,1 +1,0 @@
-- Use the existing 90-minute native ARM64 self-test observation bound in the shared CI adapter, retaining the x64 default, complete suites, failure propagation, assertion probes, and successful-evidence requirements.

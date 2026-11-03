@@ -1,1 +1,0 @@
-- Run panel/Wand functional and lifetime fixtures on the existing isolated startup owner with a deterministic memory snapshot. Preserve all 126 host and 32 lifecycle assertions, and require six additional real-host controls proving that insufficient declared capacity refuses before capture with unchanged panel, selection, source and history.

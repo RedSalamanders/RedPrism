@@ -1,1 +1,0 @@
-- Run the active-layer and composite Wand functional suites on the existing isolated owner with stable declared capacity. Preserve all original Boolean FIFO, pixel/history, reservation and settlement assertions; add twelve low-capacity refusal controls and detailed settlement diagnostics.

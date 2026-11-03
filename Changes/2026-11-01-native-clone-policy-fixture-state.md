@@ -1,1 +1,0 @@
-- Settle and verify each Clone input-policy fixture installation before synthetic pointer input, and scope its keyboard independently. Preserve all original literal source/offset/pixel/history assertions and retain detailed failure diagnostics.
