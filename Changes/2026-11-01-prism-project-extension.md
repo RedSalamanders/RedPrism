@@ -1,1 +1,0 @@
-- Use `.prism` for project filenames, open/save filters and defaults, classification, fixtures and documentation throughout rewritten history. Derive suffix length from the extension and cover missing, uppercase, mixed-case and misleading-suffix paths; retain the existing ZIP layout and `com.redprism.project` marker.

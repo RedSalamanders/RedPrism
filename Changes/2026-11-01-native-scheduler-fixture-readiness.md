@@ -1,1 +1,0 @@
-- Isolate scheduler message-pump and capacity fixtures from ambient OS memory notifications when checking post-settlement idle. Preserve every ordering, cancellation and lifetime assertion, and add a deterministic late-memory-notification control requiring owner drain before idle.
