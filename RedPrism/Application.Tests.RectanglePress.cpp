@@ -21,6 +21,11 @@ int Application::RunStandaloneEllipsePressSelfTest(HINSTANCE instance) noexcept
 }
 int Application::RunStandaloneMarqueePressSelfTest(HINSTANCE instance, LassoKind kind) noexcept
 {
+    KeyboardState::ScopedSynthetic keyboard; // Physical keys cannot change this standalone driver's input.
+    std::array<BYTE, 256> nativeKeys{};
+    if (!GetKeyboardState(nativeKeys.data()))
+        return 5;
+    auto restoreKeys = wil::scope_exit([&]() noexcept { (void)SetKeyboardState(nativeKeys.data()); });
     const bool ellipse = kind == LassoKind::Ellipse;
     const char* family = ellipse ? "application-ellipse-press" : "application-rectangle-press";
     unsigned checks = 0, failures = 0;
@@ -165,10 +170,10 @@ int Application::RunStandaloneMarqueePressSelfTest(HINSTANCE instance, LassoKind
                 std::array<BYTE, 256> beforeKeys{};
                 if (!KeyboardState::Read(beforeKeys))
                     return 5;
-                if (alt)
+                if (shift || alt)
                 {
                     auto heldKeys = beforeKeys;
-                    heldKeys[VK_MENU] = 0x80;
+                    heldKeys[shift ? VK_SHIFT : VK_MENU] = 0x80;
                     KeyboardState::Write(heldKeys);
                 }
                 send(WM_MOUSEMOVE,
@@ -176,7 +181,7 @@ int Application::RunStandaloneMarqueePressSelfTest(HINSTANCE instance, LassoKind
                      : shift || alt ? Vec2{60, 55}
                                     : Vec2{60, 60},
                      static_cast<WPARAM>(MK_LBUTTON | (shift ? MK_SHIFT : 0)));
-                if (alt)
+                if (shift || alt)
                     KeyboardState::Write(beforeKeys);
             }
         }
