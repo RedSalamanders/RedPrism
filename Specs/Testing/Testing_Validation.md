@@ -3991,7 +3991,15 @@ remain separate from subsequent qualification.
 
 `Test-Changes.ps1 -Explain` is the read-only planning entrypoint; `Test-Changes.ps1` runs affected scopes. The first run compares committed work since the local merge base with `origin/main` plus independent staged, working, rename-side, deletion and untracked paths. No ref is fetched. Unknown executable/build/shared inputs widen coverage. `-Scopes A,B` selects explicit scopes; unknown or incompatible selectors fail before execution.
 
-A successful default affected run retains a source-byte and Git-index baseline for that checkout, platform, configuration and environment. The next edit selects only changes since that baseline. Staging or committing identical tested working bytes does not rerun tests. A genuinely different staged blob is retained. Failed, interrupted, corrupt, mismatched, explicit partial or CI-pending runs never advance this baseline. An explicit `-BaseRef` bypasses the incremental baseline. Unexplained artifact changes widen coverage. No selection is `NOT_EVALUATED`, never a new repository pass.
+A successful default affected run retains a source-byte and Git-index baseline for that checkout, platform, configuration and environment. The next edit selects only changes since that baseline. Staging or committing identical tested working bytes does not rerun tests. A genuinely different staged blob is retained. Failed, interrupted, corrupt, mismatched, explicit partial or CI-pending runs never advance this baseline. Explicit `-BaseRef` and `-Force` bypass the incremental baseline. Unexplained artifact changes widen coverage. No selection is `NOT_EVALUATED`, never a new repository pass.
+
+Selected affected work suspends the old baseline before build/test execution, so failure or interruption cannot
+leave older success able to suppress the next run. An unchanged successful explicit/Full attempt may restore
+the exact old baseline bytes; it does not advance that baseline. A default success publishes its new completed
+state. Direct test.ps1 attempts revoke old affected state before validation or native work. State paths are
+bounded to the checkout's report root and refuse reparse points. A reentrant checkout/profile test lease
+refuses competing processes while keeping other profiles/workspaces independent. These controls preserve
+the existing local evidence boundary and do not grant hosted, foreground or release acceptance.
 
 Only exact successful reusable scope results may be reused: source/dependency/build policy, binary/DLL/PDB and required deployed inputs, physical checkout, toolchain/environment, profile and normalized scenario arguments must match. Missing runtime inputs, JSON-only profiles, failures and mutation invalidate evidence. Receipts publish atomically only after successful unchanged execution. `-Force` bypasses result reuse; explicit Full/PrePush do not narrow obligations through the incremental baseline. IO/clipboard, stress, resource/benchmark observations, captures and process-fault workflows remain fresh when selected. Omission by an affected plan is not reusable qualification for omitted scopes.
 

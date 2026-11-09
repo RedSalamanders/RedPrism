@@ -385,6 +385,53 @@ Export-ModuleMember -Function Get-ScopedChangedPaths, Get-ScopedComparisonProble
     Get-ScopedEnvironmentInputs, Get-ScopedEnvironmentIdentity
 
 
+function Enter-ScopedIterationLease {
+    param([string]$Root,[string]$Platform,[string]$Configuration)
+    $identity=[IO.Path]::GetFullPath($Root).TrimEnd('\','/')
+    if([OperatingSystem]::IsWindows()){$identity=$identity.ToUpperInvariant()}
+    $key=Get-ScopedDigest (@($identity,$Platform,$Configuration) -join "`n")
+    $lease=[Threading.Mutex]::new($false,"RedSalamanders.Iteration.$key")
+    try {
+        $owned=$false
+        try{$owned=$lease.WaitOne(0)}catch [Threading.AbandonedMutexException]{$owned=$true}
+        if(-not $owned){throw 'Another test operation owns this checkout/profile.'}
+        return $lease
+    }catch{$lease.Dispose();throw}
+}
+function Assert-ScopedIterationStatePath {
+    param([string]$Path,[string]$Root)
+    $base=[IO.Path]::GetFullPath($Root).TrimEnd('\','/')
+    $prefix=[IO.Path]::GetFullPath((Join-Path $base '.build/reports/scoped-tests')).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
+    $cursor=[IO.Path]::GetFullPath($Path)
+    $comparison=if([OperatingSystem]::IsWindows()){[StringComparison]::OrdinalIgnoreCase}else{[StringComparison]::Ordinal}
+    if(-not $cursor.StartsWith($prefix,$comparison)){throw 'Iteration state escaped its report root.'}
+    while($cursor.Length -gt $base.Length){
+        if((Test-Path -LiteralPath $cursor) -and ((Get-Item -LiteralPath $cursor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Reparse iteration state paths are unsupported.'}
+        $cursor=Split-Path -Parent $cursor
+    }
+}
+function Suspend-ScopedIteration {
+    param([string]$Path,[string]$Root)
+    Assert-ScopedIterationStatePath $Path $Root
+    if(-not(Test-Path -LiteralPath $Path -PathType Leaf)){return $null}
+    if((Get-Item -LiteralPath $Path).Length -gt 16MB){throw 'Oversized iteration state.'}
+    $bytes=[IO.File]::ReadAllBytes($Path)
+    Remove-Item -LiteralPath $Path -ErrorAction Stop
+    return ,$bytes
+}
+function Restore-ScopedIteration {
+    param([string]$Path,[string]$Root,[AllowNull()][byte[]]$Bytes)
+    if($null -eq $Bytes){return}
+    Assert-ScopedIterationStatePath $Path $Root
+    $temporary=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
+    try{
+        [IO.File]::WriteAllBytes($temporary,$Bytes)
+        # Preserve the exact prior proof; never overwrite another owner's new state.
+        Move-Item -LiteralPath $temporary -Destination $Path -ErrorAction Stop
+    }finally{if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary}}
+}
+Export-ModuleMember -Function Enter-ScopedIterationLease,Suspend-ScopedIteration,Restore-ScopedIteration
+
 function Get-ScopedSourceMap {
     param([string]$Root,[switch]$CompiledOnly)
     $map=@{};$deleted=$null

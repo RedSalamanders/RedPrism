@@ -24,11 +24,12 @@ function Add-Result([string] $Name, [object] $Value) { $script:results.Add([pscu
 $helper = Join-Path $RepositoryRoot '.github/scripts/Run-NativeArm64.ps1'
 $testEntrypoint = Join-Path $RepositoryRoot 'test.ps1'
 $hostDiscovery = Join-Path $RepositoryRoot 'Build/VisualStudioDiscovery.psm1'
-foreach ($required in @($helper,$testEntrypoint,$hostDiscovery)) {
+$iterationPolicy = Join-Path $RepositoryRoot 'Build/ScopedTesting.psm1'
+foreach ($required in @($helper,$testEntrypoint,$hostDiscovery,$iterationPolicy)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Missing candidate input: $required" }
 }
 $sourceHashes = [ordered]@{}
-foreach ($source in @($helper, $testEntrypoint, $hostDiscovery, $PSCommandPath)) {
+foreach ($source in @($helper, $testEntrypoint, $hostDiscovery, $iterationPolicy, $PSCommandPath)) {
     $sourceHashes[$source] = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
 }
 $tokens=$null; $parseErrors=$null
@@ -386,6 +387,10 @@ New-Item -ItemType Directory -Path $boundary | Out-Null
 $copiedEntrypoint = Join-Path $boundary 'test.ps1'
 [IO.File]::WriteAllBytes($copiedEntrypoint, [IO.File]::ReadAllBytes($testEntrypoint))
 Assert-Check ((Get-FileHash -LiteralPath $copiedEntrypoint -Algorithm SHA256).Hash -ceq $sourceHashes[$testEntrypoint]) 'invalid-argument-entrypoint-bytes-identical'
+$copiedPolicy = Join-Path $boundary 'Build/ScopedTesting.psm1'
+[void][IO.Directory]::CreateDirectory((Split-Path -Parent $copiedPolicy))
+[IO.File]::WriteAllBytes($copiedPolicy, [IO.File]::ReadAllBytes($iterationPolicy))
+Assert-Check ((Get-FileHash -LiteralPath $copiedPolicy -Algorithm SHA256).Hash -ceq $sourceHashes[$iterationPolicy]) 'invalid-argument-iteration-policy-bytes-identical'
 $sentinel = Join-Path $boundary 'build-reached.txt'
 $stub = @'
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'build-reached.txt'), 'BUILD_BOUNDARY_REACHED')

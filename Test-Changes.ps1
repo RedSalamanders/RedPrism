@@ -21,6 +21,8 @@ $ErrorActionPreference='Stop'
 if (-not $Explain -and $Mode -eq 'PrePush') { & (Join-Path $PSScriptRoot 'Tools/Test-Changelog.ps1') -Base $(if ($BaseRef) { $BaseRef } else { 'origin/main' }) }
 $root=$PSScriptRoot;$module=Join-Path $root 'Build/ScopedTesting.psm1'
 Import-Module $module -Force
+$iterationLease=if(-not $Explain){Enter-ScopedIterationLease $root $Platform $Configuration}else{$null}
+try {
 $manifest=Read-ScopedTestManifest $root
 $Scopes=@($Scopes|ForEach-Object{$_ -split ','}|ForEach-Object{$_.Trim()}|Where-Object{$_})
 if($Scopes.Count -and $Mode -ne 'Affected'){throw '-Scopes is only valid for explicit Affected iteration.'}
@@ -40,7 +42,7 @@ if($Mode -eq 'Affected' -and -not $Scopes.Count){
     # base override must not silently use an unrelated saved baseline.
     $branchPaths=@(Get-ScopedChangedPaths $root $BaseRef)
     $baseline=Read-ScopedIteration $iterationPath $root $Platform $Configuration $environment
-    if($baseline -and -not $PSBoundParameters.ContainsKey('BaseRef')){
+    if($baseline -and -not $Force -and -not $PSBoundParameters.ContainsKey('BaseRef')){
         $changed=@(@(Get-ScopedMapDelta $baseline.source $source)+@(Get-ScopedPendingIndexDelta $root $baseline.index $index)|Sort-Object -Unique)
         $basis='last successful default affected run (working bytes and index)'
         if(-not $changed.Count -and $artifact -cne $baseline.artifact){$forceFull=$true;$basis='unexplained artifact change since the last successful iteration'}
@@ -63,6 +65,7 @@ if(-not $selected.Count){
     exit 0
 }
 $native=@($selected|Where-Object native)
+$previousIteration=Suspend-ScopedIteration $iterationPath $root
 $buildOptions=''
 if($native.Count){
     Assert-ScopedRuntimePlatform $Platform
@@ -133,8 +136,11 @@ if((Get-ScopedMapIdentity (Get-ScopedSourceMap $root)) -cne (Get-ScopedMapIdenti
     (Get-ScopedEnvironmentIdentity) -cne $environment){throw 'Inputs/index/environment changed during the run; the iteration baseline was not advanced.'}
 if($Mode -eq 'Affected' -and -not $Scopes.Count -and -not $deferred.Count){
     Write-ScopedIteration $iterationPath $root $Platform $Configuration $environment $source $index $artifact
+}elseif(-not $deferred.Count){
+    Restore-ScopedIteration $iterationPath $root $previousIteration
 }
 if($deferred.Count){Write-Host 'LOCAL_OBLIGATIONS_PASSED; CI_PENDING'}
 elseif($names.Count -eq $applicable.Count){Write-Host 'FULL_NONINTERACTIVE_PASSED; manual/platform/resource qualification remains separate'}
 else{Write-Host 'SELECTED_PASSED; repository NOT_EVALUATED'}
 exit 0
+}finally{if($iterationLease){try{$iterationLease.ReleaseMutex()}finally{$iterationLease.Dispose()}}}
