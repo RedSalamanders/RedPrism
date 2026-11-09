@@ -1,7 +1,7 @@
 # Generated test-run evidence
 
 Status: normative current tooling contract
-Last reviewed: 2026-10-21
+Last reviewed: 2026-11-09
 
 After argument, desktop and build preflight, native test execution writes each invocation under `.build/evidence/test-runs/<UTC-pid-guid>/payload`.
 It creates a new directory and exclusive owner lease; it never reuses an old run directory or sweeps older runs.
@@ -15,6 +15,10 @@ Verification includes hidden files, long Unicode paths, ordinary file contents a
 ancestors and payload links are refused without traversing or deleting their targets. Directory identity is freshly
 checked; sharing flags alone do not prevent all ReFS directory renames. Files still open for writing fail verification.
 Unique evidence stays in place; no archive payload copy, attribute normalization or read-only clearing occurs.
+If native execution already failed or timed out, finalization failure is reported separately and preserves the
+original exception and unsuccessful result. If execution succeeded, finalization failure remains fatal. An
+active writer still prevents verified completion; preserving the primary diagnostic does not relax file pins,
+metadata/stream checks, process ownership or any timeout. Failed and partial raw evidence remains retained.
 Shared build/dependency/qualification files remain outside the writable run, and their existing read-only rules apply.
 
 The record establishes retention and the outcome of the selected invocation only. It does not replace exact source,
