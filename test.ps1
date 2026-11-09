@@ -30,6 +30,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSCommandPath
+Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
+$iterationLease=Enter-ScopedIterationLease $repoRoot $Platform $Configuration
+try {
+[void](Suspend-ScopedIteration (Join-Path $repoRoot ".build/reports/scoped-tests/$Platform-$($Configuration -replace ' ','')/iteration.json") $repoRoot)
 $available=@('Host','Document','IO','Composition','Runtime','Stress','Performance','Captures','Tooling')
 if($Full){$Suites=$available}
 $Suites=@($Suites|ForEach-Object{$_ -split ','}|ForEach-Object{$_.Trim()}|Where-Object{$_}|Sort-Object -Unique)
@@ -443,3 +447,4 @@ Publish-TestRunEvidenceReceipt -Run $evidence -Name 'normal-suites.json' -Receip
 $runPassed = $true
 } finally { Complete-TestRunEvidence -Run $evidence -Passed $runPassed }
 exit 0
+}finally{try{$iterationLease.ReleaseMutex()}finally{$iterationLease.Dispose()}}

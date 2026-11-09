@@ -1,0 +1,1 @@
+- Preserve the latest local failure during affected iteration: suspend old no-work state before execution, revoke it on failure/interruption and direct test attempts, and restore only unchanged successful explicit work. Force bypasses the iteration baseline, with a reentrant per-profile test lease and real process/failure refusal controls.

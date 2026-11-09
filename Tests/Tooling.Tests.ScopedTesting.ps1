@@ -324,14 +324,42 @@ exit 0
         Assert ((Get-FileHash $state).Hash -ceq $before) 'Partial selection advanced the aggregate baseline'
         $r=Run;Assert ($r.Exit -eq 0 -and $r.Text.Contains('scopes: Example, Other')) "Partial selection concealed the other edit: $($r.Text)"
     }
+    Case 'same-source forced failure revokes the old no-work baseline' {
+        $r=Run;Assert ($r.Exit -eq 0 -and $r.Text.Contains('NOTHING_SELECTED')) 'Expected the earlier successful default baseline'
+        Put (Join-Path $public '.build/fail') 'fail'
+        $r=Run @('-Force');Assert ($r.Exit -ne 0 -and -not(Test-Path $state)) 'Force reused the default baseline or retained older success'
+        Remove-Item -LiteralPath (Join-Path $public '.build/fail')
+        $r=Run;Assert ($r.Exit -eq 0 -and -not $r.Text.Contains('NOTHING_SELECTED')) "Old baseline concealed the latest failure: $($r.Text)"
+    }
+    Case 'iteration lease is nested, process-exclusive and profile-specific' {
+        $lease=Enter-ScopedIterationLease $public $platform Debug
+        try {
+            $nested=Enter-ScopedIterationLease $public $platform Debug
+            try{$nested.ReleaseMutex()}finally{$nested.Dispose()}
+            $before=(Get-FileHash $state).Hash
+            $r=Run;Assert ($r.Exit -ne 0 -and $r.Text.Contains('Another test operation')) 'Competing process entered the same profile'
+            Assert ((Get-FileHash $state).Hash -ceq $before) 'Refused process changed the existing baseline'
+            $r=Run @('-Configuration','Release');Assert ($r.Exit -eq 0) "Disjoint profile was blocked: $($r.Text)"
+        }finally{try{$lease.ReleaseMutex()}finally{$lease.Dispose()}}
+    }
+    Case 'direct test refusal revokes an earlier affected baseline before native work' {
+        $direct=Join-Path $fixture 'direct-refusal'
+        Put (Join-Path $direct 'test.ps1') ([IO.File]::ReadAllText((Join-Path $root 'test.ps1')))
+        Put (Join-Path $direct 'Build/ScopedTesting.psm1') ([IO.File]::ReadAllText((Join-Path $root 'Build/ScopedTesting.psm1')))
+        $old=Join-Path $direct ".build/reports/scoped-tests/$platform-Debug/iteration.json"
+        Put $old '{"prior":"fixture baseline"}'
+        & (Join-Path $PSHOME $(if($IsWindows){'pwsh.exe'}else{'pwsh'})) -NoProfile -File (Join-Path $direct 'test.ps1') -Platform $platform -Suites NotARealSuite *> (Join-Path $direct 'refusal.log')
+        Assert ($LASTEXITCODE -ne 0 -and -not(Test-Path $old)) 'Direct refusal retained the previous no-work baseline'
+        Assert ((Get-Content (Join-Path $direct 'refusal.log') -Raw) -match 'Unknown suite') 'Direct fixture failed before reaching the intended refusal'
+    }
     Case 'failures and post-run mutations never advance the affected baseline or retain reusable success' {
         $before=(Get-FileHash $state).Hash;Put (Join-Path $public 'Tests/Example.Tests.Case.cpp') 'failure candidate';Put (Join-Path $public '.build/fail') 'fail'
-        $r=Run;Assert ($r.Exit -ne 0) 'Failure qualified';Assert ((Get-FileHash $state).Hash -ceq $before) 'Failure advanced baseline'
+        $r=Run;Assert ($r.Exit -ne 0) 'Failure qualified';Assert (-not(Test-Path $state)) 'Failure retained an older baseline'
         $receipt=Join-Path $public ".build/reports/scoped-tests/$platform-Debug/Example.json"
         Assert (-not(Test-Path $receipt)) 'Failure retained earlier success'
         Remove-Item -LiteralPath (Join-Path $public '.build/fail');$r=Run;Assert ($r.Exit -eq 0) "Failed candidate was not rerun: $($r.Text)"
         $before=(Get-FileHash $state).Hash;Put (Join-Path $public 'Tests/Example.Tests.Case.cpp') 'mutation candidate';Put (Join-Path $public '.build/mutate') 'mutate'
-        $r=Run;Assert ($r.Exit -ne 0) 'Mutation qualified';Assert ((Get-FileHash $state).Hash -ceq $before) 'Mutation advanced baseline'
+        $r=Run;Assert ($r.Exit -ne 0) 'Mutation qualified';Assert (-not(Test-Path $state)) 'Mutation retained an older baseline'
         Remove-Item -LiteralPath (Join-Path $public '.build/mutate')
         $r=Run @('-SkipBuild');Assert ($r.Exit -ne 0 -and $r.Text.Contains('SkipBuild refused')) 'Stale compiled source accepted'
         $r=Run;Assert ($r.Exit -eq 0) "Mutated sources did not recover: $($r.Text)"
