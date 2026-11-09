@@ -107,3 +107,6 @@ authorize publication, or claim complete two-platform production qualification. 
 qualification workflow and automatic main CI remain available with their original behavior. The default
 `ARM64Feasibility` option preserves the existing ARM64 branch/configuration guard; selecting the x64
 continuation excludes that ARM64 job. Both operations retain the reviewed manual-only routing owner.
+## Dependency cache reuse
+
+The pinned shared engine restores vcpkg's ABI-indexed package cache for normal and manual native qualification. Exact engine/input keys are preferred; fallback lookup stays within the same runner OS, host architecture and target platform, and the pinned vcpkg restore still selects each package by its computed ABI. A miss rebuilds the package. This supplies dependency inputs only: product objects, DxUi SDK outputs and build/test receipts are not restored by this cache. Dependency pins, native execution, failure detectors and production/publication gates remain required. The owning behavior is the shared engine's Specs/CI.md.
