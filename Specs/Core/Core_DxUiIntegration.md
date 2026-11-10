@@ -15,6 +15,36 @@ The lock owns exact dependency identity; this contract and its source-bound evid
 rollback history. Agent skills route integration work and retain fragile host invariants; they must not copy commit
 chronologies or claim a matrix remains qualified after source, dependency or environment changes.
 
+## Explicit pinned Release SDK inputs
+
+An explicit `build.ps1 -Configuration Release -DxUiSdkInputDescriptor <descriptor>`
+may replace library source compilation with the same pinned Release SDK. The
+independent descriptor stays below this application's `.build` and outside the
+immutable byte store. The exact clean pinned controller authenticates and leases
+the SDK, checks source/API/platform and every payload byte, and supplies the actual
+selected MSBuild to its supported recipe. Source and SDK imports cannot be mixed.
+Debug/ASan, analysis and ordinary local builds retain source.
+
+Qualified v2 additionally checks portable actual tool/header/library bytes and
+per-project/per-file ABI settings; it preserves the producer's original key and
+manifest. Known v1 and v2 recipes remain distinct. Exact compatibility misses use
+source; corrupt or changed inputs fail. The existing linker tlog must name the
+leased SDK archive, whose hash, dependency recipe and original public-header tree
+are recorded in `DxUi.provenance.json`. That file remains in the scoped runtime
+artifact closure. A failed SDK close cannot publish accepted provenance or a build
+attestation. SDK inputs never supply a product test verdict.
+Every non-clean build revokes its prior mutable build attestation before beginning
+the new attempt. SDK builds evaluate the actual application profile/ABI guards
+before compiling the full solution; an incompatible import or profile cannot
+waste a solution-wide compile or retain a previous accepted build receipt.
+
+SDK production packaging reopens the same key/manifest, holds its lease while
+staging the complete verified notices, and closes successfully before reporting
+the package ready. Missing/unknown recipes, another SDK or stale production
+attestation refuse. Native regression, ISA, symbols and clean-extraction smoke
+remain independently required; controlled-origin local evidence does not prove
+live hosted-origin acceptance. The workflow selection belongs to Build_UnifiedCI.
+
 ## Pin and restore
 
 `Dependencies/DxUi.lock.json` identifies `https://github.com/RedSalamanders/DxUi`, current candidate commit

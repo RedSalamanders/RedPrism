@@ -1050,6 +1050,9 @@ step names, and the input code reads Shift, Ctrl and Alt from that keyboard, nev
 Nested drivers use `KeyboardState::ScopedSynthetic`: each starts with all keys up and restores the enclosing
 driver's previous mode and complete key bytes on normal or early return. An inner test cannot switch the outer
 test to physical input. The sampler caller's existing exact snapshot restoration preserves the same contract.
+Bounded UI correctness benchmark smoke modes also own that scope for their application message loop;
+full performance modes retain their physical-input admission guards. Smoke cancellation still dispatches
+real Escape messages and validates the original ticket, outcome and complete report.
 `HostTests` runs 15 `keyboard-synthetic.*` literal state controls for two/three levels, held modifiers, toggle
 bytes, early return and restoration of initially physical or synthetic input. This harness state is UI-thread-only;
 the scope performs no native keyboard writes and ordinary input continues to use the message thread's key state.

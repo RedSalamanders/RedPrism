@@ -17,6 +17,8 @@ Where the ZIP, its .sha256 and the staging folder go. Default: .build\packages (
 
 .PARAMETER BuildNumber
 Overrides the Git commit count that build.ps1 stamps as the third version field.
+.PARAMETER DxUiSdkInputDescriptor
+Reopens the exact production SDK before copying its verified notice payload.
 #>
 #Requires -Version 7.4
 [CmdletBinding()]
@@ -31,7 +33,8 @@ param(
     [string] $OutputDirectory = '',
 
     [ValidateRange(0, 65535)]
-    [int] $BuildNumber = 0
+    [int] $BuildNumber = 0,
+    [string] $DxUiSdkInputDescriptor = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,7 +93,7 @@ function Get-Dependents([string] $Module, [string] $Dumpbin) {
 
 # ── Build ────────────────────────────────────────────────────────────────────
 if (-not $SkipBuild) {
-    & (Join-Path $repoRoot 'build.ps1') -Platform $Platform -Configuration $Configuration -BuildNumber $BuildNumber -ProductionOnly
+    & (Join-Path $repoRoot 'build.ps1') -Platform $Platform -Configuration $Configuration -BuildNumber $BuildNumber -ProductionOnly -DxUiSdkInputDescriptor $DxUiSdkInputDescriptor
     if ($LASTEXITCODE -ne 0) {
         throw "build.ps1 failed with exit code $LASTEXITCODE."
     }
@@ -103,6 +106,19 @@ if (-not (Test-ScopedReceipt $attestation (Get-ScopedBuildAttestationKey $repoRo
 }
 if (-not (Test-Path -LiteralPath $executable)) {
     throw "No Release build to package: $executable"
+}
+Import-Module (Join-Path $repoRoot 'Build/DxUiProvenance.psm1') -Force
+Assert-RedPrismDxUiProvenance -OutputRoot $outputRoot -LockFile (Join-Path $repoRoot 'Dependencies/DxUi.lock.json') -Platform $Platform -Configuration Release
+$record=Get-Content (Join-Path $outputRoot 'DxUi.provenance.json') -Raw|ConvertFrom-Json
+$sdk=$null;$packageFailure=$null
+try{
+$knownSdkRecipes=@('PinnedReleaseSdkV1','PinnedQualifiedReleaseSdkV2')
+if(-not $record.PSObject.Properties['dependencyRecipe'] -or $record.dependencyRecipe.recipe -cnotin (@('PinnedSource')+$knownSdkRecipes)){throw 'Unsupported or missing build dependency recipe; rebuild through the reviewed entrypoint.'}
+if($record.dependencyRecipe.recipe -cin $knownSdkRecipes){
+    if(-not $DxUiSdkInputDescriptor){throw 'Reopen the original production SDK using -DxUiSdkInputDescriptor before packaging its notices.'}
+    Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.SdkConsumer.psm1')
+    $sdk=Open-CiApplicationSdkInput -ProjectRoot $repoRoot -Descriptor $DxUiSdkInputDescriptor -Platform $Platform -Configuration Release -MSBuildPath (Find-RedPrismMSBuild)
+    if($null -eq $sdk -or $sdk.Evidence.inputKey -cne $record.dependencyRecipe.inputKey -or $sdk.Evidence.manifestSha256 -cne $record.dependencyRecipe.manifestSha256){throw 'Package SDK does not match the actual production build inputs.'}
 }
 
 # ── Version identity (Common/Version.h stays authoritative; the executable carries it) ─────────────────────────
@@ -188,6 +204,9 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty/RedMonitor/LICENSE.txt')
 # DxUi.lib is linked into RedPrism.exe, so its own license ships too. restore-dxui.ps1 (run by build.ps1 above)
 # leaves the pinned source under .build\dependencies\DxUi\source\<commit>, with its license at that root.
 $dxUiLock = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'Dependencies\DxUi.lock.json') | ConvertFrom-Json
+if($null -ne $sdk){
+    Copy-Item -LiteralPath (Join-Path $sdk.SdkRoot 'licenses') -Destination (Join-Path $notices 'DxUiSdk') -Recurse
+}else{
 Import-Module (Join-Path $repoRoot 'Build/DxUiPaths.psm1') -Force
 $dxUiSource = Get-DxUiSourcePath -DependencyRoot (Join-Path $repoRoot '.build/dependencies/DxUi') -Commit $dxUiLock.commit
 $dxUiLicense = Get-ChildItem -LiteralPath $dxUiSource -Filter 'LICENSE*' -File -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -195,6 +214,7 @@ if (-not $dxUiLicense) {
     throw "DxUi's license file was not found under $dxUiSource. Run restore-dxui.ps1 -Platform $Platform before packaging."
 }
 Copy-Item -LiteralPath $dxUiLicense.FullName -Destination (Join-Path $notices 'dxui.txt')
+}
 
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\README.md') -Destination (Join-Path $stage 'README.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\usage.md') -Destination (Join-Path $stage 'usage.md')
@@ -253,6 +273,7 @@ if ($SkipSmoke) {
 }
 
 # ── Summary ──────────────────────────────────────────────────────────────────
+if($null -ne $sdk){Close-CiPinnedSdkInput $sdk}
 $zipItem = Get-Item -LiteralPath $zipPath
 Write-Host ''
 Write-Host ("Ready: {0} ({1} KB)" -f $zipItem.FullName, [math]::Round($zipItem.Length / 1KB)) -ForegroundColor Green
@@ -261,3 +282,5 @@ Write-Host 'Contents:' -ForegroundColor DarkGray
 foreach ($entry in Get-ChildItem -LiteralPath $stage -Recurse -File) {
     Write-Host ("  {0}" -f $entry.FullName.Substring($stage.Length + 1)) -ForegroundColor DarkGray
 }
+}catch{$packageFailure=$_;throw}
+finally{if($null -ne $sdk -and -not $sdk.Closed){try{Close-CiPinnedSdkInput $sdk}catch{if($null -eq $packageFailure){throw}else{Write-Warning ('SDK package close also failed: '+$_.Exception.Message)}}}}

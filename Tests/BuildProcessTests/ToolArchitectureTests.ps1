@@ -38,7 +38,9 @@ Invoke-ToolBoundary $PSScriptRoot 'restore'
 Write-Fixture 'MSBuild.ps1' @'
 param([Parameter(ValueFromRemainingArguments)][string[]] $Arguments)
 . (Join-Path $PSScriptRoot 'Boundary.ps1')
-Invoke-ToolBoundary $PSScriptRoot 'solution'
+$preflight='/t:ValidateDxUiSdkProfile;CiValidateSdkConsumer' -cin $Arguments
+Invoke-ToolBoundary $PSScriptRoot $(if($preflight){'sdk-profile'}else{'solution'})
+if($preflight){$global:LASTEXITCODE=0;return}
 $state = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'case.json') -Raw | ConvertFrom-Json
 if ($state.failure -eq 'solution-exit') { $global:LASTEXITCODE = 19; return }
 $logArgument = @($Arguments | Where-Object { $_ -match '^/flp:LogFile=' })[0]
@@ -59,8 +61,9 @@ $global:LASTEXITCODE = 0
 '@
 Write-Fixture 'Build/DxUiProvenance.psm1' @'
 . (Join-Path $PSScriptRoot '../Boundary.ps1')
-function Write-RedPrismDxUiProvenance([string] $RepoRoot, [string] $Platform, [string] $Configuration) {
+function Write-RedPrismDxUiProvenance([string] $RepoRoot, [string] $Platform, [string] $Configuration, $SdkInput=$null) {
     Invoke-ToolBoundary $RepoRoot 'provenance'
+    [IO.File]::WriteAllText((Join-Path $RepoRoot ".build/$Platform/$Configuration/DxUi.provenance.json"),'fixture provenance')
     return 'isolated fixture provenance'
 }
 Export-ModuleMember -Function Write-RedPrismDxUiProvenance
@@ -69,8 +72,25 @@ Write-Fixture 'Build/ScopedTesting.psm1' @'
 function Get-ScopedSourceIdentity([string]$Root,[switch]$CompiledOnly) { 'fixture-source' }
 function Get-ScopedEnvironmentIdentity { 'fixture-environment' }
 function Get-ScopedBuildAttestationKey([string]$Root,[string]$Platform,[string]$Configuration,[int]$BuildNumber) { 'fixture-attestation' }
-function Write-ScopedReceipt([string]$Path,[string]$Key) { }
+function Write-ScopedReceipt([string]$Path,[string]$Key) { [IO.File]::WriteAllText($Path,$Key) }
 Export-ModuleMember -Function Get-ScopedSourceIdentity,Get-ScopedEnvironmentIdentity,Get-ScopedBuildAttestationKey,Write-ScopedReceipt
+'@
+
+[void][IO.Directory]::CreateDirectory((Join-Path $fixture '.ci-engine/Tools/Modules'))
+Write-Fixture '.ci-engine/Tools/Modules/Ci.SdkConsumer.psm1' @'
+. (Join-Path $PSScriptRoot '../../../Boundary.ps1')
+function Open-CiApplicationSdkInput {
+    param($ProjectRoot,$Descriptor,$Platform,$Configuration,$MSBuildPath)
+    if($Descriptor -cne (Join-Path $ProjectRoot '.build/descriptor.json') -or $MSBuildPath -cne $env:MSBUILD_EXE_PATH -or $Configuration -cne 'Release' -or $Platform -cne 'ARM64'){throw 'Wrong actual SDK reader arguments.'}
+    Invoke-ToolBoundary $ProjectRoot 'sdk-open'
+    return @{Closed=$false;ProjectRoot=$ProjectRoot;SdkRoot=(Join-Path $ProjectRoot '.build/sdk');LeasePath=(Join-Path $ProjectRoot '.build/lease.json');Evidence=@{recipe='PinnedQualifiedReleaseSdkV2';inputKey=('a'*64)}}
+}
+function Close-CiPinnedSdkInput {
+    param($Reader)
+    $Reader.Closed=$true
+    Invoke-ToolBoundary $Reader.ProjectRoot 'sdk-close'
+}
+Export-ModuleMember -Function Open-CiApplicationSdkInput,Close-CiPinnedSdkInput
 '@
 
 $previousArchitecture = [Environment]::GetEnvironmentVariable('PreferredToolArchitecture', 'Process')
@@ -97,7 +117,11 @@ try {
         @{name='native-error';value=$null;failure='error-log';clean=$false;boundaries=@('dependencies','restore','solution')},
         @{name='missing-native-log';value=$null;failure='missing-log';clean=$false;boundaries=@('dependencies','restore','solution')},
         @{name='provenance-failure';value=$null;failure='provenance';clean=$false;boundaries=@('dependencies','restore','solution','provenance')},
-        @{name='clean';value=$null;failure='';clean=$true;boundaries=@('solution')}
+        @{name='clean';value=$null;failure='';clean=$true;boundaries=@('solution')},
+        @{name='sdk-valid';value=$null;failure='';clean=$false;sdk=$true;boundaries=@('sdk-open','dependencies','sdk-profile','solution','provenance','sdk-close')},
+        @{name='sdk-close-failure';value='x64';failure='sdk-close';clean=$false;sdk=$true;boundaries=@('sdk-open','dependencies','sdk-profile','solution','provenance','sdk-close')},
+        @{name='sdk-solution-failure';value='arm64';failure='solution-exit';clean=$false;sdk=$true;boundaries=@('sdk-open','dependencies','sdk-profile','solution','sdk-close')},
+        @{name='sdk-profile-failure';value='x64';failure='sdk-profile';clean=$false;sdk=$true;boundaries=@('sdk-open','dependencies','sdk-profile','sdk-close')}
     )
     foreach ($case in $cases) {
         Set-TestEnvironment 'PreferredToolArchitecture' $case.value
@@ -106,6 +130,7 @@ try {
         [IO.File]::WriteAllText((Join-Path $fixture 'trace.jsonl'), '', $utf8)
         $failure = $null
         $arguments = @{Platform='ARM64';Configuration='Release';BuildNumber=1;MaxCpuCount=1;Clean=$case.clean}
+        if($case.ContainsKey('sdk')){$arguments.DxUiSdkInputDescriptor=Join-Path $fixture '.build/descriptor.json'}
         try {
             & (Join-Path $fixture 'build.ps1') @arguments *> (Join-Path $fixture ($case.name + '.log'))
         } catch { $failure = $_.Exception.Message }
@@ -130,6 +155,12 @@ try {
         if ([Environment]::GetEnvironmentVariable('PreferredToolArchitecture', 'Process') -cne $callerArchitecture -or
             [Environment]::GetEnvironmentVariable('MSBUILD_EXE_PATH', 'Process') -cne (Join-Path $fixture 'MSBuild.ps1') -or
             [Environment]::GetEnvironmentVariable('PATH', 'Process') -cne $previousPath) { throw "$($case.name) leaked a caller environment change." }
+        if($case.failure -cin @('sdk-close','sdk-profile')){
+            foreach($name in @('DxUi.provenance.json','build-attestation.json')){
+                if($name -ceq 'DxUi.provenance.json' -and $case.failure -ceq 'sdk-profile'){continue}
+                if(Test-Path -LiteralPath (Join-Path $fixture ('.build/ARM64/Release/'+$name))){throw "Failed SDK attempt retained accepted $name."}
+            }
+        }
         Copy-Item -LiteralPath (Join-Path $fixture 'trace.jsonl') -Destination (Join-Path $fixture ($case.name + '.jsonl'))
         Write-Host "PASS toolarchitecture.$($case.name).boundaries-failure-and-environment"
     }
@@ -150,3 +181,5 @@ try {
     Set-TestEnvironment 'MSBUILD_EXE_PATH' $previousMSBuild
     Set-TestEnvironment 'PATH' $previousPath
 }
+# Expected compiler refusals above must not escape as a failure after every control passed.
+$global:LASTEXITCODE=0

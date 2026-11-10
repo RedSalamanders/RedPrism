@@ -19,6 +19,8 @@ Normal regression or explicit Full qualification; never advances automatic Relea
 Allows a local engine under development for compiler-free checks only.
 .OUTPUTS
 Canonical test evidence, source-bound receipts and qualified ZIPs; GitHub job output paths.
+Eligible admitted Release test/production builds prepare only distributed pinned SDK inputs;
+packaging receives the same descriptor. Missing or incompatible exact inputs retain source builds.
 .NOTES
 Requires PowerShell 7.4 and Git. Native work is hosted-only and uses the matching architecture.
 Native ARM64 requests the documented 5400-second self-test observation bound; x64 retains its default.
@@ -60,13 +62,22 @@ $receiptDirectory = Join-Path $root ".build/ci/regression/$Platform"
 $evidenceDirectory = Join-Path $root '.build/evidence/test-runs'
 if ($env:GITHUB_OUTPUT) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('evidence_directory=' + $evidenceDirectory) }
 if ($Phase -in @('ReleaseTestBuild','Qualification','Production')) {
+    $sdkDescriptor=$null
     $buildArguments = $profile + @('-BuildNumber',$number,'-MaxCpuCount','2')
     if ($Phase -eq 'Production') { $buildArguments += '-ProductionOnly' }
+    if($Configuration -ceq 'Release' -and $Phase -cin @('ReleaseTestBuild','Production')){
+        Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.SdkPreparation.psm1')
+        $lock=Get-Content (Join-Path $root 'Dependencies/DxUi.lock.json') -Raw|ConvertFrom-Json
+        $sdkDescriptor=Initialize-CiPinnedSdkInput -Context $context -SourceCommit $lock.commit -ApiRevision $lock.apiRevision
+        if($sdkDescriptor){$buildArguments+=@('-DxUiSdkInputDescriptor',$sdkDescriptor)}
+    }
     Run 'build.ps1' $buildArguments
     if ($Phase -eq 'ReleaseTestBuild') { return }
 }
 if ($Phase -eq 'Production') {
-    Run 'package.ps1' @('-Platform',$Platform,'-BuildNumber',$number,'-SkipBuild')
+    $packageArguments=@('-Platform',$Platform,'-BuildNumber',$number,'-SkipBuild')
+    if($sdkDescriptor){$packageArguments+=@('-DxUiSdkInputDescriptor',$sdkDescriptor)}
+    Run 'package.ps1' $packageArguments
     $archives = @(Get-ChildItem (Join-Path $root '.build/packages') -Filter "*-$Platform*.zip" -File | ForEach-Object FullName)
     Write-CiProductionReceipt -Context $context -Archives $archives -TestModeDisabled $true -SmokePassed $true
     return

@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "KeyboardState.h"
 #include <cstddef>
 
 #include "DocumentDraft.h"
@@ -731,6 +732,12 @@ int Application::RunUiBenchmark() noexcept
     _prompts = &QuietPrompts();
     _screenshotDpi = 0;
     _renderer.SetLayoutDpi(0);
+    // Bounded correctness fixtures own their modifier state like the hidden self-test. The
+    // real posted Escape messages and unexpected-message checks still run. Performance
+    // campaigns retain physical input authority and refuse ambient modifiers.
+    std::optional<KeyboardState::ScopedSynthetic> smokeKeyboard;
+    if (_uiBenchmark->smoke)
+        smokeKeyboard.emplace();
     const UiTimingCapture capture{_uiBenchmark->timing};
     const int result = Run(SW_SHOWNOACTIVATE);
     return result == 0 && _uiBenchmark->complete && !_uiBenchmark->failed ? 0 : 5;
