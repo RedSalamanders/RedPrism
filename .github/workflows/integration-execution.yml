@@ -1,0 +1,31 @@
+name: Candidate native shadow execution
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Exact same-repository main-targeting pull request
+        type: string
+        required: true
+      identity:
+        description: Canonical frozen candidate identity
+        type: string
+        required: true
+      nonce:
+        description: Unique isolation nonce in the precreated trusted-main branch
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+concurrency:
+  group: native-shadow-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
+jobs:
+  shadow:
+    uses: RedSalamanders/.github/.github/workflows/integration-execution.yml@dffe8b6bfc6d2d6d5f700378d59c85b35bf44bec
+    with:
+      engine_ref: dffe8b6bfc6d2d6d5f700378d59c85b35bf44bec
+      pull_request: ${{ inputs.pull_request }}
+      identity: ${{ inputs.identity }}
+      nonce: ${{ inputs.nonce }}

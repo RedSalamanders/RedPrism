@@ -129,3 +129,16 @@ run/attempt, caller/controller, archive digest and independent ABI reference bef
 An SDK hit supplies dependency inputs; all product regression, detector, production and
 extraction gates still run. Record actual recipe selection on each architecture: Source
 fallback does not establish live SDK-hit acceptance. Local Debug/ASan remain Source.
+
+## Optional isolated native shadow execution
+
+The generated manual `integration-execution.yml` caller runs one frozen candidate
+under a unique branch pointing at trusted current main. Trusted operator admission
+checks exact candidate/controller/caller identity before requesting read-only native
+x64/ARM64 test execution. It retains original attempt-bound inputs, receipts, profile
+bytes and diagnostics. Shadow execution supplies no required merge check, local
+coverage delegation, production/package authorization or main-result adoption.
+Those gates remain with the current contracts until their separate implementation
+and hosted enforcement are qualified. Use the exact pinned shared engine's
+`Specs/Integration_Candidates.md` and `Tools/Start-CandidateShadow.ps1`; no caller
+may run candidate code in a main cache/writer context or cancel another execution.
