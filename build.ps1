@@ -1,6 +1,8 @@
 <#!
 .SYNOPSIS
 Builds, cleans, rebuilds, or runs the RedPrism solution.
+.PARAMETER DxUiSdkInputDescriptor
+Independent pinned Release SDK descriptor below .build. Exact misses use source; Debug/ASan and analysis use source.
 #>
 [CmdletBinding()]
 param(
@@ -20,12 +22,14 @@ param(
     [int] $MaxCpuCount = 0,
 
     [ValidateRange(0, 65535)]
-    [int] $BuildNumber = 0
+    [int] $BuildNumber = 0,
+    [string] $DxUiSdkInputDescriptor = ''
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($env:CI_NATIVE_BUILDS_DISABLED -eq 'true') { throw 'Native builds are forbidden in compiler-free PR checks.' }
+if($DxUiSdkInputDescriptor -and ($Configuration -cne 'Release' -or $Clean -or $Analyze)){throw 'Pinned SDK inputs require an ordinary Release build.'}
 $env:RedPrismEnableTests = if ($ProductionOnly) { 'false' } else { 'true' }
 $nativeEntryElapsed = [Diagnostics.Stopwatch]::StartNew()
 Import-Module (Join-Path $PSScriptRoot 'Build/BuildConsole.psm1') -ErrorAction Stop
@@ -68,6 +72,8 @@ function Resolve-BuildNumber {
 }
 
 Assert-RedPrismBuildOutputProcessNotRunning -ExpectedExecutablePath $executable
+$buildAttestation=Join-Path $repoRoot ".build/$Platform/$Configuration/build-attestation.json"
+if(-not $Clean -and (Test-Path -LiteralPath $buildAttestation)){Remove-Item -LiteralPath $buildAttestation -ErrorAction Stop}
 
 Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
 $scopedSourceBefore=Get-ScopedSourceIdentity $repoRoot -CompiledOnly
@@ -78,6 +84,7 @@ Write-Host ("Target: {0} | {1} | version 0.1.{2}.0" -f $Platform, $Configuration
 # Share one tool-host choice with dependency identity/restore, the solution and its provenance.
 # Cross-targeting ARM64 otherwise defaults to x86-hosted tools even under amd64 MSBuild.
 $previousToolArchitecture = [Environment]::GetEnvironmentVariable('PreferredToolArchitecture', 'Process')
+$sdkInput=$null;$sdkFailure=$null;$sdkProvenanceWritten=$false
 try {
     if ($null -eq $previousToolArchitecture -and
         [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq [Runtime.InteropServices.Architecture]::X64) {
@@ -85,6 +92,18 @@ try {
     }
 
     $msbuild = Find-RedPrismMSBuild
+    $sdkProperties=@()
+    if($DxUiSdkInputDescriptor){
+        $engine=Join-Path $repoRoot '.ci-engine'
+        Import-Module (Join-Path $engine 'Tools/Modules/Ci.SdkConsumer.psm1')
+        $sdkInput=Open-CiApplicationSdkInput -ProjectRoot $repoRoot -Descriptor $DxUiSdkInputDescriptor -Platform $Platform -Configuration $Configuration -MSBuildPath $msbuild
+        if($null -ne $sdkInput){
+            foreach($path in @($sdkInput.SdkRoot,$sdkInput.LeasePath,$engine,$repoRoot)){if($path -match '[%;"\r\n]'){throw 'SDK paths contain unsupported MSBuild delimiters.'}}
+            $sdkProperties=@("/p:RedPrismDxUiSdkRoot=$($sdkInput.SdkRoot)","/p:CiSdkRoot=$($sdkInput.SdkRoot)","/p:CiSdkProjectRoot=$repoRoot","/p:CiSdkLeasePath=$($sdkInput.LeasePath)","/p:RedPrismCiEngineRoot=$engine")
+            if($sdkInput.Evidence.recipe -ceq 'PinnedQualifiedReleaseSdkV2'){$sdkProperties+=@('/p:CiSdkContract=QualifiedAbiV2')}
+            Write-Host "Using byte-verified pinned DxUi SDK input $($sdkInput.Evidence.inputKey)."
+        }else{Write-Host 'Exact pinned SDK input unavailable; retaining the governed source recipe.'}
+    }
     $target = if ($Clean) { 'Clean' } elseif ($Rebuild -or $Analyze) { 'Rebuild' } else { 'Build' }
     if ($ProductionOnly) {
         if ($Configuration -ne 'Release' -or $Clean -or $Analyze) { throw 'ProductionOnly requires an ordinary Release build.' }
@@ -98,8 +117,16 @@ try {
     if (-not $Clean) {
         Write-Host '[1/2] Dependencies' -ForegroundColor Cyan
         & (Join-Path $repoRoot 'vcpkg-install.ps1') -Platform $Platform -Asan:($Configuration -eq 'ASan Debug') -MSBuildPath $msbuild
-        & (Join-Path $repoRoot 'restore-dxui.ps1') -Platform $Platform -MSBuildPath $msbuild -CheckUpdates
+        if($null -eq $sdkInput){& (Join-Path $repoRoot 'restore-dxui.ps1') -Platform $Platform -MSBuildPath $msbuild -CheckUpdates}
         Write-Host ''
+    }
+
+    if($null -ne $sdkInput){
+        $sdkLogDirectory=Join-Path $repoRoot '.build/logs'
+        [void][IO.Directory]::CreateDirectory($sdkLogDirectory)
+        $sdkLog=Join-Path $sdkLogDirectory ('sdk-profile-'+[guid]::NewGuid().ToString('N')+'.log')
+        & $msbuild (Join-Path $repoRoot 'RedPrism/RedPrism.vcxproj') /nologo /v:minimal '/t:ValidateDxUiSdkProfile;CiValidateSdkConsumer' "/p:Platform=$Platform" "/p:Configuration=$Configuration" "/flp:LogFile=$sdkLog;Verbosity=normal" @sdkProperties
+        if($LASTEXITCODE -ne 0){throw "Pinned SDK actual-project profile preflight failed. Preserve $sdkLog"}
     }
 
     $workerArgument = if ($MaxCpuCount -gt 0) { "/m:$MaxCpuCount" } else { '/m' }
@@ -118,7 +145,7 @@ try {
         '/nologo',
         '/verbosity:minimal',
         "/flp:LogFile=$logPath;Verbosity=minimal"
-    )
+    ) + $sdkProperties
     if ($MaxCpuCount -gt 0) {
         # Bound each C++ compiler batch as well as MSBuild projects; /m alone leaves /MP unbounded.
         $arguments += "/p:CL_MPCount=$MaxCpuCount"
@@ -184,7 +211,9 @@ try {
         }
 
         Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
-        $provenance = Write-RedPrismDxUiProvenance -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration
+        $provenance = Write-RedPrismDxUiProvenance -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration -SdkInput $sdkInput
+        $sdkProvenanceWritten=$null -ne $sdkInput
+        if($null -ne $sdkInput){Close-CiPinnedSdkInput $sdkInput}
         Write-Host "DxUi provenance: $provenance" -ForegroundColor DarkGray
         Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
         if ((Get-ScopedSourceIdentity $repoRoot -CompiledOnly) -cne $scopedSourceBefore -or (Get-ScopedEnvironmentIdentity) -cne $scopedEnvironmentBefore) {
@@ -202,10 +231,23 @@ try {
     }
 
     Write-Host "Captured log: $logPath" -ForegroundColor DarkGray
+} catch {
+    $sdkFailure=$_
+    if($sdkProvenanceWritten){
+        foreach($name in @('DxUi.provenance.json','build-attestation.json')){
+            try{Remove-Item -LiteralPath (Join-Path $repoRoot ".build/$Platform/$Configuration/$name") -ErrorAction Stop}
+            catch{Write-Warning ('Failed SDK provenance cleanup also failed: '+$_.Exception.Message)}
+        }
+    }
+    throw $sdkFailure
 } finally {
+    try{if($null -ne $sdkInput -and -not $sdkInput.Closed){Close-CiPinnedSdkInput $sdkInput}}
+    catch{if($null -eq $sdkFailure){throw}else{Write-Warning ('SDK close also failed: '+$_.Exception.Message)}}
+    finally{
     if ($null -eq $previousToolArchitecture) {
         [Environment]::SetEnvironmentVariable('PreferredToolArchitecture', [System.Management.Automation.Language.NullString]::Value, 'Process')
     } else {
         [Environment]::SetEnvironmentVariable('PreferredToolArchitecture', $previousToolArchitecture, 'Process')
+    }
     }
 }

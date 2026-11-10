@@ -7,10 +7,20 @@ function Write-RedPrismDxUiProvenance {
     param(
         [Parameter(Mandatory)][string] $RepoRoot,
         [Parameter(Mandatory)][ValidateSet('x64', 'ARM64')][string] $Platform,
-        [Parameter(Mandatory)][ValidateSet('Debug', 'Release', 'ASan Debug')][string] $Configuration
+        [Parameter(Mandatory)][ValidateSet('Debug', 'Release', 'ASan Debug')][string] $Configuration,
+        $SdkInput=$null
     )
     $ErrorActionPreference = 'Stop'
     $pin = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'Dependencies/DxUi.lock.json') | ConvertFrom-Json
+    $recipe=@{recipe='PinnedSource'}
+    if($null -ne $SdkInput){
+        if($SdkInput.Closed -or $Configuration -cne 'Release'){throw 'SDK provenance requires the active Release reader.'}
+        $archive=Join-Path $SdkInput.SdkRoot "lib/$Platform/Release/DxUi.lib"
+        $source=$SdkInput.Descriptor.Value.sourceRoot
+        $consumerOutputRoot=$SdkInput.SdkRoot
+        $identity=@{Fingerprint=$SdkInput.Evidence.inputKey;Identity=$SdkInput.Evidence.identity}
+        $recipe=$SdkInput.Evidence
+    }else{
     $dependencyRoot = Join-Path $RepoRoot '.build/dependencies/DxUi'
     $identity = Get-Content -Raw -LiteralPath (Join-Path $dependencyRoot "DxUi.identity.$Platform.json") | ConvertFrom-Json
     if ($identity.Identity.commit -cne $pin.commit -or $identity.Identity.platform -cne $Platform) {
@@ -19,6 +29,7 @@ function Write-RedPrismDxUiProvenance {
     $consumerOutputRoot = Read-RedPrismDxUiResolvedOutputRoot -DependencyRoot $dependencyRoot -Platform $Platform -BuildIdentity $identity
     $archive = Join-Path $consumerOutputRoot "$Platform/$Configuration/DxUi.lib"
     $source = Join-Path $dependencyRoot "source/$($pin.commit.Substring(0,16))"
+    }
     & (Join-Path $source 'Tools/validate_consumer.ps1') -DxUiRoot $source -LockFile (Join-Path $RepoRoot 'Dependencies/DxUi.lock.json')
     $output = Join-Path $RepoRoot ".build/$Platform/$Configuration"
     $tlog = Join-Path $RepoRoot ".build/Intermediate/$Platform/$Configuration/RedPrism/RedPrism.tlog/link.command.1.tlog"
@@ -46,6 +57,7 @@ function Write-RedPrismDxUiProvenance {
         publicHeadersGitTree = $headers
         buildIdentity = $identity
         consumerOutputRoot = $consumerOutputRoot
+        dependencyRecipe = $recipe
         archiveSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
         modules = @($modules)
     }

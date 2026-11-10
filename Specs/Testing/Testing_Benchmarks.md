@@ -88,7 +88,13 @@ post-to-dispatch intervals; this is not a guaranteed 20 ms delivery deadline. Th
 posting real WM_KEYDOWN/WM_KEYUP. Monotonic timer identities reject stale messages without affecting a newer
 trial. Actual key dispatch stamps cancellation of the original ticket separately from admission of its
 ordered Cancel receipt. Failed admission cannot be reported as hidden-card success. Unexpected keyboard
-input or mutating pointer input fails the diagnostic; no physical modifier state is overwritten.
+input messages or mutating pointer input fail the diagnostic; no physical modifier state is overwritten.
+Bounded correctness smoke modes own a `KeyboardState::ScopedSynthetic` keyboard for the complete
+application message loop, as the hidden self-test does. Typing modifiers in another application cannot
+change their command semantics. Real posted Escape down/up messages, original-ticket cancellation,
+unexpected-message checks and all cancellation assertions still execute. The scope restores the prior
+keyboard state on every exit. Full performance modes retain the physical modifier-state refusal;
+smoke results never establish performance qualification.
 
 WM_TIMER is a wake-up rather than deadline authority. If it wakes before the original QPC deadline, disarm
 that identity and admit a fresh one-shot requesting at least USER_TIMER_MINIMUM (10 ms) for the remaining interval.

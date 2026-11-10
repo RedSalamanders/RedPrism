@@ -5,6 +5,16 @@ This specification owns the project's CI routing. The versioned implementation a
 in .ci/project.json and every reusable workflow caller. Update those pins together through a reviewed PR.
 Older references to automatic native PR matrices or nightly native runs are superseded by this contract.
 
+Admitted matching-native main Release test and production builds may prepare an
+explicitly distributed SDK at the unchanged DxUi lock. They pass the same
+independent descriptor to build and package. Preparation supplies dependency
+inputs only; static, local default, Debug/ASan, analysis and manual qualification
+retain source builds. Exact toolchain/profile mismatches fall back to source;
+malformed data refuses. Both native regression and production/package gates remain.
+Qualified v2 readers compare actual tool/header/library bytes, selected MSBuild
+and per-project/per-file ABI settings. Controlled-origin local runs do not prove
+live hosted authentication or hosted SDK-hit acceptance.
+
 PRs run changed-source clang-format feedback and the reviewed compiler-free static subset. Formatting drift
 fails and retains a patch. The explicit Commit PR formatting action accepts an open same-repository PR,
 checks its current head, commits only selected formatted source paths by ordinary fast-forward push and

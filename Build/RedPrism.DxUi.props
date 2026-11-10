@@ -1,8 +1,12 @@
 <Project>
   <Import Project="$(MSBuildThisFileDirectory)..\.build\dependencies\DxUi\DxUi.resolved.$(Platform).props"
-          Condition="Exists('$(MSBuildThisFileDirectory)..\.build\dependencies\DxUi\DxUi.resolved.$(Platform).props')" />
-  <Import Project="$(DxUiRoot)\Build\DxUi.Consumer.props" Condition="'$(DxUiRoot)'!=''" />
+          Condition="'$(RedPrismDxUiSdkRoot)'=='' and Exists('$(MSBuildThisFileDirectory)..\.build\dependencies\DxUi\DxUi.resolved.$(Platform).props')" />
+  <Import Project="$(DxUiRoot)\Build\DxUi.Consumer.props" Condition="'$(RedPrismDxUiSdkRoot)'=='' and '$(DxUiRoot)'!=''" />
+  <Import Project="$(RedPrismDxUiSdkRoot)\DxUi.Sdk.props" Condition="'$(RedPrismDxUiSdkRoot)'!=''" />
   <Target Name="RequireRestoredDxUi" BeforeTargets="PrepareForBuild">
-    <Error Condition="'$(DxUiRoot)'==''" Text="Run restore-dxui.ps1 for the selected platform before building RedPrism." />
+    <Error Condition="'$(DxUiRoot)'=='' and '$(RedPrismDxUiSdkRoot)'==''" Text="Run restore-dxui.ps1 for the selected platform before building RedPrism." />
+    <Error Condition="'$(DxUiRoot)'!='' and '$(RedPrismDxUiSdkRoot)'!=''" Text="Select exactly one DxUi source or SDK recipe." />
+    <Error Condition="'$(RedPrismDxUiSdkRoot)'!='' and ('$(CiSdkLeasePath)'=='' or '$(RedPrismCiEngineRoot)'=='')" Text="Use build.ps1 with an active pinned SDK reader." />
   </Target>
+  <Import Project="$(RedPrismCiEngineRoot)\Tools\MSBuild\Ci.SdkConsumer.targets" Condition="'$(RedPrismDxUiSdkRoot)'!=''" />
 </Project>
