@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "role": "ControlledOriginLocalSdkQualification",
+  "workloadOwner": "RedPrism",
+  "fixture": "redprism-qualified-sdk2-native-local-20261110",
+  "benchmarkInputs": {
+    "build.ps1": "3a9a9792f10cc78d443ec5c9d5afd7dfa3498a57ea999679d96dfb99a67c2feb",
+    "package.ps1": "531e89c98d2a7a72c8ed1b1d5974b294eda2f5f36b37018b1cc350c3588713b4",
+    "Build/RedPrism.DxUi.props": "9c54aa73d7c279063b484c3550524eb4bffc8c9c01292cf222743c70f299f25f",
+    "Build/RedPrism.DxUi.targets": "39e4c9a61fee2127e70180bc5dda91c26e4264e2a2397b8c8077f8e86e1fe75f",
+    "Tools/Invoke-ProjectCi.ps1": "2f35fe07c11625a051e324acb456cbd8492c2ec1683708f7b97a2a5ecd80e1d5",
+    "RedPrism/ApplicationBenchmark.cpp": "8cb7f3eddcf7cccb4ffc01ad2d86acdc71556829cdc91608458aad3052d3f0d7"
+  },
+  "testedCommit": "288c27acc28f4e21a4bd45f4fb8a78f868adf7c0",
+  "capturedUtc": "2026-11-10T17:34:23.5340471Z",
+  "sourceProfiles": {
+    "builds": [
+      "x64/Debug",
+      "x64/Release",
+      "x64/ASan Debug",
+      "ARM64/Debug",
+      "ARM64/Release",
+      "ARM64/ASan Debug"
+    ],
+    "warnings": 0,
+    "actualAsanDetector": "passed",
+    "productionAndExtraction": "passed",
+    "errors": 0,
+    "nativeX64Full": [
+      "Debug",
+      "Release",
+      "ASan Debug"
+    ]
+  },
+  "sdk": {
+    "recipe": {
+      "recipe": "PinnedQualifiedReleaseSdkV2",
+      "inputKey": "5868120cc91a06d158d7c4ccf617517e457546b0dcc92201099ad707a231fc98",
+      "manifestSha256": "8bb5b8de037adf5e4ee522bd96cfa8db9ea82629c10edae5121c205162499ee1",
+      "identity": {
+        "schemaVersion": 1,
+        "role": "DependencySdkInputs",
+        "sourceRepository": "RedSalamanders/DxUi",
+        "sourceCommit": "f2e328a0a26a18ca66bf4b2aea77bf010c9515e1",
+        "sourceBytes": "fdcc91006d4ac75d9fb2eaddc2709358aa1354cc5aa365f634eaa6c014d0d773",
+        "apiRevision": 4,
+        "platform": "x64",
+        "configuration": "Release",
+        "runtimeFamily": "MD",
+        "annotationPolicy": "enabled",
+        "languageStandard": "stdcpplatest",
+        "optimizationPolicy": "GL-LTCG-full",
+        "toolchainIdentity": "33861927a16550a2fe5d9bd84d81bb6eb22b4ba15d92661e6a9bcf99669e3352",
+        "compilerProfileIdentity": "aaf4603e077a74697695caeb60716d1753041fe202eea65bf55f8a6f17012744",
+        "dependencyIdentity": "ced0e108d251d1911dec328475844de27ab967e3e8d603da1938a81922bb0d08",
+        "integrationPolicyIdentity": "42cdb62688af3a4bc08945b84ec5a1c3ed98dc6334d5bda5ee3e0b317ce118ec",
+        "environmentIdentity": "5669a893097882a211bb936cbdf1fdbfb68897188071c40001f30fa668119c01"
+      },
+      "toolchainReference": "a46852d85f7f4b35fbc9514b1a0c97483e8e20751a05dd97867db5e3a0578c92",
+      "producerRun": "6111102",
+      "attempt": 1,
+      "archiveSha256": "3fef2b3471b5061a8d37db17c2b7ad35254a45a837b8c6db685295e69b4951a7",
+      "publicHeadersGitTree": "afca31c268d9d750beecc7d8c4023467d9ce4d1e",
+      "storageEngineRef": "a0db31a5d4a57ed7275333d1f47b1b1c0efb9bee",
+      "storageEngineBytes": "111235c22ca6051aeec9507cc74ed6382c845dda4470cf8430928f8ce50a6add"
+    },
+    "sourcePin": "f2e328a0a26a18ca66bf4b2aea77bf010c9515e1",
+    "platform": "x64",
+    "nativeRuntime": "passed",
+    "producerFixtureIsGitHubRun": false,
+    "productionAndExtraction": "passed",
+    "apiRevision": 4,
+    "localProducerFixture": "6111102",
+    "testBuild": "passed",
+    "nativeRun": "20261110T171530922Z-92212-e706f759edf8417d8d92e49e7dbedcd4"
+  },
+  "actualPackageRefusals": [
+    "Unknown recipe byte mutation refused by sealed production receipt",
+    "Legacy-v1 recipe byte mutation refused by sealed production receipt",
+    "Unchanged SDK2 provenance without independently retained descriptor refused"
+  ],
+  "retainedFailures": [
+    "Original hosted ARM64 timeout remains undiagnosed",
+    "Earlier local SDK Full attempts observed physical modifier contamination; synthetic bounded benchmark fixture added without changing full physical performance guards",
+    "First positive package expected wrong notice folder; corrected to actual licenses and complete current-head SDK campaign passed",
+    "Initial new package-negative driver expected recipe parsing before the earlier sealed-receipt gate; corrected to assert actual earlier refusal; original failed driver log retained"
+  ],
+  "limits": [
+    "No foreground suite executed",
+    "ARM64 builds do not establish native ARM64 runtime",
+    "Normal Full selection leaves unselected manual/platform/resource coverage NOT_EVALUATED",
+    "No live GitHub SDK origin acceptance or organization 3x/2x speed acceptance",
+    "Curation follows tested source; raw receipts preserve original identity"
+  ],
+  "logs": [
+    {
+      "path": ".build/i61-source-profile-matrix.log",
+      "bytes": 403,
+      "sha256": "1518bb666bd183eb27ef67edfacfe51f7f66b7ad524ed9140325ace123903a29"
+    },
+    {
+      "path": ".build/i61-sdk-current-head-qualification.log",
+      "bytes": 3291348,
+      "sha256": "4e210812261451769dda2ca49f18c8a5c2f9075851720be01c3fd45c1ec60f2a"
+    },
+    {
+      "path": ".build/i61-sdk-current-head-receipt-package-refusals.log",
+      "bytes": 241,
+      "sha256": "0427b79f8637731bccb9e9aa37c70a41c17590e48e27d6f31b091be735ba0352"
+    },
+    {
+      "path": ".build/i61-sdk-complete-validation.log",
+      "bytes": 283761,
+      "sha256": "cd013f354a8e3a5c54bdfc548073a3bce0b360fab269d1c674dbb3b4cd83b1a7"
+    },
+    {
+      "path": ".build/i61-sdk-format-check.log",
+      "bytes": 235,
+      "sha256": "5c7532f3ea60e267ab93186bd38f13cf5ff52c245dd8fb92667eadb3f707896a"
+    },
+    {
+      "path": ".build/i61-sdk-adapter-controls-final.log",
+      "bytes": 114,
+      "sha256": "d028568a39bb6e8b6b773dc8d5f1589dfabe120ca69ff93b59d7f133d0325489"
+    },
+    {
+      "path": ".build/i61-sdk-lifetime-host-controls-final.log",
+      "bytes": 1231,
+      "sha256": "823267dcfd5e6b1b50564bf4a19e598131653f0c5ede0bdd3f8a123b6e97a64f"
+    },
+    {
+      "path": ".build/i61-source-build-x64-Debug.log",
+      "bytes": 51656,
+      "sha256": "0827e534791cb075b1fc9c36341c66feb1dbcadc51753c8073f28f47046bec12"
+    },
+    {
+      "path": ".build/i61-source-build-x64-Release.log",
+      "bytes": 29461,
+      "sha256": "ba4add23641b15087169f529b1987cceed78d243cacd8964462ed3030b370648"
+    },
+    {
+      "path": ".build/i61-source-build-x64-ASan-Debug.log",
+      "bytes": 63083,
+      "sha256": "c7523190028e120bc5d093e628bf7fb26dc38fa77d413248d8c4d56d18c778ad"
+    },
+    {
+      "path": ".build/i61-source-build-ARM64-Debug.log",
+      "bytes": 66832,
+      "sha256": "b9e0236edb8ceee6c3495574e04fb284c1ff534c87b9d2894682b61709c0df09"
+    },
+    {
+      "path": ".build/i61-source-build-ARM64-Release.log",
+      "bytes": 50367,
+      "sha256": "32420a41f958100ea46d70c710345921d63f384c90692cd93dd42d6ea67abbce"
+    },
+    {
+      "path": ".build/i61-source-build-ARM64-ASan-Debug.log",
+      "bytes": 61316,
+      "sha256": "ff0ed5d475d6f23329340c32e4481bb41d96b267b88488e5b30c55046bfbef58"
+    },
+    {
+      "path": ".build/i61-source-native-x64-Debug.log",
+      "bytes": 3248926,
+      "sha256": "b3b767f83bba746df6cba10578cb7752794f13852ae65c4075710556f5e2ebfc"
+    },
+    {
+      "path": ".build/i61-source-native-x64-Release.log",
+      "bytes": 3248101,
+      "sha256": "086b92f59cae948b42e342d1fabce9ab1cc3177dff6ff5b8828f6d39b03d3728"
+    },
+    {
+      "path": ".build/i61-source-native-x64-ASan-Debug.log",
+      "bytes": 3967292,
+      "sha256": "2700e7556ab429ed01648211f8f6445dc8f699d0ab29bf8bb451ae14fe7c6123"
+    }
+  ]
+}
