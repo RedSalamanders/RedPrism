@@ -1,0 +1,1 @@
+- Preserve the original native test or timeout failure when evidence finalization also fails, while retaining the additional diagnostic and all lossless verification requirements.

@@ -78,6 +78,7 @@ if ($LASTEXITCODE -ne 0) {
 Import-Module (Join-Path $repoRoot 'Build/TestRunEvidence.psm1') -Force
 $evidence = Start-TestRunEvidence -Repository $repoRoot -Context @{ project='RedPrism'; platform=$Platform; configuration=$Configuration; suites=$Suites; selfTestTimeoutSeconds=$SelfTestTimeoutSeconds }
 $runPassed = $false
+$runFailure = $null
 try {
 $outputRoot = Join-Path $repoRoot ".build\$Platform\$Configuration"
 $executable = Join-Path $outputRoot 'RedPrism.exe'
@@ -445,6 +446,16 @@ Publish-TestRunEvidenceReceipt -Run $evidence -Name 'normal-suites.json' -Receip
     countUnit='suite'; discovered=@($Suites); executed=@($Suites); filtered=$false
 })
 $runPassed = $true
-} finally { Complete-TestRunEvidence -Run $evidence -Passed $runPassed }
+} catch {
+    $runFailure = $_
+    throw
+} finally {
+    try { Complete-TestRunEvidence -Run $evidence -Passed $runPassed }
+    catch {
+        if ($null -eq $runFailure) { throw }
+        # Preserve the original native/timeout failure when an active writer prevents lossless finalization.
+        Write-Warning ('Test-run evidence finalization also failed: ' + $_.Exception.Message)
+    }
+}
 exit 0
 }finally{try{$iterationLease.ReleaseMutex()}finally{$iterationLease.Dispose()}}

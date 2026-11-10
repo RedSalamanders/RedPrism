@@ -1,0 +1,15 @@
+{
+  "role":"RenderingDiagnosticValidation",
+  "date":"2026-11-10",
+  "baseCommit":"7f1a1d40ecf29cca2fd801f933b0a8d89a6a8ff1",
+  "applicationGitBlob":"702b3d16e30ac886d8161bc7f80ded2e7c5f0eb8",
+  "command":"Test-Changes.ps1 -Configuration Release",
+  "profile":"native x64 Release",
+  "build":{"passed":true,"warnings":0,"errors":0,"elapsed":"00:14:41"},
+  "evidenceRun":"20261110T080256039Z-64764-c2b9ddb6b8ab47709c1793a43906b5de",
+  "result":"FULL_NONINTERACTIVE_PASSED",
+  "selectedSuites":["Captures","Composition","Document","Host","IO","Performance","Runtime"],
+  "failureFinalizationControls":4,
+  "renderingFrameMarkersCompleted":23,
+  "limits":"The prior ARM64 timeout is not fixed or qualified by this local result. This validates diagnostics and existing x64 behavior; it is not paired performance, native ARM64, Debug/ASan or complete manual/resource qualification. Original failure evidence is retained separately."
+}
