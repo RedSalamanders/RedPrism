@@ -8504,21 +8504,30 @@ int Application::RunRenderingSelfTest() noexcept
         SelfTestFailure(L"The rendering self-test needs the chrome and the window.\n");
         return 5;
     }
+    unsigned renderingFixture = 0;
+    unsigned renderingReadback = 0;
+    unsigned renderingFrame = 0;
     const auto fresh = [&](int width, int height)
     {
+        ++renderingFixture;
+        std::printf("BEGIN rendering.fixture=%u size=%dx%d\n", renderingFixture, width, height);
         (void)SettleInteractions(false); // Reference rendering fixture replaces the document immediately.
         _session.CreateDocument(width, height, false);
         _session.history.MarkSaved();
         _viewport.followsFit = true;
         DocumentChanged();
+        std::printf("END rendering.fixture=%u\n", renderingFixture);
     };
     const auto readCanvas = [&](int x, int y, std::array<int, 4>& out) -> bool
     {
         std::vector<std::uint8_t> bgra;
         UINT width = 0;
         UINT height = 0;
-        if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width ||
-            static_cast<UINT>(y) >= height)
+        ++renderingReadback;
+        std::printf("BEGIN rendering.readback=%u\n", renderingReadback);
+        const HRESULT readback = _composition.Readback(bgra, width, height);
+        std::printf("END rendering.readback=%u result=%08x\n", renderingReadback, static_cast<unsigned>(readback));
+        if (FAILED(readback) || x < 0 || y < 0 || static_cast<UINT>(x) >= width || static_cast<UINT>(y) >= height)
         {
             return false;
         }
@@ -8534,8 +8543,11 @@ int Application::RunRenderingSelfTest() noexcept
     };
     const auto frame = [&]()
     {
+        ++renderingFrame;
+        std::printf("BEGIN rendering.frame=%u\n", renderingFrame);
         InvalidateFrame();
         RenderFrame();
+        std::printf("END rendering.frame=%u\n", renderingFrame);
     };
 
     // Zoom is device pixels per document pixel (RF-403): Actual Pixels draws the document 1:1 on this display.
@@ -8617,6 +8629,7 @@ int Application::RunRenderingSelfTest() noexcept
     }};
     for (const auto& [stage, name] : stages)
     {
+        std::printf("BEGIN rendering.device-recovery stage=%u\n", static_cast<unsigned>(stage));
         const std::uint64_t generation = _renderer.DeviceGeneration();
         _renderer.FailNextStageForTest(stage, DXGI_ERROR_DEVICE_REMOVED);
         frame();

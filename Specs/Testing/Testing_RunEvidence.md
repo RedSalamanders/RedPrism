@@ -19,6 +19,10 @@ If native execution already failed or timed out, finalization failure is reporte
 original exception and unsuccessful result. If execution succeeded, finalization failure remains fatal. An
 active writer still prevents verified completion; preserving the primary diagnostic does not relax file pins,
 metadata/stream checks, process ownership or any timeout. Failed and partial raw evidence remains retained.
+The hidden rendering self-test emits ordered BEGIN/END markers around each fixture replacement, frame and
+GPU readback, plus device-recovery stage markers. Its existing unbuffered stdout preserves the last entered
+operation during a hosted timeout. These markers supply diagnosis only: assertions, selected work and failure
+bounds remain unchanged, and an entered operation is never counted as completed coverage.
 Shared build/dependency/qualification files remain outside the writable run, and their existing read-only rules apply.
 
 The record establishes retention and the outcome of the selected invocation only. It does not replace exact source,
