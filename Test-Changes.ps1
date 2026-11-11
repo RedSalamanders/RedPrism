@@ -113,6 +113,16 @@ if($pending.Count){
                 $global:LASTEXITCODE=0;& $engine @invocationArguments
                 if(-not $? -or $LASTEXITCODE -ne 0){throw "Independent scope failed: $($scope.name) ($LASTEXITCODE)"}
             }
+            # Retain this completed obligation before a later native failure or
+            # interruption. Its original full input/tool closure still applies.
+            Import-Module $module -Force
+            $afterIndependent=Get-ScopedDigest ($(if($scope.name -ceq 'Format'){
+                Get-ScopedSourceIdentity $root -CompiledOnly
+            }else{Get-ScopedSourceIdentity $root})+"`n"+(Get-ScopedEnvironmentIdentity -Tooling))
+            $after=Get-ScopedDigest ($afterIndependent+"`n"+$scope.name)
+            if($after -cne $identities[$scope.name]){throw "Inputs changed during $($scope.name); no reusable success was published."}
+            if($scope.reuse){Write-ScopedReceipt (Get-ReceiptPath $scope) $identities[$scope.name]}
+            Write-Host "PASSED $($scope.name) (independent obligation; native coverage remains separate)"
         }
     }
     $runtime=@($pending|Where-Object native|ForEach-Object name)
@@ -123,13 +133,11 @@ if($pending.Count){
     }
     Import-Module $module -Force
     $afterNative=if($runtime.Count){Get-ScopedRunIdentity $root $Platform $Configuration '(common)' $buildOptions}else{$nativeKey}
-    $afterFormat=Get-ScopedDigest ((Get-ScopedSourceIdentity $root -CompiledOnly)+"`n"+(Get-ScopedEnvironmentIdentity -Tooling))
-    $afterTooling=Get-ScopedDigest ((Get-ScopedSourceIdentity $root)+"`n"+(Get-ScopedEnvironmentIdentity -Tooling))
-    foreach($scope in $pending){
-        $after=Get-ScopedDigest ($(if($scope.native){$afterNative}elseif($scope.name -ceq 'Format'){$afterFormat}else{$afterTooling})+"`n"+$scope.name)
+    foreach($scope in @($pending|Where-Object native)){
+        $after=Get-ScopedDigest ($afterNative+"`n"+$scope.name)
         if($after -cne $identities[$scope.name]){throw "Inputs changed during $($scope.name); no reusable success was published."}
     }
-    foreach($scope in $pending){if($scope.reuse){Write-ScopedReceipt (Get-ReceiptPath $scope) $identities[$scope.name]}}
+    foreach($scope in @($pending|Where-Object native)){if($scope.reuse){Write-ScopedReceipt (Get-ReceiptPath $scope) $identities[$scope.name]}}
 }
 if((Get-ScopedMapIdentity (Get-ScopedSourceMap $root)) -cne (Get-ScopedMapIdentity $source) -or
     (Get-ScopedMapIdentity (Get-ScopedIndexMap $root)) -cne (Get-ScopedMapIdentity $index) -or

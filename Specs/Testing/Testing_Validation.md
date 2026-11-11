@@ -4067,3 +4067,12 @@ identifiers inside retained run descriptions and compressed measurement metadata
 Recorded measurements and artifact hashes still identify their original builds; they do not qualify the renamed
 source. Original byte-for-byte history is retained separately in the verified recovery bundle for this operation.
 Current source needs fresh build, tooling and runtime evidence under the ordinary qualification contract.
+
+Independent Tooling and Format obligations retain their successful receipts immediately
+when their own unchanged complete input/tool/environment closure is verified. A later
+native failure or interruption does not erase that proof. Failed or input-mutating
+independent execution publishes no success and cannot enter native execution. A later
+source change invalidates the old independent receipt normally; it is never relabeled.
+Native final fingerprint checks and whole-run iteration baseline advancement remain
+separate and require their existing successful unchanged batch conditions. Independent
+success is not native, interactive, platform or whole-repository qualification.
