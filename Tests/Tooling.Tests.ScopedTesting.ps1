@@ -380,6 +380,52 @@ if(-not $Check){throw 'The named Check switch was not forwarded'}
         Assert ($r.Exit -eq 0) "Strict independent commands failed: $($r.Text)"
         Assert (([IO.File]::ReadAllText((Join-Path $public '.build/strict-commands.txt')) -replace "`r`n","`n") -ceq "empty`ncheck`n") 'Strict command arguments or execution count changed'
     }
+    # Recording independent command: actual public runner, no compiler/desktop.
+    Put (Join-Path $public 'validate.ps1') @'
+[CmdletBinding()]
+param()
+[IO.File]::AppendAllText((Join-Path $PSScriptRoot '.build/tooling-calls.txt'),"ran`n")
+if(Test-Path (Join-Path $PSScriptRoot '.build/tooling-fail')){exit 21}
+if(Test-Path (Join-Path $PSScriptRoot '.build/tooling-mutate')){[IO.File]::AppendAllText((Join-Path $PSScriptRoot 'Tests/Other.Tests.Case.cpp'),'changed during tooling')}
+'@
+    Case 'independent tooling survives a later native failure and is reused without advancing the batch baseline' {
+        $receipt=Join-Path $public '.build/reports/scoped-tests/independent/Tooling.json'
+        Put (Join-Path $public '.build/fail') 'later native failure'
+        $run=Run @('-Mode','Full','-Force')
+        Assert ($run.Exit -ne 0 -and $run.Text.Contains('Selected runtime tests failed') -and (Test-Path $receipt)) "Completed tooling was lost or failed native work passed: $($run.Text)"
+        Assert (-not(Test-Path $state)) 'A failed batch advanced its iteration baseline'
+        $original=[IO.File]::ReadAllText($receipt)
+        $calls=@(Get-Content (Join-Path $public '.build/tooling-calls.txt')).Count
+        Remove-Item -LiteralPath (Join-Path $public '.build/fail')
+        $run=Run @('-Mode','Full')
+        Assert ($run.Exit -eq 0 -and $run.Text.Contains('REUSED Tooling') -and
+            @(Get-Content (Join-Path $public '.build/tooling-calls.txt')).Count -eq $calls -and
+            [IO.File]::ReadAllText($receipt) -ceq $original) "Retry duplicated or rewrote exact independent evidence: $($run.Text)"
+    }
+    Case 'failed or input-mutating tooling cannot publish reusable success or enter native execution' {
+        $receipt=Join-Path $public '.build/reports/scoped-tests/independent/Tooling.json'
+        foreach($marker in @('tooling-fail','tooling-mutate')){
+            $nativeCalls=@(Get-Content (Join-Path $public '.build/calls.txt')).Count
+            Put (Join-Path $public ('.build/'+$marker)) 'independent refusal control'
+            $run=Run @('-Mode','Full','-Force')
+            Assert ($run.Exit -ne 0 -and -not(Test-Path $receipt) -and
+                @(Get-Content (Join-Path $public '.build/calls.txt')).Count -eq $nativeCalls) "Failed or mutated tooling published success or entered native work: $($run.Text)"
+            Remove-Item -LiteralPath (Join-Path $public ('.build/'+$marker))
+        }
+    }
+    Case 'later native mutation retains original tooling proof but changed inputs cannot reuse it' {
+        $receipt=Join-Path $public '.build/reports/scoped-tests/independent/Tooling.json'
+        Put (Join-Path $public '.build/mutate') 'native changes source after completed tooling'
+        $run=Run @('-Mode','Full','-Force')
+        Assert ($run.Exit -ne 0 -and (Test-Path $receipt)) "Native mutation passed or discarded independently completed tooling: $($run.Text)"
+        $original=[IO.File]::ReadAllText($receipt)
+        $calls=@(Get-Content (Join-Path $public '.build/tooling-calls.txt')).Count
+        Remove-Item -LiteralPath (Join-Path $public '.build/mutate')
+        $run=Run @('-Mode','Full')
+        Assert ($run.Exit -eq 0 -and -not $run.Text.Contains('REUSED Tooling') -and
+            @(Get-Content (Join-Path $public '.build/tooling-calls.txt')).Count -eq ($calls+1) -and
+            [IO.File]::ReadAllText($receipt) -cne $original) "Changed native/source inputs reused earlier tooling: $($run.Text)"
+    }
     Write-Host "Scoped testing: $passed cases passed."
 }finally{
     $absolute=[IO.Path]::GetFullPath($fixture);$allowed=[IO.Path]::GetFullPath((Join-Path $root '.build/ToolTests'))+[IO.Path]::DirectorySeparatorChar

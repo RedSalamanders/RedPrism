@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "role": "LocalPrismIndependentToolingRetentionQualification",
+  "testedCommit": "c94d46a27a4b48e1be7c138bdc48305efd2e4207",
+  "engine": "476d3fafeb67f70cda37f6f00195e42c53936e19",
+  "capturedUtc": "2026-11-11T04:22:24.8126895Z",
+  "profiles": [
+    {
+      "logSha256": "ea5f5bdb1b6ac49e61a9d52eccd87b2ff1b13e7c67d5025295f1b9eecf41dffa",
+      "platform": "x64",
+      "scope": "CanonicalFullScopedNative",
+      "passed": true,
+      "configuration": "Debug"
+    },
+    {
+      "logSha256": "6f7fe26ff9c04d657e3e0708687202048ff753fb8da8f36517214b7034371974",
+      "platform": "x64",
+      "scope": "CanonicalFullScopedNative",
+      "passed": true,
+      "configuration": "Release"
+    },
+    {
+      "logSha256": "45d83ed46f2c04fb0227dbb22c42a035f7f0834fa050236498c8f2a3037abfc0",
+      "platform": "x64",
+      "scope": "CanonicalFullScopedNative",
+      "passed": true,
+      "configuration": "ASan Debug"
+    },
+    {
+      "platform": "ARM64",
+      "configuration": "Debug",
+      "logSha256": "5450790264061a8ce513e9a1329ad063f0856c9513f1300377839ffc0af70602",
+      "scope": "CrossBuildOnly",
+      "passed": true,
+      "nativeRuntimeExecuted": false
+    },
+    {
+      "platform": "ARM64",
+      "configuration": "Release",
+      "logSha256": "19ca996a166e70e1a41cb21c47f9a7ca4c53f13aeab46386af3e432b10919cc7",
+      "scope": "CrossBuildOnly",
+      "passed": true,
+      "nativeRuntimeExecuted": false
+    },
+    {
+      "platform": "ARM64",
+      "configuration": "ASan Debug",
+      "logSha256": "2e3c081952175d56dd5594a70816b8bcfb137a7624e7307a0ff684a9fab88a3b",
+      "scope": "CrossBuildOnly",
+      "passed": true,
+      "nativeRuntimeExecuted": false
+    }
+  ],
+  "nativeRunIds": {
+    "Release": "20261111T023841507Z-64204-1473ab24491d4a7e880b2c71c60e76d6",
+    "Debug": "20261111T021349137Z-64204-869684fb0af84e56a7aa78cdfe7e4d83",
+    "ASanDebug": "20261111T030307859Z-64204-cff03459a9824f63bcae62e84d45e37c"
+  },
+  "wholeRepositoryQualified": false,
+  "arm64RuntimeQualified": false,
+  "controlledPerformanceTargetQualified": false,
+  "shadowCampaignRequired": false,
+  "existingLocalAndMainGatesRetained": true
+}
