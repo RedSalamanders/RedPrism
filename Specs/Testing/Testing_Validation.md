@@ -1004,6 +1004,19 @@ This extends observation only: it does not establish
 a prior stall's cause, a performance fix, a G1 pass or successful runtime completion. A timeout fails with
 the process id reported, never killed.
 
+During the hidden WARP wait, the parent reads at most the last 16 KiB of stderr per
+250 ms observation. Only the complete, ordinal exact line `Clipboard host work did
+not acknowledge within the bounded wait.` establishes this known terminal failure.
+A five-second natural-exit grace preserves the actual exit code when available;
+otherwise the parent fails promptly and reports the still-live PID and original
+logs without terminating it. A terminal failure never permits subsequent suites
+or a success receipt, including an observed failure followed by exit zero. Missing,
+locked and incomplete log data establish no result; the ordinary watchdog remains
+the backstop. This reporting optimization neither identifies the native failure's
+cause nor repairs or qualifies the clipboard scenario. Tooling controls exercise
+real event-gated owned children, exact/partial/tail records, unavailable logs, actual
+exit codes, live-process preservation and the real entrypoint's failure branch.
+
 The native helper copies canonical stdout/stderr independently and records Application stdout and stderr
 progress, byte counts, last-write times, and bounded owned-process CPU/memory diagnostics. Unavailable CIM,
 missing/disappearing logs and processes are diagnostic states with explicit availability/errors, never an
