@@ -1,5 +1,12 @@
 # RedPrism validation
 
+Local build, native and tooling identities also bind the actual ignored `.ci-engine`
+through the shared `Get-CiPinnedEngineInputsIdentity`. The generated checkout must be
+ordinary, independent, clean and at `.ci/project.json`'s exact pin before evidence
+reuse. Fresh raw engine bytes participate; generated engine `.build` output does not.
+This input is separate from product iteration maps, grants no qualification or CI
+delegation, and preserves the current local and main gates.
+
 Status: current normative repository contract
 Last reviewed: 2026-10-21
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
