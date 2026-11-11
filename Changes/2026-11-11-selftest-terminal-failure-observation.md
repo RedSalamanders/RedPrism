@@ -1,0 +1,1 @@
+- Report the hidden WARP test's exact terminal clipboard acknowledgement failure after a five-second exit grace when its process remains alive, instead of waiting for the general watchdog. Keep the process and failure logs, all original assertions and ordinary failure bounds; this does not diagnose or repair the native clipboard failure.

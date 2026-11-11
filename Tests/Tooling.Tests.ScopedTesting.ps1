@@ -17,6 +17,41 @@ function New-Repository([string]$Directory){
     Invoke-FixtureGit $Directory @('init','-q','-b','main');Invoke-FixtureGit $Directory @('config','user.name','Scope fixture');Invoke-FixtureGit $Directory @('config','user.email','fixture@example.invalid')
 }
 try{
+    Case 'actual ignored engine bytes bind build and tooling evidence without changing iteration maps' {
+        $product=Join-Path $fixture 'engine-input-project'
+        [void][IO.Directory]::CreateDirectory($product)
+        New-Repository $product
+        Put (Join-Path $product '.gitignore') ".build/`n.ci-engine/`n"
+        Put (Join-Path $product '.ci/project.json') ([IO.File]::ReadAllText((Join-Path $root '.ci/project.json')))
+        Put (Join-Path $product 'runtime.cpp') 'synthetic source'
+        $engine=Join-Path $product '.ci-engine'
+        $cloneOutput=& git clone --quiet --no-hardlinks (Join-Path $root '.ci-engine') $engine 2>&1
+        if($LASTEXITCODE){throw "Owned engine fixture clone failed: $cloneOutput"}
+        $mapBefore=Get-ScopedMapIdentity (Get-ScopedSourceMap $product)
+        $toolingBefore=Get-ScopedSourceIdentity $product
+        $buildBefore=Get-ScopedSourceIdentity $product -CompiledOnly
+        if([OperatingSystem]::IsWindows()){
+            Assert ((Get-ScopedSourceIdentity $product.ToUpperInvariant()) -ceq $toolingBefore) 'Windows path casing invalidated tooling evidence'
+            Assert ((Get-ScopedSourceIdentity $product.ToUpperInvariant() -CompiledOnly) -ceq $buildBefore) 'Windows path casing invalidated build evidence'
+        }
+        Put (Join-Path $engine '.build/fixture-output.json') '{"generated":true}'
+        Assert ((Get-ScopedSourceIdentity $product) -ceq $toolingBefore) 'Generated engine output invalidated tooling'
+        Assert ((Get-ScopedSourceIdentity $product -CompiledOnly) -ceq $buildBefore) 'Generated engine output invalidated build evidence'
+        $policy=Join-Path $engine 'Tools/Modules/Ci.Policy.psm1'
+        $original=[IO.File]::ReadAllBytes($policy)
+        try{
+            [IO.File]::AppendAllText($policy,"`n# Synthetic changed engine implementation.`n")
+            foreach($compiled in @($false,$true)){
+                $refusal=''
+                try{$null=Get-ScopedSourceIdentity $product -CompiledOnly:$compiled}catch [System.Management.Automation.RuntimeException]{$refusal=$_.Exception.Message}
+                Assert ($refusal.Contains('Local engine checkout must be clean')) 'Modified ignored engine retained reusable build/tooling evidence'
+            }
+            Assert ((Get-ScopedMapIdentity (Get-ScopedSourceMap $product)) -ceq $mapBefore) 'Engine identity polluted product iteration maps'
+        }finally{[IO.File]::WriteAllBytes($policy,$original)}
+        Assert ((Get-ScopedSourceIdentity $product) -ceq $toolingBefore) 'Restored exact engine did not recover its tooling identity'
+        Assert ((Get-ScopedSourceIdentity $product -CompiledOnly) -ceq $buildBefore) 'Restored exact engine did not recover its build identity'
+
+    }
     Case 'active native naming and inventory are contextual and complete' {
         Assert ((Assert-ScopedTestNames $root) -gt 0) 'Empty inventory'
         $paths=@(Get-Content (Join-Path $root $manifest.nativeInventory) -Raw|ConvertFrom-Json)

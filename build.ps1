@@ -78,6 +78,7 @@ if(-not $Clean -and (Test-Path -LiteralPath $buildAttestation)){Remove-Item -Lit
 Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
 $scopedSourceBefore=Get-ScopedSourceIdentity $repoRoot -CompiledOnly
 $scopedEnvironmentBefore=Get-ScopedEnvironmentIdentity
+Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.Policy.psm1') -ErrorAction Stop
 $BuildNumber = Resolve-BuildNumber -Requested $BuildNumber
 Write-Host ("Target: {0} | {1} | version 0.1.{2}.0" -f $Platform, $Configuration, $BuildNumber) -ForegroundColor Magenta
 
@@ -125,7 +126,8 @@ try {
         $sdkLogDirectory=Join-Path $repoRoot '.build/logs'
         [void][IO.Directory]::CreateDirectory($sdkLogDirectory)
         $sdkLog=Join-Path $sdkLogDirectory ('sdk-profile-'+[guid]::NewGuid().ToString('N')+'.log')
-        & $msbuild (Join-Path $repoRoot 'RedPrism/RedPrism.vcxproj') /nologo /v:minimal '/t:ValidateDxUiSdkProfile;CiValidateSdkConsumer' "/p:Platform=$Platform" "/p:Configuration=$Configuration" "/flp:LogFile=$sdkLog;Verbosity=normal" @sdkProperties
+        $sdkArguments=@((Join-Path $repoRoot 'RedPrism/RedPrism.vcxproj'),'/nologo','/v:minimal','/t:ValidateDxUiSdkProfile;CiValidateSdkConsumer',"/p:Platform=$Platform","/p:Configuration=$Configuration","/flp:LogFile=$sdkLog;Verbosity=normal")+$sdkProperties
+        Invoke-CiNativeCommand -FilePath $msbuild -WorkingDirectory $repoRoot -Arguments $sdkArguments
         if($LASTEXITCODE -ne 0){throw "Pinned SDK actual-project profile preflight failed. Preserve $sdkLog"}
     }
 
@@ -167,13 +169,13 @@ try {
         }
         [Environment]::SetEnvironmentVariable('Esp.Extensions', ($existingExtensions -join ';'), 'Process')
         try {
-            & $msbuild @arguments
+            Invoke-CiNativeCommand -FilePath $msbuild -WorkingDirectory $repoRoot -Arguments $arguments
             $exitCode = $LASTEXITCODE
         } finally {
             [Environment]::SetEnvironmentVariable('Esp.Extensions', $previousEspExtensions, 'Process')
         }
     } else {
-        & $msbuild @arguments
+        Invoke-CiNativeCommand -FilePath $msbuild -WorkingDirectory $repoRoot -Arguments $arguments
         $exitCode = $LASTEXITCODE
     }
     if ($exitCode -ne 0) {

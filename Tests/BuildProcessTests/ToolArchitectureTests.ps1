@@ -77,6 +77,18 @@ Export-ModuleMember -Function Get-ScopedSourceIdentity,Get-ScopedEnvironmentIden
 '@
 
 [void][IO.Directory]::CreateDirectory((Join-Path $fixture '.ci-engine/Tools/Modules'))
+# This fixture already substitutes the compiler with an in-process PowerShell script.
+# Preserve that boundary when the real entrypoint routes through the shared native bridge;
+# actual child transport belongs to engine controls and actual native builds.
+Write-Fixture '.ci-engine/Tools/Modules/Ci.Policy.psm1' @'
+function Invoke-CiNativeCommand {
+    param([string]$FilePath,[string]$WorkingDirectory,[string[]]$Arguments)
+    $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
+    if($WorkingDirectory -cne $root -or $FilePath -cne (Join-Path $root 'MSBuild.ps1')){throw 'Unexpected actual native launch boundary.'}
+    & $FilePath @Arguments
+}
+Export-ModuleMember -Function Invoke-CiNativeCommand
+'@
 Write-Fixture '.ci-engine/Tools/Modules/Ci.SdkConsumer.psm1' @'
 . (Join-Path $PSScriptRoot '../../../Boundary.ps1')
 function Open-CiApplicationSdkInput {

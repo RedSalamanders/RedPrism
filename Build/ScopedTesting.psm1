@@ -188,7 +188,15 @@ function Get-ScopedDigest {
 
 function Get-ScopedSourceIdentity {
     param([string] $Root, [switch] $CompiledOnly)
-    return Get-ScopedMapIdentity (Get-ScopedSourceMap $Root -CompiledOnly:$CompiledOnly)
+    $source = Get-ScopedMapIdentity (Get-ScopedSourceMap $Root -CompiledOnly:$CompiledOnly)
+    # Generated engine code is outside Git's product inventory, but executes the governed tools.
+    # Keep it separate from iteration maps so it cannot masquerade as a changed product file.
+    if (Test-Path -LiteralPath (Join-Path $Root '.ci/project.json') -PathType Leaf) {
+        Import-Module (Join-Path $Root '.ci-engine/Tools/Modules/Ci.SourceInputs.psm1') -ErrorAction Stop
+        $engineInputs = Get-CiPinnedEngineInputsIdentity -Root $Root
+        return Get-ScopedDigest ("$source`0$engineInputs")
+    }
+    return $source
 }
 
 function Get-ScopedArtifactIdentity {

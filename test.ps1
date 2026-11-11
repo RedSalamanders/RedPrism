@@ -201,7 +201,14 @@ $selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentLis
     -RedirectStandardOutput $selfTestLog -RedirectStandardError $selfTestErr
 $null = $selfTest.Handle
 Write-Host "Hidden WARP self-test PID $($selfTest.Id); failure bound $SelfTestTimeoutSeconds seconds. This is not a performance qualification."
-if (-not $selfTest.WaitForExit($selfTestTimeoutSeconds * 1000)) {
+Import-Module (Join-Path $repoRoot 'Build/TestProcess.psm1') -Force
+$selfTestObservation = Wait-RedPrismTestProcess -Process $selfTest -StandardErrorPath $selfTestErr `
+    -TerminalFailureLine 'Clipboard host work did not acknowledge within the bounded wait.' `
+    -TimeoutMilliseconds ($SelfTestTimeoutSeconds * 1000)
+if ($selfTestObservation.Status -ceq 'TerminalFailure') {
+    throw "RedPrism.exe --self-test --warp reported terminal clipboard acknowledgement failure but did not exit within the 5-second exit grace (PID $($selfTest.Id) was not terminated). Logs: $selfTestLog; $selfTestErr."
+}
+if ($selfTestObservation.Status -cne 'Exited') {
     # AGENTS.md: never terminate a RedPrism.exe this script did not confirm is safe to close. Report the PID and
     # leave it running rather than kill it (RF-702).
     throw "RedPrism.exe --self-test --warp did not finish within $selfTestTimeoutSeconds s (PID $($selfTest.Id) is still running; report it, do not kill it)."
@@ -212,6 +219,9 @@ if ($selfTest.ExitCode -ne 0) {
     $selfTestText = (Get-Content -LiteralPath $selfTestErr -Tail 15 -ErrorAction SilentlyContinue) -join "`n"
     $selfTestOutput = (Get-Content -LiteralPath $selfTestLog -Tail 15 -ErrorAction SilentlyContinue) -join "`n"
     throw "RedPrism.exe --self-test --warp exited with code $($selfTest.ExitCode). Logs: $selfTestLog; $selfTestErr. $selfTestOutput`n$selfTestText"
+}
+if ($selfTestObservation.TerminalFailureObserved) {
+    throw "RedPrism.exe --self-test --warp reported terminal clipboard acknowledgement failure before exiting (code $($selfTest.ExitCode)). Logs: $selfTestLog; $selfTestErr."
 }
 Write-Host "PASS hidden WARP self-test: $selfTestLog" -ForegroundColor Green
 

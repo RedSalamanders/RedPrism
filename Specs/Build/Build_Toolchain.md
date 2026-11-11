@@ -6,6 +6,13 @@ Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Bui
 
 ## Scope
 
+Local MSBuild launches, including ordinary, analysis and actual SDK-profile preflight,
+use the exact pinned engine's `Invoke-CiNativeCommand`. Each owned child receives a
+fresh private compiler metadata-service endpoint; the parent's environment, literal
+arguments, live output, original native exit, compiler flags and warning policy remain
+unchanged. Restore the clean `.ci-engine` pin before native builds. This launch policy
+does not itself grant a native, SDK or performance result.
+
 This contract owns the Windows C++ toolchain, configurations, generated-output layout, vcpkg pin, and the root
 build entrypoints. Runtime windowing lives in [`UI/UI_Windowing.md`](../UI/UI_Windowing.md). Architecture ownership
 lives in [`Core/Core_Architecture.md`](../Core/Core_Architecture.md). Test orchestration lives in
