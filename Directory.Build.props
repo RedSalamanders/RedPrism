@@ -4,8 +4,9 @@
     <RequiredMsvcToolsVersion>14.52</RequiredMsvcToolsVersion>
     <SolutionDir Condition="'$(SolutionDir)'==''">$(MSBuildThisFileDirectory)</SolutionDir>
     <RedPrismBuildRoot>$(MSBuildThisFileDirectory).build\</RedPrismBuildRoot>
-    <OutDir>$(RedPrismBuildRoot)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(RedPrismBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(MSBuildProjectName)\</IntDir>
+    <RedPrismOutputRoot Condition="'$(RedPrismOutputRoot)'==''">$(RedPrismBuildRoot)</RedPrismOutputRoot>
+    <OutDir>$(RedPrismOutputRoot)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(RedPrismOutputRoot)Intermediate\$(Platform)\$(Configuration)\$(MSBuildProjectName)\</IntDir>
     <TargetName>$(MSBuildProjectName)</TargetName>
 
     <RedPrismVcpkgPlatformScope Condition="'$(Platform)'=='ARM64'">arm64</RedPrismVcpkgPlatformScope>

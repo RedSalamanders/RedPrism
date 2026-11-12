@@ -6,6 +6,16 @@ Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Bui
 
 ## Scope
 
+`Tools/Build-LocalSdkCandidate.ps1` consumes one independently hashed local SDK descriptor,
+requires its original producer and actual selected ABI to remain current, and compiles only
+the application target into a fresh `.build/local-unpinned` operation. Restore the selected
+app dependencies with `vcpkg-install.ps1` before invocation and keep them unchanged during it.
+`RedPrismOutputRoot` changes output/intermediate paths only; the ordinary dependency tree remains
+under `RedPrismBuildRoot`. A noncanonical output root requires `LocalUnpinnedAbiV1` and the live
+shared SDK/output lease before native writes. Managed pins and ordinary receipts are unchanged.
+The retained local build/link record grants no test, ISA, native-platform, package or production
+qualification. Ordinary build/test/ISA gates still apply to accepted product changes.
+
 Local MSBuild launches, including ordinary, analysis and actual SDK-profile preflight,
 use the exact pinned engine's `Invoke-CiNativeCommand`. Each owned child receives a
 fresh private compiler metadata-service endpoint; the parent's environment, literal
