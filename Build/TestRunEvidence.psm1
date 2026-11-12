@@ -112,7 +112,8 @@ function Write-TestRunEvidenceRecord([string] $Path, $Value) {
 
 function Start-TestRunEvidence {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string] $Repository, [Parameter(Mandatory)][hashtable] $Context, [switch] $CaptureNativeArtifacts)
+    param([Parameter(Mandatory)][string] $Repository, [Parameter(Mandatory)][hashtable] $Context, [switch] $CaptureNativeArtifacts,
+        [switch] $LocalSdkCandidate)
     Initialize-TestRunEvidenceNative
     $root = [IO.Path]::GetFullPath($Repository).TrimEnd('\')
     if (-not [IO.Path]::IsPathRooted($Repository) -or $root -eq [IO.Path]::GetPathRoot($root).TrimEnd('\') -or $root.StartsWith('\\')) {
@@ -132,7 +133,8 @@ function Start-TestRunEvidence {
             $anchors.Add(@{path=$part;identity=[TestRunEvidenceV2.Native]::Identity($pin)})
         }
         $parent = $root
-        foreach ($name in @('.build', 'evidence', 'test-runs')) {
+        $runFolder=if($LocalSdkCandidate){'local-sdk-test-runs'}else{'test-runs'}
+        foreach ($name in @('.build', 'evidence', $runFolder)) {
             $parent = Join-Path $parent $name
             [void][IO.Directory]::CreateDirectory($parent)
             $pin = [TestRunEvidenceV2.Native]::Pin($parent, $true)
@@ -154,7 +156,7 @@ function Start-TestRunEvidence {
         $anchors.Add(@{path=$path;identity=[TestRunEvidenceV2.Native]::Identity($pin)})
         $run = [pscustomobject]@{ Repository=$root; Id=$id; Directory=$directory; Path=$path; Pins=$pins; Anchors=$anchors; Lock=$lock;
             Owner=$PID; OwnerStarted=(Get-Process -Id $PID).StartTime.ToUniversalTime().Ticks; Closed=$false;
-            CaptureNativeArtifacts=[bool]$CaptureNativeArtifacts; ArtifactLock=$null }
+            CaptureNativeArtifacts=[bool]$CaptureNativeArtifacts; ArtifactLock=$null; LocalSdkCandidate=[bool]$LocalSdkCandidate }
         Write-TestRunEvidenceRecord (Join-Path $directory 'started.json') ([ordered]@{
             schema=1; id=$id; repository=$root; owner=$run.Owner; ownerStartedTicks=$run.OwnerStarted;
             startedUtc=[DateTime]::UtcNow.ToString('o'); context=$Context
@@ -237,7 +239,7 @@ function Complete-TestRunEvidence {
     param([Parameter(Mandatory)] $Run, [Parameter(Mandatory)][bool] $Passed)
     if ($Run.Closed) { throw 'Run evidence has already been closed.' }
     if ($Run.Owner -ne $PID -or $Run.OwnerStarted -ne (Get-Process -Id $PID).StartTime.ToUniversalTime().Ticks -or
-        $Run.Directory -cne (Join-Path $Run.Repository ".build\evidence\test-runs\$($Run.Id)") -or
+        $Run.Directory -cne (Join-Path $Run.Repository ('.build\evidence\'+$(if($Run.LocalSdkCandidate){'local-sdk-test-runs'}else{'test-runs'})+"\$($Run.Id)")) -or
         $Run.Path -cne (Join-Path $Run.Directory 'payload')) { throw 'Evidence ownership or path mismatch.' }
     $pins = [Collections.Generic.List[IDisposable]]::new()
     try {

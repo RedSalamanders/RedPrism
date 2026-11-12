@@ -1,5 +1,14 @@
 # Generated test-run evidence
 
+Explicit local SDK application execution uses the same create-only, owned and
+byte/metadata-verified retention under `.build/evidence/local-sdk-test-runs`.
+Its `local-sdk-runtime.json` has role `LocalUnpinnedApplicationRuntimeResult`, the
+original build-record digest and source/engine/dependency/runtime identities,
+`testsExecuted=true`, and false repository/production qualification flags. Only
+actually completed selected Runtime/Captures scopes count. The original runtime
+input must pass close verification before a successful receipt is published.
+Ordinary `test-runs`, `normal-suites.json` and iteration evidence remain separate.
+
 Status: normative current tooling contract
 Last reviewed: 2026-11-09
 

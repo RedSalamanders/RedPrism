@@ -23,6 +23,16 @@ shared SDK/output lease before native writes. Managed pins and ordinary receipts
 The retained local build/link record grants no test, ISA, native-platform, package or production
 qualification. Ordinary build/test/ISA gates still apply to accepted product changes.
 
+`test.ps1 -Configuration Release -SkipBuild -Suites Runtime,Captures
+-LocalSdkBuildReceipt <original-record> -LocalSdkBuildSha256 <independent-hash>` runs
+the existing application-only CLI/WARP and harness capture checks against held local
+SDK output. Either supported scope may be selected explicitly. Full, standalone,
+sanitizer, performance and hosted use refuse before discovery. The shared runtime
+guard verifies the original source/API/ABI/engine/dependency/byte identities at open
+and close; a local result never advances ordinary iteration or replaces its gates.
+Screenshot timeouts preserve the failed result and wait for the owned process to
+drain without terminating it or releasing its inputs while it still writes.
+
 Local MSBuild launches, including ordinary, analysis and actual SDK-profile preflight,
 use the exact pinned engine's `Invoke-CiNativeCommand`. Each owned child receives a
 fresh private compiler metadata-service endpoint; the parent's environment, literal
