@@ -243,6 +243,19 @@ try {
     if ($cachedRun -and -not $cachedRun.Closed) { Complete-TestRunEvidence $cachedRun $false }
 }
 
+$localRoot=New-Fixture 'local-sdk-namespace'
+$localRun=Start-TestRunEvidence $localRoot @{scenario='local-sdk-runtime'} -LocalSdkCandidate
+try {
+    Assert-Evidence ($localRun.Directory -ceq (Join-Path $localRoot ('.build/evidence/local-sdk-test-runs/'+$localRun.Id))) 'Local SDK output entered the ordinary namespace.'
+    [IO.File]::WriteAllText((Join-Path $localRun.Path 'actual-result.txt'),'local runtime evidence')
+    $localRun.LocalSdkCandidate=$false
+    Reject-Evidence { Complete-TestRunEvidence $localRun $true } 'Changing the namespace role was accepted.'
+    $localRun.LocalSdkCandidate=$true
+    Complete-TestRunEvidence $localRun $true
+    Assert-Evidence (Test-Path (Join-Path $localRun.Directory 'completed.json')) 'Local SDK evidence could not complete in its owned namespace.'
+    Assert-Evidence (-not(Test-Path (Join-Path $localRoot '.build/evidence/test-runs'))) 'Local SDK execution created ordinary qualification evidence.'
+}finally{if(-not $localRun.Closed){$localRun.LocalSdkCandidate=$true;Complete-TestRunEvidence $localRun $false}}
+
 [ordered]@{passed=$script:count;module=(Get-FileHash -LiteralPath $ModulePath).Hash;scratch=$ScratchRoot} |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $ScratchRoot 'result.json')
 Write-Host "PASS $script:count evidence preservation checks; fixtures retained at $ScratchRoot"

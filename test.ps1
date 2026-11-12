@@ -1,6 +1,10 @@
 <#!
 .SYNOPSIS
 Builds RedPrism and runs host tests plus the hidden WARP self-test.
+.PARAMETER LocalSdkBuildReceipt
+Original local SDK build record. Requires local native Release, SkipBuild and explicit Runtime/Captures scopes.
+.PARAMETER LocalSdkBuildSha256
+Independently retained SHA-256 of the original build record. Local results cannot qualify the repository or production.
 #>
 [CmdletBinding()]
 param(
@@ -23,17 +27,43 @@ param(
 
     # A deadlock/failure bound, never a performance target. Extended bounds require native ARM64.
     [ValidateRange(1200, 5400)]
-    [int] $SelfTestTimeoutSeconds = 1200
+    [int] $SelfTestTimeoutSeconds = 1200,
+    [string] $LocalSdkBuildReceipt = '',
+    [string] $LocalSdkBuildSha256 = ''
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSCommandPath
-Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
-$iterationLease=Enter-ScopedIterationLease $repoRoot $Platform $Configuration
+$localSdkMode = [bool]($LocalSdkBuildReceipt -or $LocalSdkBuildSha256)
+if ($localSdkMode -and (-not $IsWindows -or $env:GITHUB_ACTIONS -ceq 'true' -or $env:CI_NATIVE_BUILDS_DISABLED -ceq 'true')) {
+    throw 'Local SDK runtime requires local Windows native execution.'
+}
+if ($localSdkMode -and (-not $LocalSdkBuildReceipt -or $LocalSdkBuildSha256 -cnotmatch '^[a-f0-9]{64}$' -or
+    $Configuration -cne 'Release' -or -not $SkipBuild -or $Full -or $Rebuild -or
+    -not @($Suites).Count -or
+    @($Suites | Where-Object { $_ -cnotin @('Runtime','Captures') }).Count)) {
+    throw 'Local SDK runtime requires the original build record/digest, Release, SkipBuild and explicit Runtime/Captures only.'
+}
+$runtimeInput=$null
+$runtimeFailure=$null
+$iterationLease=$null
 try {
-[void](Suspend-ScopedIteration (Join-Path $repoRoot ".build/reports/scoped-tests/$Platform-$($Configuration -replace ' ','')/iteration.json") $repoRoot)
+if ($localSdkMode) {
+    Import-Module (Join-Path $repoRoot 'Build/VisualStudioDiscovery.psm1')
+    Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.LocalSdkRuntime.psm1')
+    $runtimeInput = Open-CiLocalSdkApplicationRuntimeInput -ProjectRoot $repoRoot -BuildReceipt $LocalSdkBuildReceipt `
+        -ExpectedBuildSha256 $LocalSdkBuildSha256 -MSBuildPath (Find-RedPrismMSBuild)
+    $sdkVersion=[Diagnostics.FileVersionInfo]::GetVersionInfo($runtimeInput.Build.executable)
+    if ($runtimeInput.Build.platform -cne $Platform -or ($BuildNumber -and $BuildNumber -ne $sdkVersion.FileBuildPart)) {
+        throw 'Local SDK runtime profile/build number differs from the held native build.'
+    }
+}
+Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
+if (-not $localSdkMode) { $iterationLease=Enter-ScopedIterationLease $repoRoot $Platform $Configuration }
+try {
+if (-not $localSdkMode) { [void](Suspend-ScopedIteration (Join-Path $repoRoot ".build/reports/scoped-tests/$Platform-$($Configuration -replace ' ','')/iteration.json") $repoRoot) }
 $available=@('Host','Document','IO','Composition','Runtime','Stress','Performance','Captures','Tooling')
 if($Full){$Suites=$available}
 $Suites=@($Suites|ForEach-Object{$_ -split ','}|ForEach-Object{$_.Trim()}|Where-Object{$_}|Sort-Object -Unique)
@@ -77,11 +107,11 @@ if ($LASTEXITCODE -ne 0) {
 
 Import-Module (Join-Path $repoRoot 'Build/TestRunEvidence.psm1') -Force
 Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.DesktopLease.psm1')
-$evidence = Start-TestRunEvidence -Repository $repoRoot -Context @{ project='RedPrism'; platform=$Platform; configuration=$Configuration; suites=$Suites; selfTestTimeoutSeconds=$SelfTestTimeoutSeconds }
+$evidence = Start-TestRunEvidence -Repository $repoRoot -LocalSdkCandidate:$localSdkMode -Context @{ project='RedPrism'; platform=$Platform; configuration=$Configuration; suites=$Suites; selfTestTimeoutSeconds=$SelfTestTimeoutSeconds; localSdkCandidate=$localSdkMode }
 $runPassed = $false
 $runFailure = $null
 try {
-$outputRoot = Join-Path $repoRoot ".build\$Platform\$Configuration"
+$outputRoot = if ($localSdkMode) { $runtimeInput.Build.runtimeRoot } else { Join-Path $repoRoot ".build\$Platform\$Configuration" }
 $executable = Join-Path $outputRoot 'RedPrism.exe'
 $hostTests = Join-Path $outputRoot 'HostTests.exe'
 
@@ -92,12 +122,15 @@ if ($info.OriginalFilename -ne 'RedPrism.exe' -or $info.ProductName -ne 'RedPris
 
 Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
 $buildAttestation=Join-Path $outputRoot 'build-attestation.json'
-if(-not(Test-ScopedReceipt $buildAttestation (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $info.FileBuildPart))){throw 'Native artifact/source/profile/toolchain attestation is stale or missing. Run build.ps1 before -SkipBuild.'}
+if(-not $localSdkMode -and -not(Test-ScopedReceipt $buildAttestation (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $info.FileBuildPart))){throw 'Native artifact/source/profile/toolchain attestation is stale or missing. Run build.ps1 before -SkipBuild.'}
 # First, so that every later run is known to end on a failed runtime check instead of opening a dialog on the desktop.
+if (-not $localSdkMode) {
+# Local app-only scopes contain none of the standalone executables this probe owns.
 Write-Host 'Running failure report self-tests...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\FailureReportTests.ps1') -OutputRoot $outputRoot -Configuration $Configuration -Suites @($Suites | Where-Object {$_ -in @('Host','Document','IO','Composition')} | ForEach-Object {if($_ -eq 'IO'){'IoTests'}else{$_+'Tests'}}) -EvidenceRun $evidence
 if ($LASTEXITCODE -ne 0) {
     throw "Failure report self-tests failed with exit code $LASTEXITCODE."
+}
 }
 
 foreach ($suite in @(
@@ -370,8 +403,10 @@ foreach ($isaCase in @(
 
 Write-Host 'Validating DxUi provenance...' -ForegroundColor Cyan
 Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
+if (-not $localSdkMode) {
 Assert-RedPrismDxUiProvenance -OutputRoot $outputRoot -LockFile (Join-Path $repoRoot 'Dependencies\DxUi.lock.json') `
     -Platform $Platform -Configuration $Configuration
+}
 if('Captures' -in $Suites){
 Write-Host 'Capturing harness screenshots (empty-document shell)...' -ForegroundColor Cyan
 Add-Type -AssemblyName System.Drawing
@@ -435,12 +470,12 @@ foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ 
     # into two arguments (the crash probe below already quotes its directory the same way).
     $shotArgs = @('--screenshot', ('"' + $shotPath + '"'), '--warp', '--dpi', "$dpi")
     if ($demo) { $shotArgs += @('--demo', $demo) }
-    $shot = Start-Process -FilePath $executable -ArgumentList $shotArgs `
+    $shot = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList $shotArgs `
         -PassThru -RedirectStandardOutput $shotLog -RedirectStandardError $shotErr
+    try {
     $null = $shot.Handle
     if (-not $shot.WaitForExit(60000)) {
-        $shot.Kill()
-        throw "RedPrism.exe --screenshot ($shotName) did not exit within 60 seconds."
+        throw "RedPrism.exe --screenshot ($shotName) did not exit within 60 seconds; PID $($shot.Id) was not terminated."
     }
     if ($shot.ExitCode -eq 8) {
         # WP4: RedPrism returns 8 only when the harness capture path is unsupported on this host. Any other
@@ -463,15 +498,38 @@ foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ 
         throw "Screenshot ($shotName) failed content validation: $problem ($shotPath)."
     }
     Write-Host "PASS harness screenshot ($shotName): $shotPath"
+    } finally {
+        if (-not $shot.HasExited) {
+            Write-Warning "Waiting for owned screenshot process $($shot.Id) to exit before releasing its SDK/evidence inputs."
+            $shot.WaitForExit()
+        }
+        $shot.Dispose()
+    }
 }
 
 }
 
-Write-Host ('Selected suites passed: '+($Suites -join ', ')+'. Unselected/manual/platform/resource coverage remains NOT_EVALUATED.') -ForegroundColor Green
-Publish-TestRunEvidenceReceipt -Run $evidence -Name 'normal-suites.json' -Receipt ([ordered]@{
+$resultReceipt=[ordered]@{
     schemaVersion=1; platform=$Platform; configuration=$Configuration; passed=$true
     countUnit='suite'; discovered=@($Suites); executed=@($Suites); filtered=$false
-})
+}
+$receiptName='normal-suites.json'
+if ($localSdkMode) {
+    Close-CiLocalSdkApplicationRuntimeInput $runtimeInput
+    $receiptName='local-sdk-runtime.json'
+    $resultReceipt.role='LocalUnpinnedApplicationRuntimeResult'
+    $resultReceipt.recipe='LocalUnpinnedReleaseSdk'
+    $resultReceipt.buildReceipt=$LocalSdkBuildReceipt
+    $resultReceipt.buildReceiptSha256=$LocalSdkBuildSha256
+    $resultReceipt.sourceBytes=$runtimeInput.Build.sourceBytes
+    $resultReceipt.engineInputs=$runtimeInput.Build.engineInputs
+    $resultReceipt.dependency=$runtimeInput.Build.dependency
+    $resultReceipt.runtimeBytesDigest=$runtimeInput.Build.runtimeBytes.digest
+    $resultReceipt.testsExecuted=$true
+    $resultReceipt.repositoryQualified=$false
+    $resultReceipt.productionQualified=$false
+}
+Publish-TestRunEvidenceReceipt -Run $evidence -Name $receiptName -Receipt $resultReceipt
 $runPassed = $true
 } catch {
     $runFailure = $_
@@ -484,5 +542,19 @@ $runPassed = $true
         Write-Warning ('Test-run evidence finalization also failed: ' + $_.Exception.Message)
     }
 }
+Write-Host ('Selected suites passed: '+($Suites -join ', ')+'. Unselected/manual/platform/resource coverage remains NOT_EVALUATED.') -ForegroundColor Green
+if ($localSdkMode) { Write-Host 'LOCAL_UNPINNED_RUNTIME: ordinary local/main, repository and production gates remain NOT_EVALUATED.' }
 exit 0
-}finally{try{$iterationLease.ReleaseMutex()}finally{$iterationLease.Dispose()}}
+}finally{if($null -ne $iterationLease){try{$iterationLease.ReleaseMutex()}finally{$iterationLease.Dispose()}}}
+} catch {
+    $runtimeFailure=$_
+    throw
+} finally {
+    if ($null -ne $runtimeInput -and -not $runtimeInput.Closed) {
+        try { Close-CiLocalSdkApplicationRuntimeInput $runtimeInput }
+        catch {
+            if ($null -eq $runtimeFailure) { throw }
+            Write-Warning ('Local SDK runtime close also failed: '+$_.Exception.Message)
+        }
+    }
+}
