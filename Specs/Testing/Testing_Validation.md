@@ -961,6 +961,14 @@ Sampler adjustment-picker checks retain the original panel's settled memory base
 the sampler must add no retained terminal charge. Original99/75 luminance bytes, settings, root/generation,
 history and palette expectations remain exact. Actual panel Cancel must then acknowledge zero reserved
 and releasing bytes. Destructive panel/ordinary sampler zero-memory cases remain unchanged.
+
+the 512-point physical sampler overflow case uses the existing acknowledgement event and requires
+strictly decreasing pending work on every wait, with at most 512 rounds. Each wait retains the existing
+ten-second missing-acknowledgement failure bound, followed by the ordinary complete-retirement bound.
+The entire 512-point sequence has no aggregate latency assertion; the outer hidden WARP process keeps
+its independent 1,200-second failure bound. The last accepted brown prefix, exactly one source capture,
+unchanged document/history, exact quota failure and complete ownership retirement remain required.
+
 An open transaction disables Undo/Redo commands; retention assertions therefore inspect its immutable redo stack,
 not `CanRedo()`. No production command pumps a nested wait. Final identities and configuration results live in the
 [opening/OK record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md).
@@ -992,6 +1000,17 @@ negative-test children (`HostTests.exe --asan-probe`, `RedPrism.exe --no-such-sw
 entrypoint's success exit code and MUST NOT be reused as the pass/fail signal for a later gate.
 
 ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 binaries are produced by `build.ps1` only.
+
+Real-clipboard `IoTests` and the hidden WARP runtime hold the existing shared
+`Invoke-CiInteractiveDesktopOperation` admission. A hidden window still shares the Windows session clipboard:
+Root/DxUi/sibling foreground or clipboard fixtures must not overlap it. Host, Document and Composition use
+private state and retain independent lifecycles; build/setup/archival hold no desktop admission. Admission
+itself does not activate a window or substitute for a native focus warning/restoration contract.
+The runtime callback retains that admission until its exact owned child exits, including after an observed
+failure or timeout. Such a timeout remains failed and reported with its retained logs/PID; the runner does
+not terminate the child or release a shared clipboard that it may still use. Failure-bound and functional
+assertions remain unchanged. Runner controls execute the actual suite/boundary selection and drain paths;
+the shared engine owns contender, nesting and abandoned-owner mutex controls.
 
 The hidden WARP self-test failure bound defaults to 1,200 seconds. Optional
 `-SelfTestTimeoutSeconds` accepts 1,200–5,400 seconds; values above the default require `-Platform ARM64`

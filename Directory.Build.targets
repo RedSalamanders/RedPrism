@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
+  <Target Name="ValidateRedPrismOutputRoot" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <_RedPrismCanonicalOutputRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory).build\'))</_RedPrismCanonicalOutputRoot>
+      <_RedPrismEvaluatedOutputRoot>$([System.IO.Path]::GetFullPath('$(RedPrismOutputRoot)'))</_RedPrismEvaluatedOutputRoot>
+    </PropertyGroup>
+    <Error Condition="'$(_RedPrismEvaluatedOutputRoot)'!='$(_RedPrismCanonicalOutputRoot)' and ('$(CiSdkContract)'!='LocalUnpinnedAbiV1' or '$(RedPrismDxUiSdkRoot)'=='' or '$(RedPrismCiEngineRoot)'=='')" Text="Separate RedPrism output roots require the explicit local SDK build broker and its active compiler lease." />
+    <CallTarget Targets="CiRequireSdkConsumerLease" Condition="'$(_RedPrismEvaluatedOutputRoot)'!='$(_RedPrismCanonicalOutputRoot)'" />
+  </Target>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='ASan Debug'">
     <ClCompile>
       <EnableASAN>true</EnableASAN>

@@ -1,0 +1,1 @@
+- Add an explicit local Release SDK application build through the shared broker, with separate leased outputs and actual linker-input proof. Existing vcpkg dependencies and ordinary profile outputs remain separate; the result grants no test, ISA, repository or production qualification.

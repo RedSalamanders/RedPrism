@@ -1,10 +1,27 @@
 # RedPrism build toolchain
 
+ASan solution builds use one MSBuild project worker. MSVC's per-project app-local
+ASan runtime copy uses independent tracking and unconditional writes to the same
+profile directory; parallel project copies can produce MSB3026 and invalidate a
+zero-warning build. This scheduling rule serializes those writers while retaining
+the existing C++ `/MP` compiler bound. Debug/Release project concurrency, sanitizer
+instrumentation/detection, runtime staging and zero-warning acceptance are unchanged.
+
 Status: current normative repository contract
 Last reviewed: 2026-10-21
 Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `Build/VcpkgToolset.psm1`, `Build/VisualStudioDiscovery.psm1`, `format.ps1`
 
 ## Scope
+
+`Tools/Build-LocalSdkCandidate.ps1` consumes one independently hashed local SDK descriptor,
+requires its original producer and actual selected ABI to remain current, and compiles only
+the application target into a fresh `.build/local-unpinned` operation. Restore the selected
+app dependencies with `vcpkg-install.ps1` before invocation and keep them unchanged during it.
+`RedPrismOutputRoot` changes output/intermediate paths only; the ordinary dependency tree remains
+under `RedPrismBuildRoot`. A noncanonical output root requires `LocalUnpinnedAbiV1` and the live
+shared SDK/output lease before native writes. Managed pins and ordinary receipts are unchanged.
+The retained local build/link record grants no test, ISA, native-platform, package or production
+qualification. Ordinary build/test/ISA gates still apply to accepted product changes.
 
 Local MSBuild launches, including ordinary, analysis and actual SDK-profile preflight,
 use the exact pinned engine's `Invoke-CiNativeCommand`. Each owned child receives a

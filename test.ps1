@@ -76,6 +76,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Import-Module (Join-Path $repoRoot 'Build/TestRunEvidence.psm1') -Force
+Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.DesktopLease.psm1')
 $evidence = Start-TestRunEvidence -Repository $repoRoot -Context @{ project='RedPrism'; platform=$Platform; configuration=$Configuration; suites=$Suites; selfTestTimeoutSeconds=$SelfTestTimeoutSeconds }
 $runPassed = $false
 $runFailure = $null
@@ -100,16 +101,19 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 foreach ($suite in @(
-        @{ Name = 'HostTests'; Scope = 'Host'; Path = $hostTests; Label = 'host contract' },
-        @{ Name = 'DocumentTests'; Scope = 'Document'; Path = (Join-Path $outputRoot 'DocumentTests.exe'); Label = 'document model' },
-        @{ Name = 'CompositionTests'; Scope = 'Composition'; Path = (Join-Path $outputRoot 'CompositionTests.exe'); Label = 'composition' },
-        @{ Name = 'IoTests'; Scope = 'IO'; Path = (Join-Path $outputRoot 'IoTests.exe'); Label = 'project I/O' }
+        @{ Name = 'HostTests'; Scope = 'Host'; Path = $hostTests; Label = 'host contract'; RequiresInteractiveDesktop = $false },
+        @{ Name = 'DocumentTests'; Scope = 'Document'; Path = (Join-Path $outputRoot 'DocumentTests.exe'); Label = 'document model'; RequiresInteractiveDesktop = $false },
+        @{ Name = 'CompositionTests'; Scope = 'Composition'; Path = (Join-Path $outputRoot 'CompositionTests.exe'); Label = 'composition'; RequiresInteractiveDesktop = $false },
+        @{ Name = 'IoTests'; Scope = 'IO'; Path = (Join-Path $outputRoot 'IoTests.exe'); Label = 'project I/O'; RequiresInteractiveDesktop = $true }
     )) {
     if($suite.Scope -notin $Suites){continue}
     Write-Host "Running $($suite.Label) tests..." -ForegroundColor Cyan
-    & $suite.Path 2>&1 | Tee-Object -FilePath (Join-Path $evidence.Path ($suite.Name + '.log'))
-    if ($LASTEXITCODE -ne 0) {
-        throw "$($suite.Name).exe failed with exit code $LASTEXITCODE."
+    # IO owns real clipboard fixtures; the other console suites use private state.
+    Invoke-CiInteractiveDesktopOperation -RequiresInteractiveDesktop $suite.RequiresInteractiveDesktop -Operation {
+        & $suite.Path 2>&1 | Tee-Object -FilePath (Join-Path $evidence.Path ($suite.Name + '.log'))
+        if ($LASTEXITCODE -ne 0) {
+            throw "$($suite.Name).exe failed with exit code $LASTEXITCODE."
+        }
     }
 }
 
@@ -195,6 +199,9 @@ if ($unknown.ExitCode -ne 2) {
 }
 
 Write-Host 'Running hidden WARP self-test...' -ForegroundColor Cyan
+Invoke-CiInteractiveDesktopOperation -RequiresInteractiveDesktop $true -Operation {
+$selfTest=$null
+try {
 $selfTestErr = Join-Path $evidence.Path 'RedPrism.self-test.err.log'
 $selfTestLog = Join-Path $evidence.Path 'RedPrism.self-test.log'
 $selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -PassThru `
@@ -224,6 +231,16 @@ if ($selfTestObservation.TerminalFailureObserved) {
     throw "RedPrism.exe --self-test --warp reported terminal clipboard acknowledgement failure before exiting (code $($selfTest.ExitCode)). Logs: $selfTestLog; $selfTestErr."
 }
 Write-Host "PASS hidden WARP self-test: $selfTestLog" -ForegroundColor Green
+}finally{
+    if($null -ne $selfTest){
+        if(-not $selfTest.HasExited){
+            Write-Warning "Owned hidden WARP process $($selfTest.Id) is still active; retain shared clipboard admission until it exits. The original failure and logs remain retained; no process is terminated."
+            $selfTest.WaitForExit()
+        }
+        $selfTest.Dispose()
+    }
+}
+}
 
 }
 
