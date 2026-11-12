@@ -1180,8 +1180,43 @@ int Application::RunSamplerCallerSelfTest() noexcept
             L"The physical sampler overflow dropped accepted points, captured inline, or invented its release point.\n",
             "sampler-caller.capacity.full-prefix-seals-on-rejected-point"))
         return 5;
+    // Every accepted point performs an asynchronous GPU/worker acknowledgement.
+    // One aggregate ten-second deadline turns 512 productive rounds into a speed
+    // assertion under ASan. Require strictly decreasing pending work at each
+    // existing event-bound wait, then require the original complete retirement.
+    wil::unique_handle overflowAcknowledged{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    if (!overflowAcknowledged || _samplerAcknowledgedForTest)
+    {
+        SelfTestFailure(L"The sampler overflow acknowledgement fixture could not begin.\n");
+        return 5;
+    }
+    _samplerAcknowledgedForTest = overflowAcknowledged.get();
+    const auto clearOverflowAcknowledgement =
+        wil::scope_exit([this]() noexcept { _samplerAcknowledgedForTest = nullptr; });
     const auto overflowStarted = GetTickCount64();
-    const auto overflowSettlement = SettleJobs(_jobs, 10000, DispatchMessageThunk, this);
+    bool overflowProgress = true;
+    std::uint32_t overflowRounds = 0;
+    while (const auto* pending = FindSamplerOpening(overflowOpening))
+    {
+        const auto before = pending->points.PendingCount();
+        if (before == 0)
+            break;
+        if (++overflowRounds > SamplerIntentInput::kPendingCapacity || !ResetEvent(overflowAcknowledged.get()) ||
+            !WaitForColorWorkTestEvent(_jobs, overflowAcknowledged.get(), DispatchMessageThunk, this))
+        {
+            overflowProgress = false;
+            break;
+        }
+        const auto* after = FindSamplerOpening(overflowOpening);
+        if (after && after->points.PendingCount() >= before)
+        {
+            overflowProgress = false;
+            break;
+        }
+    }
+    _samplerAcknowledgedForTest = nullptr;
+    const auto overflowSettlement =
+        overflowProgress ? SettleJobs(_jobs, 10000, DispatchMessageThunk, this) : SettleResult::Failed;
     const bool overflowSettled = overflowSettlement == SettleResult::Settled;
     const bool overflowComplete =
         overflowSettled && overflowReceipt.Read().outcome == HostOutcome::Failed &&
@@ -1226,6 +1261,8 @@ int Application::RunSamplerCallerSelfTest() noexcept
                L"retirement.\n",
                "sampler-caller.capacity.overflow-retains-brown-one-source-and-exact-failure"))
         return 5;
+    std::printf("INFO sampler-caller.capacity acknowledged-rounds=%u elapsed=%llu\n", overflowRounds,
+                static_cast<unsigned long long>(GetTickCount64() - overflowStarted));
     _samplerSourceCapturesForTest = nullptr;
 
     // A busy Map uses one event barrier, without recopy or polling. Persistent busy on the second pixel must
