@@ -680,6 +680,12 @@ void SelfTestFailure(const wchar_t* message) noexcept
 int Application::RunSelfTest() noexcept
 {
     (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
+    const ULONGLONG selfTestStarted = GetTickCount64();
+    const auto traceSelfTest = [selfTestStarted](const char* stage) noexcept
+    {
+        std::printf("BEGIN self-test.%s elapsed_ms=%llu\n", stage,
+                    static_cast<unsigned long long>(GetTickCount64() - selfTestStarted));
+    };
     if (_session.history.RetainedByteLimit() != HostHistoryLimit())
     {
         SelfTestFailure(L"The application session did not receive its physical-memory history limit.\n");
@@ -727,7 +733,7 @@ int Application::RunSelfTest() noexcept
         return true;
     };
 
-    std::printf("BEGIN self-test.RunJobShutdownSelfTest\n");
+    traceSelfTest("RunJobShutdownSelfTest");
     if (const int failed = RunJobShutdownSelfTest(); failed != 0)
     {
         return failed;
@@ -868,7 +874,7 @@ int Application::RunSelfTest() noexcept
         return 5;
     }
     const int visibleTools = _chrome->VisibleToolButtonCount();
-    std::printf("BEGIN self-test.RunJobActivitySelfTest\n");
+    traceSelfTest("RunJobActivitySelfTest");
     if (const int failed = RunJobActivitySelfTest(); failed != 0)
     {
         return failed;
@@ -1240,7 +1246,7 @@ int Application::RunSelfTest() noexcept
         // Keys through the window procedure (ApplicationKeyboard.cpp): replacements, text fields, AltGr, the Command
         // List, the menu bar, the Move tool's digits and the chords the chrome shows. It leaves the palette at
         // black over white, the document and the settings as they were.
-        std::printf("BEGIN self-test.RunKeyboardSelfTest\n");
+        traceSelfTest("RunKeyboardSelfTest");
         if (const int keyboard = RunKeyboardSelfTest(); keyboard != 0)
         {
             return keyboard;
@@ -2594,304 +2600,304 @@ int Application::RunSelfTest() noexcept
     }
 
     // Product hardening (C14): accessible names and the UIA root, the settings file's live reload and the theme.
-    std::printf("BEGIN self-test.RunProductHardeningSelfTest\n");
+    traceSelfTest("RunProductHardeningSelfTest");
     if (const int hardening = RunProductHardeningSelfTest(); hardening != 0)
     {
         return hardening;
     }
     // Files and the unimplemented-function notice (C16).
-    std::printf("BEGIN self-test.RunFilesSelfTest\n");
+    traceSelfTest("RunFilesSelfTest");
     if (const int files = RunFilesSelfTest(); files != 0)
     {
         return files;
     }
-    std::printf("BEGIN self-test.RunSizeSelfTest\n");
+    traceSelfTest("RunSizeSelfTest");
     if (const int sizes = RunSizeSelfTest(); sizes != 0)
     {
         return sizes;
     }
-    std::printf("BEGIN self-test.RunSizingWorkSelfTest\n");
+    traceSelfTest("RunSizingWorkSelfTest");
     if (const int sizing = RunSizingWorkSelfTest(); sizing != 0)
         return sizing;
-    std::printf("BEGIN self-test.RunDocumentLifecycleSelfTest\n");
+    traceSelfTest("RunDocumentLifecycleSelfTest");
     if (const int lifecycle = RunDocumentLifecycleSelfTest(); lifecycle != 0)
         return lifecycle;
-    std::printf("BEGIN self-test.RunDocumentLifecycleRefusalSelfTest\n");
+    traceSelfTest("RunDocumentLifecycleRefusalSelfTest");
     if (const int lifecycle = RunDocumentLifecycleRefusalSelfTest(); lifecycle != 0)
         return lifecycle;
-    std::printf("BEGIN self-test.RunDocumentLifecycleCloseSelfTest\n");
+    traceSelfTest("RunDocumentLifecycleCloseSelfTest");
     if (const int lifecycle = RunDocumentLifecycleCloseSelfTest(); lifecycle != 0)
         return lifecycle;
-    std::printf("BEGIN self-test.RunHistoryRestoreSelfTest\n");
+    traceSelfTest("RunHistoryRestoreSelfTest");
     if (const int restore = RunHistoryRestoreSelfTest(); restore != 0)
         return restore;
-    std::printf("BEGIN self-test.RunSelectionCommandSelfTest\n");
+    traceSelfTest("RunSelectionCommandSelfTest");
     if (const int selection = RunSelectionCommandSelfTest(); selection != 0)
         return selection;
-    std::printf("BEGIN self-test.RunInverseSelectionHostSelfTest\n");
+    traceSelfTest("RunInverseSelectionHostSelfTest");
     if (const int inverse = RunInverseSelectionHostSelfTest(); inverse != 0)
         return inverse;
-    std::printf("BEGIN self-test.RunInverseSelectionFailureSelfTest\n");
+    traceSelfTest("RunInverseSelectionFailureSelfTest");
     if (const int failures = RunInverseSelectionFailureSelfTest(); failures != 0)
         return failures;
-    std::printf("BEGIN self-test.RunSelectionOffsetHostSelfTest\n");
+    traceSelfTest("RunSelectionOffsetHostSelfTest");
     if (const int offset = RunSelectionOffsetHostSelfTest(); offset != 0)
         return offset;
-    std::printf("BEGIN self-test.RunSelectionOffsetFailureSelfTest\n");
+    traceSelfTest("RunSelectionOffsetFailureSelfTest");
     if (const int offset = RunSelectionOffsetFailureSelfTest(); offset != 0)
         return offset;
-    std::printf("BEGIN self-test.RunSelectionOffsetLargeOutputSelfTest\n");
+    traceSelfTest("RunSelectionOffsetLargeOutputSelfTest");
     if (const int large = RunSelectionOffsetLargeOutputSelfTest(); large != 0)
         return large;
-    std::printf("BEGIN self-test.RunLayerMetadataSelfTest\n");
+    traceSelfTest("RunLayerMetadataSelfTest");
     if (const int metadata = RunLayerMetadataSelfTest(); metadata != 0)
         return metadata;
-    std::printf("BEGIN self-test.RunLayerOpacityHostSelfTest\n");
+    traceSelfTest("RunLayerOpacityHostSelfTest");
     if (const int opacity = RunLayerOpacityHostSelfTest(); opacity != 0)
         return opacity;
-    std::printf("BEGIN self-test.RunLayerOpacityContextsSelfTest\n");
+    traceSelfTest("RunLayerOpacityContextsSelfTest");
     if (const int opacityContexts = RunLayerOpacityContextsSelfTest(); opacityContexts != 0)
         return opacityContexts;
-    std::printf("BEGIN self-test.RunCanvasBrushOpacitySelfTest\n");
+    traceSelfTest("RunCanvasBrushOpacitySelfTest");
     if (const int canvasBrush = RunCanvasBrushOpacitySelfTest(); canvasBrush != 0)
         return canvasBrush;
-    std::printf("BEGIN self-test.RunCloneReadbackSelfTest\n");
+    traceSelfTest("RunCloneReadbackSelfTest");
     if (const int cloneReadback = RunCloneReadbackSelfTest(); cloneReadback != 0)
         return cloneReadback;
-    std::printf("BEGIN self-test.RunCloneLayerSourceSelfTest\n");
+    traceSelfTest("RunCloneLayerSourceSelfTest");
     if (const int cloneSource = RunCloneLayerSourceSelfTest(); cloneSource != 0)
         return cloneSource;
-    std::printf("BEGIN self-test.RunCloneLayerSourceCaptureFailureSelfTest\n");
+    traceSelfTest("RunCloneLayerSourceCaptureFailureSelfTest");
     if (const int cloneCapture = RunCloneLayerSourceCaptureFailureSelfTest(); cloneCapture != 0)
         return cloneCapture;
-    std::printf("BEGIN self-test.RunStrokeOpeningHostSelfTest\n");
+    traceSelfTest("RunStrokeOpeningHostSelfTest");
     if (RunStrokeOpeningHostSelfTest() != 0)
         return 5;
-    std::printf("BEGIN self-test.RunSealedStrokeHostSelfTest\n");
+    traceSelfTest("RunSealedStrokeHostSelfTest");
     if (RunSealedStrokeHostSelfTest() != 0)
         return 5;
-    std::printf("BEGIN self-test.RunSealedCloneHostSelfTest\n");
+    traceSelfTest("RunSealedCloneHostSelfTest");
     if (RunSealedCloneHostSelfTest() != 0)
         return 5;
-    std::printf("BEGIN self-test.RunCloneInputPolicySelfTest\n");
+    traceSelfTest("RunCloneInputPolicySelfTest");
     if (const int clonePolicy = RunCloneInputPolicySelfTest(); clonePolicy != 0)
         return clonePolicy;
-    std::printf("BEGIN self-test.RunCanvasBrushCancellationSelfTest\n");
+    traceSelfTest("RunCanvasBrushCancellationSelfTest");
     if (const int canvasCancellation = RunCanvasBrushCancellationSelfTest(); canvasCancellation != 0)
         return canvasCancellation;
-    std::printf("BEGIN self-test.RunCanvasBrushPaletteSelfTest\n");
+    traceSelfTest("RunCanvasBrushPaletteSelfTest");
     if (const int canvasPalette = RunCanvasBrushPaletteSelfTest(); canvasPalette != 0)
         return canvasPalette;
-    std::printf("BEGIN self-test.RunCanvasBrushCompetingSelfTest\n");
+    traceSelfTest("RunCanvasBrushCompetingSelfTest");
     if (const int canvasCompeting = RunCanvasBrushCompetingSelfTest(); canvasCompeting != 0)
         return canvasCompeting;
-    std::printf("BEGIN self-test.RunCanvasBrushMaskPaletteExtensionSelfTest\n");
+    traceSelfTest("RunCanvasBrushMaskPaletteExtensionSelfTest");
     if (const int canvasMaskPalette = RunCanvasBrushMaskPaletteExtensionSelfTest(); canvasMaskPalette != 0)
         return canvasMaskPalette;
-    std::printf("BEGIN self-test.RunCanvasBrushBoundarySelfTest\n");
+    traceSelfTest("RunCanvasBrushBoundarySelfTest");
     if (const int canvasBoundary = RunCanvasBrushBoundarySelfTest(); canvasBoundary != 0)
         return canvasBoundary;
-    std::printf("BEGIN self-test.RunCanvasBrushLifetimeCancelSelfTest\n");
+    traceSelfTest("RunCanvasBrushLifetimeCancelSelfTest");
     if (const int canvasLifetimeCancel = RunCanvasBrushLifetimeCancelSelfTest(); canvasLifetimeCancel != 0)
         return canvasLifetimeCancel;
-    std::printf("BEGIN self-test.RunCanvasBrushLifetimeAcceptedSelfTest\n");
+    traceSelfTest("RunCanvasBrushLifetimeAcceptedSelfTest");
     if (const int canvasLifetimeAccepted = RunCanvasBrushLifetimeAcceptedSelfTest(); canvasLifetimeAccepted != 0)
         return canvasLifetimeAccepted;
-    std::printf("BEGIN self-test.RunCanvasBrushLifetimeModalSelfTest\n");
+    traceSelfTest("RunCanvasBrushLifetimeModalSelfTest");
     if (const int canvasLifetimeModal = RunCanvasBrushLifetimeModalSelfTest(); canvasLifetimeModal != 0)
         return canvasLifetimeModal;
-    std::printf("BEGIN self-test.RunCanvasBrushLifetimeAuthoritySelfTest\n");
+    traceSelfTest("RunCanvasBrushLifetimeAuthoritySelfTest");
     if (const int canvasLifetimeAuthority = RunCanvasBrushLifetimeAuthoritySelfTest(); canvasLifetimeAuthority != 0)
         return canvasLifetimeAuthority;
-    std::printf("BEGIN self-test.RunCanvasBrushLifetimeWindowSelfTest\n");
+    traceSelfTest("RunCanvasBrushLifetimeWindowSelfTest");
     if (const int canvasLifetimeWindow = RunCanvasBrushLifetimeWindowSelfTest(); canvasLifetimeWindow != 0)
         return canvasLifetimeWindow;
-    std::printf("BEGIN self-test.RunSelectionMoveCloseSelfTest\n");
+    traceSelfTest("RunSelectionMoveCloseSelfTest");
     if (const int close = RunSelectionMoveCloseSelfTest(); close != 0)
         return close;
-    std::printf("BEGIN self-test.RunSelectionMoveCallerSelfTest\n");
+    traceSelfTest("RunSelectionMoveCallerSelfTest");
     if (const int callers = RunSelectionMoveCallerSelfTest(); callers != 0)
         return callers;
-    std::printf("BEGIN self-test.RunSelectionMoveFollowupSelfTest\n");
+    traceSelfTest("RunSelectionMoveFollowupSelfTest");
     if (const int followup = RunSelectionMoveFollowupSelfTest(); followup != 0)
         return followup;
-    std::printf("BEGIN self-test.RunSelectionMoveHeaderSelfTest\n");
+    traceSelfTest("RunSelectionMoveHeaderSelfTest");
     if (const int header = RunSelectionMoveHeaderSelfTest(); header != 0)
         return header;
-    std::printf("BEGIN self-test.RunSelectionSizeOutlineLiteralSelfTest\n");
+    traceSelfTest("RunSelectionSizeOutlineLiteralSelfTest");
     if (const int sizeOutline = RunSelectionSizeOutlineLiteralSelfTest(); sizeOutline != 0)
         return sizeOutline;
-    std::printf("BEGIN self-test.RunSelectionSizeOutlineFaultSelfTest\n");
+    traceSelfTest("RunSelectionSizeOutlineFaultSelfTest");
     if (const int sizeOutlineFault = RunSelectionSizeOutlineFaultSelfTest(); sizeOutlineFault != 0)
         return sizeOutlineFault;
-    std::printf("BEGIN self-test.RunSelectionNewCanvasLiteralSelfTest\n");
+    traceSelfTest("RunSelectionNewCanvasLiteralSelfTest");
     if (const int newCanvasOutline = RunSelectionNewCanvasLiteralSelfTest(); newCanvasOutline != 0)
         return newCanvasOutline;
-    std::printf("BEGIN self-test.RunSelectionNewCanvasFaultSelfTest\n");
+    traceSelfTest("RunSelectionNewCanvasFaultSelfTest");
     if (const int newCanvasFault = RunSelectionNewCanvasFaultSelfTest(); newCanvasFault != 0)
         return newCanvasFault;
-    std::printf("BEGIN self-test.RunSelectionCloseProjectLiteralSelfTest\n");
+    traceSelfTest("RunSelectionCloseProjectLiteralSelfTest");
     if (const int closeProjectOutline = RunSelectionCloseProjectLiteralSelfTest(); closeProjectOutline != 0)
         return closeProjectOutline;
-    std::printf("BEGIN self-test.RunSelectionCloseProjectFaultSelfTest\n");
+    traceSelfTest("RunSelectionCloseProjectFaultSelfTest");
     if (const int closeProjectFault = RunSelectionCloseProjectFaultSelfTest(); closeProjectFault != 0)
         return closeProjectFault;
-    std::printf("BEGIN self-test.RunSelectionLifecycleOutlineLiteralSelfTest\n");
+    traceSelfTest("RunSelectionLifecycleOutlineLiteralSelfTest");
     if (const int lifecycleOutlineLiteral = RunSelectionLifecycleOutlineLiteralSelfTest(); lifecycleOutlineLiteral != 0)
         return lifecycleOutlineLiteral;
-    std::printf("BEGIN self-test.RunSelectionLifecycleOutlineFaultSelfTest\n");
+    traceSelfTest("RunSelectionLifecycleOutlineFaultSelfTest");
     if (const int lifecycleOutlineFault = RunSelectionLifecycleOutlineFaultSelfTest(); lifecycleOutlineFault != 0)
         return lifecycleOutlineFault;
-    std::printf("BEGIN self-test.RunSelectionNudgeSelfTest\n");
+    traceSelfTest("RunSelectionNudgeSelfTest");
     if (const int nudge = RunSelectionNudgeSelfTest(); nudge != 0)
     {
         return nudge;
     }
-    std::printf("BEGIN self-test.RunSelectionNudgeFaultSelfTest\n");
+    traceSelfTest("RunSelectionNudgeFaultSelfTest");
     if (const int nudgeFaults = RunSelectionNudgeFaultSelfTest(); nudgeFaults != 0)
         return nudgeFaults;
-    std::printf("BEGIN self-test.RunRasterEditSelfTest\n");
+    traceSelfTest("RunRasterEditSelfTest");
     if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
         return rasterEdits;
-    std::printf("BEGIN self-test.RunMaskWorkSelfTest\n");
+    traceSelfTest("RunMaskWorkSelfTest");
     if (const int maskWork = RunMaskWorkSelfTest(); maskWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: mask-work.\n");
         return maskWork;
     }
 
-    std::printf("BEGIN self-test.RunLayerCopyWorkSelfTest\n");
+    traceSelfTest("RunLayerCopyWorkSelfTest");
     if (const int layerCopy = RunLayerCopyWorkSelfTest(); layerCopy != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: layer-copy.\n");
         return layerCopy;
     }
-    std::printf("BEGIN self-test.RunTransformWorkSelfTest\n");
+    traceSelfTest("RunTransformWorkSelfTest");
     if (const int transformWork = RunTransformWorkSelfTest(); transformWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: transform-work.\n");
         return transformWork;
     }
-    std::printf("BEGIN self-test.RunTransformShapeRedrawSelfTest\n");
+    traceSelfTest("RunTransformShapeRedrawSelfTest");
     if (const int shapeRedraw = RunTransformShapeRedrawSelfTest(); shapeRedraw != 0)
         return shapeRedraw;
-    std::printf("BEGIN self-test.RunTransformPreviewSelfTest\n");
+    traceSelfTest("RunTransformPreviewSelfTest");
     if (const int transformPreview = RunTransformPreviewSelfTest(); transformPreview != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: transform-preview.\n");
         return transformPreview;
     }
-    std::printf("BEGIN self-test.RunDuplicateGestureSelfTest\n");
+    traceSelfTest("RunDuplicateGestureSelfTest");
     if (const int duplicateGesture = RunDuplicateGestureSelfTest(); duplicateGesture != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: duplicate-gesture.\n");
         return duplicateGesture;
     }
-    std::printf("BEGIN self-test.RunTransformPolicySelfTest\n");
+    traceSelfTest("RunTransformPolicySelfTest");
     if (const int transformPolicy = RunTransformPolicySelfTest(); transformPolicy != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: transform-policy.\n");
         return transformPolicy;
     }
-    std::printf("BEGIN self-test.RunShapeWorkSelfTest\n");
+    traceSelfTest("RunShapeWorkSelfTest");
     if (const int shapeWork = RunShapeWorkSelfTest(); shapeWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: shape-work.\n");
         return shapeWork;
     }
-    std::printf("BEGIN self-test.RunGradientWorkSelfTest\n");
+    traceSelfTest("RunGradientWorkSelfTest");
     if (const int gradientWork = RunGradientWorkSelfTest(); gradientWork != 0)
         return gradientWork;
-    std::printf("BEGIN self-test.RunPixelMoveWorkSelfTest\n");
+    traceSelfTest("RunPixelMoveWorkSelfTest");
     if (const int pixelMoveWork = RunPixelMoveWorkSelfTest(); pixelMoveWork != 0)
         return pixelMoveWork;
-    std::printf("BEGIN self-test.RunCropSelfTest\n");
+    traceSelfTest("RunCropSelfTest");
     if (const int crop = RunCropSelfTest(); crop != 0)
     {
         return crop;
     }
-    std::printf("BEGIN self-test.RunLayerEditsSelfTest\n");
+    traceSelfTest("RunLayerEditsSelfTest");
     if (const int edits = RunLayerEditsSelfTest(); edits != 0)
     {
         return edits;
     }
     // The adjustment panel's live controls (review fixes wave 1b: RF-1107).
-    std::printf("BEGIN self-test.RunUtilityReadbackSelfTest\n");
+    traceSelfTest("RunUtilityReadbackSelfTest");
     if (const int utility = RunUtilityReadbackSelfTest(); utility != 0)
     {
         return utility;
     }
-    std::printf("BEGIN self-test.RunAdjustSelfTest\n");
+    traceSelfTest("RunAdjustSelfTest");
     if (const int adjust = RunAdjustSelfTest(); adjust != 0)
     {
         return adjust;
     }
-    std::printf("BEGIN self-test.RunColorJobsSelfTest\n");
+    traceSelfTest("RunColorJobsSelfTest");
     if (const int colorJobs = RunColorJobsSelfTest(); colorJobs != 0)
     {
         return colorJobs;
     }
-    std::printf("BEGIN self-test.RunAdjustBusySelfTest\n");
+    traceSelfTest("RunAdjustBusySelfTest");
     if (const int adjustBusy = RunAdjustBusySelfTest(); adjustBusy != 0)
     {
         return adjustBusy;
     }
-    std::printf("BEGIN self-test.RunColorCommitSelfTest\n");
+    traceSelfTest("RunColorCommitSelfTest");
     if (const int colorCommit = RunColorCommitSelfTest(); colorCommit != 0)
     {
         return colorCommit;
     }
-    std::printf("BEGIN self-test.RunAdjustmentClosureSelfTest\n");
+    traceSelfTest("RunAdjustmentClosureSelfTest");
     if (const int adjustmentClosure = RunAdjustmentClosureSelfTest(); adjustmentClosure != 0)
     {
         return adjustmentClosure;
     }
-    std::printf("BEGIN self-test.RunColorCancellationSelfTest\n");
+    traceSelfTest("RunColorCancellationSelfTest");
     if (const int cancellation = RunColorCancellationSelfTest(); cancellation != 0)
     {
         return cancellation;
     }
-    std::printf("BEGIN self-test.RunUiCancellationDispatchSelfTest\n");
+    traceSelfTest("RunUiCancellationDispatchSelfTest");
     if (const int dispatch = RunUiCancellationDispatchSelfTest(); dispatch != 0)
         return dispatch;
-    std::printf("BEGIN self-test.RunAdjustmentOpeningSelfTest\n");
+    traceSelfTest("RunAdjustmentOpeningSelfTest");
     if (const int adjustmentOpening = RunAdjustmentOpeningSelfTest(); adjustmentOpening != 0)
     {
         return adjustmentOpening;
     }
-    std::printf("BEGIN self-test.RunHostContinuationSelfTest\n");
+    traceSelfTest("RunHostContinuationSelfTest");
     if (const int continuations = RunHostContinuationSelfTest(); continuations != 0)
     {
         return continuations;
     }
-    std::printf("BEGIN self-test.RunHostFlowSelfTest\n");
+    traceSelfTest("RunHostFlowSelfTest");
     if (const int flows = RunHostFlowSelfTest(); flows != 0)
     {
         return flows;
     }
-    std::printf("BEGIN self-test.RunPathClassificationSelfTest\n");
+    traceSelfTest("RunPathClassificationSelfTest");
     if (const int classification = RunPathClassificationSelfTest(); classification != 0)
     {
         return classification;
     }
-    std::printf("BEGIN self-test.RunProjectOpenSelfTest\n");
+    traceSelfTest("RunProjectOpenSelfTest");
     if (const int opened = RunProjectOpenSelfTest(); opened != 0)
         return opened;
-    std::printf("BEGIN self-test.RunImageImportSelfTest\n");
+    traceSelfTest("RunImageImportSelfTest");
     if (const int imported = RunImageImportSelfTest(); imported != 0)
         return imported;
-    std::printf("BEGIN self-test.RunProjectSaveSelfTest\n");
+    traceSelfTest("RunProjectSaveSelfTest");
     if (const int projectSave = RunProjectSaveSelfTest(); projectSave != 0)
         return projectSave;
-    std::printf("BEGIN self-test.RunExportReadbackSelfTest\n");
+    traceSelfTest("RunExportReadbackSelfTest");
     if (const int exported = RunExportReadbackSelfTest(); exported != 0)
         return exported;
     // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
-    std::printf("BEGIN self-test.RunPreparedLayerRowsSelfTest\n");
+    traceSelfTest("RunPreparedLayerRowsSelfTest");
     if (const int rows = RunPreparedLayerRowsSelfTest(); rows != 0)
         return rows;
 
-    std::printf("BEGIN self-test.RunChromeSyncSelfTest\n");
+    traceSelfTest("RunChromeSyncSelfTest");
     if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: chrome-sync.\n");
@@ -2899,57 +2905,60 @@ int Application::RunSelfTest() noexcept
     }
     // Session and interaction state (review fixes RF-603, RF-607…RF-609, RF-612): the clipboard, capture and focus
     // loss, a close inside a chrome dispatch and the session end.
-    std::printf("BEGIN self-test.RunClipboardSelfTest\n");
+    traceSelfTest("RunClipboardSelfTest");
     if (const int clipboard = RunClipboardSelfTest(); clipboard != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-compatibility.\n");
         return clipboard;
     }
-    std::printf("BEGIN self-test.RunClipboardWorkSelfTest\n");
+    traceSelfTest("RunClipboardWorkSelfTest");
     if (const int clipboardWork = RunClipboardWorkSelfTest(); clipboardWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-work.\n");
         return clipboardWork;
     }
-    std::printf("BEGIN self-test.RunClipboardPrefillSelfTest\n");
+    traceSelfTest("RunClipboardPrefillSelfTest");
     if (const int clipboardPrefill = RunClipboardPrefillSelfTest(); clipboardPrefill != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-prefill.\n");
         return clipboardPrefill;
     }
-    std::printf("BEGIN self-test.RunClipboardDelayedSelfTest\n");
+    traceSelfTest("RunClipboardDelayedSelfTest");
     if (const int clipboardDelayed = RunClipboardDelayedSelfTest(); clipboardDelayed != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-delayed.\n");
         return clipboardDelayed;
     }
-    std::printf("BEGIN self-test.RunClipboardFaultSelfTest\n");
+    traceSelfTest("RunClipboardFaultSelfTest");
     if (const int clipboardFault = RunClipboardFaultSelfTest(); clipboardFault != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-fault.\n");
         return clipboardFault;
     }
-    std::printf("BEGIN self-test.RunClipboardEndSessionSelfTest\n");
+    traceSelfTest("RunClipboardEndSessionSelfTest");
     if (const int clipboardEndSession = RunClipboardEndSessionSelfTest(); clipboardEndSession != 0)
         return clipboardEndSession;
-    std::printf("BEGIN self-test.RunFileEndSessionSelfTest\n");
+    traceSelfTest("RunFileEndSessionSelfTest");
     if (const int fileEndSession = RunFileEndSessionSelfTest(); fileEndSession != 0)
         return fileEndSession;
-    std::printf("BEGIN self-test.RunSessionSelfTest\n");
+    traceSelfTest("RunSessionSelfTest");
     if (const int session = RunSessionSelfTest(); session != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: session.\n");
         return session;
     }
     // Rendering, viewport and frame loop (review fixes WP4).
-    std::printf("BEGIN self-test.RunRenderingSelfTest\n");
+    traceSelfTest("RunRenderingSelfTest");
     if (const int rendering = RunRenderingSelfTest(); rendering != 0)
     {
         return rendering;
     }
 
+    traceSelfTest("HideChrome");
     _chrome->SetVisible(false);
+    traceSelfTest("ReleaseDocumentSurfaces");
     _composition.ReleaseDocumentSurfaces();
+    traceSelfTest("HiddenStatistics");
     const DxUi::EmbeddedStatistics hidden = _chrome->Statistics();
     if (hidden.surfaceBytes != 0)
     {
@@ -2962,7 +2971,9 @@ int Application::RunSelfTest() noexcept
         return 5;
     }
 
+    traceSelfTest("CloseMainWindow");
     CloseMainWindow();
+    traceSelfTest("VerifyClosedChrome");
     // No Direct2D object of the chrome may outlive it: a cached icon document left for the static destructors at
     // exit releases the factory's last reference inside d2d1 and faults there (RF-1110).
     if (const int kept = LucideCachedDocumentCount(); kept != 0)
