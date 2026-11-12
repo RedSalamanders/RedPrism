@@ -1,0 +1,1 @@
+- Retain elapsed self-test stage and final cleanup observations so native timeout evidence distinguishes slow progress, body completion and shutdown without changing assertions, failure bounds or main gates.

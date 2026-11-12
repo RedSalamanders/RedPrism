@@ -32,6 +32,10 @@ The hidden rendering self-test emits ordered BEGIN/END markers around each fixtu
 GPU readback, plus device-recovery stage markers. Its existing unbuffered stdout preserves the last entered
 operation during a hosted timeout. These markers supply diagnosis only: assertions, selected work and failure
 bounds remain unchanged, and an entered operation is never counted as completed coverage.
+The application self-test's ordered stage markers additionally report monotonic elapsed milliseconds
+from its entry. Final hidden-chrome/resource/close observations distinguish body completion from
+shutdown, whose separate BEGIN/END includes elapsed time. These fields diagnose slow progress or
+an unfinished exit; they do not raise failure bounds, skip assertions or establish performance acceptance.
 Shared build/dependency/qualification files remain outside the writable run, and their existing read-only rules apply.
 
 The record establishes retention and the outcome of the selected invocation only. It does not replace exact source,
