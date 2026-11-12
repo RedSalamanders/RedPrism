@@ -1,0 +1,1 @@
+- Hold the existing shared session admission around real-clipboard I/O and hidden WARP tests, including owned child drain, so sibling project tests cannot corrupt their clipboard fixtures; background suites and ordinary builds remain independent.

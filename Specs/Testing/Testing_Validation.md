@@ -1001,6 +1001,17 @@ entrypoint's success exit code and MUST NOT be reused as the pass/fail signal fo
 
 ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 binaries are produced by `build.ps1` only.
 
+Real-clipboard `IoTests` and the hidden WARP runtime hold the existing shared
+`Invoke-CiInteractiveDesktopOperation` admission. A hidden window still shares the Windows session clipboard:
+Root/DxUi/sibling foreground or clipboard fixtures must not overlap it. Host, Document and Composition use
+private state and retain independent lifecycles; build/setup/archival hold no desktop admission. Admission
+itself does not activate a window or substitute for a native focus warning/restoration contract.
+The runtime callback retains that admission until its exact owned child exits, including after an observed
+failure or timeout. Such a timeout remains failed and reported with its retained logs/PID; the runner does
+not terminate the child or release a shared clipboard that it may still use. Failure-bound and functional
+assertions remain unchanged. Runner controls execute the actual suite/boundary selection and drain paths;
+the shared engine owns contender, nesting and abandoned-owner mutex controls.
+
 The hidden WARP self-test failure bound defaults to 1,200 seconds. Optional
 `-SelfTestTimeoutSeconds` accepts 1,200–5,400 seconds; values above the default require `-Platform ARM64`
 on a native ARM64 host and are rejected before build on every other route. The hosted native ARM64 Release
