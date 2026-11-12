@@ -3,6 +3,8 @@
 Builds, cleans, rebuilds, or runs the RedPrism solution.
 .PARAMETER DxUiSdkInputDescriptor
 Independent pinned Release SDK descriptor below .build. Exact misses use source; Debug/ASan and analysis use source.
+.PARAMETER MaxCpuCount
+Maximum project/compiler workers. ASan project builds serialize because MSVC stages one shared app-local runtime; C++ /MP retains the requested compiler bound.
 #>
 [CmdletBinding()]
 param(
@@ -131,7 +133,10 @@ try {
         if($LASTEXITCODE -ne 0){throw "Pinned SDK actual-project profile preflight failed. Preserve $sdkLog"}
     }
 
-    $workerArgument = if ($MaxCpuCount -gt 0) { "/m:$MaxCpuCount" } else { '/m' }
+    # MSVC's per-project ASan copies share one destination and use per-project
+    # tracking with SkipUnchangedFiles=false. Serialize those project writers;
+    # /MP within a project still has the caller's existing compiler budget.
+    $workerArgument = if ($Configuration -eq 'ASan Debug') { '/m:1' } elseif ($MaxCpuCount -gt 0) { "/m:$MaxCpuCount" } else { '/m' }
     $logDir = Join-Path $repoRoot '.build\logs'
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
     $logFlavor = if ($Analyze) { '-Analyze' } else { '' }

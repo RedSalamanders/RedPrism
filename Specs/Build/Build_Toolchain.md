@@ -1,5 +1,12 @@
 # RedPrism build toolchain
 
+ASan solution builds use one MSBuild project worker. MSVC's per-project app-local
+ASan runtime copy uses independent tracking and unconditional writes to the same
+profile directory; parallel project copies can produce MSB3026 and invalidate a
+zero-warning build. This scheduling rule serializes those writers while retaining
+the existing C++ `/MP` compiler bound. Debug/Release project concurrency, sanitizer
+instrumentation/detection, runtime staging and zero-warning acceptance are unchanged.
+
 Status: current normative repository contract
 Last reviewed: 2026-10-21
 Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `Build/VcpkgToolset.psm1`, `Build/VisualStudioDiscovery.psm1`, `format.ps1`
