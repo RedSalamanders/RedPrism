@@ -59,6 +59,8 @@ preserved failures and interruptions, verified identities/hashes/streams/metadat
 
 Cross-repository C++/WIL, `yyjson`, `d3d11-win32-host`, `localization`, `performance-resources`, and `spec-workflow` skills live in the sibling `RedHome` repository.
 
+Shared skill index: `../RedHome/AGENTS.md`; packages: `../RedHome/.agents/skills/`. If `../RedHome` is missing, clone https://github.com/RedSalamanders/RedHome.git to that path. This repository's guidance and domain specs own product behavior and validation.
+
 ## Architecture ownership
 
 | Owner | Responsibility |
