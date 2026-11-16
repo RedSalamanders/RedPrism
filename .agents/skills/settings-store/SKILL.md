@@ -24,4 +24,4 @@ application side `RedPrism/ApplicationSettings.cpp`, the startup load `RedPrism/
   `MoveFileExW` replace, write-through).
 - `--self-test`, `--screenshot`, `--demo`, `--bench` and `--crash-probe` never read or write the user's file; the
   self-test proves the live reload from a file under `%TEMP%`.
-- Use yyjson with the `yyjson` skill (`yyjson_mut_obj_put` replaces a key; `yyjson_doc_mut_copy` keeps the rest).
+- Use `yyjson` with WIL document ownership (`yyjson_mut_obj_put` replaces a key; `yyjson_doc_mut_copy` keeps the rest).
