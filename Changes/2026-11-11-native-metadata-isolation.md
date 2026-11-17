@@ -1,1 +1,0 @@
-- Give each owned MSBuild launch a private compiler metadata endpoint while preserving native arguments, output, exit codes and the existing qualification gates.

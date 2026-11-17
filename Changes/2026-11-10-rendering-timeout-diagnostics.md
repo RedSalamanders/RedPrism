@@ -1,1 +1,0 @@
-- Retain ordered rendering fixture, frame, readback and device-recovery markers in hidden self-test output so a native timeout identifies the last entered operation without changing assertions or failure bounds. The original native ARM64 hang remains unresolved until diagnosed on the matching hosted runner.
