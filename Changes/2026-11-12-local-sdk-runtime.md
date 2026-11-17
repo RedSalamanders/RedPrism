@@ -1,1 +1,0 @@
-- Run explicit local SDK Runtime/Captures through the existing CLI, WARP and harness checks with original byte-verified inputs and separate local-only evidence; preserve ordinary local/main gates and drain owned screenshot processes without terminating them.

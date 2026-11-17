@@ -4,6 +4,43 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Consolidated the eight shared skills (`direct3d11-rendering`, `localization`, `modern-cpp-windows`,
+  `performance-resources`, `spec-workflow`, `wil-raii`, `win32-windowing`, and `yyjson`) into the organization
+  `RedHome` repository, retaining RedPrism-specific rules in `AGENTS.md` and `.agents/skills/` and validating with
+  `validate-skills.ps1` and `Tools/Test-Changelog.ps1` (documentation/tooling only; native qualification unchanged).
+  Shared-skill discovery names `../RedHome/AGENTS.md`, the package directory, and the clone URL while preserving
+  local product authority.
+  Skill-package fixtures also recognize Windows error 1314 as unavailable symbolic-link privilege and report the
+  documented capability skips; other I/O errors still fail.
+- Hold the existing shared session admission around real-clipboard I/O and hidden WARP tests, including owned child drain, so sibling project tests cannot corrupt their clipboard fixtures; background suites and ordinary builds remain independent.
+- Retain elapsed self-test stage and final cleanup observations so native timeout evidence distinguishes slow progress, body completion and shutdown without changing assertions, failure bounds or main gates.
+- Make the 512-point sampler overflow test wait for strictly advancing acknowledgements and final retirement, preserving its exact prefix, source-capture, error and ownership checks without imposing one aggregate speed limit on asynchronous ASan work.
+- Run explicit local SDK Runtime/Captures through the existing CLI, WARP and harness checks with original byte-verified inputs and separate local-only evidence; preserve ordinary local/main gates and drain owned screenshot processes without terminating them.
+- Add an explicit local Release SDK application build through the shared broker, with separate leased outputs and actual linker-input proof. Existing vcpkg dependencies and ordinary profile outputs remain separate; the result grants no test, ISA, repository or production qualification.
+- Serialize ASan solution project builds so MSVC's shared app-local sanitizer runtime copies cannot race and invalidate zero-warning builds. Keep per-project C++ compilation, sanitizer instrumentation and detection, Debug/Release concurrency and all test gates.
+- Report the hidden WARP test's exact terminal clipboard acknowledgement failure after a five-second exit grace when its process remains alive, instead of waiting for the general watchdog. Keep the process and failure logs, all original assertions and ordinary failure bounds; this does not diagnose or repair the native clipboard failure.
+- Give each owned MSBuild launch a private compiler metadata endpoint while preserving native arguments, output, exit codes and the existing qualification gates.
+- Adopt bounded native lanes, queued candidate freshness checks and an optional
+  trusted reporter for original native evidence. Preserve current local, platform,
+  review and production requirements while hosted gate acceptance is completed.
+- Retain byte-verified completed tooling and formatting evidence before later native
+  execution, so a native failure does not force identical independent work to repeat.
+  Preserve full input/tool/environment checks and separate native/platform acceptance.
+- Bind local build and test reuse to the actual pinned CI engine inputs, refusing missing, modified or mismatched engine checkouts while preserving the existing local and main gates.
+- Retain ordered rendering fixture, frame, readback and device-recovery markers in hidden self-test output so a native timeout identifies the last entered operation without changing assertions or failure bounds. The original native ARM64 hang remains unresolved until diagnosed on the matching hosted runner.
+- Reuse verified pinned Release DxUi SDK inputs through the shared reader and
+  actual MSBuild ABI guard, retaining source fallback, linker/byte provenance,
+  exact package notices and all native regression, ISA and extraction gates.
+  Isolate bounded correctness-smoke modifier state from typing in other apps,
+  retaining real cancellation messages and full performance input guards.
+- Add the optional isolated native shadow caller and exact shared-engine admission tooling while retaining current required checks, local coverage and production qualification.
+- Enable authenticated qualified DxUi SDK reuse for eligible hosted Release builds, preserving the existing dependency pin and all native regression, detector and package checks.
+- Added the indexed WIP handoff plan (`Specs/Plans/WIP/ExplicitStateMachines_2026-11-10.md`) cataloging internal explicit state-machine refactors and session-lifetime hardening across `Common/`, `RedPrism/`, and `Build/` with zero `.prism` schema or `DxUi` pin changes.
+  Validation: `validate.ps1`, `Tools/Test-Changelog.ps1 -Base origin/main`, and `Tools/Invoke-ProjectCi.ps1 -Phase Static`.
+- Adopt the shared guard and explicit owned-prose exclusions so new runtime Markdown and notice inputs retain native qualification; preserve existing native gates and historical artifact identity.
+- Preserve the latest local failure during affected iteration: suspend old no-work state before execution, revoke it on failure/interruption and direct test attempts, and restore only unchanged successful explicit work. Force bypasses the iteration baseline, with a reentrant per-profile test lease and real process/failure refusal controls.
+- Preserve the original native test or timeout failure when evidence finalization also fails, while retaining the additional diagnostic and all lossless verification requirements.
+- Adopt the shared engine's ABI-indexed vcpkg fallback cache and manual native dependency caching; keep compiler-free PRs, exact dependency pins and every native qualification gate.
 - Add an explicit x64 production-continuation option to the approved manual native workflow, verifying both preserved regression receipts and the exact qualified source while preserving ARM64 feasibility and extended qualification.
 - The vcpkg toolset parity check against DxUi's pinned `Get-DxUiDefaultToolset` and
   `Update-DxUiVcpkgOverlayTriplet` now runs. `Tests/BuildProcessTests/VcpkgToolsetTests.ps1` finds the restored

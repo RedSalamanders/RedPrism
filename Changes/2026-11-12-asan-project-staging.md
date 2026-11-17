@@ -1,1 +1,0 @@
-- Serialize ASan solution project builds so MSVC's shared app-local sanitizer runtime copies cannot race and invalidate zero-warning builds. Keep per-project C++ compilation, sanitizer instrumentation and detection, Debug/Release concurrency and all test gates.
