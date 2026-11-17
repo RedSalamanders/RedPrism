@@ -179,6 +179,11 @@ $sentinel = Join-Path $run 'fixtures/not-readable-as-utf8.dat'
 $linkCreated = $false
 try { [void][IO.File]::CreateSymbolicLink($entrypoint,$sentinel); $linkCreated = $true }
 catch [UnauthorizedAccessException] { $skippedLinks += 3; Write-Host 'SKIP reparse controls: symbolic-link privilege unavailable.' }
+catch [IO.IOException] {
+    # .NET reports ERROR_PRIVILEGE_NOT_HELD as IOException on this host; preserve the declared capability skips.
+    if (($_.Exception.GetBaseException().HResult -band 0xffff) -ne 1314) { throw }
+    $skippedLinks += 3; Write-Host 'SKIP reparse controls: symbolic-link privilege unavailable.'
+}
 try {
     if ($linkCreated) { Expect 'reparse SKILL refused before reading' $false 'Reparse' }
 } finally { if ($linkCreated) { [IO.File]::Delete($entrypoint) }; Put $skill 'Read the contract.' }

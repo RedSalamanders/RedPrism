@@ -49,21 +49,17 @@ preserved failures and interruptions, verified identities/hashes/streams/metadat
 
 | Skill | Use it for |
 | --- | --- |
-| [spec-workflow](.agents/skills/spec-workflow/SKILL.md) | Domain specs, WIP/Done lifecycle |
 | [build-redprism](.agents/skills/build-redprism/SKILL.md) | `build.ps1`, `test.ps1`, `package.ps1`, configurations, outputs |
 | [test-harness](.agents/skills/test-harness/SKILL.md) | In-process tests, goldens, WARP fixtures, harness screenshots |
-| [direct3d11-rendering](.agents/skills/direct3d11-rendering/SKILL.md) | Device, swap chain, Present, WARP, device loss |
 | [hlsl-composition](.agents/skills/hlsl-composition/SKILL.md) | Document-space passes, coverage, clipping stacks, the brush compute shader, build-time HLSL |
-| [win32-windowing](.agents/skills/win32-windowing/SKILL.md) | HWND, WndProc, DPI, message loop |
-| [performance-resources](.agents/skills/performance-resources/SKILL.md) | Idle, allocation, GPU submit, bounded storage |
-| [wil-raii](.agents/skills/wil-raii/SKILL.md) | WIL handles and COM |
-| [yyjson](.agents/skills/yyjson/SKILL.md) | JSON ownership, Swift Codable shapes |
-| [modern-cpp-windows](.agents/skills/modern-cpp-windows/SKILL.md) | Ownership, HRESULT, warnings, style |
-| [localization](.agents/skills/localization/SKILL.md) | STRINGTABLE, positional placeholders, `Common/Resources.h` |
 | [numeric-goldens](.agents/skills/numeric-goldens/SKILL.md) | Independent numeric expectations, fixture formulas and documented tolerances |
 | [settings-store](.agents/skills/settings-store/SKILL.md) | The settings document, its schema, cold recovery, atomic saves, UI-thread live reload |
 | [crash-handling](.agents/skills/crash-handling/SKILL.md) | Local minidumps, the pending marker and prompt, the `--crash-probe` gate |
 | [consumer-dxui](.agents/skills/consumer-dxui/SKILL.md) | Exact DxUi pin, pinned-library facts, pin bumps |
+
+Cross-repository C++/WIL, `yyjson`, `d3d11-win32-host`, `localization`, `performance-resources`, and `spec-workflow` skills live in the sibling `RedHome` repository.
+
+Shared skill index: `../RedHome/AGENTS.md`; packages: `../RedHome/.agents/skills/`. If `../RedHome` is missing, clone https://github.com/RedSalamanders/RedHome.git to that path. This repository's guidance and domain specs own product behavior and validation.
 
 ## Architecture ownership
 
@@ -98,7 +94,12 @@ preserved failures and interruptions, verified identities/hashes/streams/metadat
 - Steady-state hot paths use bounded reusable storage and avoid heap allocation. The composition composites only
   when the document changed; a settled document costs zero passes per frame.
 - Every user-visible chrome string is a `STRINGTABLE` entry with positional `{0}` placeholders
-  (`localization` skill). Document data such as default layer names is not chrome.
+  (`Common/Resources.h`, `Specs/UI/UI_ApplicationChrome.md`). Document data such as default layer names is not chrome.
+- Formatting into fixed buffers normally uses `std::format_to_n`; the allocation-sensitive crash writer in
+  `Common/CrashDumps.cpp` deliberately retains fixed-buffer `swprintf_s` per `Specs/Core/Core_CrashHandling.md`.
+- `.prism` Swift `Codable` JSON shapes on disk (`Specs/IO/IO_ProjectFormat.md`): non-optional properties are always
+  present, optional ones are omitted when nil, and dictionaries keyed by non-`CodingKeyRepresentable` enums serialize as
+  alternating key/value arrays (read both array and object forms; write the array form in fixed order).
 - Caches keyed by `Raster::Identity()` hold the `Raster`; a freed storage address may be reused by another image.
 - Screenshots for specs and docs come from the application harness. Never Computer Use or a desktop screenshot tool.
 - `build.ps1` rejects a running `RedPrism.exe` whose path is the selected output and MUST NOT terminate it.
