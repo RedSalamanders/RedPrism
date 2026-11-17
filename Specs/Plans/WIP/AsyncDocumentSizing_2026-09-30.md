@@ -129,5 +129,5 @@ The current resizers have no cancellation checkpoints. Add a cancellable worker-
 - `Specs/Document/Document_History.md`
 - `Specs/Document/Document_Tools.md`, “Canvas size, image size and crop (C16)” and “Validation / Sizes”
 - `Specs/Plans/WIP/UiNeverBlocks_2026-09-22.md`, P1.8 and P1 exit (G1)
-- `.agents/skills/spec-workflow/SKILL.md`
-- `.agents/skills/performance-resources/SKILL.md`
+- `../RedHome/.agents/skills/spec-workflow/SKILL.md`
+- `../RedHome/.agents/skills/performance-resources/SKILL.md`
