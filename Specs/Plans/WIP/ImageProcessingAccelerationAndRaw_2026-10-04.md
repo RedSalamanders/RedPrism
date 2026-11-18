@@ -67,7 +67,7 @@ same-machine measurement (§7).
 | W | WARP on R1 | Correctness floor. `--self-test` asserts G1's structural invariants here (a message dispatches while a gated job runs, the result applies exactly once, Escape leaves no entry). G1 timing on W is measured by `--bench ui` in Release and recorded; it is never a `test.ps1` assertion |
 
 "Gate" in this plan means a phase-exit criterion checked against a recorded Release measurement under
-`Specs/TestRuns/`. Tests never assert wall-clock time (test-harness rule).
+`Specs/TestRuns/`. Tests never assert wall-clock time (`test-evidence` rule, in `RedHome`).
 
 ### 1.2 Targets
 
@@ -1487,7 +1487,7 @@ the real `JobScheduler`.
    sentinel's handler opens the gate, and the completion applies exactly once.
 4. A cancelled run yields zero applies and zero live payloads.
 
-The only timeout is a failure bound; the settings self-test precedent uses 5 s. The test-harness skill's "no window"
+The only timeout is a failure bound; the settings self-test precedent uses 5 s. The `test-evidence` skill's "no window"
 note becomes "no visible window, no device".
 
 **Worker-vs-direct matrix (DocumentTests).**
@@ -1549,7 +1549,7 @@ exists (`vcpkg-install.ps1` throws for non-x64 `-Asan`).
 | `Testing_Validation.md` | New suites and gates (§8), matrix time budgets, and the D8 golden rule | P0.5–P5 |
 | `UI_ApplicationChrome.md` | Busy indicator placement and the 250 ms rule. Progress bars, "Applying…", OK gating, the refused-while-busy status. The Develop panel and the preview badge. Every new chrome text is a STRINGTABLE entry with positional `{0}` placeholders, added to `resource.h`, `RedPrism.rc` and the HostTests `kIds` gate in the slice that introduces it: busy, saving and close-after-save, opening, selecting, stale selection dropped, applying, histogram loading, the preview badge, out-of-memory, the RAW notices, the end-session block reason, clipboard busy, the Develop panel labels, and the `IDS_A11Y_*` names | P0.6b, P1, P4 |
 | `UI_Windowing.md` | `WM_CLOSE` deferral during a save; `WM_QUERYENDSESSION`/`WM_ENDSESSION`; the `--bench` values and options; `--isa`; `--crash-probe-worker`; positional paths. The switch table catches up with `--demo`, `--bench` and `--crash-probe` (existing drift) | P0.1, P0.5, P0.8, P1.7 |
-| Skills | `performance-resources` (jobs, admission, budgets). `hlsl-composition` (the per-layer adjust pass, compute passes, SRV-in/UAV-out, slicing). `direct3d11-rendering` (fences, rings, lent slots, the probe, the `ID3D11DeviceContext1` decision). `test-harness` (SettleJobs, the gate test, the message-only window, stress, matrix budget). `build-redprism` (tiers, the VEX scan). A new `raw-pipeline` skill in P4. `validate-skills.ps1` passes | Each phase |
+| Skills | `performance-resources` (jobs, admission, budgets). `hlsl-composition` (the per-layer adjust pass, compute passes, SRV-in/UAV-out, slicing). `direct3d11-rendering` (fences, rings, lent slots, the probe, the `ID3D11DeviceContext1` decision). `test-evidence` in `RedHome`, its RedPrism facts (SettleJobs, the gate test, the message-only window, stress, matrix budget). `native-build` in `RedHome`, its RedPrism facts (tiers, the VEX scan). A new `raw-pipeline` skill in P4. `validate-skills.ps1` passes | Each phase |
 
 ## 10. Phases and slices
 
