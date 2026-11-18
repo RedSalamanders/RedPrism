@@ -80,6 +80,10 @@ finally { $policyHasher.Dispose() }
 $buildIdentity = [pscustomobject]@{ Fingerprint=$policyFingerprint; Identity=$policyIdentity }
 Import-Module (Join-Path $PSScriptRoot 'Build/DxUiOutputPath.psm1') -Force
 $output = Initialize-RedPrismDxUiOutputRoot -DependencyRoot $dependencyRoot -BuildIdentity $buildIdentity
+# The pinned installer clones vcpkg partially unless <output>\vcpkg-tool already is a clean checkout at its pin, and vcpkg
+# cannot read ports from a partial clone (Build/VcpkgToolCheckout.psm1): make that checkout complete first.
+Import-Module (Join-Path $PSScriptRoot 'Build/VcpkgToolCheckout.psm1') -Force
+Initialize-VcpkgToolCheckout -ToolIdentityPath (Join-Path $source 'vcpkg-tool.json') -ToolRoot (Join-Path $output 'vcpkg-tool')
 & (Join-Path $source 'vcpkg-install.ps1') -Platform $Platform -OutputRoot $output
 
 $escape = { param([string] $value) [System.Security.SecurityElement]::Escape($value) }
