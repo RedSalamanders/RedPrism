@@ -11,10 +11,10 @@
 // Draft-only preview publication may finish while IO runs; committed document/history changes still refuse apply.
 class ImageImportAuthority final
 {
-  public:
+public:
     ImageImportAuthority() = default;
 
-  private:
+private:
     friend class DocumentSession;
     friend class PreparedImageImport;
     Guid _session;
@@ -27,15 +27,13 @@ class ImageImportAuthority final
 // CPU-only publication: baseline, final document, history and all owner replacements are prepared together.
 class PreparedImageImport final
 {
-  public:
-    PreparedImageImport(const PreparedImageImport&) = delete;
+public:
+    PreparedImageImport(const PreparedImageImport&)            = delete;
     PreparedImageImport& operator=(const PreparedImageImport&) = delete;
     PreparedImageImport(PreparedImageImport&& source) noexcept;
     PreparedImageImport& operator=(PreparedImageImport&& source) noexcept;
-    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
-        DocumentHistory::ResidencyPermit& permit) noexcept;
-    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
-                                               DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(DocumentHistory::ResidencyPermit& permit) noexcept;
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool ReplacesDocument() const noexcept
     {
         return _replacement.has_value();
@@ -45,10 +43,9 @@ class PreparedImageImport final
         return _changesDocument;
     }
 
-  private:
+private:
     friend class DocumentSession;
-    PreparedImageImport(ImageImportAuthority authority, DocumentHistory::StateView view)
-        : _authority(std::move(authority)), _view(std::move(view))
+    PreparedImageImport(ImageImportAuthority authority, DocumentHistory::StateView view) : _authority(std::move(authority)), _view(std::move(view))
     {
     }
     struct RetiredDrafts final

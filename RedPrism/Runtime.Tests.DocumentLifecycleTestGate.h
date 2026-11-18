@@ -22,10 +22,10 @@ struct DocumentLifecycleTestGate final
 {
     static constexpr unsigned int kMessage = WM_APP + 0x5C;
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    bool afterPreparation = false;
+    bool afterPreparation        = false;
     bool throwPreparationFailure = false;
-    bool throwCaptureFailure = false;
-    bool throwAdmissionFailure = false;
+    bool throwCaptureFailure     = false;
+    bool throwAdmissionFailure   = false;
     std::optional<DocumentHistory::PrepareStage> historyFailure;
     JobResult result{};
     std::uint64_t reservationBytes = 0;

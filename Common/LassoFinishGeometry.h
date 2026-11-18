@@ -37,18 +37,18 @@ enum class Stage : std::uint8_t
 };
 struct Observer final
 {
-    void* context = nullptr;
+    void* context                             = nullptr;
     void (*checkpoint)(void*, Stage) noexcept = nullptr;
     BoundedSelectionBoolean::Limits limits;
 };
 struct MemoryPlan final
 {
     std::uint64_t retainedArenaBytes = 0;
-    std::uint64_t traversalBytes = 0;
-    std::uint64_t outlineBytes = 0;
-    std::uint64_t workspaceBytes = 0;
-    std::uint64_t outputBytes = 0;
-    std::uint64_t preparationBytes = 0;
+    std::uint64_t traversalBytes     = 0;
+    std::uint64_t outlineBytes       = 0;
+    std::uint64_t workspaceBytes     = 0;
+    std::uint64_t outputBytes        = 0;
+    std::uint64_t preparationBytes   = 0;
 };
 struct Result final
 {
@@ -67,32 +67,30 @@ struct Result final
 // Preserving resource ceilings use cached source counts only; no geometry traversal or capture.
 // Every allocation/output ceiling is enforced by the worker. Complex geometry may refuse within the
 // admitted ceiling; this plan never promises that arbitrary input geometry must fit. New is unchanged.
-[[nodiscard]] std::optional<BoundedSelectionBoolean::Limits> MarqueeLimits(LassoKind kind, SelectionMode mode,
+[[nodiscard]] std::optional<BoundedSelectionBoolean::Limits> MarqueeLimits(LassoKind kind,
+                                                                           SelectionMode mode,
                                                                            std::uint64_t sourcePoints = 0,
-                                                                           std::uint64_t sourceLoops = 0) noexcept;
-[[nodiscard]] std::optional<MemoryPlan> PlanMarquee(LassoKind kind, SelectionMode mode, std::uint64_t sourcePoints = 0,
-                                                    std::uint64_t sourceLoops = 0) noexcept;
+                                                                           std::uint64_t sourceLoops  = 0) noexcept;
+[[nodiscard]] std::optional<MemoryPlan> PlanMarquee(LassoKind kind, SelectionMode mode, std::uint64_t sourcePoints = 0, std::uint64_t sourceLoops = 0) noexcept;
 // Physical Freehand has a finite complete-gesture arena independent of the pending input ring.
 // The arena holds 1023 sealed 64-point blocks plus one inline tail: exactly 65,536 vertices.
 // These are enforced capacity ceilings; complex paths may exhaust worker scratch/output and fail
 // the original gesture. No partial result or larger replacement admission is permitted.
 inline constexpr std::uint32_t kFreehandMaximumPoints = 65'536;
-inline constexpr std::uint32_t kFreehandArenaBlocks = 1023;
+inline constexpr std::uint32_t kFreehandArenaBlocks   = 1023;
 [[nodiscard]] std::optional<BoundedSelectionBoolean::Limits> FreehandLimits(SelectionMode mode,
                                                                             std::uint64_t sourcePoints = 0,
-                                                                            std::uint64_t sourceLoops = 0) noexcept;
-[[nodiscard]] std::optional<MemoryPlan> PlanFreehand(SelectionMode mode, std::uint64_t sourcePoints = 0,
-                                                     std::uint64_t sourceLoops = 0) noexcept;
+                                                                            std::uint64_t sourceLoops  = 0) noexcept;
+[[nodiscard]] std::optional<MemoryPlan> PlanFreehand(SelectionMode mode, std::uint64_t sourcePoints = 0, std::uint64_t sourceLoops = 0) noexcept;
 inline constexpr std::uint32_t kPolygonalMaximumPoints = kFreehandMaximumPoints;
-inline constexpr std::uint32_t kPolygonalArenaBlocks = kFreehandArenaBlocks;
+inline constexpr std::uint32_t kPolygonalArenaBlocks   = kFreehandArenaBlocks;
 // Polygonal uses the same finite arena and enforced geometry ceilings, with ordered Backspace and
 // re-extension allowed to exhaust the non-recycled node budget before the live-point limit. This
 // model plan does not enable polygonal in the drag parent's Up-finishes protocol.
 [[nodiscard]] std::optional<BoundedSelectionBoolean::Limits> PolygonalLimits(SelectionMode mode,
                                                                              std::uint64_t sourcePoints = 0,
-                                                                             std::uint64_t sourceLoops = 0) noexcept;
-[[nodiscard]] std::optional<MemoryPlan> PlanPolygonal(SelectionMode mode, std::uint64_t sourcePoints = 0,
-                                                      std::uint64_t sourceLoops = 0) noexcept;
+                                                                             std::uint64_t sourceLoops  = 0) noexcept;
+[[nodiscard]] std::optional<MemoryPlan> PlanPolygonal(SelectionMode mode, std::uint64_t sourcePoints = 0, std::uint64_t sourceLoops = 0) noexcept;
 // Complete immutable Down-time drawing descriptor. Polygonal remains a separate multi-press protocol.
 struct DrawingPlan final
 {
@@ -103,16 +101,21 @@ struct DrawingPlan final
     BoundedSelectionBoolean::Limits geometry;
     MemoryPlan finish;
 };
-[[nodiscard]] std::optional<DrawingPlan> PlanDrawing(LassoKind kind, SelectionMode mode, std::uint64_t sourcePoints = 0,
-                                                     std::uint64_t sourceLoops = 0) noexcept;
+[[nodiscard]] std::optional<DrawingPlan> PlanDrawing(LassoKind kind,
+                                                     SelectionMode mode,
+                                                     std::uint64_t sourcePoints = 0,
+                                                     std::uint64_t sourceLoops  = 0) noexcept;
 [[nodiscard]] std::optional<MemoryPlan> Plan(const BoundedLassoGesture::Display& terminal,
                                              const std::optional<DocumentSelection>& before,
                                              BoundedSelectionBoolean::Limits limits = {}) noexcept;
 // Allocations/engine refusal reach the scheduler's original bad_alloc boundary. A null result is
 // invalid input or stopped work; never publish a partial shape or use a synchronous fallback.
-[[nodiscard]] std::optional<Result> Prepare(const BoundedLassoGesture::Display& terminal, int width, int height,
+[[nodiscard]] std::optional<Result> Prepare(const BoundedLassoGesture::Display& terminal,
+                                            int width,
+                                            int height,
                                             const std::optional<DocumentSelection>& before,
-                                            CancelToken cancellation = {}, const Observer* observer = nullptr,
+                                            CancelToken cancellation                              = {},
+                                            const Observer* observer                              = nullptr,
                                             std::shared_ptr<const SharedPublicationMemory> memory = {});
 } // namespace LassoFinishGeometry
 

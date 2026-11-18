@@ -21,7 +21,7 @@ namespace SettingsStore
 {
 namespace
 {
-using unique_yyjson_doc = JsonRead::unique_doc;
+using unique_yyjson_doc     = JsonRead::unique_doc;
 using unique_yyjson_mut_doc = JsonRead::unique_mut_doc;
 
 struct FreeDeleter
@@ -39,7 +39,7 @@ constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
 [[nodiscard]] std::optional<int> SchemaOf(yyjson_val* root) noexcept
 {
     int schema = 0;
-    if (!JsonRead::ReadInt(root, "schema", schema, true) || schema < 1)
+    if (! JsonRead::ReadInt(root, "schema", schema, true) || schema < 1)
     {
         return std::nullopt;
     }
@@ -56,8 +56,8 @@ constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
     for (const char ch : tag)
     {
         const bool letter = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
-        const bool digit = ch >= '0' && ch <= '9';
-        if (!letter && !digit && ch != '-')
+        const bool digit  = ch >= '0' && ch <= '9';
+        if (! letter && ! digit && ch != '-')
         {
             return false;
         }
@@ -69,25 +69,23 @@ constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
 // `shift`, and exactly one of `vk` (Common/KeyChord.h spellings, any case) or `keyPosition`. nullopt otherwise.
 [[nodiscard]] std::optional<ShortcutBinding> ParseShortcut(yyjson_val* entry)
 {
-    if (entry == nullptr || !yyjson_is_obj(entry))
+    if (entry == nullptr || ! yyjson_is_obj(entry))
     {
         return std::nullopt;
     }
     std::string commandId;
-    if (!JsonRead::ReadString(entry, "commandId", commandId, true) || commandId.size() < 5 ||
-        !commandId.starts_with("cmd/"))
+    if (! JsonRead::ReadString(entry, "commandId", commandId, true) || commandId.size() < 5 || ! commandId.starts_with("cmd/"))
     {
         return std::nullopt;
     }
     ShortcutBinding binding;
     // A flag missing from the entry keeps its default (false); present with the wrong type fails the whole entry.
-    if (!JsonRead::ReadBool(entry, "ctrl", binding.chord.ctrl, false) ||
-        !JsonRead::ReadBool(entry, "alt", binding.chord.alt, false) ||
-        !JsonRead::ReadBool(entry, "shift", binding.chord.shift, false))
+    if (! JsonRead::ReadBool(entry, "ctrl", binding.chord.ctrl, false) || ! JsonRead::ReadBool(entry, "alt", binding.chord.alt, false) ||
+        ! JsonRead::ReadBool(entry, "shift", binding.chord.shift, false))
     {
         return std::nullopt;
     }
-    const bool hasVk = yyjson_obj_get(entry, "vk") != nullptr;
+    const bool hasVk       = yyjson_obj_get(entry, "vk") != nullptr;
     const bool hasPosition = yyjson_obj_get(entry, "keyPosition") != nullptr;
     if (hasVk == hasPosition)
     {
@@ -96,7 +94,7 @@ constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
     if (hasVk)
     {
         std::string vk;
-        if (!JsonRead::ReadString(entry, "vk", vk, true) || !ParseStableKeyName(vk, binding.chord.virtualKey))
+        if (! JsonRead::ReadString(entry, "vk", vk, true) || ! ParseStableKeyName(vk, binding.chord.virtualKey))
         {
             return std::nullopt;
         }
@@ -104,9 +102,7 @@ constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
     else
     {
         std::string position;
-        binding.chord.position = JsonRead::ReadString(entry, "keyPosition", position, true)
-                                     ? ParseKeyPositionName(position)
-                                     : KeyPosition::None;
+        binding.chord.position = JsonRead::ReadString(entry, "keyPosition", position, true) ? ParseKeyPositionName(position) : KeyPosition::None;
         if (binding.chord.position == KeyPosition::None)
         {
             return std::nullopt;
@@ -120,7 +116,7 @@ constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
 [[nodiscard]] std::vector<ShortcutBinding> ParseShortcuts(yyjson_val* array)
 {
     std::vector<ShortcutBinding> bindings;
-    if (array == nullptr || !yyjson_is_arr(array))
+    if (array == nullptr || ! yyjson_is_arr(array))
     {
         return bindings;
     }
@@ -145,7 +141,7 @@ constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
         return nullptr;
     }
     const std::string commandId = WideToUtf8(binding.commandId);
-    bool ok = yyjson_mut_obj_add_strcpy(doc, entry, "commandId", commandId.c_str());
+    bool ok                     = yyjson_mut_obj_add_strcpy(doc, entry, "commandId", commandId.c_str());
     if (binding.chord.ctrl)
     {
         ok = yyjson_mut_obj_add_bool(doc, entry, "ctrl", true) && ok;
@@ -166,7 +162,7 @@ constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
     else
     {
         const std::string vk = StableKeyName(binding.chord.virtualKey);
-        ok = yyjson_mut_obj_add_strcpy(doc, entry, "vk", vk.c_str()) && ok;
+        ok                   = yyjson_mut_obj_add_strcpy(doc, entry, "vk", vk.c_str()) && ok;
     }
     return ok ? entry : nullptr;
 }
@@ -175,12 +171,9 @@ constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
 {
     switch (theme)
     {
-    case ThemePreference::Light:
-        return "light";
-    case ThemePreference::Dark:
-        return "dark";
-    case ThemePreference::System:
-        break;
+        case ThemePreference::Light: return "light";
+        case ThemePreference::Dark: return "dark";
+        case ThemePreference::System: break;
     }
     return "system";
 }
@@ -250,8 +243,14 @@ std::wstring BackupPathFor(const std::wstring& path)
 {
     SYSTEMTIME time{};
     GetLocalTime(&time);
-    return path + std::format(L".invalid-{:04}{:02}{:02}-{:02}{:02}{:02}-{:03}", time.wYear, time.wMonth, time.wDay,
-                              time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
+    return path + std::format(L".invalid-{:04}{:02}{:02}-{:02}{:02}{:02}-{:03}",
+                              time.wYear,
+                              time.wMonth,
+                              time.wDay,
+                              time.wHour,
+                              time.wMinute,
+                              time.wSecond,
+                              time.wMilliseconds);
 }
 
 std::optional<AppSettings> Parse(std::string_view json)
@@ -261,12 +260,12 @@ std::optional<AppSettings> Parse(std::string_view json)
         return std::nullopt;
     }
     const unique_yyjson_doc doc{yyjson_read(json.data(), json.size(), kReadFlags)};
-    if (!doc)
+    if (! doc)
     {
         return std::nullopt;
     }
     yyjson_val* root = yyjson_doc_get_root(doc.get());
-    if (root == nullptr || !yyjson_is_obj(root) || !SchemaOf(root).has_value())
+    if (root == nullptr || ! yyjson_is_obj(root) || ! SchemaOf(root).has_value())
     {
         return std::nullopt;
     }
@@ -275,8 +274,7 @@ std::optional<AppSettings> Parse(std::string_view json)
     {
         settings.theme = ThemeFrom(theme);
     }
-    if (std::string language;
-        JsonRead::ReadString(root, "language", language, true) && LanguageTagIsPlausible(language))
+    if (std::string language; JsonRead::ReadString(root, "language", language, true) && LanguageTagIsPlausible(language))
     {
         settings.language = Utf8ToWide(language);
     }
@@ -299,12 +297,10 @@ std::optional<AppSettings> Parse(std::string_view json)
         WindowPlacementSetting placement;
         // Every value fits ±32767 (compared directly: std::abs of INT_MIN has no int result).
         const auto fits = [](int value) noexcept { return value >= -32767 && value <= 32767; };
-        placement.valid =
-            JsonRead::ReadInt(window, "x", placement.x, true) && JsonRead::ReadInt(window, "y", placement.y, true) &&
-            JsonRead::ReadInt(window, "width", placement.width, true) &&
-            JsonRead::ReadInt(window, "height", placement.height, true) &&
-            placement.width >= AppSettings::kWindowMinWidth && placement.height >= AppSettings::kWindowMinHeight &&
-            fits(placement.x) && fits(placement.y) && fits(placement.width) && fits(placement.height);
+        placement.valid = JsonRead::ReadInt(window, "x", placement.x, true) && JsonRead::ReadInt(window, "y", placement.y, true) &&
+                          JsonRead::ReadInt(window, "width", placement.width, true) && JsonRead::ReadInt(window, "height", placement.height, true) &&
+                          placement.width >= AppSettings::kWindowMinWidth && placement.height >= AppSettings::kWindowMinHeight && fits(placement.x) &&
+                          fits(placement.y) && fits(placement.width) && fits(placement.height);
         if (placement.valid)
         {
             (void)JsonRead::ReadBool(window, "maximized", placement.maximized, true);
@@ -320,8 +316,8 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
     unique_yyjson_mut_doc doc;
     unique_yyjson_doc existing;
     yyjson_val* existingShortcuts = nullptr;
-    int schema = AppSettings::kSchema;
-    if (!existingJson.empty())
+    int schema                    = AppSettings::kSchema;
+    if (! existingJson.empty())
     {
         existing.reset(yyjson_read(existingJson.data(), existingJson.size(), kReadFlags));
         yyjson_val* existingRoot = existing ? yyjson_doc_get_root(existing.get()) : nullptr;
@@ -330,7 +326,7 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
             if (const std::optional<int> existingSchema = SchemaOf(existingRoot); existingSchema.has_value())
             {
                 doc.reset(yyjson_doc_mut_copy(existing.get(), nullptr));
-                schema = std::max(schema, existingSchema.value());
+                schema            = std::max(schema, existingSchema.value());
                 existingShortcuts = yyjson_obj_get(existingRoot, "shortcuts");
             }
         }
@@ -343,14 +339,14 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
     else
     {
         doc.reset(yyjson_mut_doc_new(nullptr));
-        if (!doc)
+        if (! doc)
         {
             return {};
         }
         root = yyjson_mut_obj(doc.get());
         yyjson_mut_doc_set_root(doc.get(), root);
     }
-    if (root == nullptr || !yyjson_mut_is_obj(root))
+    if (root == nullptr || ! yyjson_mut_is_obj(root))
     {
         return {};
     }
@@ -360,21 +356,19 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
         return name != nullptr && value != nullptr && yyjson_mut_obj_put(root, name, value);
     };
     const std::string language = WideToUtf8(settings.language);
-    bool ok = put("schema", yyjson_mut_int(doc.get(), schema));
-    ok = put("theme", yyjson_mut_strcpy(doc.get(), ThemeName(settings.theme))) && ok;
-    ok = put("language", yyjson_mut_strcpy(doc.get(), language.c_str())) && ok;
-    ok = put("layersPanelWidth", yyjson_mut_real(doc.get(), settings.layersPanelWidth)) && ok;
-    ok = put("sampleRing", yyjson_mut_bool(doc.get(), settings.sampleRing)) && ok;
-    ok = put("jpegQuality", yyjson_mut_real(doc.get(), settings.jpegQuality)) && ok;
+    bool ok                    = put("schema", yyjson_mut_int(doc.get(), schema));
+    ok                         = put("theme", yyjson_mut_strcpy(doc.get(), ThemeName(settings.theme))) && ok;
+    ok                         = put("language", yyjson_mut_strcpy(doc.get(), language.c_str())) && ok;
+    ok                         = put("layersPanelWidth", yyjson_mut_real(doc.get(), settings.layersPanelWidth)) && ok;
+    ok                         = put("sampleRing", yyjson_mut_bool(doc.get(), settings.sampleRing)) && ok;
+    ok                         = put("jpegQuality", yyjson_mut_real(doc.get(), settings.jpegQuality)) && ok;
     if (settings.window.valid)
     {
         yyjson_mut_val* window = yyjson_mut_obj(doc.get());
         ok = window != nullptr && yyjson_mut_obj_add_int(doc.get(), window, "x", settings.window.x) &&
-             yyjson_mut_obj_add_int(doc.get(), window, "y", settings.window.y) &&
-             yyjson_mut_obj_add_int(doc.get(), window, "width", settings.window.width) &&
+             yyjson_mut_obj_add_int(doc.get(), window, "y", settings.window.y) && yyjson_mut_obj_add_int(doc.get(), window, "width", settings.window.width) &&
              yyjson_mut_obj_add_int(doc.get(), window, "height", settings.window.height) &&
-             yyjson_mut_obj_add_bool(doc.get(), window, "maximized", settings.window.maximized) &&
-             put("window", window) && ok;
+             yyjson_mut_obj_add_bool(doc.get(), window, "maximized", settings.window.maximized) && put("window", window) && ok;
     }
     else
     {
@@ -386,7 +380,7 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
     if (ParseShortcuts(existingShortcuts) != settings.shortcuts)
     {
         yyjson_mut_val* shortcuts = yyjson_mut_arr(doc.get());
-        ok = shortcuts != nullptr && ok;
+        ok                        = shortcuts != nullptr && ok;
         std::vector<yyjson_val*> reusable;
         std::vector<ShortcutBinding> reusableBindings;
         if (shortcuts != nullptr && existingShortcuts != nullptr && yyjson_is_arr(existingShortcuts))
@@ -417,7 +411,7 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
             {
                 if (reusable[index] != nullptr && reusableBindings[index] == binding)
                 {
-                    entry = yyjson_val_mut_copy(doc.get(), reusable[index]);
+                    entry           = yyjson_val_mut_copy(doc.get(), reusable[index]);
                     reusable[index] = nullptr;
                     break;
                 }
@@ -437,13 +431,13 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
             ok = put("shortcuts", shortcuts) && ok;
         }
     }
-    if (!ok)
+    if (! ok)
     {
         return {};
     }
     std::size_t length = 0;
     const std::unique_ptr<char, FreeDeleter> text{yyjson_mut_write(doc.get(), YYJSON_WRITE_PRETTY, &length)};
-    if (!text)
+    if (! text)
     {
         return {};
     }
@@ -457,11 +451,11 @@ SettingsLoadResult LoadCold(const std::wstring& path)
     SettingsLoadResult result;
     std::string bytes;
     unsigned long error = 0;
-    if (!ReadFileBytes(path, bytes, &error))
+    if (! ReadFileBytes(path, bytes, &error))
     {
         if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
         {
-            result.status = SettingsLoadStatus::Missing;
+            result.status          = SettingsLoadStatus::Missing;
             result.templateWritten = WriteFileAtomic(path, Serialize(result.settings));
         }
         else
@@ -475,11 +469,11 @@ SettingsLoadResult LoadCold(const std::wstring& path)
         result.settings = parsed.value();
         return result;
     }
-    result.status = SettingsLoadStatus::Invalid;
+    result.status             = SettingsLoadStatus::Invalid;
     const std::wstring backup = BackupPathFor(path);
     if (MoveFileExW(path.c_str(), backup.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
     {
-        result.backupPath = backup;
+        result.backupPath      = backup;
         result.templateWritten = WriteFileAtomic(path, Serialize(result.settings));
     }
     return result;
@@ -488,7 +482,7 @@ SettingsLoadResult LoadCold(const std::wstring& path)
 std::optional<AppSettings> LoadLive(const std::wstring& path)
 {
     std::string bytes;
-    if (!ReadFileBytes(path, bytes))
+    if (! ReadFileBytes(path, bytes))
     {
         return std::nullopt;
     }
@@ -508,23 +502,21 @@ bool Save(const std::wstring& path, const AppSettings& settings, std::wstring* b
         else
         {
             const std::wstring backup = BackupPathFor(path);
-            if (MoveFileExW(path.c_str(), backup.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) &&
-                backupPath != nullptr)
+            if (MoveFileExW(path.c_str(), backup.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) && backupPath != nullptr)
             {
                 *backupPath = backup;
             }
         }
     }
     const std::string text = Serialize(settings, merge);
-    return !text.empty() && WriteFileAtomic(path, text);
+    return ! text.empty() && WriteFileAtomic(path, text);
 }
 
 bool ReadFileBytes(const std::wstring& path, std::string& bytes, unsigned long* lastError)
 {
-    const wil::unique_hfile file{CreateFileW(path.c_str(), GENERIC_READ,
-                                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
-    if (!file)
+    const wil::unique_hfile file{CreateFileW(
+        path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+    if (! file)
     {
         if (lastError != nullptr)
         {
@@ -533,8 +525,7 @@ bool ReadFileBytes(const std::wstring& path, std::string& bytes, unsigned long* 
         return false;
     }
     LARGE_INTEGER size{};
-    if (!GetFileSizeEx(file.get(), &size) || size.QuadPart < 0 ||
-        static_cast<std::uint64_t>(size.QuadPart) > kMaxFileBytes)
+    if (! GetFileSizeEx(file.get(), &size) || size.QuadPart < 0 || static_cast<std::uint64_t>(size.QuadPart) > kMaxFileBytes)
     {
         if (lastError != nullptr)
         {
@@ -546,9 +537,9 @@ bool ReadFileBytes(const std::wstring& path, std::string& bytes, unsigned long* 
     std::size_t offset = 0;
     while (offset < bytes.size())
     {
-        DWORD read = 0;
+        DWORD read        = 0;
         const DWORD chunk = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - offset, 1u << 20));
-        if (!ReadFile(file.get(), bytes.data() + offset, chunk, &read, nullptr))
+        if (! ReadFile(file.get(), bytes.data() + offset, chunk, &read, nullptr))
         {
             if (lastError != nullptr)
             {
@@ -572,25 +563,24 @@ bool ReadFileBytes(const std::wstring& path, std::string& bytes, unsigned long* 
 
 bool WriteFileAtomic(const std::wstring& path, std::string_view bytes)
 {
-    if (path.empty() || !EnsureDirectoryFor(path))
+    if (path.empty() || ! EnsureDirectoryFor(path))
     {
         return false;
     }
     const std::wstring temporary = path + L".tmp-" + std::to_wstring(GetCurrentProcessId());
     {
-        wil::unique_hfile file{
-            CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)};
-        if (!file)
+        wil::unique_hfile file{CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)};
+        if (! file)
         {
             return false;
         }
-        bool complete = true;
+        bool complete      = true;
         std::size_t offset = 0;
         while (offset < bytes.size())
         {
-            DWORD written = 0;
+            DWORD written     = 0;
             const DWORD chunk = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - offset, 1u << 20));
-            if (!WriteFile(file.get(), bytes.data() + offset, chunk, &written, nullptr) || written == 0)
+            if (! WriteFile(file.get(), bytes.data() + offset, chunk, &written, nullptr) || written == 0)
             {
                 complete = false;
                 break;
@@ -601,13 +591,13 @@ bool WriteFileAtomic(const std::wstring& path, std::string_view bytes)
         // Closed before any delete: the temporary was opened without sharing, so DeleteFileW on the open file
         // fails and would leave it behind.
         file.reset();
-        if (!complete)
+        if (! complete)
         {
             (void)DeleteFileW(temporary.c_str());
             return false;
         }
     }
-    if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+    if (! MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
     {
         (void)DeleteFileW(temporary.c_str());
         return false;

@@ -24,13 +24,10 @@ class CodecFileStream final : public IStream
     {
     };
 
-  public:
-    [[nodiscard]] static HRESULT Create(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation,
-                                        CodecFileStream** result) noexcept;
-    [[nodiscard]] static HRESULT CreateRead(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation,
-                                            CodecFileStream** result) noexcept;
-    CodecFileStream(ConstructionKey, wil::unique_hfile file, std::uint64_t maximumBytes, CancelToken cancellation,
-                    bool readOnly) noexcept;
+public:
+    [[nodiscard]] static HRESULT Create(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation, CodecFileStream** result) noexcept;
+    [[nodiscard]] static HRESULT CreateRead(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation, CodecFileStream** result) noexcept;
+    CodecFileStream(ConstructionKey, wil::unique_hfile file, std::uint64_t maximumBytes, CancelToken cancellation, bool readOnly) noexcept;
     [[nodiscard]] HRESULT CloseChecked() noexcept;
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** result) noexcept override;
     ULONG STDMETHODCALLTYPE AddRef() noexcept override;
@@ -47,10 +44,10 @@ class CodecFileStream final : public IStream
     HRESULT STDMETHODCALLTYPE Stat(STATSTG* result, DWORD flags) noexcept override;
     HRESULT STDMETHODCALLTYPE Clone(IStream** result) noexcept override;
 
-  private:
+private:
     friend struct std::default_delete<CodecFileStream>;
-    [[nodiscard]] static HRESULT Open(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation,
-                                      bool readOnly, CodecFileStream** result) noexcept;
+    [[nodiscard]] static HRESULT Open(
+        const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation, bool readOnly, CodecFileStream** result) noexcept;
     ~CodecFileStream() = default;
     std::atomic<ULONG> _references{1};
     wil::unique_hfile _file;

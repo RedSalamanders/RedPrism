@@ -55,10 +55,10 @@
 
 namespace
 {
-constexpr int kDefaultClientWidth = 1280;
-constexpr int kDefaultClientHeight = 800;
+constexpr int kDefaultClientWidth           = 1280;
+constexpr int kDefaultClientHeight          = 800;
 constexpr UINT kScreenshotDelayMilliseconds = 800;
-constexpr double kCommandZoomStep = 1.25;
+constexpr double kCommandZoomStep           = 1.25;
 // Frames in a row that may fail before drawing stops and the window asks to close (RF-401).
 constexpr int kFailedFramesBeforeClose = 3;
 
@@ -83,7 +83,7 @@ HRESULT CalculateWindowSizeForDpi(DWORD windowStyle, DWORD extendedStyle, UINT d
 
     const SIZE clientSize = ScaleDefaultClientSize(dpi);
     RECT bounds{0, 0, clientSize.cx, clientSize.cy};
-    if (!AdjustWindowRectExForDpi(&bounds, windowStyle, FALSE, extendedStyle, dpi))
+    if (! AdjustWindowRectExForDpi(&bounds, windowStyle, FALSE, extendedStyle, dpi))
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -112,12 +112,11 @@ HRESULT CalculateWindowSizeForDpi(DWORD windowStyle, DWORD extendedStyle, UINT d
 [[nodiscard]] Raster SolidRaster(int width, int height, std::uint32_t argb)
 {
     const std::uint8_t alpha = static_cast<std::uint8_t>(argb >> 24);
-    const auto premultiply = [alpha](std::uint32_t channel)
-    { return static_cast<std::uint8_t>((channel & 0xFFu) * alpha / 255u); };
+    const auto premultiply   = [alpha](std::uint32_t channel) { return static_cast<std::uint8_t>((channel & 0xFFu) * alpha / 255u); };
     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * 4u * static_cast<std::size_t>(height));
     for (std::size_t index = 0; index + 3 < bytes.size(); index += 4)
     {
-        bytes[index] = premultiply(argb);
+        bytes[index]     = premultiply(argb);
         bytes[index + 1] = premultiply(argb >> 8);
         bytes[index + 2] = premultiply(argb >> 16);
         bytes[index + 3] = alpha;
@@ -126,29 +125,29 @@ HRESULT CalculateWindowSizeForDpi(DWORD windowStyle, DWORD extendedStyle, UINT d
 }
 
 // A painted layer added on top as one Import Image history entry, then made active.
-Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width, int height, Vec2 origin,
-                        double rotation, std::uint32_t argb)
+Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width, int height, Vec2 origin, double rotation, std::uint32_t argb)
 {
-    if (!session.Document().has_value())
+    if (! session.Document().has_value())
     {
         return Guid{};
     }
-    ImageLayer layer = ImageLayer::Blank(name, Vec2{static_cast<double>(width), static_cast<double>(height)});
-    const Raster raster = SolidRaster(width, height, argb);
-    layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), name};
-    layer.transform.origin = origin;
+    ImageLayer layer         = ImageLayer::Blank(name, Vec2{static_cast<double>(width), static_cast<double>(height)});
+    const Raster raster      = SolidRaster(width, height, argb);
+    layer.asset              = RasterAsset{raster, Raster::MakeThumbnail(raster), name};
+    layer.transform.origin   = origin;
     layer.transform.rotation = rotation;
-    auto draft = CanvasDocumentDraft::Clone(session.Document().value(), session.Document()->layers.size() + 1);
-    if (!draft || !draft.value().Append(layer))
+    auto draft               = CanvasDocumentDraft::Clone(session.Document().value(), session.Document()->layers.size() + 1);
+    if (! draft || ! draft.value().Append(layer))
         return Guid{};
     auto document = draft.value().Seal();
-    return document && session.ApplyImportedDocument(std::move(document.value()), layer.id, L"Import Image") ? layer.id
-                                                                                                             : Guid{};
+    return document && session.ApplyImportedDocument(std::move(document.value()), layer.id, L"Import Image") ? layer.id : Guid{};
 }
 
-Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
-                         const wchar_t* demo, const wchar_t* bench) noexcept
-    : _instance(instance), _session(HostHistoryLimit()), _forceWarp(forceWarp)
+Application::Application(
+    HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi, const wchar_t* demo, const wchar_t* bench) noexcept
+    : _instance(instance),
+      _session(HostHistoryLimit()),
+      _forceWarp(forceWarp)
 {
     _session.SetColorDisplayJobsEnabled(true);
     if (demo != nullptr && demo[0] != L'\0')
@@ -162,8 +161,8 @@ Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* scre
     if (screenshotPath && screenshotPath[0] != L'\0')
     {
         _screenshotPath = screenshotPath;
-        _quietUi = true;
-        _prompts = &QuietPrompts();
+        _quietUi        = true;
+        _prompts        = &QuietPrompts();
         // A run that closes before its capture has failed it (exit 9), whatever else happened.
         _screenshotResult = E_PENDING;
     }
@@ -181,11 +180,11 @@ Application::~Application()
 HRESULT Application::InitializeProcessing() noexcept
 {
     LARGE_INTEGER frequency{};
-    if (!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0)
+    if (! QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0)
     {
         return E_FAIL;
     }
-    _jobQpcFrequency = static_cast<std::uint64_t>(frequency.QuadPart);
+    _jobQpcFrequency      = static_cast<std::uint64_t>(frequency.QuadPart);
     const auto checkpoint = [this](ApplicationProcessingStage stage) noexcept -> HRESULT
     {
         return _processingTestProbe && _processingTestProbe->afterStage
@@ -195,36 +194,37 @@ HRESULT Application::InitializeProcessing() noexcept
     RETURN_IF_FAILED(static_cast<HRESULT>(InitializePipelineTrace()));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Trace));
     RETURN_IF_FAILED(PrepareUiCancellationObservation());
-    RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(
-        _processingTestProbe ? _processingTestProbe->workerCount : 0, {JobNoticeThunk, this},
-        _processingTestProbe ? _processingTestProbe->memory : MemorySource{}, UiCancellationObserver())));
+    RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(_processingTestProbe ? _processingTestProbe->workerCount : 0,
+                                                           {JobNoticeThunk, this},
+                                                           _processingTestProbe ? _processingTestProbe->memory : MemorySource{},
+                                                           UiCancellationObserver())));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Jobs));
-    if (!_jobs.RegisterOwnerWork(_ownerWork))
+    if (! _jobs.RegisterOwnerWork(_ownerWork))
         return E_UNEXPECTED;
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::OwnerWork));
     RETURN_IF_FAILED(_gpuWork.Initialize(_jobs, &_ownerWork));
     _gpuWorkInitialized = true;
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::GpuWork));
-    RETURN_IF_FAILED(static_cast<HRESULT>(_retryWait.Initialize(
-        _jobs, _ownerWork, _processingTestProbe ? _processingTestProbe->retryWait : RetryWaitObserver{})));
+    RETURN_IF_FAILED(
+        static_cast<HRESULT>(_retryWait.Initialize(_jobs, _ownerWork, _processingTestProbe ? _processingTestProbe->retryWait : RetryWaitObserver{})));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::RetryWait));
-    if (!InitializeHostContinuations())
+    if (! InitializeHostContinuations())
     {
         return E_UNEXPECTED;
     }
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Continuations));
-    if (!_jobs.EnableDeferredRelease())
+    if (! _jobs.EnableDeferredRelease())
     {
         return E_OUTOFMEMORY;
     }
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::DeferredRelease));
-    if (!_jobs.EnableMemoryRecycling())
+    if (! _jobs.EnableMemoryRecycling())
     {
         return E_OUTOFMEMORY;
     }
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Recycling));
-    RETURN_IF_FAILED(static_cast<HRESULT>(_pathReadWait.Initialize(
-        _jobs, _ownerWork, _processingTestProbe ? _processingTestProbe->pathReadWait : PathReadWaitObserver{})));
+    RETURN_IF_FAILED(
+        static_cast<HRESULT>(_pathReadWait.Initialize(_jobs, _ownerWork, _processingTestProbe ? _processingTestProbe->pathReadWait : PathReadWaitObserver{})));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::NativeRead));
     RETURN_IF_FAILED(static_cast<HRESULT>(_utilityReadback.InitializeOwner(_jobs, _ownerWork)));
     _utilityReadbackInitialized = true;
@@ -305,14 +305,13 @@ int Application::Run(int showCommand) noexcept
 
     // Arm the qualified history-only maintenance source before accepting startup paths or ordinary input.
     // Failed subscription/route admission is a startup failure; Shutdown joins notices before the pool closes.
-    if (!_historyResidencySource.Start())
+    if (! _historyResidencySource.Start())
     {
         OutputDebugStringW(L"History residency subscription failed.\n");
         return 5;
     }
-    if (_processingTestProbe &&
-        (_processingTestProbe->responsiveSourcesForTest || _processingTestProbe->responsiveSelectionSourcesForTest) &&
-        !InitializeResponsiveSourcesOwner(false, _processingTestProbe->responsiveSelectionSourcesForTest))
+    if (_processingTestProbe && (_processingTestProbe->responsiveSourcesForTest || _processingTestProbe->responsiveSelectionSourcesForTest) &&
+        ! InitializeResponsiveSourcesOwner(false, _processingTestProbe->responsiveSelectionSourcesForTest))
         return 5;
     // Cursor containment is independently admitted by the compute scheduler. It needs neither prepared GPU
     // display nor stroke activation; every ordinary input path uses its latest-request worker after startup.
@@ -337,7 +336,7 @@ int Application::Run(int showCommand) noexcept
         return 5;
     }
 
-    if (!_screenshotPath.empty())
+    if (! _screenshotPath.empty())
     {
         // The capture timer starts after the first frame that reached the display (RenderFrame, RF-409).
         ShowWindow(_window.get(), SW_SHOWNOACTIVATE);
@@ -376,7 +375,7 @@ int Application::Run(int showCommand) noexcept
         {
             continue;
         }
-        if (!_window)
+        if (! _window)
         {
             break;
         }
@@ -388,18 +387,18 @@ int Application::Run(int showCommand) noexcept
         {
             // Drawing stopped after a failure it could not get past; the close it asked for prompts to save
             // (RF-401). Until then the window only answers messages.
-            if (!WaitUntilMessage())
+            if (! WaitUntilMessage())
             {
                 break;
             }
             continue;
         }
 
-        const bool capturing = !_screenshotPath.empty();
+        const bool capturing = ! _screenshotPath.empty();
         // Smoke validates command/result ordering, never performance. Like the screenshot harness it may
         // draw with the display powered off, while retaining the ordinary visibility and occlusion guards.
         const bool displayOn = _displayPoweredOn || (_uiBenchmark && _uiBenchmark->smoke);
-        if (!_renderer.IsOccluded() || capturing)
+        if (! _renderer.IsOccluded() || capturing)
         {
             _occlusionStatusChanged = false;
         }
@@ -407,13 +406,12 @@ int Application::Run(int showCommand) noexcept
 
         // Marching ants: the dash steps one DIP every 120 ms while a non-empty outline shows and a frame can reach
         // the display; the wait below wakes for the next step, nothing else (RF-408).
-        DWORD waitTimeout = INFINITE;
-        const bool drawable =
-            capturing || (_windowVisible && displayOn && !_renderer.IsSuspended() && !_renderer.IsOccluded());
+        DWORD waitTimeout   = INFINITE;
+        const bool drawable = capturing || (_windowVisible && displayOn && ! _renderer.IsSuspended() && ! _renderer.IsOccluded());
         if (_marchingAnts && _chrome && drawable)
         {
             const std::uint64_t now = GetTickCount64();
-            const float phase = MarchingAntsPhase(now);
+            const float phase       = MarchingAntsPhase(now);
             if (phase != _chrome->SelectionAntPhase())
             {
                 _chrome->SetSelectionAntPhase(phase);
@@ -427,17 +425,17 @@ int Application::Run(int showCommand) noexcept
         }
 
         HostFrameState state;
-        state.windowVisible = _windowVisible;
-        state.displayPoweredOn = displayOn;
-        state.rendererSuspended = _renderer.IsSuspended();
-        state.rendererOccluded = _renderer.IsOccluded();
+        state.windowVisible          = _windowVisible;
+        state.displayPoweredOn       = displayOn;
+        state.rendererSuspended      = _renderer.IsSuspended();
+        state.rendererOccluded       = _renderer.IsOccluded();
         state.occlusionStatusChanged = _occlusionStatusChanged;
-        state.frameInvalidated = _frameInvalidated;
-        state.chromeAnimating = _chrome && _chrome->NeedsAnimation();
-        state.occlusionMessages = _renderer.OcclusionMessages();
-        state.capturing = capturing;
-        state.completionsPending = _jobs.HasUiWork();
-        HostFrameAction frameAction = SelectHostFrameAction(state);
+        state.frameInvalidated       = _frameInvalidated;
+        state.chromeAnimating        = _chrome && _chrome->NeedsAnimation();
+        state.occlusionMessages      = _renderer.OcclusionMessages();
+        state.capturing              = capturing;
+        state.completionsPending     = _jobs.HasUiWork();
+        HostFrameAction frameAction  = SelectHostFrameAction(state);
         if (frameAction == HostFrameAction::DrainCompletions)
         {
             continue; // a producer published after this pass's drain; return to the shared outer pump
@@ -445,7 +443,7 @@ int Application::Run(int showCommand) noexcept
         if (frameAction == HostFrameAction::ProbeOcclusion)
         {
             _occlusionStatusChanged = false;
-            result = _renderer.ProbeOcclusion();
+            result                  = _renderer.ProbeOcclusion();
             if (FAILED(result))
             {
                 OutputDebugStringW(L"Swap-chain occlusion probe failed.\n");
@@ -469,7 +467,7 @@ int Application::Run(int showCommand) noexcept
             continue;
         }
 
-        if (!WaitForFrameLatency())
+        if (! WaitForFrameLatency())
         {
             continue;
         }
@@ -497,7 +495,7 @@ int Application::ExitCode(int quitCode) const noexcept
     {
         return 5;
     }
-    if (!_screenshotPath.empty())
+    if (! _screenshotPath.empty())
     {
         // 8: this system cannot capture a window at all; 9: the capture was possible and failed, or never happened
         // (RF-409, Testing_Validation.md "Harness screenshot").
@@ -529,20 +527,16 @@ void Application::RenderFrame() noexcept
     const auto previousPresents = _renderer.PresentCount();
     BindCompositionDevice();
     bool cancellationSourceSelected = false;
-    const auto render = [this, &cancellationSourceSelected]() noexcept
+    const auto render               = [this, &cancellationSourceSelected]() noexcept
     {
-        auto* pending = _pendingDisplayInitialized ? _pendingDisplay.GraphForFrameOwner() : nullptr;
-        auto* graph = _acknowledgedStrokePreview ? _acknowledgedStrokePreview
-                      : pending                  ? pending
-                                                 : _acknowledgedCommittedDisplay;
+        auto* pending      = _pendingDisplayInitialized ? _pendingDisplay.GraphForFrameOwner() : nullptr;
+        auto* graph        = _acknowledgedStrokePreview ? _acknowledgedStrokePreview : pending ? pending : _acknowledgedCommittedDisplay;
         const auto* direct = _committedDisplayInitialized ? nullptr : DirectDisplayDocumentForFrame();
         // Bind the actual source argument for THIS rendering attempt, including a device-rebuild retry.
-        cancellationSourceSelected =
-            _uiBenchmark && UiCancellationSourceSelected(_committedDisplayInitialized ? graph : nullptr, direct);
-        return _committedDisplayInitialized ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr, graph,
-                                                               _selectionOutlineInitialized ? this : nullptr)
-                                            : _renderer.Render(_chrome.get(), &_composition, &_viewport, direct,
-                                                               nullptr, _selectionOutlineInitialized ? this : nullptr);
+        cancellationSourceSelected = _uiBenchmark && UiCancellationSourceSelected(_committedDisplayInitialized ? graph : nullptr, direct);
+        return _committedDisplayInitialized
+                   ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr, graph, _selectionOutlineInitialized ? this : nullptr)
+                   : _renderer.Render(_chrome.get(), &_composition, &_viewport, direct, nullptr, _selectionOutlineInitialized ? this : nullptr);
     };
     HRESULT result = render();
     if (result == S_FALSE)
@@ -584,17 +578,16 @@ void Application::RenderFrame() noexcept
     else
         AbandonUiFrameLatency(); // An occluded Present is not a completed visible frame.
     const HRESULT committedFailure = _committedDisplayInitialized ? CurrentCommittedDisplayFailureOwner() : S_OK;
-    HRESULT canvasFailure = FAILED(committedFailure) ? committedFailure : _renderer.CanvasFailure();
+    HRESULT canvasFailure          = FAILED(committedFailure) ? committedFailure : _renderer.CanvasFailure();
     if (_pendingDisplayInitialized && _pendingDisplayFailureKey && FAILED(_pendingDisplayFailure))
     {
         CommittedDisplayDescriptor current;
-        if (_pendingDisplayClient.DescribeCommittedDisplayOwner(current) &&
-            current.key == _pendingDisplayFailureKey.value())
+        if (_pendingDisplayClient.DescribeCommittedDisplayOwner(current) && current.key == _pendingDisplayFailureKey.value())
             canvasFailure = _pendingDisplayFailure;
     }
     ReportCanvasFailure(canvasFailure);
     // The screenshot capture waits for a frame that reached the display (RF-409).
-    if (!_screenshotPath.empty() && !_screenshotArmed && _window && _renderer.PresentCount() > 0)
+    if (! _screenshotPath.empty() && ! _screenshotArmed && _window && _renderer.PresentCount() > 0)
     {
         _screenshotArmed = true;
         (void)SetTimer(_window.get(), kScreenshotTimerId, kScreenshotDelayMilliseconds, nullptr);
@@ -616,13 +609,12 @@ void Application::ReportCanvasFailure(HRESULT failure) noexcept
     _canvasFailureShown = true;
     ++_canvasFailureNotices;
     OutputDebugStringW(L"The canvas could not be drawn; the chrome still presents.\n");
-    _prompts->ShowNotice(_chrome.get(),
-                         FormatStringResource(nullptr, IDS_ERROR_CANVAS_DRAW, static_cast<std::uint32_t>(failure)));
+    _prompts->ShowNotice(_chrome.get(), FormatStringResource(nullptr, IDS_ERROR_CANVAS_DRAW, static_cast<std::uint32_t>(failure)));
 }
 
 void Application::OnFrameLoopFailure(HRESULT failure) noexcept
 {
-    if (FAILED(_frameLoopFailure) || !_window)
+    if (FAILED(_frameLoopFailure) || ! _window)
     {
         return;
     }
@@ -636,16 +628,15 @@ void Application::ReleaseSurfacesWhileUnseen() noexcept
 {
     // Hidden, minimized, occluded or display-off windows keep no document surfaces (Rendering_Composition.md,
     // RF-411); the next frame that can reach the display composes them again.
-    const bool displayOff = !_displayPoweredOn && !(_uiBenchmark && _uiBenchmark->smoke);
-    const bool unseen =
-        _screenshotPath.empty() && (!_windowVisible || displayOff || _renderer.IsSuspended() || _renderer.IsOccluded());
+    const bool displayOff = ! _displayPoweredOn && ! (_uiBenchmark && _uiBenchmark->smoke);
+    const bool unseen     = _screenshotPath.empty() && (! _windowVisible || displayOff || _renderer.IsSuspended() || _renderer.IsOccluded());
     if (_committedDisplayInitialized)
     {
-        _committedDisplay.SetSuspendedOwner(unseen && !_committedDisplayAllowHiddenForTest);
-        _pendingDisplay.SetSuspendedOwner(unseen && !_committedDisplayAllowHiddenForTest);
+        _committedDisplay.SetSuspendedOwner(unseen && ! _committedDisplayAllowHiddenForTest);
+        _pendingDisplay.SetSuspendedOwner(unseen && ! _committedDisplayAllowHiddenForTest);
     }
     if (_selectionOutlineInitialized)
-        _selectionOutlineDisplay.SetSuspendedOwner(unseen && !_selectionOutlineAllowHiddenForTest);
+        _selectionOutlineDisplay.SetSuspendedOwner(unseen && ! _selectionOutlineAllowHiddenForTest);
     if (unseen && _composition.CanvasSurfaceBytes() != 0)
     {
         _composition.ReleaseDocumentSurfaces();
@@ -662,7 +653,7 @@ void SelfTestFailure(const wchar_t* message) noexcept
         return;
     }
     const int length = static_cast<int>(wcslen(message));
-    const int size = WideCharToMultiByte(CP_UTF8, 0, message, length, nullptr, 0, nullptr, nullptr);
+    const int size   = WideCharToMultiByte(CP_UTF8, 0, message, length, nullptr, 0, nullptr, nullptr);
     if (size <= 0)
     {
         return;
@@ -681,11 +672,8 @@ int Application::RunSelfTest() noexcept
 {
     (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
     const ULONGLONG selfTestStarted = GetTickCount64();
-    const auto traceSelfTest = [selfTestStarted](const char* stage) noexcept
-    {
-        std::printf("BEGIN self-test.%s elapsed_ms=%llu\n", stage,
-                    static_cast<unsigned long long>(GetTickCount64() - selfTestStarted));
-    };
+    const auto traceSelfTest        = [selfTestStarted](const char* stage) noexcept
+    { std::printf("BEGIN self-test.%s elapsed_ms=%llu\n", stage, static_cast<unsigned long long>(GetTickCount64() - selfTestStarted)); };
     if (_session.history.RetainedByteLimit() != HostHistoryLimit())
     {
         SelfTestFailure(L"The application session did not receive its physical-memory history limit.\n");
@@ -715,7 +703,7 @@ int Application::RunSelfTest() noexcept
     const auto undoTo = [&](int count) noexcept
     {
         const int allowance = (std::max)(0, _session.history.UndoCount() - count) + 2;
-        int attempts = 0;
+        int attempts        = 0;
         while (_session.history.CanUndo() && _session.history.UndoCount() > count)
         {
             if (attempts++ >= allowance)
@@ -760,23 +748,21 @@ int Application::RunSelfTest() noexcept
     }
 
     RECT clientBounds{};
-    const UINT windowDpi = GetDpiForWindow(_window.get());
-    const SIZE expectedClientSize = ScaleDefaultClientSize(windowDpi);
-    const DWORD windowStyle = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_STYLE));
-    const DWORD windowExtendedStyle = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_EXSTYLE));
+    const UINT windowDpi             = GetDpiForWindow(_window.get());
+    const SIZE expectedClientSize    = ScaleDefaultClientSize(windowDpi);
+    const DWORD windowStyle          = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_STYLE));
+    const DWORD windowExtendedStyle  = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_EXSTYLE));
     const bool clientBoundsAvailable = GetClientRect(_window.get(), &clientBounds) != FALSE;
-    const DWORD clientBoundsError = clientBoundsAvailable ? ERROR_SUCCESS : GetLastError();
+    const DWORD clientBoundsError    = clientBoundsAvailable ? ERROR_SUCCESS : GetLastError();
     RECT windowBounds{};
     const bool windowBoundsAvailable = GetWindowRect(_window.get(), &windowBounds) != FALSE;
-    const DWORD windowBoundsError = windowBoundsAvailable ? ERROR_SUCCESS : GetLastError();
+    const DWORD windowBoundsError    = windowBoundsAvailable ? ERROR_SUCCESS : GetLastError();
     MONITORINFO monitor{sizeof(monitor)};
-    const bool monitorAvailable =
-        GetMonitorInfoW(MonitorFromWindow(_window.get(), MONITOR_DEFAULTTONEAREST), &monitor) != FALSE;
-    const DWORD monitorError = monitorAvailable ? ERROR_SUCCESS : GetLastError();
+    const bool monitorAvailable = GetMonitorInfoW(MonitorFromWindow(_window.get(), MONITOR_DEFAULTTONEAREST), &monitor) != FALSE;
+    const DWORD monitorError    = monitorAvailable ? ERROR_SUCCESS : GetLastError();
     SIZE requestedWindowSize{};
     const HRESULT requestedWindowResult =
-        CalculateWindowSizeForDpi(WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP,
-                                  windowDpi, requestedWindowSize);
+        CalculateWindowSizeForDpi(WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP, windowDpi, requestedWindowSize);
     // Retain every original predicate. The hosted ARM64 failure combined several independent
     // facts; report the actual values before choosing a DPI, style or OS sizing repair.
     std::printf("INFO default-client window-dpi=%u system-dpi=%u style=0x%08lX extended-style=0x%08lX "
@@ -784,41 +770,73 @@ int Application::RunSelfTest() noexcept
                 "outer-ok=%d outer-error=%lu outer=[%ld,%ld,%ld,%ld] requested-hr=0x%08lX requested=[%ld,%ld] "
                 "monitor-ok=%d monitor-error=%lu monitor=[%ld,%ld,%ld,%ld] work=[%ld,%ld,%ld,%ld] "
                 "max-track=[%d,%d]\n",
-                windowDpi, GetDpiForSystem(), windowStyle, windowExtendedStyle, clientBoundsAvailable,
-                clientBoundsError, clientBounds.left, clientBounds.top, clientBounds.right, clientBounds.bottom,
-                expectedClientSize.cx, expectedClientSize.cy, windowBoundsAvailable, windowBoundsError,
-                windowBounds.left, windowBounds.top, windowBounds.right, windowBounds.bottom,
-                static_cast<unsigned long>(requestedWindowResult), requestedWindowSize.cx, requestedWindowSize.cy,
-                monitorAvailable, monitorError, monitor.rcMonitor.left, monitor.rcMonitor.top, monitor.rcMonitor.right,
-                monitor.rcMonitor.bottom, monitor.rcWork.left, monitor.rcWork.top, monitor.rcWork.right,
-                monitor.rcWork.bottom, GetSystemMetricsForDpi(SM_CXMAXTRACK, windowDpi),
+                windowDpi,
+                GetDpiForSystem(),
+                windowStyle,
+                windowExtendedStyle,
+                clientBoundsAvailable,
+                clientBoundsError,
+                clientBounds.left,
+                clientBounds.top,
+                clientBounds.right,
+                clientBounds.bottom,
+                expectedClientSize.cx,
+                expectedClientSize.cy,
+                windowBoundsAvailable,
+                windowBoundsError,
+                windowBounds.left,
+                windowBounds.top,
+                windowBounds.right,
+                windowBounds.bottom,
+                static_cast<unsigned long>(requestedWindowResult),
+                requestedWindowSize.cx,
+                requestedWindowSize.cy,
+                monitorAvailable,
+                monitorError,
+                monitor.rcMonitor.left,
+                monitor.rcMonitor.top,
+                monitor.rcMonitor.right,
+                monitor.rcMonitor.bottom,
+                monitor.rcWork.left,
+                monitor.rcWork.top,
+                monitor.rcWork.right,
+                monitor.rcWork.bottom,
+                GetSystemMetricsForDpi(SM_CXMAXTRACK, windowDpi),
                 GetSystemMetricsForDpi(SM_CYMAXTRACK, windowDpi));
-    const bool hiddenFixture = !IsWindowVisible(_window.get());
-    if (windowDpi == 0 || (windowStyle & WS_CLIPCHILDREN) == 0 ||
-        (windowExtendedStyle & WS_EX_NOREDIRECTIONBITMAP) == 0 || !clientBoundsAvailable || !hiddenFixture ||
-        clientBounds.right - clientBounds.left != expectedClientSize.cx ||
-        clientBounds.bottom - clientBounds.top != expectedClientSize.cy)
+    const bool hiddenFixture = ! IsWindowVisible(_window.get());
+    if (windowDpi == 0 || (windowStyle & WS_CLIPCHILDREN) == 0 || (windowExtendedStyle & WS_EX_NOREDIRECTIONBITMAP) == 0 || ! clientBoundsAvailable ||
+        ! hiddenFixture || clientBounds.right - clientBounds.left != expectedClientSize.cx || clientBounds.bottom - clientBounds.top != expectedClientSize.cy)
     {
         SelfTestFailure(std::format(L"The default client area does not match the current monitor DPI: dpi={}, "
                                     L"read={}, client={}x{}, expected={}x{}, style=0x{:08X}, extended=0x{:08X}, "
                                     L"desktop={}x{}, hidden={}.\n",
-                                    windowDpi, clientBoundsAvailable, clientBounds.right - clientBounds.left,
-                                    clientBounds.bottom - clientBounds.top, expectedClientSize.cx,
-                                    expectedClientSize.cy, windowStyle, windowExtendedStyle,
-                                    GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), hiddenFixture));
+                                    windowDpi,
+                                    clientBoundsAvailable,
+                                    clientBounds.right - clientBounds.left,
+                                    clientBounds.bottom - clientBounds.top,
+                                    expectedClientSize.cx,
+                                    expectedClientSize.cy,
+                                    windowStyle,
+                                    windowExtendedStyle,
+                                    GetSystemMetrics(SM_CXSCREEN),
+                                    GetSystemMetrics(SM_CYSCREEN),
+                                    hiddenFixture));
         return 2;
     }
 
-    std::printf("WINDOWFIXTURE dpi=%u client=%ldx%ld desktop=%dx%d hidden=1\n", windowDpi,
-                clientBounds.right - clientBounds.left, clientBounds.bottom - clientBounds.top,
-                GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+    std::printf("WINDOWFIXTURE dpi=%u client=%ldx%ld desktop=%dx%d hidden=1\n",
+                windowDpi,
+                clientBounds.right - clientBounds.left,
+                clientBounds.bottom - clientBounds.top,
+                GetSystemMetrics(SM_CXSCREEN),
+                GetSystemMetrics(SM_CYSCREEN));
     result = InitializeRenderer();
     if (FAILED(result))
     {
         SelfTestFailure(L"Renderer initialization failed.\n");
         return 5;
     }
-    if (!_renderer.IsWarp())
+    if (! _renderer.IsWarp())
     {
         SelfTestFailure(L"Self-test requires a WARP device.\n");
         return 5;
@@ -841,20 +859,21 @@ int Application::RunSelfTest() noexcept
     BindCompositionDevice();
     SyncChrome();
     // The first model publication must use the real viewport before Tree selects/scrolls its first row.
-    const float initialLayerTitleBottom =
-        ChromeHost::kMenuHeightDip + ChromeHost::kTabHeightDip + ChromeHost::kLayersTitleDip;
-    const auto initialLayerRow = _chrome->LayerRowBoundsDip(0);
+    const float initialLayerTitleBottom = ChromeHost::kMenuHeightDip + ChromeHost::kTabHeightDip + ChromeHost::kLayersTitleDip;
+    const auto initialLayerRow          = _chrome->LayerRowBoundsDip(0);
     if (initialLayerRow.bottom <= initialLayerRow.top || initialLayerRow.top < initialLayerTitleBottom)
     {
-        std::fprintf(stderr, "DIAG initial-layer-row before-prepare top=%.2f bottom=%.2f titleBottom=%.2f\n",
-                     static_cast<double>(initialLayerRow.top), static_cast<double>(initialLayerRow.bottom),
+        std::fprintf(stderr,
+                     "DIAG initial-layer-row before-prepare top=%.2f bottom=%.2f titleBottom=%.2f\n",
+                     static_cast<double>(initialLayerRow.top),
+                     static_cast<double>(initialLayerRow.bottom),
                      static_cast<double>(initialLayerTitleBottom));
         SelfTestFailure(L"The first layer row overlaps the title/opacity band before preparation.\n");
         return 5;
     }
     std::puts("PASS layers.initial-row-below-header-before-prepare");
     const CanvasDocument* document = _session.DisplayDocument();
-    result = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
+    result                         = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
     if (FAILED(result))
     {
         SelfTestFailure(L"Self-test Present failed.\n");
@@ -879,18 +898,16 @@ int Application::RunSelfTest() noexcept
     {
         return failed;
     }
-    if (LucideIconsPrepared() < static_cast<int>(kEditorToolCount) || LucideIconsDrawn() < visibleTools ||
-        visibleTools < 1)
+    if (LucideIconsPrepared() < static_cast<int>(kEditorToolCount) || LucideIconsDrawn() < visibleTools || visibleTools < 1)
     {
         const std::wstring missed =
-            std::format(L"The tool rail prepared {} Lucide icons and drew {} of {} visible tools.\n",
-                        LucideIconsPrepared(), LucideIconsDrawn(), visibleTools);
+            std::format(L"The tool rail prepared {} Lucide icons and drew {} of {} visible tools.\n", LucideIconsPrepared(), LucideIconsDrawn(), visibleTools);
         SelfTestFailure(missed.c_str());
         return 5;
     }
     if (visibleTools < static_cast<int>(kEditorToolCount))
     {
-        const float scale = static_cast<float>(windowDpi) / 96.0f;
+        const float scale      = static_cast<float>(windowDpi) / 96.0f;
         const D2D1_RECT_F more = _chrome->MoreToolsBoundsDip();
         if (more.bottom <= more.top)
         {
@@ -900,14 +917,14 @@ int Application::RunSelfTest() noexcept
         DxUi::PointerEvent pointer{};
         const auto click = [&](const D2D1_RECT_F& rect)
         {
-            pointer.action = DxUi::PointerAction::Down;
-            pointer.xPixels = (rect.left + rect.right) * 0.5f * scale;
-            pointer.yPixels = (rect.top + rect.bottom) * 0.5f * scale;
+            pointer.action     = DxUi::PointerAction::Down;
+            pointer.xPixels    = (rect.left + rect.right) * 0.5f * scale;
+            pointer.yPixels    = (rect.top + rect.bottom) * 0.5f * scale;
             const bool pressed = _chrome->DispatchPointer(pointer);
-            pointer.action = DxUi::PointerAction::Up;
+            pointer.action     = DxUi::PointerAction::Up;
             return _chrome->DispatchPointer(pointer) && pressed;
         };
-        if (!click(more) || !_chrome->MoreToolsOpen())
+        if (! click(more) || ! _chrome->MoreToolsOpen())
         {
             SelfTestFailure(L"More did not open the hidden tools.\n");
             return 5;
@@ -920,19 +937,19 @@ int Application::RunSelfTest() noexcept
             const D2D1_RECT_F bounds = _chrome->OverflowToolBoundsDip(EditorToolAt(index));
             if (bounds.bottom > bounds.top)
             {
-                hidden = EditorToolAt(index);
+                hidden       = EditorToolAt(index);
                 hiddenBounds = bounds;
                 break;
             }
         }
-        if (hidden == EditorTool::Count || !click(hiddenBounds) || _tool != hidden || _chrome->MoreToolsOpen())
+        if (hidden == EditorTool::Count || ! click(hiddenBounds) || _tool != hidden || _chrome->MoreToolsOpen())
         {
             SelfTestFailure(L"A hidden tool in the More card did not become the current tool.\n");
             return 5;
         }
         (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), static_cast<float>(windowDpi));
         const D2D1_RECT_F move = _chrome->ToolButtonBoundsDip(EditorTool::Move);
-        if (!click(move) || _tool != EditorTool::Move)
+        if (! click(move) || _tool != EditorTool::Move)
         {
             SelfTestFailure(L"The rail did not return to the Move tool after More.\n");
             return 5;
@@ -946,11 +963,12 @@ int Application::RunSelfTest() noexcept
     // A settled rail parses no SVG documents (RF-505): frames that repaint it under a moving pointer add none, and a
     // tool switch adds at most the two icons whose latch changed.
     {
-        const float scale = static_cast<float>(windowDpi) / 96.0f;
+        const float scale     = static_cast<float>(windowDpi) / 96.0f;
         const auto hoverFrame = [&](EditorTool tool)
         {
             const D2D1_RECT_F button = _chrome->ToolButtonBoundsDip(tool);
-            OnPointer(WM_MOUSEMOVE, 0,
+            OnPointer(WM_MOUSEMOVE,
+                      0,
                       MAKELPARAM(static_cast<int>(std::lround((button.left + button.right) / 2.0f * scale)),
                                  static_cast<int>(std::lround((button.top + button.bottom) / 2.0f * scale))));
             (void)_chrome->AdvanceAnimation(GetTickCount64());
@@ -974,7 +992,9 @@ int Application::RunSelfTest() noexcept
         {
             SelfTestFailure(std::format(L"The rail parsed SVG documents while settled or beyond the two latched icons "
                                         L"of a tool switch (repaints {}, switch {}, back {}).\n",
-                                        hovered - settled, switched - hovered, returned - switched)
+                                        hovered - settled,
+                                        switched - hovered,
+                                        returned - switched)
                                 .c_str());
             return 5;
         }
@@ -991,7 +1011,7 @@ int Application::RunSelfTest() noexcept
     }
     // A settled document must not re-composite: the second frame reuses the canvas.
     const std::uint64_t composites = _composition.CompositeCount();
-    result = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
+    result                         = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
     if (FAILED(result) || _composition.CompositeCount() != composites)
     {
         SelfTestFailure(L"A settled document was re-composited.\n");
@@ -1004,8 +1024,7 @@ int Application::RunSelfTest() noexcept
         const std::uint64_t antComposites = _composition.CompositeCount();
         _chrome->SetSelectionAntPhase(3.0f);
         result = _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
-        if (FAILED(result) || _composition.CompositeCount() != antComposites ||
-            std::fabs(_chrome->SelectionAntPhase() - 3.0f) > 0.01f)
+        if (FAILED(result) || _composition.CompositeCount() != antComposites || std::fabs(_chrome->SelectionAntPhase() - 3.0f) > 0.01f)
         {
             SelfTestFailure(L"Marching ants recomposited the document or did not keep the dash phase.\n");
             return 5;
@@ -1015,18 +1034,16 @@ int Application::RunSelfTest() noexcept
     SyncChrome();
     // Device loss rebuilds the device, then the composition and the brush engine bind to the new one.
     {
-        ID3D11Device* previous = _renderer.Device();
+        ID3D11Device* previous  = _renderer.Device();
         const HRESULT recovered = _renderer.RecoverDeviceForTest();
         if (FAILED(recovered))
         {
-            const std::wstring message =
-                std::format(L"RecoverDevice failed {:#010X}.\n", static_cast<std::uint32_t>(recovered));
+            const std::wstring message = std::format(L"RecoverDevice failed {:#010X}.\n", static_cast<std::uint32_t>(recovered));
             SelfTestFailure(message.c_str());
             return 5;
         }
         BindCompositionDevice();
-        if (_renderer.Device() == nullptr || _renderer.Device() == previous || !_brushEngine.Ready() ||
-            _composition.Device() != _renderer.Device())
+        if (_renderer.Device() == nullptr || _renderer.Device() == previous || ! _brushEngine.Ready() || _composition.Device() != _renderer.Device())
         {
             SelfTestFailure(L"Device recovery did not rebind the composition and the brush engine.\n");
             return 5;
@@ -1045,33 +1062,31 @@ int Application::RunSelfTest() noexcept
         }
         if (LucideIconsPrepared() != static_cast<int>(kEditorToolCount))
         {
-            SelfTestFailure(std::format(L"The rail prepared {} of {} icons on the new device.\n", LucideIconsPrepared(),
-                                        kEditorToolCount)
-                                .c_str());
+            SelfTestFailure(std::format(L"The rail prepared {} of {} icons on the new device.\n", LucideIconsPrepared(), kEditorToolCount).c_str());
             return 5;
         }
     }
 
     // The DxUi splitter, palette wells with the color picker, and the opacity stepper are wired to the session.
     {
-        const float scale = static_cast<float>(windowDpi) / 96.0f;
-        const CanvasHole before = _chrome->HolePixels();
-        const float beforeWidth = _chrome->LayersWidthDip();
+        const float scale           = static_cast<float>(windowDpi) / 96.0f;
+        const CanvasHole before     = _chrome->HolePixels();
+        const float beforeWidth     = _chrome->LayersWidthDip();
         const D2D1_RECT_F separator = _chrome->SplitterBoundsDip();
-        const float centerX = (separator.left + separator.right) * 0.5f;
-        const float centerY = (separator.top + separator.bottom) * 0.5f;
+        const float centerX         = (separator.left + separator.right) * 0.5f;
+        const float centerY         = (separator.top + separator.bottom) * 0.5f;
         DxUi::PointerEvent pointer{};
-        pointer.action = DxUi::PointerAction::Down;
+        pointer.action  = DxUi::PointerAction::Down;
         pointer.xPixels = centerX * scale;
         pointer.yPixels = centerY * scale;
-        if (!_chrome->DispatchPointer(pointer))
+        if (! _chrome->DispatchPointer(pointer))
         {
             SelfTestFailure(L"The layers splitter did not take the pointer press.\n");
             return 5;
         }
-        pointer.action = DxUi::PointerAction::Move;
+        pointer.action  = DxUi::PointerAction::Move;
         pointer.xPixels = (centerX - 40.0f) * scale;
-        if (!_chrome->DispatchPointer(pointer))
+        if (! _chrome->DispatchPointer(pointer))
         {
             SelfTestFailure(L"The layers splitter did not take the pointer move.\n");
             return 5;
@@ -1083,20 +1098,20 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"A frame during the drag snapped the splitter back.\n");
             return 5;
         }
-        pointer.action = DxUi::PointerAction::Move;
+        pointer.action  = DxUi::PointerAction::Move;
         pointer.xPixels = (centerX - 80.0f) * scale;
-        if (!_chrome->DispatchPointer(pointer))
+        if (! _chrome->DispatchPointer(pointer))
         {
             SelfTestFailure(L"A frame during the drag cancelled the splitter.\n");
             return 5;
         }
         pointer.action = DxUi::PointerAction::Up;
-        if (!_chrome->DispatchPointer(pointer))
+        if (! _chrome->DispatchPointer(pointer))
         {
             SelfTestFailure(L"The layers splitter did not take the pointer release.\n");
             return 5;
         }
-        if (!_layoutDirty)
+        if (! _layoutDirty)
         {
             SelfTestFailure(L"The layers splitter did not report a layout change.\n");
             return 5;
@@ -1104,8 +1119,7 @@ int Application::RunSelfTest() noexcept
         if (std::fabs(_chrome->LayersWidthDip() - (beforeWidth + 80.0f)) > 0.5f)
         {
             const std::wstring text =
-                std::format(L"The layers splitter did not resize the panel: {} DIP, expected {} DIP.\n",
-                            _chrome->LayersWidthDip(), beforeWidth + 80.0f);
+                std::format(L"The layers splitter did not resize the panel: {} DIP, expected {} DIP.\n", _chrome->LayersWidthDip(), beforeWidth + 80.0f);
             SelfTestFailure(text.c_str());
             return 5;
         }
@@ -1118,13 +1132,13 @@ int Application::RunSelfTest() noexcept
         }
 
         const D2D1_RECT_F well = _chrome->PaletteWellBoundsDip(false);
-        pointer.action = DxUi::PointerAction::Down;
-        pointer.xPixels = (well.left + well.right) * 0.5f * scale;
-        pointer.yPixels = (well.top + well.bottom) * 0.5f * scale;
-        bool handled = _chrome->DispatchPointer(pointer);
-        pointer.action = DxUi::PointerAction::Up;
-        handled = _chrome->DispatchPointer(pointer) && handled;
-        if (!handled || !_chrome->ColorPickerOpen())
+        pointer.action         = DxUi::PointerAction::Down;
+        pointer.xPixels        = (well.left + well.right) * 0.5f * scale;
+        pointer.yPixels        = (well.top + well.bottom) * 0.5f * scale;
+        bool handled           = _chrome->DispatchPointer(pointer);
+        pointer.action         = DxUi::PointerAction::Up;
+        handled                = _chrome->DispatchPointer(pointer) && handled;
+        if (! handled || ! _chrome->ColorPickerOpen())
         {
             SelfTestFailure(L"The foreground well did not open the color picker.\n");
             return 5;
@@ -1136,14 +1150,13 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         const auto pickerOpening = _chrome->CapturePickerSampleAuthority();
-        if (!pickerOpening)
+        if (! pickerOpening)
         {
             SelfTestFailure(L"The visible picker has no sampling authority.\n");
             return 5;
         }
         auto sampleAuthority = pickerOpening.value();
-        if (!_chrome->ApplySampledPickerColor(sampleAuthority, 0xFF102030u) ||
-            !_chrome->ApplySampledPickerColor(sampleAuthority, 0xFF203040u) ||
+        if (! _chrome->ApplySampledPickerColor(sampleAuthority, 0xFF102030u) || ! _chrome->ApplySampledPickerColor(sampleAuthority, 0xFF203040u) ||
             sampleAuthority == pickerOpening.value() || _chrome->PickerColor() != 0xFF203040u)
         {
             SelfTestFailure(L"The picker did not renew its own sampled-color authority.\n");
@@ -1174,16 +1187,14 @@ int Application::RunSelfTest() noexcept
         _chrome->OpenColorPicker(PickerTarget::Background, _session.BackgroundColor());
         auto backgroundAuthority = _chrome->CapturePickerSampleAuthority().value();
         _chrome->SampleColor(DocumentSession::kDefaultBackgroundArgb);
-        if (_chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u) ||
-            _chrome->PickerColor() != DocumentSession::kDefaultBackgroundArgb)
+        if (_chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u) || _chrome->PickerColor() != DocumentSession::kDefaultBackgroundArgb)
         {
             SelfTestFailure(L"An equal explicit picker input rebound an older sample.\n");
             return 5;
         }
         std::printf("PASS sampler-authority.picker.equal-manual-input-refuses-older-sample\n");
         backgroundAuthority = _chrome->CapturePickerSampleAuthority().value();
-        if (!_chrome->ApplySampledPickerColor(backgroundAuthority, 0x00445566u) ||
-            _chrome->PickerColor() != 0xFF445566u)
+        if (! _chrome->ApplySampledPickerColor(backgroundAuthority, 0x00445566u) || _chrome->PickerColor() != 0xFF445566u)
         {
             SelfTestFailure(L"The background picker did not select its own opaque sample.\n");
             return 5;
@@ -1205,23 +1216,21 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Cancelling the color picker changed the palette.\n");
             return 5;
         }
-        if (_chrome->CapturePickerSampleAuthority() ||
-            _chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u))
+        if (_chrome->CapturePickerSampleAuthority() || _chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u))
         {
             SelfTestFailure(L"A closed picker accepted a delayed sample.\n");
             return 5;
         }
         std::printf("PASS sampler-authority.picker.closed-card-refuses-delayed-sample\n");
         _chrome->OpenColorPicker(PickerTarget::Background, _session.BackgroundColor());
-        if (_chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u) ||
-            _chrome->PickerColor() != DocumentSession::kDefaultBackgroundArgb)
+        if (_chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u) || _chrome->PickerColor() != DocumentSession::kDefaultBackgroundArgb)
         {
             SelfTestFailure(L"Reopening an equal picker rebound an old sampling opening.\n");
             return 5;
         }
         std::printf("PASS sampler-authority.picker.equal-target-reopen-refuses-older-sample\n");
         _chrome->CloseColorPicker(false);
-        if (!RunSamplerIntentHostSelfTest())
+        if (! RunSamplerIntentHostSelfTest())
             return 5;
         if (RunSamplerHostSelfTest() != 0)
             return 5;
@@ -1231,13 +1240,12 @@ int Application::RunSelfTest() noexcept
             return 5;
         // Palette keys apply while the canvas has focus; the well click and the picker moved focus to chrome.
         _chrome->SetCanvasFocused(true);
-        if (!hostKey('X', 0) || _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||
-            _session.BackgroundColor() != 0xFF336699u)
+        if (! hostKey('X', 0) || _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb || _session.BackgroundColor() != 0xFF336699u)
         {
             SelfTestFailure(L"X did not swap the palette.\n");
             return 5;
         }
-        if (!hostKey('D', 0) || _chrome->ForegroundColor() != DocumentSession::kDefaultForegroundArgb ||
+        if (! hostKey('D', 0) || _chrome->ForegroundColor() != DocumentSession::kDefaultForegroundArgb ||
             _chrome->BackgroundColor() != DocumentSession::kDefaultBackgroundArgb)
         {
             SelfTestFailure(L"D did not reset the palette into the wells.\n");
@@ -1253,22 +1261,20 @@ int Application::RunSelfTest() noexcept
         }
         const auto clickPalette = [&](const D2D1_RECT_F& rect)
         {
-            pointer.action = DxUi::PointerAction::Down;
-            pointer.xPixels = (rect.left + rect.right) * 0.5f * scale;
-            pointer.yPixels = (rect.top + rect.bottom) * 0.5f * scale;
+            pointer.action     = DxUi::PointerAction::Down;
+            pointer.xPixels    = (rect.left + rect.right) * 0.5f * scale;
+            pointer.yPixels    = (rect.top + rect.bottom) * 0.5f * scale;
             const bool pressed = _chrome->DispatchPointer(pointer);
-            pointer.action = DxUi::PointerAction::Up;
+            pointer.action     = DxUi::PointerAction::Up;
             return _chrome->DispatchPointer(pointer) && pressed;
         };
-        if (!clickPalette(_chrome->PaletteHotBoundsDip(false)) ||
-            _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||
+        if (! clickPalette(_chrome->PaletteHotBoundsDip(false)) || _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||
             _session.BackgroundColor() != DocumentSession::kDefaultForegroundArgb)
         {
             SelfTestFailure(L"The palette swap hot zone did not invert foreground and background.\n");
             return 5;
         }
-        if (!clickPalette(_chrome->PaletteHotBoundsDip(true)) ||
-            _session.ForegroundColor() != DocumentSession::kDefaultForegroundArgb ||
+        if (! clickPalette(_chrome->PaletteHotBoundsDip(true)) || _session.ForegroundColor() != DocumentSession::kDefaultForegroundArgb ||
             _session.BackgroundColor() != DocumentSession::kDefaultBackgroundArgb)
         {
             SelfTestFailure(L"The palette reset hot zone did not restore black and white.\n");
@@ -1277,9 +1283,8 @@ int Application::RunSelfTest() noexcept
 
         _chrome->ShowNotice(L"Merge Down is not implemented yet.");
         const D2D1_RECT_F notice = _chrome->NoticeBoundsDip();
-        if (!_chrome->NoticeOpen() || notice.bottom <= notice.top ||
-            _chrome->IsCanvasPoint((notice.left + notice.right) * 0.5f * scale,
-                                   (notice.top + notice.bottom) * 0.5f * scale))
+        if (! _chrome->NoticeOpen() || notice.bottom <= notice.top ||
+            _chrome->IsCanvasPoint((notice.left + notice.right) * 0.5f * scale, (notice.top + notice.bottom) * 0.5f * scale))
         {
             SelfTestFailure(L"The unimplemented-function notice did not open as an overlay.\n");
             return 5;
@@ -1291,28 +1296,28 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         const int editsBeforeFilter = _session.history.UndoCount();
-        const Guid painted = InsertPaintedLayer(_session, L"Filter", 16, 16, Vec2{}, 0.0, 0xFFFF0000u);
-        if (painted != Guid{} && !BeginColorEdit(ChromeHost::kCommandGaussianBlur))
+        const Guid painted          = InsertPaintedLayer(_session, L"Filter", 16, 16, Vec2{}, 0.0, 0xFFFF0000u);
+        if (painted != Guid{} && ! BeginColorEdit(ChromeHost::kCommandGaussianBlur))
         {
             SelfTestFailure(L"Gaussian Blur did not open on a painted layer.\n");
             return 5;
         }
         SyncChrome();
-        if (painted != Guid{} && !_chrome->FilterOptionsVisible())
+        if (painted != Guid{} && ! _chrome->FilterOptionsVisible())
         {
             SelfTestFailure(L"The Gaussian Blur panel did not show its Radius option.\n");
             return 5;
         }
         CancelColorEditForTest();
-        if (!undoTo(editsBeforeFilter))
+        if (! undoTo(editsBeforeFilter))
             return 5;
 
         const int editsBeforeDrag = _session.history.UndoCount();
         _session.AddBlankLayer();
         SyncChrome();
         const std::vector<HierarchyEntry> beforeRows = _session.LayerRows();
-        const D2D1_RECT_F topRow = _chrome->LayerRowBoundsDip(0);
-        const D2D1_RECT_F lowerRow = _chrome->LayerRowBoundsDip(1);
+        const D2D1_RECT_F topRow                     = _chrome->LayerRowBoundsDip(0);
+        const D2D1_RECT_F lowerRow                   = _chrome->LayerRowBoundsDip(1);
         if (beforeRows.size() < 2 || topRow.bottom <= topRow.top || lowerRow.bottom <= lowerRow.top)
         {
             SelfTestFailure(L"The layers tree did not lay out two rows to drag.\n");
@@ -1321,28 +1326,33 @@ int Application::RunSelfTest() noexcept
         const Guid dragged = beforeRows[0].id;
         (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), static_cast<float>(windowDpi));
         DxUi::PointerEvent drag{};
-        drag.action = DxUi::PointerAction::Down;
+        drag.action  = DxUi::PointerAction::Down;
         drag.xPixels = (topRow.left + topRow.right) * 0.5f * scale;
         drag.yPixels = (topRow.top + topRow.bottom) * 0.5f * scale;
-        if (!_chrome->DispatchPointer(drag))
+        if (! _chrome->DispatchPointer(drag))
         {
             const std::wstring missed = std::format(L"The layers tree did not take the drag press at {:.1f},{:.1f} "
                                                     L"(row {:.1f},{:.1f}-{:.1f},{:.1f}, hit {}).\n",
-                                                    drag.xPixels, drag.yPixels, topRow.left, topRow.top, topRow.right,
-                                                    topRow.bottom, _chrome->HitKindForTest(drag.xPixels, drag.yPixels));
+                                                    drag.xPixels,
+                                                    drag.yPixels,
+                                                    topRow.left,
+                                                    topRow.top,
+                                                    topRow.right,
+                                                    topRow.bottom,
+                                                    _chrome->HitKindForTest(drag.xPixels, drag.yPixels));
             SelfTestFailure(missed.c_str());
             return 5;
         }
-        drag.action = DxUi::PointerAction::Move;
+        drag.action  = DxUi::PointerAction::Move;
         drag.xPixels = (lowerRow.left + lowerRow.right) * 0.5f * scale;
         drag.yPixels = (lowerRow.bottom - 3.0f) * scale;
-        if (!_chrome->DispatchPointer(drag))
+        if (! _chrome->DispatchPointer(drag))
         {
             SelfTestFailure(L"The layers tree did not take the drag move.\n");
             return 5;
         }
         drag.action = DxUi::PointerAction::Up;
-        if (!_chrome->DispatchPointer(drag))
+        if (! _chrome->DispatchPointer(drag))
         {
             SelfTestFailure(L"The layers tree did not take the drag release.\n");
             return 5;
@@ -1353,11 +1363,11 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Dragging a layer did not reorder it.\n");
             return 5;
         }
-        if (!undoTo(editsBeforeDrag))
+        if (! undoTo(editsBeforeDrag))
             return 5;
         SyncChrome();
 
-        if (!_chrome->RequestLayerOpacity(50.0))
+        if (! _chrome->RequestLayerOpacity(50.0))
         {
             SelfTestFailure(L"The opacity stepper refused a value.\n");
             return 5;
@@ -1368,8 +1378,7 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         const ImageLayer* layer = _session.ActiveLayer();
-        if (layer == nullptr || std::fabs(layer->opacity - 0.5) > 1e-9 || !_session.history.CanUndo() ||
-            _session.history.UndoName() != L"Layer Opacity")
+        if (layer == nullptr || std::fabs(layer->opacity - 0.5) > 1e-9 || ! _session.history.CanUndo() || _session.history.UndoName() != L"Layer Opacity")
         {
             SelfTestFailure(L"The opacity stepper did not record an undoable edit.\n");
             return 5;
@@ -1380,16 +1389,16 @@ int Application::RunSelfTest() noexcept
     {
         InsertPaintedLayer(_session, L"Painted", 200, 150, Vec2{300, 200}, 0.0, 0xFF2F6FB0u);
         DocumentChanged();
-        if (!_overlayGeometry.has_value())
+        if (! _overlayGeometry.has_value())
         {
             SelfTestFailure(L"The Move tool did not show a transform box for a painted layer.\n");
             return 5;
         }
-        const CanvasHole hole = _chrome->HolePixels();
-        const ImageLayer* layer = _session.ActiveLayer();
+        const CanvasHole hole       = _chrome->HolePixels();
+        const ImageLayer* layer     = _session.ActiveLayer();
         const LayerTransform before = layer->transform;
-        const Vec2 center = _viewport.ViewFromDocument(before.Center(), DocumentSize());
-        const auto pointer = [&](UINT message, double x, double y)
+        const Vec2 center           = _viewport.ViewFromDocument(before.Center(), DocumentSize());
+        const auto pointer          = [&](UINT message, double x, double y)
         { OnPointer(message, 0, MAKELPARAM(static_cast<int>(hole.left + x), static_cast<int>(hole.top + y))); };
         pointer(WM_LBUTTONDOWN, center.x, center.y);
         pointer(WM_MOUSEMOVE, center.x + 40.0, center.y + 24.0);
@@ -1400,16 +1409,15 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         layer = _session.ActiveLayer();
-        if (std::holds_alternative<MoveToolDrag>(_drag) || layer == nullptr ||
-            layer->transform.origin.x <= before.origin.x || layer->transform.origin.y <= before.origin.y ||
-            _session.PendingTransformEdit().has_value() || _session.history.UndoName() != L"Transform Layer")
+        if (std::holds_alternative<MoveToolDrag>(_drag) || layer == nullptr || layer->transform.origin.x <= before.origin.x ||
+            layer->transform.origin.y <= before.origin.y || _session.PendingTransformEdit().has_value() || _session.history.UndoName() != L"Transform Layer")
         {
             SelfTestFailure(L"Dragging with the Move tool did not move the layer as one history entry.\n");
             return 5;
         }
         hostCommand(ChromeHost::kCommandFreeTransform);
         OnTransformAction(TransformAction::SetRotation, 30.0);
-        if (!_session.PendingTransformEdit().has_value() || _session.PendingTransformEdit()->draft.rotation != 30.0 ||
+        if (! _session.PendingTransformEdit().has_value() || _session.PendingTransformEdit()->draft.rotation != 30.0 ||
             _session.ActiveLayer()->transform.rotation != 0.0)
         {
             SelfTestFailure(L"Free Transform did not preview a typed rotation.\n");
@@ -1429,26 +1437,25 @@ int Application::RunSelfTest() noexcept
         hostCommand(ChromeHost::kCommandFreeTransform);
         OnTransformAction(TransformAction::SetX, 999.0);
         _chrome->SetCanvasFocused(true);
-        if (!hostKey(VK_ESCAPE, 0) || _session.PendingTransformEdit().has_value() ||
-            _session.ActiveLayer()->transform.origin.x == 999.0)
+        if (! hostKey(VK_ESCAPE, 0) || _session.PendingTransformEdit().has_value() || _session.ActiveLayer()->transform.origin.x == 999.0)
         {
             SelfTestFailure(L"Escape did not cancel the pending transform.\n");
             return 5;
         }
         const double x = _session.ActiveLayer()->transform.origin.x;
-        if (!hostKey(VK_RIGHT, MK_SHIFT) || _session.ActiveLayer()->transform.origin.x != x + 10.0)
+        if (! hostKey(VK_RIGHT, MK_SHIFT) || _session.ActiveLayer()->transform.origin.x != x + 10.0)
         {
             SelfTestFailure(L"Shift+Right did not nudge the layer by ten pixels.\n");
             return 5;
         }
         hostCommand(ChromeHost::kCommandFlipCanvasHorizontal);
-        if (!_session.ActiveLayer()->transform.flipX || _session.history.UndoName() != L"Flip Canvas Horizontal")
+        if (! _session.ActiveLayer()->transform.flipX || _session.history.UndoName() != L"Flip Canvas Horizontal")
         {
             SelfTestFailure(L"Flip Canvas Horizontal did not mirror the layer.\n");
             return 5;
         }
         hostCommand(ChromeHost::kCommandFlipLayerVertical);
-        if (!_session.ActiveLayer()->transform.flipY || _session.history.UndoName() != L"Flip Vertical")
+        if (! _session.ActiveLayer()->transform.flipY || _session.history.UndoName() != L"Flip Vertical")
         {
             SelfTestFailure(L"Flip Layer Vertical did not mirror the layer.\n");
             return 5;
@@ -1461,12 +1468,10 @@ int Application::RunSelfTest() noexcept
         RedPrismTestViewport::FrameActualPixelsAtOrigin(_viewport, DocumentSize());
         SyncChrome();
         const CanvasHole hole = _chrome->HolePixels();
-        const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
+        const auto pointer    = [&](UINT message, WPARAM wParam, double documentX, double documentY)
         {
             const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
-            OnPointer(message, wParam,
-                      MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
-                                 static_cast<int>(std::lround(hole.top + view.y))));
+            OnPointer(message, wParam, MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)), static_cast<int>(std::lround(hole.top + view.y))));
         };
         const auto bounds = [&]() -> std::optional<SelectionBounds>
         {
@@ -1480,19 +1485,27 @@ int Application::RunSelfTest() noexcept
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 120.0, 100.0);
         pointer(WM_LBUTTONUP, 0, 120.0, 100.0);
         std::optional<SelectionBounds> box = bounds();
-        if (!box.has_value() || !closeTo(box->minX, 40.0) || !closeTo(box->minY, 40.0) || !closeTo(box->maxX, 120.0) ||
-            !closeTo(box->maxY, 100.0) || _session.history.UndoName() != L"Rectangular Marquee" ||
-            _session.PendingLasso().has_value())
+        if (! box.has_value() || ! closeTo(box->minX, 40.0) || ! closeTo(box->minY, 40.0) || ! closeTo(box->maxX, 120.0) || ! closeTo(box->maxY, 100.0) ||
+            _session.history.UndoName() != L"Rectangular Marquee" || _session.PendingLasso().has_value())
         {
             std::fprintf(stderr,
                          "self-test.marquee synthetic=%u shift=%u control=%u alt=%u tool=%u kind=%u selected=%u "
                          "bounds=%.3f,%.3f,%.3f,%.3f pending-lasso=%u history-busy=%u host-active=%u host-queued=%zu\n",
-                         KeyboardState::Detail::g_synthetic.active ? 1u : 0u, KeyboardState::Held(VK_SHIFT) ? 1u : 0u,
-                         KeyboardState::Held(VK_CONTROL) ? 1u : 0u, KeyboardState::Held(VK_MENU) ? 1u : 0u,
-                         static_cast<unsigned int>(_tool), static_cast<unsigned int>(_session.marqueeKind),
-                         box.has_value() ? 1u : 0u, box ? box->minX : 0.0, box ? box->minY : 0.0, box ? box->maxX : 0.0,
-                         box ? box->maxY : 0.0, _session.PendingLasso().has_value() ? 1u : 0u,
-                         _historyWork.Busy() ? 1u : 0u, _activeHostRequest.has_value() ? 1u : 0u, _hostRequests.Size());
+                         KeyboardState::Detail::g_synthetic.active ? 1u : 0u,
+                         KeyboardState::Held(VK_SHIFT) ? 1u : 0u,
+                         KeyboardState::Held(VK_CONTROL) ? 1u : 0u,
+                         KeyboardState::Held(VK_MENU) ? 1u : 0u,
+                         static_cast<unsigned int>(_tool),
+                         static_cast<unsigned int>(_session.marqueeKind),
+                         box.has_value() ? 1u : 0u,
+                         box ? box->minX : 0.0,
+                         box ? box->minY : 0.0,
+                         box ? box->maxX : 0.0,
+                         box ? box->maxY : 0.0,
+                         _session.PendingLasso().has_value() ? 1u : 0u,
+                         _historyWork.Busy() ? 1u : 0u,
+                         _activeHostRequest.has_value() ? 1u : 0u,
+                         _hostRequests.Size());
             SelfTestFailure(L"Dragging the Marquee did not select a whole-pixel rectangle.\n");
             return 5;
         }
@@ -1500,14 +1513,13 @@ int Application::RunSelfTest() noexcept
         pointer(WM_MOUSEMOVE, MK_LBUTTON | MK_SHIFT, 280.0, 100.0);
         pointer(WM_LBUTTONUP, MK_SHIFT, 280.0, 100.0);
         box = bounds();
-        if (!box.has_value() || !closeTo(box->minX, 40.0) || !closeTo(box->maxX, 280.0) || !closeTo(box->maxY, 100.0))
+        if (! box.has_value() || ! closeTo(box->minX, 40.0) || ! closeTo(box->maxX, 280.0) || ! closeTo(box->maxY, 100.0))
         {
             SelfTestFailure(L"Shift-dragging the Marquee did not add a second rectangle.\n");
             return 5;
         }
-        if (!hostKey('M', 0, false) || _session.marqueeKind != LassoKind::Ellipse || !hostKey('M', 0, true) ||
-            _session.marqueeKind != LassoKind::Ellipse || !hostKey('M', 0, false) ||
-            _session.marqueeKind != LassoKind::Rectangle)
+        if (! hostKey('M', 0, false) || _session.marqueeKind != LassoKind::Ellipse || ! hostKey('M', 0, true) || _session.marqueeKind != LassoKind::Ellipse ||
+            ! hostKey('M', 0, false) || _session.marqueeKind != LassoKind::Rectangle)
         {
             SelfTestFailure(L"M did not switch the Marquee's shape exactly once per press.\n");
             return 5;
@@ -1519,8 +1531,7 @@ int Application::RunSelfTest() noexcept
         if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
             return 5;
         box = bounds();
-        if (!box.has_value() || !closeTo(box->minX, before + 30.0) ||
-            _session.history.UndoName() != L"Move Selection" || _session.IsMovingSelection())
+        if (! box.has_value() || ! closeTo(box->minX, before + 30.0) || _session.history.UndoName() != L"Move Selection" || _session.IsMovingSelection())
         {
             SelfTestFailure(L"Dragging inside the selection did not move its outline as one entry.\n");
             return 5;
@@ -1529,26 +1540,27 @@ int Application::RunSelfTest() noexcept
         // where it was either way (RF-904): the release that follows neither moves nor deselects.
         {
             const std::optional<SelectionBounds> placed = bounds();
-            const int entries = _session.history.UndoCount();
-            const auto dragThen = [&](UINT key, UINT modifiers)
+            const int entries                           = _session.history.UndoCount();
+            const auto dragThen                         = [&](UINT key, UINT modifiers)
             {
                 pointer(WM_LBUTTONDOWN, 0, 100.0, 70.0);
                 pointer(WM_MOUSEMOVE, MK_LBUTTON, 130.0, 90.0);
                 const bool dragged = _session.IsMovingSelection() && bounds() != placed;
-                const bool taken = hostKey(key, modifiers);
-                const bool restored = !_session.IsMovingSelection() && bounds() == placed &&
-                                      _session.history.UndoCount() == entries && _session.history.CanUndo();
+                const bool taken   = hostKey(key, modifiers);
+                const bool restored =
+                    ! _session.IsMovingSelection() && bounds() == placed && _session.history.UndoCount() == entries && _session.history.CanUndo();
                 pointer(WM_MOUSEMOVE, MK_LBUTTON, 150.0, 100.0);
                 pointer(WM_LBUTTONUP, 0, 150.0, 100.0);
                 return dragged && taken && restored && bounds() == placed && _session.history.UndoCount() == entries;
             };
             const bool escaped = dragThen(VK_ESCAPE, 0);
-            const bool undone = dragThen('Z', MK_CONTROL);
-            if (!escaped || !undone)
+            const bool undone  = dragThen('Z', MK_CONTROL);
+            if (! escaped || ! undone)
             {
                 SelfTestFailure(std::format(L"Escape or Ctrl+Z during an outline drag did not put the outline back "
                                             L"(Escape {}, Ctrl+Z {}).\n",
-                                            escaped, undone)
+                                            escaped,
+                                            undone)
                                     .c_str());
                 return 5;
             }
@@ -1562,7 +1574,7 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"A click inside the selection did not deselect.\n");
             return 5;
         }
-        const Guid swatchId = InsertPaintedLayer(_session, L"Swatch", 120, 80, Vec2{40, 40}, 0.0, 0xFFE58A2Eu);
+        const Guid swatchId      = InsertPaintedLayer(_session, L"Swatch", 120, 80, Vec2{40, 40}, 0.0, 0xFFE58A2Eu);
         const ImageLayer* swatch = _session.ActiveLayer();
         if (swatchId == Guid{} || swatch == nullptr || swatch->id != swatchId)
         {
@@ -1571,44 +1583,46 @@ int Application::RunSelfTest() noexcept
         }
         DocumentChanged();
         {
-            _traceWandForTest = true;
+            _traceWandForTest     = true;
             const auto clearTrace = wil::scope_exit([this]() noexcept { _traceWandForTest = false; });
             OnTool(EditorTool::Wand);
             std::printf("WAND FIXTURE before-pointer tool=%u queued=%zu active=%d history_busy=%d opacity=%d "
                         "all_layers=%d tolerance=%d\n",
-                        static_cast<unsigned int>(_tool), _hostRequests.Size(), _activeHostRequest.has_value(),
-                        _historyWork.Busy(), _opacityEdit.has_value(), _session.wandSettings.sampleAllLayers,
+                        static_cast<unsigned int>(_tool),
+                        _hostRequests.Size(),
+                        _activeHostRequest.has_value(),
+                        _historyWork.Busy(),
+                        _opacityEdit.has_value(),
+                        _session.wandSettings.sampleAllLayers,
                         _session.wandSettings.tolerance);
             const Vec2 expectedView = _viewport.ViewFromDocument(Vec2{100.0, 80.0}, DocumentSize());
-            const LPARAM clickLParam = MAKELPARAM(static_cast<int>(std::lround(hole.left + expectedView.x)),
-                                                  static_cast<int>(std::lround(hole.top + expectedView.y)));
-            const std::uint64_t generationBeforeClick = _session.Generation();
+            const LPARAM clickLParam =
+                MAKELPARAM(static_cast<int>(std::lround(hole.left + expectedView.x)), static_cast<int>(std::lround(hole.top + expectedView.y)));
+            const std::uint64_t generationBeforeClick  = _session.Generation();
             const WandSettings wandSettingsBeforeClick = _session.wandSettings;
-            const bool antialiasedBeforeClick = _session.selectionAntialiased;
+            const bool antialiasedBeforeClick          = _session.selectionAntialiased;
             pointer(WM_LBUTTONDOWN, 0, 100.0, 80.0);
             pointer(WM_LBUTTONUP, 0, 100.0, 80.0);
             const SettleResult wandSettleResult = SettleJobs(_jobs, 10000, DispatchMessageThunk, this);
             if (wandSettleResult != SettleResult::Settled)
             {
-                const wchar_t* reason =
-                    wandSettleResult == SettleResult::TimedOut
-                        ? L"WAND fixture: job settlement timed out.\n"
-                        : (wandSettleResult == SettleResult::Quit ? L"WAND fixture: job settlement received WM_QUIT.\n"
-                                                                  : L"WAND fixture: job settlement failed.\n");
+                const wchar_t* reason = wandSettleResult == SettleResult::TimedOut
+                                            ? L"WAND fixture: job settlement timed out.\n"
+                                            : (wandSettleResult == SettleResult::Quit ? L"WAND fixture: job settlement received WM_QUIT.\n"
+                                                                                      : L"WAND fixture: job settlement failed.\n");
                 SelfTestFailure(reason);
                 return 5;
             }
             box = bounds();
-            if (!box.has_value() || *box != SelectionBounds{40.0, 40.0, 160.0, 120.0} ||
-                _session.history.UndoName() != L"Magic Wand")
+            if (! box.has_value() || *box != SelectionBounds{40.0, 40.0, 160.0, 120.0} || _session.history.UndoName() != L"Magic Wand")
             {
-                const auto actual = box.value_or(SelectionBounds{});
-                const ImageLayer* active = _session.ActiveLayer();
-                const bool hasRaster = active != nullptr && active->asset.has_value();
-                const int rasterWidth = hasRaster ? active->asset->image.Width() : 0;
-                const int rasterHeight = hasRaster ? active->asset->image.Height() : 0;
+                const auto actual                = box.value_or(SelectionBounds{});
+                const ImageLayer* active         = _session.ActiveLayer();
+                const bool hasRaster             = active != nullptr && active->asset.has_value();
+                const int rasterWidth            = hasRaster ? active->asset->image.Width() : 0;
+                const int rasterHeight           = hasRaster ? active->asset->image.Height() : 0;
                 const std::wstring activeLayerId = active != nullptr ? active->id.ToString() : L"<none>";
-                const std::wstring undoName = _session.history.UndoName();
+                const std::wstring undoName      = _session.history.UndoName();
                 std::fprintf(stderr,
                              "WAND SWATCH failure bounds_present=%d bounds=[%.3f,%.3f,%.3f,%.3f] "
                              "undo='%ls' active_id='%ls' inserted_id='%ls' raster_present=%d raster=%dx%d "
@@ -1616,14 +1630,27 @@ int Application::RunSelfTest() noexcept
                              "contiguous=%d sample_all_layers=%d antialiased=%d} generation_before=%llu "
                              "generation_after=%llu down_lParam=0x%08lX down_client=(%d,%d) "
                              "up_lParam=0x%08lX up_client=(%d,%d) expected_document_click=(100,80)\n",
-                             box.has_value(), actual.minX, actual.minY, actual.maxX, actual.maxY, undoName.c_str(),
-                             activeLayerId.c_str(), swatchId.ToString().c_str(), hasRaster, rasterWidth, rasterHeight,
+                             box.has_value(),
+                             actual.minX,
+                             actual.minY,
+                             actual.maxX,
+                             actual.maxY,
+                             undoName.c_str(),
+                             activeLayerId.c_str(),
+                             swatchId.ToString().c_str(),
+                             hasRaster,
+                             rasterWidth,
+                             rasterHeight,
                              active != nullptr ? active->transform.origin.x : 0.0,
                              active != nullptr ? active->transform.origin.y : 0.0,
-                             active != nullptr ? active->transform.rotation : 0.0, wandSettingsBeforeClick.tolerance,
-                             static_cast<int>(wandSettingsBeforeClick.sampleSize), wandSettingsBeforeClick.Radius(),
-                             wandSettingsBeforeClick.contiguous, wandSettingsBeforeClick.sampleAllLayers,
-                             antialiasedBeforeClick, static_cast<unsigned long long>(generationBeforeClick),
+                             active != nullptr ? active->transform.rotation : 0.0,
+                             wandSettingsBeforeClick.tolerance,
+                             static_cast<int>(wandSettingsBeforeClick.sampleSize),
+                             wandSettingsBeforeClick.Radius(),
+                             wandSettingsBeforeClick.contiguous,
+                             wandSettingsBeforeClick.sampleAllLayers,
+                             antialiasedBeforeClick,
+                             static_cast<unsigned long long>(generationBeforeClick),
                              static_cast<unsigned long long>(_session.Generation()),
                              static_cast<unsigned long>(static_cast<std::uint32_t>(clickLParam)),
                              static_cast<int>(static_cast<short>(LOWORD(clickLParam))),
@@ -1634,18 +1661,25 @@ int Application::RunSelfTest() noexcept
                 SelfTestFailure(std::format(L"The Magic Wand did not select the painted layer's pixels exactly "
                                             L"(has bounds {}, [{}, {}, {}, {}], history '{}', tool {}, queued {}, "
                                             L"active {}, history busy {}, opacity {}, host error {:08X}).\n",
-                                            box.has_value(), actual.minX, actual.minY, actual.maxX, actual.maxY,
-                                            _session.history.UndoName(), static_cast<unsigned int>(_tool),
-                                            _hostRequests.Size(), _activeHostRequest.has_value(), _historyWork.Busy(),
-                                            _opacityEdit.has_value(), static_cast<std::uint32_t>(_hostExecutionError))
+                                            box.has_value(),
+                                            actual.minX,
+                                            actual.minY,
+                                            actual.maxX,
+                                            actual.maxY,
+                                            _session.history.UndoName(),
+                                            static_cast<unsigned int>(_tool),
+                                            _hostRequests.Size(),
+                                            _activeHostRequest.has_value(),
+                                            _historyWork.Busy(),
+                                            _opacityEdit.has_value(),
+                                            static_cast<std::uint32_t>(_hostExecutionError))
                                     .c_str());
                 return 5;
             }
         }
-        if (!hostKey('I', MK_CONTROL | MK_SHIFT) || _session.history.UndoName() != L"Inverse" ||
-            !hostKey('A', MK_CONTROL) || _session.history.UndoName() != L"Select All" ||
-            bounds() != SelectionBounds{0.0, 0.0, DocumentSize().x, DocumentSize().y} || !hostKey('D', MK_CONTROL) ||
-            _session.Selection().has_value() || _session.history.UndoName() != L"Deselect")
+        if (! hostKey('I', MK_CONTROL | MK_SHIFT) || _session.history.UndoName() != L"Inverse" || ! hostKey('A', MK_CONTROL) ||
+            _session.history.UndoName() != L"Select All" || bounds() != SelectionBounds{0.0, 0.0, DocumentSize().x, DocumentSize().y} ||
+            ! hostKey('D', MK_CONTROL) || _session.Selection().has_value() || _session.history.UndoName() != L"Deselect")
         {
             SelfTestFailure(L"Ctrl+Shift+I, Ctrl+A and Ctrl+D did not drive the Select menu.\n");
             return 5;
@@ -1658,9 +1692,8 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONUP, 0, 400.0, 300.0);
         pointer(WM_LBUTTONDOWN, 0, 400.0, 400.0);
         pointer(WM_LBUTTONUP, 0, 400.0, 400.0);
-        if (!_session.PendingLasso().has_value() || _session.PendingLasso()->PointCount() != 3 ||
-            !hostKey(VK_RETURN, 0) || _session.PendingLasso().has_value() ||
-            _session.history.UndoName() != L"Polygonal Lasso")
+        if (! _session.PendingLasso().has_value() || _session.PendingLasso()->PointCount() != 3 || ! hostKey(VK_RETURN, 0) ||
+            _session.PendingLasso().has_value() || _session.history.UndoName() != L"Polygonal Lasso")
         {
             SelfTestFailure(L"Polygonal lasso clicks and Enter did not close an outline.\n");
             return 5;
@@ -1670,14 +1703,14 @@ int Application::RunSelfTest() noexcept
         if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
             return 5;
         box = bounds();
-        if (_session.history.UndoName() != L"Expand Selection" || !box.has_value() || !closeTo(box->minX, 295.0))
+        if (_session.history.UndoName() != L"Expand Selection" || ! box.has_value() || ! closeTo(box->minX, 295.0))
         {
             SelfTestFailure(L"Expand from the header did not grow the selection by five pixels.\n");
             return 5;
         }
         pointer(WM_LBUTTONDOWN, 0, 500.0, 500.0);
         pointer(WM_LBUTTONUP, 0, 500.0, 500.0);
-        if (!_session.PendingLasso().has_value() || !hostKey(VK_ESCAPE, 0) || _session.PendingLasso().has_value())
+        if (! _session.PendingLasso().has_value() || ! hostKey(VK_ESCAPE, 0) || _session.PendingLasso().has_value())
         {
             SelfTestFailure(L"Escape did not cancel the lasso outline in progress.\n");
             return 5;
@@ -1696,72 +1729,67 @@ int Application::RunSelfTest() noexcept
         _session.brushSettings = BrushSettings{30, 1, 1, 0, 0, 1};
         RedPrismTestViewport::FrameActualPixelsAtOrigin(_viewport, DocumentSize());
         SyncChrome();
-        const CanvasHole hole = _chrome->HolePixels();
+        const CanvasHole hole    = _chrome->HolePixels();
         bool pointerAcknowledged = true;
-        const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
+        const auto pointer       = [&](UINT message, WPARAM wParam, double documentX, double documentY)
         {
             const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
-            OnPointer(message, wParam,
-                      MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
-                                 static_cast<int>(std::lround(hole.top + view.y))));
+            OnPointer(message, wParam, MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)), static_cast<int>(std::lround(hole.top + view.y))));
             // These compatibility fixtures inspect completed previews/edits. The separate event-gated opening
             // suite proves that the real callback returns before the worker and keeps view input live.
-            pointerAcknowledged =
-                SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled && pointerAcknowledged;
+            pointerAcknowledged = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled && pointerAcknowledged;
         };
         const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
         {
             (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
             std::vector<std::uint8_t> bgra;
-            UINT width = 0;
+            UINT width  = 0;
             UINT height = 0;
-            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width ||
-                static_cast<UINT>(y) >= height)
+            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width || static_cast<UINT>(y) >= height)
             {
                 return false;
             }
             const std::size_t index = (static_cast<std::size_t>(y) * width + static_cast<std::size_t>(x)) * 4u;
-            out = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
+            out                     = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
             return true;
         };
-        if (!_brushEngine.Ready())
+        if (! _brushEngine.Ready())
         {
             SelfTestFailure(L"The brush compute engine did not initialize on the WARP device.\n");
             return 5;
         }
         std::array<int, 4> before{};
         std::array<int, 4> besideBefore{};
-        if (!pixelAt(300, 600, before) || !pixelAt(300, 500, besideBefore))
+        if (! pixelAt(300, 600, before) || ! pixelAt(300, 500, besideBefore))
         {
             SelfTestFailure(L"The canvas could not be read back before the stroke.\n");
             return 5;
         }
         pointer(WM_LBUTTONDOWN, 0, 200.0, 600.0);
-        if (!pointerAcknowledged || _session.PendingBrush() == nullptr || !_composition.HasStroke())
+        if (! pointerAcknowledged || _session.PendingBrush() == nullptr || ! _composition.HasStroke())
         {
             SelfTestFailure(L"Pressing with the Brush did not start a stroke with a live preview.\n");
             return 5;
         }
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 400.0, 600.0);
         std::array<int, 4> live{};
-        if (!pixelAt(300, 600, live) || live[2] < 250 || live[1] > 5 || live[0] > 5 || live[3] < 250)
+        if (! pixelAt(300, 600, live) || live[2] < 250 || live[1] > 5 || live[0] > 5 || live[3] < 250)
         {
             SelfTestFailure(L"The live stroke did not show red paint on the canvas.\n");
             return 5;
         }
         pointer(WM_LBUTTONUP, 0, 400.0, 600.0);
         const ImageLayer* painted = _session.ActiveLayer();
-        if (_session.PendingBrush() != nullptr || _composition.HasStroke() || painted == nullptr ||
-            !painted->asset.has_value() || !painted->asset->image.IsSparse() ||
-            painted->asset->image.IsMaterialized() || _session.history.UndoName() != L"Brush Stroke")
+        if (_session.PendingBrush() != nullptr || _composition.HasStroke() || painted == nullptr || ! painted->asset.has_value() ||
+            ! painted->asset->image.IsSparse() || painted->asset->image.IsMaterialized() || _session.history.UndoName() != L"Brush Stroke")
         {
             SelfTestFailure(L"Releasing the Brush did not commit one sparse Brush Stroke entry.\n");
             return 5;
         }
         std::array<int, 4> committed{};
         std::array<int, 4> beside{};
-        if (!pixelAt(300, 600, committed) || committed[2] < 250 || committed[3] < 250 || !pixelAt(300, 500, beside) ||
-            beside != besideBefore || painted->asset->image.IsMaterialized())
+        if (! pixelAt(300, 600, committed) || committed[2] < 250 || committed[3] < 250 || ! pixelAt(300, 500, beside) || beside != besideBefore ||
+            painted->asset->image.IsMaterialized())
         {
             SelfTestFailure(L"The committed stroke did not draw from the adopted texture.\n");
             return 5;
@@ -1770,22 +1798,22 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONDOWN, 0, 300.0, 600.0);
         pointer(WM_LBUTTONUP, 0, 300.0, 600.0);
         std::array<int, 4> erased{};
-        if (_session.history.UndoName() != L"Erase" || !pixelAt(300, 600, erased) || erased != before)
+        if (_session.history.UndoName() != L"Erase" || ! pixelAt(300, 600, erased) || erased != before)
         {
             SelfTestFailure(L"The Eraser did not clear the painted pixels.\n");
             return 5;
         }
         OnTool(EditorTool::Brush);
         _session.brushSettings.diameter = 30;
-        if (!hostKey(VK_OEM_6, 0) || _session.brushSettings.diameter != 36 || !hostKey(VK_OEM_4, MK_SHIFT) ||
-            _session.brushSettings.hardness != 0.75 || !hostKey('5', 0) || _session.brushSettings.opacity != 0.5)
+        if (! hostKey(VK_OEM_6, 0) || _session.brushSettings.diameter != 36 || ! hostKey(VK_OEM_4, MK_SHIFT) || _session.brushSettings.hardness != 0.75 ||
+            ! hostKey('5', 0) || _session.brushSettings.opacity != 0.5)
         {
             SelfTestFailure(L"The bracket and digit keys did not change the brush tip.\n");
             return 5;
         }
         pointer(WM_LBUTTONDOWN, 0, 500.0, 500.0);
-        if (_session.PendingBrush() == nullptr || !hostKey(VK_ESCAPE, 0) || _session.PendingBrush() != nullptr ||
-            _composition.HasStroke() || _session.history.UndoName() != L"Erase")
+        if (_session.PendingBrush() == nullptr || ! hostKey(VK_ESCAPE, 0) || _session.PendingBrush() != nullptr || _composition.HasStroke() ||
+            _session.history.UndoName() != L"Erase")
         {
             SelfTestFailure(L"Escape did not drop the stroke in progress.\n");
             return 5;
@@ -1797,8 +1825,7 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         const int undoBeforeStroke = _session.history.UndoCount();
-        if (!hostKey('Z', MK_CONTROL) || _session.PendingBrush() != nullptr || _composition.HasStroke() ||
-            _session.history.UndoCount() != undoBeforeStroke)
+        if (! hostKey('Z', MK_CONTROL) || _session.PendingBrush() != nullptr || _composition.HasStroke() || _session.history.UndoCount() != undoBeforeStroke)
         {
             SelfTestFailure(L"Ctrl+Z did not drop the stroke without moving history.\n");
             return 5;
@@ -1813,13 +1840,13 @@ int Application::RunSelfTest() noexcept
         // the stroke live (nothing settles before the answer), and the release then records it.
         _session.history.MarkSaved();
         pointer(WM_LBUTTONDOWN, 0, 520.0, 500.0);
-        _forcedDiscard = false;
+        _forcedDiscard         = false;
         const int beforePrompt = _session.history.UndoCount();
-        const bool stayed = AskDiscardChanges() == Prompts::Answer::Cancel;
+        const bool stayed      = AskDiscardChanges() == Prompts::Answer::Cancel;
         _forcedDiscard.reset();
         const bool strokeLive = _session.PendingBrush() != nullptr;
         pointer(WM_LBUTTONUP, 0, 520.0, 500.0);
-        if (!pointerAcknowledged || !stayed || !strokeLive || _session.history.UndoCount() != beforePrompt + 1 ||
+        if (! pointerAcknowledged || ! stayed || ! strokeLive || _session.history.UndoCount() != beforePrompt + 1 ||
             _session.history.UndoName() != L"Brush Stroke")
         {
             SelfTestFailure(L"The save prompt did not ask for a live stroke on a clean document, or its Cancel did "
@@ -1838,42 +1865,37 @@ int Application::RunSelfTest() noexcept
         InsertPaintedLayer(_session, L"Plate", 300, 300, Vec2{0, 0}, 0.0, 0xFF808080u);
         RedPrismTestViewport::FrameActualPixelsAtOrigin(_viewport, DocumentSize());
         SyncChrome();
-        const CanvasHole hole = _chrome->HolePixels();
+        const CanvasHole hole    = _chrome->HolePixels();
         bool pointerAcknowledged = true;
-        const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
+        const auto pointer       = [&](UINT message, WPARAM wParam, double documentX, double documentY)
         {
             const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
-            OnPointer(message, wParam,
-                      MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
-                                 static_cast<int>(std::lround(hole.top + view.y))));
+            OnPointer(message, wParam, MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)), static_cast<int>(std::lround(hole.top + view.y))));
             // These compatibility fixtures inspect completed previews/edits. The separate event-gated opening
             // suite proves that the real callback returns before the worker and keeps view input live.
-            pointerAcknowledged =
-                SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled && pointerAcknowledged;
+            pointerAcknowledged = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled && pointerAcknowledged;
         };
         const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
         {
             (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
             std::vector<std::uint8_t> bgra;
-            UINT width = 0;
+            UINT width  = 0;
             UINT height = 0;
-            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width ||
-                static_cast<UINT>(y) >= height)
+            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width || static_cast<UINT>(y) >= height)
             {
                 return false;
             }
             const std::size_t index = (static_cast<std::size_t>(y) * width + static_cast<std::size_t>(x)) * 4u;
-            out = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
+            out                     = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
             return true;
         };
         // A red mark to copy.
-        _session.brushMode = BrushToolMode::Paint;
+        _session.brushMode     = BrushToolMode::Paint;
         _session.brushSettings = BrushSettings{12, 1, 1, 0, 0, 1};
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 100.0);
         std::array<int, 4> mark{};
-        if (!pointerAcknowledged || _session.history.UndoName() != L"Brush Stroke" || !pixelAt(100, 100, mark) ||
-            mark[2] < 250 || mark[1] > 5)
+        if (! pointerAcknowledged || _session.history.UndoName() != L"Brush Stroke" || ! pixelAt(100, 100, mark) || mark[2] < 250 || mark[1] > 5)
         {
             SelfTestFailure(L"The red mark for the retouch block did not paint.\n");
             return 5;
@@ -1902,10 +1924,9 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         const std::optional<D2D1_POINT_2F> sourceMark = _chrome->CloneSourceMarkDip();
-        const Vec2 sourceView = _viewport.ViewFromDocument(Vec2{160, 100}, DocumentSize());
-        const float sourceDip = _chrome->LayoutDpi() > 0.0f ? 96.0f / _chrome->LayoutDpi() : 1.0f;
-        if (!sourceMark.has_value() || std::fabs(sourceMark->x - sourceView.x * sourceDip) > 1.5 ||
-            std::fabs(sourceMark->y - sourceView.y * sourceDip) > 1.5)
+        const Vec2 sourceView                         = _viewport.ViewFromDocument(Vec2{160, 100}, DocumentSize());
+        const float sourceDip                         = _chrome->LayoutDpi() > 0.0f ? 96.0f / _chrome->LayoutDpi() : 1.0f;
+        if (! sourceMark.has_value() || std::fabs(sourceMark->x - sourceView.x * sourceDip) > 1.5 || std::fabs(sourceMark->y - sourceView.y * sourceDip) > 1.5)
         {
             SelfTestFailure(L"Clone Stamp's source crosshair did not follow the stroke.\n");
             return 5;
@@ -1917,8 +1938,7 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         std::array<int, 4> stamped{};
-        if (_session.history.UndoName() != L"Clone Stamp" || !pixelAt(200, 200, stamped) || stamped[2] < 250 ||
-            stamped[1] > 5)
+        if (_session.history.UndoName() != L"Clone Stamp" || ! pixelAt(200, 200, stamped) || stamped[2] < 250 || stamped[1] > 5)
         {
             SelfTestFailure(L"Clone Stamp did not copy the mark.\n");
             return 5;
@@ -1930,26 +1950,25 @@ int Application::RunSelfTest() noexcept
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 200.5, 200.0);
         pointer(WM_LBUTTONUP, 0, 200.5, 200.0);
         std::array<int, 4> healed{};
-        if (_session.history.UndoName() != L"Spot Healing" || !pixelAt(200, 200, healed) || healed[2] - healed[1] >= 30)
+        if (_session.history.UndoName() != L"Spot Healing" || ! pixelAt(200, 200, healed) || healed[2] - healed[1] >= 30)
         {
             SelfTestFailure(L"Spot Healing did not blend the mark away.\n");
             return 5;
         }
         // Smear: Smudge drags the red along through a live warp; Blur commits its own entry.
         OnTool(EditorTool::Smear);
-        _session.smearMode = SmearMode::Smudge;
+        _session.smearMode     = SmearMode::Smudge;
         _session.brushSettings = BrushSettings{10, 0.5, 0, 0, 0, 0.8};
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 130.0, 100.0);
-        if (_session.PendingWarp() == nullptr || !_composition.HasStroke())
+        if (_session.PendingWarp() == nullptr || ! _composition.HasStroke())
         {
             SelfTestFailure(L"Smudge did not start a warp with a live preview.\n");
             return 5;
         }
         pointer(WM_LBUTTONUP, 0, 130.0, 100.0);
         std::array<int, 4> smudged{};
-        if (_session.HasPendingWarp() || _session.history.UndoName() != L"Smudge" || !pixelAt(115, 100, smudged) ||
-            smudged[2] <= smudged[0])
+        if (_session.HasPendingWarp() || _session.history.UndoName() != L"Smudge" || ! pixelAt(115, 100, smudged) || smudged[2] <= smudged[0])
         {
             SelfTestFailure(L"Smudge did not drag the red mark along.\n");
             return 5;
@@ -1957,7 +1976,7 @@ int Application::RunSelfTest() noexcept
         _session.smearMode = SmearMode::Blur;
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 100.0);
-        if (!pointerAcknowledged || _session.history.UndoName() != L"Blur")
+        if (! pointerAcknowledged || _session.history.UndoName() != L"Blur")
         {
             SelfTestFailure(L"Blur did not commit.\n");
             return 5;
@@ -1967,33 +1986,31 @@ int Application::RunSelfTest() noexcept
         _session.SetForegroundColor(0xFF000000u);
         _session.SetBackgroundColor(0xFFFFFFFFu);
         _session.gradientSettings = GradientSettings{};
-        const int beforeGradient = _session.history.UndoCount();
+        const int beforeGradient  = _session.history.UndoCount();
         pointer(WM_LBUTTONDOWN, 0, 10.0, 250.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 290.0, 250.0);
         pointer(WM_LBUTTONUP, 0, 290.0, 250.0);
         std::array<int, 4> pendingPixel{};
-        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
-            _session.PendingGradient() == nullptr || !_composition.HasStroke() || !pixelAt(20, 250, pendingPixel) ||
-            pendingPixel[2] > 40 || _session.history.UndoCount() != beforeGradient)
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled || _session.PendingGradient() == nullptr ||
+            ! _composition.HasStroke() || ! pixelAt(20, 250, pendingPixel) || pendingPixel[2] > 40 || _session.history.UndoCount() != beforeGradient)
         {
             SelfTestFailure(L"Dragging the Gradient did not show a pending line on the canvas.\n");
             return 5;
         }
-        if (!hostKey('5', 0) || _session.gradientSettings.opacity != 0.5)
+        if (! hostKey('5', 0) || _session.gradientSettings.opacity != 0.5)
         {
             SelfTestFailure(L"The digit keys did not set the gradient opacity.\n");
             return 5;
         }
-        if (!hostKey(VK_RETURN, 0) || SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
-            _session.PendingGradient() != nullptr || _composition.HasStroke() ||
-            _session.history.UndoCount() != beforeGradient + 1 || _session.history.UndoName() != L"Gradient")
+        if (! hostKey(VK_RETURN, 0) || SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled || _session.PendingGradient() != nullptr ||
+            _composition.HasStroke() || _session.history.UndoCount() != beforeGradient + 1 || _session.history.UndoName() != L"Gradient")
         {
             SelfTestFailure(L"Enter did not apply the gradient as one entry.\n");
             return 5;
         }
         std::array<int, 4> gradientStart{};
         std::array<int, 4> gradientEnd{};
-        if (!pixelAt(20, 250, gradientStart) || !pixelAt(280, 250, gradientEnd) || gradientStart[2] >= gradientEnd[2])
+        if (! pixelAt(20, 250, gradientStart) || ! pixelAt(280, 250, gradientEnd) || gradientStart[2] >= gradientEnd[2])
         {
             SelfTestFailure(L"The committed gradient did not darken its start more than its end.\n");
             return 5;
@@ -2002,40 +2019,40 @@ int Application::RunSelfTest() noexcept
         // header's Paint choice (maskPaintWhite), and X flips and D resets that choice, leaving the colors alone.
         {
             hostCommand(ChromeHost::kCommandAddMask);
-            _session.maskPaintWhite = false;
+            _session.maskPaintWhite        = false;
             const std::uint32_t foreground = _session.ForegroundColor();
             const std::uint32_t background = _session.BackgroundColor();
             pointer(WM_LBUTTONDOWN, 0, 10.0, 250.0);
             pointer(WM_MOUSEMOVE, MK_LBUTTON, 290.0, 250.0);
             pointer(WM_LBUTTONUP, 0, 290.0, 250.0);
-            const bool maskLine = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
-                                  _session.IsMaskSelected() && _session.PendingGradient() != nullptr &&
-                                  _session.PendingGradient()->raster && _session.PendingGradient()->raster->IsMask();
+            const bool maskLine = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled && _session.IsMaskSelected() &&
+                                  _session.PendingGradient() != nullptr && _session.PendingGradient()->raster && _session.PendingGradient()->raster->IsMask();
             OnBrushAction(BrushAction::SetMaskPaint, 1.0);
-            const bool applied = hostKey(VK_RETURN, 0) &&
-                                 SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
+            const bool applied = hostKey(VK_RETURN, 0) && SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
                                  _session.history.UndoName() == L"Gradient Mask";
             std::uint8_t start = 0;
             if (const ImageLayer* masked = _session.ActiveLayer(); masked != nullptr && masked->mask.has_value())
             {
                 const Raster& mask = masked->mask->asset.image;
-                const Vec2 cell =
-                    PixelToDocument(masked->transform, mask.Width(), mask.Height()).Inverted().Apply(Vec2{12.5, 250.5});
-                mask.ReadRegion(static_cast<int>(std::floor(cell.x)), static_cast<int>(std::floor(cell.y)), 1, 1,
-                                &start, 1, 0);
+                const Vec2 cell    = PixelToDocument(masked->transform, mask.Width(), mask.Height()).Inverted().Apply(Vec2{12.5, 250.5});
+                mask.ReadRegion(static_cast<int>(std::floor(cell.x)), static_cast<int>(std::floor(cell.y)), 1, 1, &start, 1, 0);
             }
-            const bool swapped = hostKey('X', 0) && !_session.maskPaintWhite;
+            const bool swapped     = hostKey('X', 0) && ! _session.maskPaintWhite;
             const bool swappedBack = hostKey('X', 0) && _session.maskPaintWhite;
-            const bool reset = hostKey('D', 0) && !_session.maskPaintWhite;
-            if (!maskLine || !applied || start < 240 || !swapped || !swappedBack || !reset ||
-                _session.ForegroundColor() != foreground || _session.BackgroundColor() != background)
+            const bool reset       = hostKey('D', 0) && ! _session.maskPaintWhite;
+            if (! maskLine || ! applied || start < 240 || ! swapped || ! swappedBack || ! reset || _session.ForegroundColor() != foreground ||
+                _session.BackgroundColor() != background)
             {
-                SelfTestFailure(
-                    std::format(L"The mask palette did not follow Paint, X and D (line {}, applied {}, "
-                                L"start {}, X {} {}, D {}, colors kept {}).\n",
-                                maskLine, applied, start, swapped, swappedBack, reset,
-                                _session.ForegroundColor() == foreground && _session.BackgroundColor() == background)
-                        .c_str());
+                SelfTestFailure(std::format(L"The mask palette did not follow Paint, X and D (line {}, applied {}, "
+                                            L"start {}, X {} {}, D {}, colors kept {}).\n",
+                                            maskLine,
+                                            applied,
+                                            start,
+                                            swapped,
+                                            swappedBack,
+                                            reset,
+                                            _session.ForegroundColor() == foreground && _session.BackgroundColor() == background)
+                                    .c_str());
                 return 5;
             }
         }
@@ -2043,11 +2060,11 @@ int Application::RunSelfTest() noexcept
         // openColorPicker): black and white per Paint, swapped by X, whatever the colors are; a well click opens no
         // picker, and a picker open on a well closes unchanged once the mask becomes the target.
         {
-            constexpr std::uint32_t kRed = 0xFFCC3322u;
-            constexpr std::uint32_t kGreen = 0xFF22AA44u;
-            constexpr std::uint32_t kBlack = 0xFF000000u;
-            constexpr std::uint32_t kWhite = 0xFFFFFFFFu;
-            const Guid maskedLayer = _session.ActiveLayerID().value_or(Guid{});
+            constexpr std::uint32_t kRed         = 0xFFCC3322u;
+            constexpr std::uint32_t kGreen       = 0xFF22AA44u;
+            constexpr std::uint32_t kBlack       = 0xFF000000u;
+            constexpr std::uint32_t kWhite       = 0xFFFFFFFFu;
+            const Guid maskedLayer               = _session.ActiveLayerID().value_or(Guid{});
             const std::uint32_t foregroundBefore = _session.ForegroundColor();
             const std::uint32_t backgroundBefore = _session.BackgroundColor();
             _session.SetForegroundColor(kRed);
@@ -2055,43 +2072,44 @@ int Application::RunSelfTest() noexcept
             _session.maskPaintWhite = false;
             SyncChrome();
             const auto wells = [&](std::uint32_t foreground, std::uint32_t background)
-            {
-                return _chrome->ForegroundWellForTest() == foreground && _chrome->BackgroundWellForTest() == background;
-            };
+            { return _chrome->ForegroundWellForTest() == foreground && _chrome->BackgroundWellForTest() == background; };
             const bool blackWhite = _session.IsMaskSelected() && wells(kBlack, kWhite);
-            const bool swapped = hostKey('X', 0) && wells(kWhite, kBlack);
-            const bool reset = hostKey('D', 0) && wells(kBlack, kWhite);
+            const bool swapped    = hostKey('X', 0) && wells(kWhite, kBlack);
+            const bool reset      = hostKey('D', 0) && wells(kBlack, kWhite);
             const float wellScale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
-            const auto clickWell = [&](bool background)
+            const auto clickWell  = [&](bool background)
             {
                 const D2D1_RECT_F well = _chrome->PaletteWellBoundsDip(background);
-                const LPARAM at =
-                    MAKELPARAM(static_cast<int>(std::lround((well.left + well.right) * 0.5f * wellScale)),
-                               static_cast<int>(std::lround((well.top + well.bottom) * 0.5f * wellScale)));
+                const LPARAM at        = MAKELPARAM(static_cast<int>(std::lround((well.left + well.right) * 0.5f * wellScale)),
+                                                    static_cast<int>(std::lround((well.top + well.bottom) * 0.5f * wellScale)));
                 OnPointer(WM_MOUSEMOVE, 0, at);
                 OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, at);
                 OnPointer(WM_LBUTTONUP, 0, at);
             };
             clickWell(false);
-            const bool refused = !_chrome->ColorPickerOpen();
+            const bool refused = ! _chrome->ColorPickerOpen();
             TargetLayer(maskedLayer, false, false);
-            const bool colors = !_session.IsMaskSelected() && wells(kRed, kGreen);
+            const bool colors = ! _session.IsMaskSelected() && wells(kRed, kGreen);
             clickWell(true);
             const bool opened = _chrome->ColorPickerOpen();
             TargetLayer(maskedLayer, true, false);
-            const bool closed = _session.IsMaskSelected() && !_chrome->ColorPickerOpen() &&
-                                _session.BackgroundColor() == kGreen && wells(kBlack, kWhite);
+            const bool closed = _session.IsMaskSelected() && ! _chrome->ColorPickerOpen() && _session.BackgroundColor() == kGreen && wells(kBlack, kWhite);
             TargetLayer(maskedLayer, false, false);
             _session.SetForegroundColor(foregroundBefore);
             _session.SetBackgroundColor(backgroundBefore);
             SyncChrome();
-            if (!blackWhite || !swapped || !reset || !refused || !colors || !opened || !closed)
+            if (! blackWhite || ! swapped || ! reset || ! refused || ! colors || ! opened || ! closed)
             {
-                SelfTestFailure(
-                    std::format(L"The rail's wells did not show the mask palette (black and white {}, X {}, "
-                                L"D {}, picker refused {}, colors back {}, picker opened {}, closed {}).\n",
-                                blackWhite, swapped, reset, refused, colors, opened, closed)
-                        .c_str());
+                SelfTestFailure(std::format(L"The rail's wells did not show the mask palette (black and white {}, X {}, "
+                                            L"D {}, picker refused {}, colors back {}, picker opened {}, closed {}).\n",
+                                            blackWhite,
+                                            swapped,
+                                            reset,
+                                            refused,
+                                            colors,
+                                            opened,
+                                            closed)
+                                    .c_str());
                 return 5;
             }
         }
@@ -2101,7 +2119,7 @@ int Application::RunSelfTest() noexcept
         const std::size_t layersBefore = _session.Document().value().layers.size();
         pointer(WM_LBUTTONDOWN, 0, 20.0, 20.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 60.0, 50.0);
-        if (!_session.PendingShape().has_value())
+        if (! _session.PendingShape().has_value())
         {
             SelfTestFailure(L"Dragging the Shape did not start a draft.\n");
             return 5;
@@ -2114,20 +2132,20 @@ int Application::RunSelfTest() noexcept
         }
         std::array<int, 4> filled{};
         if (_session.Document().value().layers.size() != layersBefore + 1 || _session.ActiveLayer() == nullptr ||
-            _session.ActiveLayer()->name != L"Rectangle 1" || _session.history.UndoName() != L"Rectangle" ||
-            !pixelAt(40, 35, filled) || filled[0] != 0xCC || filled[1] != 0x66 || filled[2] != 0x33)
+            _session.ActiveLayer()->name != L"Rectangle 1" || _session.history.UndoName() != L"Rectangle" || ! pixelAt(40, 35, filled) || filled[0] != 0xCC ||
+            filled[1] != 0x66 || filled[2] != 0x33)
         {
             SelfTestFailure(L"Releasing the Shape did not add a Rectangle layer in the foreground color.\n");
             return 5;
         }
-        if (!hostKey('U', MK_SHIFT) || _session.shapeKind != ShapeKind::Ellipse)
+        if (! hostKey('U', MK_SHIFT) || _session.shapeKind != ShapeKind::Ellipse)
         {
             SelfTestFailure(L"Shift-U did not switch the shape kind.\n");
             return 5;
         }
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 140.0, 140.0);
-        if (!hostKey(VK_ESCAPE, 0) || _session.PendingShape().has_value())
+        if (! hostKey(VK_ESCAPE, 0) || _session.PendingShape().has_value())
         {
             SelfTestFailure(L"Escape did not drop the shape draft.\n");
             return 5;
@@ -2142,14 +2160,13 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Eyedropper);
         _session.SetForegroundColor(0xFF000000u);
         pointer(WM_LBUTTONDOWN, 0, 40.0, 35.0);
-        if (!std::holds_alternative<ColorSampling>(_drag))
+        if (! std::holds_alternative<ColorSampling>(_drag))
         {
             SelfTestFailure(L"The Eyedropper did not sample the shape's color.\n");
             return 5;
         }
         pointer(WM_LBUTTONUP, 0, 40.0, 35.0);
-        if (std::holds_alternative<ColorSampling>(_drag) ||
-            SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
+        if (std::holds_alternative<ColorSampling>(_drag) || SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
             _session.ForegroundColor() != 0xFF3366CCu)
         {
             SelfTestFailure(L"Releasing the Eyedropper did not end sampling.\n");
@@ -2168,26 +2185,23 @@ int Application::RunSelfTest() noexcept
         RedPrismTestViewport::FrameActualPixelsAtOrigin(_viewport, DocumentSize());
         SyncChrome();
         const CanvasHole hole = _chrome->HolePixels();
-        const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
+        const auto pointer    = [&](UINT message, WPARAM wParam, double documentX, double documentY)
         {
             const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
-            OnPointer(message, wParam,
-                      MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
-                                 static_cast<int>(std::lround(hole.top + view.y))));
+            OnPointer(message, wParam, MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)), static_cast<int>(std::lround(hole.top + view.y))));
         };
         const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
         {
             (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
             std::vector<std::uint8_t> bgra;
-            UINT width = 0;
+            UINT width  = 0;
             UINT height = 0;
-            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width ||
-                static_cast<UINT>(y) >= height)
+            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width || static_cast<UINT>(y) >= height)
             {
                 return false;
             }
             const std::size_t index = (static_cast<std::size_t>(y) * width + static_cast<std::size_t>(x)) * 4u;
-            out = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
+            out                     = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
             return true;
         };
         const auto bounds = [&]() -> std::optional<SelectionBounds>
@@ -2200,41 +2214,35 @@ int Application::RunSelfTest() noexcept
             const std::optional<DocumentSelection> displayed = _session.DisplayedSelection();
             return displayed.has_value() ? displayed->Bounds() : std::nullopt;
         };
-        const auto closeTo = [](double a, double b) { return std::fabs(a - b) <= 2.0; };
+        const auto closeTo    = [](double a, double b) { return std::fabs(a - b) <= 2.0; };
         const auto layerPixel = [&](int x, int y, std::array<std::uint8_t, 4>& out) -> bool
         {
             const ImageLayer* layer = _session.ActiveLayer();
-            if (layer == nullptr || !layer->asset.has_value())
+            if (layer == nullptr || ! layer->asset.has_value())
             {
                 return false;
             }
             const Raster& image = layer->asset->image;
-            const Vec2 pixel = PixelToDocument(layer->transform, image.Width(), image.Height())
-                                   .Inverted()
-                                   .Apply(Vec2{x + 0.5, y + 0.5});
-            image.ReadRegion(static_cast<int>(std::floor(pixel.x)), static_cast<int>(std::floor(pixel.y)), 1, 1,
-                             out.data(), 4, 0);
+            const Vec2 pixel    = PixelToDocument(layer->transform, image.Width(), image.Height()).Inverted().Apply(Vec2{x + 0.5, y + 0.5});
+            image.ReadRegion(static_cast<int>(std::floor(pixel.x)), static_cast<int>(std::floor(pixel.y)), 1, 1, out.data(), 4, 0);
             return true;
         };
         // The block borrows the user's clipboard: it comes back on every way out, and it starts empty so the mirror
         // checks below read this run's copies, never an image that was there before.
         SystemClipboard::SavedContents userClipboard;
-        if (!SystemClipboard::SaveContents(_window.get(), userClipboard) || !SystemClipboard::Clear(_window.get()))
+        if (! SystemClipboard::SaveContents(_window.get(), userClipboard) || ! SystemClipboard::Clear(_window.get()))
         {
             SelfTestFailure(L"The self-test could not set the user's clipboard aside.\n");
             return 5;
         }
-        const auto restoreClipboard =
-            wil::scope_exit([&]() noexcept { (void)SystemClipboard::RestoreContents(_window.get(), userClipboard); });
+        const auto restoreClipboard = wil::scope_exit([&]() noexcept { (void)SystemClipboard::RestoreContents(_window.get(), userClipboard); });
         // The system clipboard holds exactly the session's clip: same size, same first pixel. Other applications'
         // clipboard listeners read every change for a moment, so the read waits them out (SystemClipboard.h).
         const auto mirrorsClip = [&]() -> bool
         {
             const std::optional<PixelClipboard>& clip = _session.Clipboard();
             Raster mirrored;
-            if (!clip.has_value() ||
-                !SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, mirrored,
-                                            SystemClipboard::kHarnessAttempts) ||
+            if (! clip.has_value() || ! SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, mirrored, SystemClipboard::kHarnessAttempts) ||
                 mirrored.Width() != clip->image.Width() || mirrored.Height() != clip->image.Height())
             {
                 return false;
@@ -2254,7 +2262,7 @@ int Application::RunSelfTest() noexcept
         _session.SetForegroundColor(0xFFFF0000u);
         hostCommand(ChromeHost::kCommandFillForeground);
         std::array<int, 4> pixel{};
-        if (_session.history.UndoName() != L"Fill" || !pixelAt(40, 40, pixel) || pixel[2] < 250 || pixel[0] > 5)
+        if (_session.history.UndoName() != L"Fill" || ! pixelAt(40, 40, pixel) || pixel[2] < 250 || pixel[0] > 5)
         {
             SelfTestFailure(L"Fill with Foreground Color did not fill the selection.\n");
             return 5;
@@ -2262,22 +2270,21 @@ int Application::RunSelfTest() noexcept
         const std::size_t layersBefore = _session.Document()->layers.size();
         // A user's copy waits only briefly for the clipboard: let the listeners of the last change finish first.
         (void)SystemClipboard::WaitUntilFree(_window.get());
-        if (!hostKey('X', MK_CONTROL) || _session.history.UndoName() != L"Clear" || !_session.CanPaste() ||
-            !pixelAt(40, 40, pixel) || pixel[2] > 250 || !mirrorsClip())
+        if (! hostKey('X', MK_CONTROL) || _session.history.UndoName() != L"Clear" || ! _session.CanPaste() || ! pixelAt(40, 40, pixel) || pixel[2] > 250 ||
+            ! mirrorsClip())
         {
             SelfTestFailure(L"Ctrl+X did not cut the selection to the clipboard and mirror it to the system.\n");
             return 5;
         }
-        if (!hostKey('V', MK_CONTROL) || _session.history.UndoName() != L"Paste" ||
-            _session.Document()->layers.size() != layersBefore + 1 || _session.Selection().has_value() ||
-            _session.ActiveLayer() == nullptr || _session.ActiveLayer()->transform.origin != Vec2{20, 20} ||
-            !pixelAt(40, 40, pixel) || pixel[2] < 250 || pixel[0] > 5)
+        if (! hostKey('V', MK_CONTROL) || _session.history.UndoName() != L"Paste" || _session.Document()->layers.size() != layersBefore + 1 ||
+            _session.Selection().has_value() || _session.ActiveLayer() == nullptr || _session.ActiveLayer()->transform.origin != Vec2{20, 20} ||
+            ! pixelAt(40, 40, pixel) || pixel[2] < 250 || pixel[0] > 5)
         {
             SelfTestFailure(L"Ctrl+V did not paste the cut pixels in place as a new layer.\n");
             return 5;
         }
-        if (!hostKey('I', MK_CONTROL) || _session.history.UndoName() != L"Invert" || !pixelAt(40, 40, pixel) ||
-            pixel[2] > 5 || pixel[1] < 250 || pixel[0] < 250)
+        if (! hostKey('I', MK_CONTROL) || _session.history.UndoName() != L"Invert" || ! pixelAt(40, 40, pixel) || pixel[2] > 5 || pixel[1] < 250 ||
+            pixel[0] < 250)
         {
             SelfTestFailure(L"Ctrl+I did not invert the pasted layer.\n");
             return 5;
@@ -2293,29 +2300,29 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The selected-pixel preview did not acknowledge its worker.\n");
             return 5;
         }
-        std::optional<SelectionBounds> box = bounds();
+        std::optional<SelectionBounds> box       = bounds();
         std::optional<SelectionBounds> displayed = shown();
-        if (!std::holds_alternative<PixelDrag>(_drag) || _session.PendingPixelMove() == nullptr)
+        if (! std::holds_alternative<PixelDrag>(_drag) || _session.PendingPixelMove() == nullptr)
         {
             SelfTestFailure(L"Ctrl-dragging inside the selection did not lift the selected pixels.\n");
             return 5;
         }
-        if (!_composition.HasStroke())
+        if (! _composition.HasStroke())
         {
             SelfTestFailure(L"The pixel move did not start the stroke preview.\n");
             return 5;
         }
-        if (!displayed.has_value() || !closeTo(displayed->minX, 120.0) || !box.has_value() || !closeTo(box->minX, 20.0))
+        if (! displayed.has_value() || ! closeTo(displayed->minX, 120.0) || ! box.has_value() || ! closeTo(box->minX, 20.0))
         {
             SelfTestFailure(L"The outline did not follow the pixel drag while the stored selection stayed put.\n");
             return 5;
         }
-        if (!pixelAt(140, 40, pixel) || pixel[1] < 250)
+        if (! pixelAt(140, 40, pixel) || pixel[1] < 250)
         {
             SelfTestFailure(L"The moving pixels did not show at their new place through the preview.\n");
             return 5;
         }
-        if (!pixelAt(40, 40, pixel) || pixel[1] > 250)
+        if (! pixelAt(40, 40, pixel) || pixel[1] > 250)
         {
             SelfTestFailure(L"The moved pixels still showed at their old place through the preview.\n");
             return 5;
@@ -2327,23 +2334,21 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         box = bounds();
-        if (std::holds_alternative<PixelDrag>(_drag) || _session.PendingPixelMove() != nullptr ||
-            _composition.HasStroke() || _session.history.UndoName() != L"Move Pixels" || !box.has_value() ||
-            !closeTo(box->minX, 120.0) || !pixelAt(140, 40, pixel) || pixel[1] < 250)
+        if (std::holds_alternative<PixelDrag>(_drag) || _session.PendingPixelMove() != nullptr || _composition.HasStroke() ||
+            _session.history.UndoName() != L"Move Pixels" || ! box.has_value() || ! closeTo(box->minX, 120.0) || ! pixelAt(140, 40, pixel) || pixel[1] < 250)
         {
             SelfTestFailure(L"Releasing the Ctrl-drag did not commit one Move Pixels entry.\n");
             return 5;
         }
         // The Marquee landed on whole pixels near 20; the nudge is exact relative to where the drag left the outline.
         const double beforeNudge = box.has_value() ? box->minX : 0.0;
-        if (!hostKey(VK_RIGHT, MK_CONTROL) || _session.history.UndoName() != L"Move Pixels" || !bounds().has_value() ||
+        if (! hostKey(VK_RIGHT, MK_CONTROL) || _session.history.UndoName() != L"Move Pixels" || ! bounds().has_value() ||
             std::fabs(bounds()->minX - (beforeNudge + 1.0)) > 0.01)
         {
             SelfTestFailure(L"Ctrl+Right did not nudge the selected pixels by one.\n");
             return 5;
         }
-        if (!hostKey(VK_DELETE, 0) || _session.history.UndoName() != L"Clear" || !pixelAt(141, 40, pixel) ||
-            pixel[1] > 250)
+        if (! hostKey(VK_DELETE, 0) || _session.history.UndoName() != L"Clear" || ! pixelAt(141, 40, pixel) || pixel[1] > 250)
         {
             SelfTestFailure(L"Delete did not clear the selected pixels.\n");
             return 5;
@@ -2355,23 +2360,21 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 140.0, 140.0);
         pointer(WM_LBUTTONUP, 0, 140.0, 140.0);
-        const std::wstring entryBefore = _session.history.UndoName();
+        const std::wstring entryBefore   = _session.history.UndoName();
         const std::size_t layersFloating = _session.Document()->layers.size();
-        if (!hostKey('T', MK_CONTROL) || _tool != EditorTool::Move || !_session.PendingTransformEdit().has_value() ||
-            !_session.PendingTransformEdit()->floating.has_value() ||
-            _session.Document()->layers.size() != layersFloating + 1)
+        if (! hostKey('T', MK_CONTROL) || _tool != EditorTool::Move || ! _session.PendingTransformEdit().has_value() ||
+            ! _session.PendingTransformEdit()->floating.has_value() || _session.Document()->layers.size() != layersFloating + 1)
         {
             SelfTestFailure(L"Ctrl+T with a selection did not float the selected pixels.\n");
             return 5;
         }
-        if (!hostKey(VK_ESCAPE, 0) || _session.PendingTransformEdit().has_value() ||
-            _session.Document()->layers.size() != layersFloating || _session.history.UndoName() != entryBefore ||
-            _session.ActiveLayerID() != sheet)
+        if (! hostKey(VK_ESCAPE, 0) || _session.PendingTransformEdit().has_value() || _session.Document()->layers.size() != layersFloating ||
+            _session.history.UndoName() != entryBefore || _session.ActiveLayerID() != sheet)
         {
             SelfTestFailure(L"Escape did not restore the floating selection exactly.\n");
             return 5;
         }
-        if (!hostKey('T', MK_CONTROL) || !_session.PendingTransformEdit().has_value())
+        if (! hostKey('T', MK_CONTROL) || ! _session.PendingTransformEdit().has_value())
         {
             SelfTestFailure(L"Ctrl+T did not float the selection a second time.\n");
             return 5;
@@ -2386,59 +2389,64 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         displayed = shown();
-        if (!displayed.has_value() || !closeTo(displayed->minX, 150.0) || !closeTo(bounds()->minX, 100.0))
+        if (! displayed.has_value() || ! closeTo(displayed->minX, 150.0) || ! closeTo(bounds()->minX, 100.0))
         {
             SelfTestFailure(L"The outline did not follow the floating pixels.\n");
             return 5;
         }
         std::array<std::uint8_t, 4> cleared{};
         std::array<std::uint8_t, 4> landed{};
-        if (!hostKey(VK_RETURN, 0) || _session.PendingTransformEdit().has_value() ||
-            _session.history.UndoName() != L"Transform Selection" ||
-            _session.Document()->layers.size() != layersFloating || _session.ActiveLayerID() != sheet ||
-            !closeTo(bounds()->minX, 150.0) || !layerPixel(120, 120, cleared) || cleared[3] != 0 ||
-            !layerPixel(170, 120, landed) || landed[3] != 255 || landed[0] != 0xB0)
+        if (! hostKey(VK_RETURN, 0) || _session.PendingTransformEdit().has_value() || _session.history.UndoName() != L"Transform Selection" ||
+            _session.Document()->layers.size() != layersFloating || _session.ActiveLayerID() != sheet || ! closeTo(bounds()->minX, 150.0) ||
+            ! layerPixel(120, 120, cleared) || cleared[3] != 0 || ! layerPixel(170, 120, landed) || landed[3] != 255 || landed[0] != 0xB0)
         {
             SelfTestFailure(L"Enter did not merge the floating selection as one Transform Selection entry.\n");
             return 5;
         }
         // Layer via Copy and Add Mask use the selection; Copy Merged takes the composite.
-        if (!hostKey('J', MK_CONTROL) || _session.history.UndoName() != L"Layer via Copy" ||
-            _session.Document()->layers.size() != layersFloating + 1 || _session.Selection().has_value())
+        if (! hostKey('J', MK_CONTROL) || _session.history.UndoName() != L"Layer via Copy" || _session.Document()->layers.size() != layersFloating + 1 ||
+            _session.Selection().has_value())
         {
             SelfTestFailure(L"Ctrl+J did not copy the selection to a new layer.\n");
             return 5;
         }
         hostCommand(ChromeHost::kCommandUndo);
         hostCommand(ChromeHost::kCommandAddMask);
-        if (_session.history.UndoName() != L"Add Mask from Selection" || !_session.IsMaskSelected() ||
-            _session.Selection().has_value() || _session.ActiveLayer() == nullptr ||
-            !_session.ActiveLayer()->mask.has_value())
+        if (_session.history.UndoName() != L"Add Mask from Selection" || ! _session.IsMaskSelected() || _session.Selection().has_value() ||
+            _session.ActiveLayer() == nullptr || ! _session.ActiveLayer()->mask.has_value())
         {
             SelfTestFailure(L"Add Mask did not make a mask from the selection.\n");
             return 5;
         }
         hostCommand(ChromeHost::kCommandSelectAll);
-        const bool clipboardFreeBeforeCopy = SystemClipboard::WaitUntilFree(_window.get());
+        const bool clipboardFreeBeforeCopy     = SystemClipboard::WaitUntilFree(_window.get());
         const auto clipboardSequenceBeforeCopy = SystemClipboard::SequenceNumber();
-        const bool mergedCopyKeyHandled = hostKey('C', MK_CONTROL | MK_SHIFT);
-        const auto& mergedClip = _session.Clipboard();
-        const bool mergedClipDimensions = mergedClip && mergedClip->image.Width() == _session.Document()->width &&
-                                          mergedClip->image.Height() == _session.Document()->height;
+        const bool mergedCopyKeyHandled        = hostKey('C', MK_CONTROL | MK_SHIFT);
+        const auto& mergedClip                 = _session.Clipboard();
+        const bool mergedClipDimensions =
+            mergedClip && mergedClip->image.Width() == _session.Document()->width && mergedClip->image.Height() == _session.Document()->height;
         const bool mergedClipMirrored = mergedCopyKeyHandled && mergedClipDimensions && mirrorsClip();
-        if (!mergedCopyKeyHandled || !mergedClipDimensions || !mergedClipMirrored)
+        if (! mergedCopyKeyHandled || ! mergedClipDimensions || ! mergedClipMirrored)
         {
             DWORD clipboardHolderPID = 0;
             (void)GetWindowThreadProcessId(GetOpenClipboardWindow(), &clipboardHolderPID);
-            SelfTestFailure(std::format(
-                L"Ctrl+Shift+C did not copy the merged canvas and mirror it to the system (free before {}, key {}, "
-                L"clip {}x{}, document {}x{}, mirrored {}, write {}, sequence {} -> {} / offered {}, holder PID {}, "
-                L"history busy {}, queued {}).\n",
-                clipboardFreeBeforeCopy, mergedCopyKeyHandled, mergedClip ? mergedClip->image.Width() : 0,
-                mergedClip ? mergedClip->image.Height() : 0, _session.Document()->width, _session.Document()->height,
-                mergedClipMirrored, _clipboardWriteSucceeded, clipboardSequenceBeforeCopy,
-                SystemClipboard::SequenceNumber(), _clipboardSequence, clipboardHolderPID, _historyWork.Busy(),
-                _hostRequests.Size()));
+            SelfTestFailure(std::format(L"Ctrl+Shift+C did not copy the merged canvas and mirror it to the system (free before {}, key {}, "
+                                        L"clip {}x{}, document {}x{}, mirrored {}, write {}, sequence {} -> {} / offered {}, holder PID {}, "
+                                        L"history busy {}, queued {}).\n",
+                                        clipboardFreeBeforeCopy,
+                                        mergedCopyKeyHandled,
+                                        mergedClip ? mergedClip->image.Width() : 0,
+                                        mergedClip ? mergedClip->image.Height() : 0,
+                                        _session.Document()->width,
+                                        _session.Document()->height,
+                                        mergedClipMirrored,
+                                        _clipboardWriteSucceeded,
+                                        clipboardSequenceBeforeCopy,
+                                        SystemClipboard::SequenceNumber(),
+                                        _clipboardSequence,
+                                        clipboardHolderPID,
+                                        _historyWork.Busy(),
+                                        _hostRequests.Size()));
             return 5;
         }
         hostCommand(ChromeHost::kCommandDeselect);
@@ -2462,34 +2470,32 @@ int Application::RunSelfTest() noexcept
             }
             (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
             std::vector<std::uint8_t> bgra;
-            UINT width = 0;
+            UINT width  = 0;
             UINT height = 0;
-            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width ||
-                static_cast<UINT>(y) >= height)
+            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width || static_cast<UINT>(y) >= height)
             {
                 return false;
             }
             const std::size_t index = (static_cast<std::size_t>(y) * width + static_cast<std::size_t>(x)) * 4u;
-            out = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
+            out                     = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
             return true;
         };
         InsertPaintedLayer(_session, L"Gray", 120, 120, Vec2{0, 0}, 0.0, 0xFF808080u);
         OnTool(EditorTool::Move);
         _chrome->SetCanvasFocused(true);
         std::array<int, 4> pixel{};
-        if (!hostKey('L', MK_CONTROL) || !_session.HasColorEdit(FilterKind::Levels) || !_chrome->AdjustPanelOpen())
+        if (! hostKey('L', MK_CONTROL) || ! _session.HasColorEdit(FilterKind::Levels) || ! _chrome->AdjustPanelOpen())
         {
             SelfTestFailure(L"Ctrl+L did not open the Levels panel.\n");
             return 5;
         }
         OnAdjustAction(AdjustAction::SetOutputWhite, 0.0);
-        if (!pixelAt(50, 50, pixel) || pixel[0] > 5)
+        if (! pixelAt(50, 50, pixel) || pixel[0] > 5)
         {
             SelfTestFailure(L"The Levels preview did not show through the canvas.\n");
             return 5;
         }
-        if (!hostKey(VK_ESCAPE, 0) || _session.HasColorEdit(FilterKind::Levels) || _chrome->AdjustPanelOpen() ||
-            !pixelAt(50, 50, pixel) || pixel[0] < 120)
+        if (! hostKey(VK_ESCAPE, 0) || _session.HasColorEdit(FilterKind::Levels) || _chrome->AdjustPanelOpen() || ! pixelAt(50, 50, pixel) || pixel[0] < 120)
         {
             SelfTestFailure(L"Escape did not cancel the Levels edit.\n");
             return 5;
@@ -2499,9 +2505,8 @@ int Application::RunSelfTest() noexcept
         OnAdjustAction(AdjustAction::SetInputBlack, 40.0);
         OnAdjustAction(AdjustAction::SetChannel, 1.0);
         if (const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
-            !edit.has_value() || edit->settings.levels.channel != LevelsChannel::Red ||
-            edit->settings.levels.ranges[0].black != 40.0 || !(edit->settings.levels.ranges[1] == LevelRange{}) ||
-            !hostKey(VK_ESCAPE, 0) || _session.HasColorEdit())
+            ! edit.has_value() || edit->settings.levels.channel != LevelsChannel::Red || edit->settings.levels.ranges[0].black != 40.0 ||
+            ! (edit->settings.levels.ranges[1] == LevelRange{}) || ! hostKey(VK_ESCAPE, 0) || _session.HasColorEdit())
         {
             SelfTestFailure(L"Choosing the Red channel in Levels copied the RGB range onto it.\n");
             return 5;
@@ -2509,15 +2514,14 @@ int Application::RunSelfTest() noexcept
         const int levelsCount = _session.history.UndoCount();
         static_cast<void>(hostKey('L', MK_CONTROL));
         OnAdjustAction(AdjustAction::SetInputWhite, 128.0);
-        if (!hostKey(VK_RETURN, 0) || _session.HasColorEdit(FilterKind::Levels) ||
-            _session.history.UndoCount() != levelsCount + 1 || _session.history.UndoName() != L"Levels" ||
-            !pixelAt(50, 50, pixel) || pixel[0] < 250)
+        if (! hostKey(VK_RETURN, 0) || _session.HasColorEdit(FilterKind::Levels) || _session.history.UndoCount() != levelsCount + 1 ||
+            _session.history.UndoName() != L"Levels" || ! pixelAt(50, 50, pixel) || pixel[0] < 250)
         {
             SelfTestFailure(L"Enter did not apply the Levels edit as one entry.\n");
             return 5;
         }
         hostCommand(ChromeHost::kCommandGaussianBlur);
-        if (!_session.HasColorEdit(FilterKind::GaussianBlur) || !_chrome->AdjustPanelOpen())
+        if (! _session.HasColorEdit(FilterKind::GaussianBlur) || ! _chrome->AdjustPanelOpen())
         {
             SelfTestFailure(L"The Filter menu did not open Gaussian Blur.\n");
             return 5;
@@ -2541,56 +2545,49 @@ int Application::RunSelfTest() noexcept
         _session.SetForegroundColor(0xFFFF0000u);
         hostCommand(ChromeHost::kCommandFillForeground);
         const int fillCount = _session.history.UndoCount();
-        if (!pixelAt(50, 50, pixel) || pixel[2] < 250 || pixel[0] > 5 || !hostKey(VK_DELETE, MK_SHIFT) ||
-            !_session.HasColorEdit(FilterKind::ContentAwareFill) || _session.PendingColorEdit()->previewFailed ||
-            !_chrome->AdjustPanelOpen())
+        if (! pixelAt(50, 50, pixel) || pixel[2] < 250 || pixel[0] > 5 || ! hostKey(VK_DELETE, MK_SHIFT) ||
+            ! _session.HasColorEdit(FilterKind::ContentAwareFill) || _session.PendingColorEdit()->previewFailed || ! _chrome->AdjustPanelOpen())
         {
             SelfTestFailure(L"Shift+Delete did not open Content-Aware Fill on the selection.\n");
             return 5;
         }
-        if (!hostKey(VK_RETURN, 0) || _session.HasColorEdit() || _session.history.UndoCount() != fillCount + 1 ||
-            _session.history.UndoName() != L"Content-Aware Fill" || !pixelAt(50, 50, pixel) || pixel[0] < 240 ||
-            pixel[1] < 240 || pixel[2] < 240)
+        if (! hostKey(VK_RETURN, 0) || _session.HasColorEdit() || _session.history.UndoCount() != fillCount + 1 ||
+            _session.history.UndoName() != L"Content-Aware Fill" || ! pixelAt(50, 50, pixel) || pixel[0] < 240 || pixel[1] < 240 || pixel[2] < 240)
         {
             SelfTestFailure(L"Enter did not apply Content-Aware Fill as one entry.\n");
             return 5;
         }
         hostCommand(ChromeHost::kCommandSelectAll);
-        if (!hostKey(VK_DELETE, MK_SHIFT) || !_session.HasColorEdit() ||
-            SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
-            !_session.PendingColorEdit()->previewFailed || !hostKey(VK_RETURN, 0) || !_session.HasColorEdit() ||
-            !hostKey(VK_ESCAPE, 0) || _session.HasColorEdit() || _chrome->AdjustPanelOpen())
+        if (! hostKey(VK_DELETE, MK_SHIFT) || ! _session.HasColorEdit() || SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
+            ! _session.PendingColorEdit()->previewFailed || ! hostKey(VK_RETURN, 0) || ! _session.HasColorEdit() || ! hostKey(VK_ESCAPE, 0) ||
+            _session.HasColorEdit() || _chrome->AdjustPanelOpen())
         {
-            SelfTestFailure(
-                L"Content-Aware Fill with nothing to copy from did not refuse Enter and close on Escape.\n");
+            SelfTestFailure(L"Content-Aware Fill with nothing to copy from did not refuse Enter and close on Escape.\n");
             return 5;
         }
         hostCommand(ChromeHost::kCommandDeselect);
         InsertPaintedLayer(_session, L"Red", 120, 120, Vec2{0, 0}, 0.0, 0xFFFF0000u);
         const std::size_t layersBefore = _session.Document()->layers.size();
         hostCommand(ChromeHost::kCommandNewHueSaturationAdjustment);
-        if (_session.Document()->layers.size() != layersBefore + 1 || _session.ActiveLayer() == nullptr ||
-            !_session.ActiveLayer()->adjustment.has_value() || !_session.HasColorEdit(FilterKind::HueSaturation) ||
-            !_chrome->AdjustPanelOpen())
+        if (_session.Document()->layers.size() != layersBefore + 1 || _session.ActiveLayer() == nullptr || ! _session.ActiveLayer()->adjustment.has_value() ||
+            ! _session.HasColorEdit(FilterKind::HueSaturation) || ! _chrome->AdjustPanelOpen())
         {
             SelfTestFailure(L"New Hue/Saturation Adjustment did not add a layer and open its panel.\n");
             return 5;
         }
         OnAdjustAction(AdjustAction::SetHue, 120.0);
-        if (!pixelAt(50, 50, pixel) || pixel[1] < 200 || pixel[2] > 60)
+        if (! pixelAt(50, 50, pixel) || pixel[1] < 200 || pixel[2] > 60)
         {
             SelfTestFailure(L"The adjustment layer did not rotate the red beneath it live.\n");
             return 5;
         }
-        if (!hostKey(VK_RETURN, 0) || _session.HasColorEdit(FilterKind::HueSaturation) ||
-            _session.history.UndoName() != L"Edit Hue/Saturation Adjustment" ||
-            std::fabs(Adjust::RangeOf(_session.ActiveLayer()->adjustment->ResolvedHsv()).hue - 120.0) > 0.01 ||
-            !pixelAt(50, 50, pixel) || pixel[1] < 200)
+        if (! hostKey(VK_RETURN, 0) || _session.HasColorEdit(FilterKind::HueSaturation) || _session.history.UndoName() != L"Edit Hue/Saturation Adjustment" ||
+            std::fabs(Adjust::RangeOf(_session.ActiveLayer()->adjustment->ResolvedHsv()).hue - 120.0) > 0.01 || ! pixelAt(50, 50, pixel) || pixel[1] < 200)
         {
             SelfTestFailure(L"Enter did not keep the adjustment layer's settings.\n");
             return 5;
         }
-        if (!hostKey(VK_OEM_PLUS, MK_SHIFT) || _session.ActiveLayer()->blendMode != LayerBlendMode::Multiply ||
+        if (! hostKey(VK_OEM_PLUS, MK_SHIFT) || _session.ActiveLayer()->blendMode != LayerBlendMode::Multiply ||
             _session.history.UndoName() != L"Layer Blend Mode")
         {
             SelfTestFailure(L"Shift+= did not step the blend mode.\n");
@@ -2989,24 +2986,22 @@ int Application::RunSelfTest() noexcept
 HRESULT Application::RegisterWindowClass() noexcept
 {
     WNDCLASSEXW windowClass{};
-    windowClass.cbSize = sizeof(windowClass);
-    windowClass.style = 0;
+    windowClass.cbSize      = sizeof(windowClass);
+    windowClass.style       = 0;
     windowClass.lpfnWndProc = WindowProcedure;
-    windowClass.hInstance = _instance;
-    windowClass.hIcon =
-        static_cast<HICON>(LoadImageW(_instance, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
-                                      GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_SHARED));
-    windowClass.hIconSm =
-        static_cast<HICON>(LoadImageW(_instance, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
-                                      GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
-    if (!windowClass.hIcon || !windowClass.hIconSm)
+    windowClass.hInstance   = _instance;
+    windowClass.hIcon       = static_cast<HICON>(
+        LoadImageW(_instance, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_SHARED));
+    windowClass.hIconSm = static_cast<HICON>(
+        LoadImageW(_instance, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
+    if (! windowClass.hIcon || ! windowClass.hIconSm)
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
-    windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    windowClass.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
     windowClass.lpszClassName = kWindowClassName;
 
-    if (!RegisterClassExW(&windowClass))
+    if (! RegisterClassExW(&windowClass))
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -3017,7 +3012,7 @@ HRESULT Application::RegisterWindowClass() noexcept
 HRESULT Application::CreateMainWindow(bool visible) noexcept
 {
     constexpr DWORD extendedStyle = WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP;
-    constexpr DWORD windowStyle = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
+    constexpr DWORD windowStyle   = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
 
     const UINT dpi = _screenshotDpi != 0 ? _screenshotDpi : GetDpiForSystem();
     SIZE windowSize{};
@@ -3028,24 +3023,33 @@ HRESULT Application::CreateMainWindow(bool visible) noexcept
     }
 
     const std::wstring title = LoadStringResource(nullptr, IDS_APP_TITLE);
-    const HWND window = CreateWindowExW(extendedStyle, kWindowClassName, title.c_str(), windowStyle, CW_USEDEFAULT,
-                                        CW_USEDEFAULT, windowSize.cx, windowSize.cy, nullptr, nullptr, _instance, this);
-    if (!window)
+    const HWND window        = CreateWindowExW(extendedStyle,
+                                               kWindowClassName,
+                                               title.c_str(),
+                                               windowStyle,
+                                               CW_USEDEFAULT,
+                                               CW_USEDEFAULT,
+                                               windowSize.cx,
+                                               windowSize.cy,
+                                               nullptr,
+                                               nullptr,
+                                               _instance,
+                                               this);
+    if (! window)
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
     const UINT windowDpi = _screenshotDpi != 0 ? _screenshotDpi : GetDpiForWindow(window);
-    result = CalculateWindowSizeForDpi(windowStyle, extendedStyle, windowDpi, windowSize);
+    result               = CalculateWindowSizeForDpi(windowStyle, extendedStyle, windowDpi, windowSize);
     if (FAILED(result))
     {
         return result;
     }
     // Fixed harness canvases must not be clamped to a hosted runner's small desktop by WM_GETMINMAXINFO.
     // This changes only the initial harness fixture; later window messages retain their ordinary policy.
-    const UINT sizingFlags =
-        SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE | ((!visible || !_screenshotPath.empty()) ? SWP_NOSENDCHANGING : 0u);
-    if (!SetWindowPos(window, nullptr, 0, 0, windowSize.cx, windowSize.cy, sizingFlags))
+    const UINT sizingFlags = SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE | ((! visible || ! _screenshotPath.empty()) ? SWP_NOSENDCHANGING : 0u);
+    if (! SetWindowPos(window, nullptr, 0, 0, windowSize.cx, windowSize.cy, sizingFlags))
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -3054,13 +3058,11 @@ HRESULT Application::CreateMainWindow(bool visible) noexcept
     if (_settings.window.valid && _screenshotDpi == 0 && visible)
     {
         WINDOWPLACEMENT placement{};
-        placement.length = sizeof(placement);
+        placement.length  = sizeof(placement);
         placement.showCmd = SW_HIDE;
         placement.rcNormalPosition =
-            RECT{_settings.window.x, _settings.window.y, _settings.window.x + _settings.window.width,
-                 _settings.window.y + _settings.window.height};
-        if (MonitorFromRect(&placement.rcNormalPosition, MONITOR_DEFAULTTONULL) != nullptr &&
-            SetWindowPlacement(window, &placement))
+            RECT{_settings.window.x, _settings.window.y, _settings.window.x + _settings.window.width, _settings.window.y + _settings.window.height};
+        if (MonitorFromRect(&placement.rcNormalPosition, MONITOR_DEFAULTTONULL) != nullptr && SetWindowPlacement(window, &placement))
         {
             _restoreMaximized = _settings.window.maximized;
         }
@@ -3078,7 +3080,7 @@ HRESULT Application::CreateMainWindow(bool visible) noexcept
         _renderer.SetLayoutDpi(static_cast<float>(_screenshotDpi));
     }
 
-    if (!visible)
+    if (! visible)
     {
         ShowWindow(window, SW_HIDE);
     }
@@ -3087,9 +3089,8 @@ HRESULT Application::CreateMainWindow(bool visible) noexcept
 
 HRESULT Application::RegisterDisplayPowerNotification(HWND window) noexcept
 {
-    _displayPowerNotification.reset(
-        RegisterPowerSettingNotification(window, &GUID_SESSION_DISPLAY_STATUS, DEVICE_NOTIFY_WINDOW_HANDLE));
-    if (!_displayPowerNotification)
+    _displayPowerNotification.reset(RegisterPowerSettingNotification(window, &GUID_SESSION_DISPLAY_STATUS, DEVICE_NOTIFY_WINDOW_HANDLE));
+    if (! _displayPowerNotification)
     {
         const DWORD error = GetLastError();
         return error != ERROR_SUCCESS ? HRESULT_FROM_WIN32(error) : E_FAIL;
@@ -3120,7 +3121,7 @@ HRESULT Application::InitializeChrome() noexcept
 {
     // Every chrome event lands on this Application (ChromeEvents).
     auto chrome = std::unique_ptr<ChromeHost>(new (std::nothrow) ChromeHost(*this));
-    if (!chrome)
+    if (! chrome)
     {
         return E_OUTOFMEMORY;
     }
@@ -3138,15 +3139,14 @@ HRESULT Application::InitializeChrome() noexcept
 
 void Application::OnLayerSelected(Guid id) noexcept
 {
-    if (!_hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
-                            _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() ||
-                            _opacityEdit || _activeHostRequest || _hostRequests.Size()))
+    if (! _hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+                             _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerSelectInput{id}));
         return;
     }
     // A typed opacity belongs to the layer it started on: it records its entry before another is active.
-    if (!CloseOpacityEdit())
+    if (! CloseOpacityEdit())
         return;
     _session.SelectLayer(id);
     SyncChrome();
@@ -3155,9 +3155,8 @@ void Application::OnLayerSelected(Guid id) noexcept
 
 void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
 {
-    if (!_hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
-                            _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() ||
-                            _opacityEdit || _activeHostRequest || _hostRequests.Size()))
+    if (! _hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+                             _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerTargetInput{id, mask, toggleMask}));
         return;
@@ -3169,7 +3168,7 @@ void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
     }
     // As a command does: a typed opacity records its entry and a pending transform applies (legacy clickedLayer);
     // the session applies a pending gradient on a target switch (Decision D3).
-    if (!CloseOpacityEdit())
+    if (! CloseOpacityEdit())
         return;
     (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
     _session.SelectLayerTarget(id, mask);
@@ -3190,23 +3189,21 @@ void Application::OnLayerExpanded(Guid id, bool expanded) noexcept
     {
         _session.SetGroupCollapsed(id, true);
     }
-    if (_session.CollapsedGroupIDs().contains(id) != !expanded)
+    if (_session.CollapsedGroupIDs().contains(id) != ! expanded)
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_ROWS);
     SyncChrome();
     InvalidateFrame();
 }
 
-void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
-                                   DxUi::TreeDropPlace place) noexcept
+void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent, DxUi::TreeDropPlace place) noexcept
 {
-    if (!_hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
-                            _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() ||
-                            _opacityEdit || _activeHostRequest || _hostRequests.Size()))
+    if (! _hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+                             _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerReorderInput{source, target, parent, place}));
         return;
     }
-    if (!CloseOpacityEdit())
+    if (! CloseOpacityEdit())
         return;
     bool moved = false;
     if (place == DxUi::TreeDropPlace::Inside)
@@ -3233,37 +3230,33 @@ void Application::OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint
         SealSamplerForBoundary(); // A terminal picker callback ends its exact physical sampling target.
     switch (target)
     {
-    case PickerTarget::Foreground:
-    case PickerTarget::Background:
-        // A well previews in the chrome and OK sets the palette. Reached from inside a DxUi callback: sync chrome on
-        // the next frame rather than re-entering Prepare.
-        if (phase == ChromeEditPhase::Commit)
-        {
-            if (_gradientCommitTicket)
+        case PickerTarget::Foreground:
+        case PickerTarget::Background:
+            // A well previews in the chrome and OK sets the palette. Reached from inside a DxUi callback: sync chrome on
+            // the next frame rather than re-entering Prepare.
+            if (phase == ChromeEditPhase::Commit)
             {
-                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
-                return;
+                if (_gradientCommitTicket)
+                {
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+                    return;
+                }
+                if (target == PickerTarget::Foreground)
+                {
+                    _session.SetForegroundColor(argb);
+                }
+                else
+                {
+                    _session.SetBackgroundColor(argb);
+                }
+                RefreshGradientJobs();
+                _layoutDirty = true;
+                InvalidateFrame();
             }
-            if (target == PickerTarget::Foreground)
-            {
-                _session.SetForegroundColor(argb);
-            }
-            else
-            {
-                _session.SetBackgroundColor(argb);
-            }
-            RefreshGradientJobs();
-            _layoutDirty = true;
-            InvalidateFrame();
-        }
-        return;
-    case PickerTarget::GradientShadows:
-    case PickerTarget::GradientHighlights:
-        OnAdjustColor(phase, argb, target == PickerTarget::GradientHighlights);
-        return;
-    case PickerTarget::SizeExtension:
-        OnSizeColor(phase, argb);
-        return;
+            return;
+        case PickerTarget::GradientShadows:
+        case PickerTarget::GradientHighlights: OnAdjustColor(phase, argb, target == PickerTarget::GradientHighlights); return;
+        case PickerTarget::SizeExtension: OnSizeColor(phase, argb); return;
     }
 }
 
@@ -3292,18 +3285,16 @@ HRESULT Application::InitializeDocument() noexcept
 
 Vec2 Application::DocumentSize() const noexcept
 {
-    if (!_session.Document().has_value())
+    if (! _session.Document().has_value())
     {
         return Vec2{1, 1};
     }
-    return Vec2{static_cast<double>(_session.Document().value().width),
-                static_cast<double>(_session.Document().value().height)};
+    return Vec2{static_cast<double>(_session.Document().value().width), static_cast<double>(_session.Document().value().height)};
 }
 
 void Application::DocumentChanged() noexcept
 {
-    if (!_shutdownStarted && _polygonalPressState && _polygonalPressState->controller &&
-        _polygonalPressState->admissionSource &&
+    if (! _shutdownStarted && _polygonalPressState && _polygonalPressState->controller && _polygonalPressState->admissionSource &&
         _polygonalPressState->admissionSource->document.documentSerial != _session.DocumentSerial())
     {
         // A replaced/cleared document supplies readiness even when no further raw input can reach
@@ -3329,7 +3320,7 @@ void Application::SyncChrome() noexcept
     RefreshGradientJobs();
     RefreshPixelMoveJobs();
     RefreshTransformPreviewJobs();
-    if (!_chrome)
+    if (! _chrome)
     {
         return;
     }
@@ -3345,10 +3336,10 @@ void Application::SyncChrome() noexcept
     if (_renameLayer.has_value())
     {
         // The Rename card closes once its layer is gone (Undo, a delete, a merge, another document).
-        const bool present = _session.Document().has_value() &&
-                             std::any_of(_session.Document()->layers.begin(), _session.Document()->layers.end(),
-                                         [&](const ImageLayer& layer) { return layer.id == _renameLayer.value(); });
-        if (!present)
+        const bool present = _session.Document().has_value() && std::any_of(_session.Document()->layers.begin(),
+                                                                            _session.Document()->layers.end(),
+                                                                            [&](const ImageLayer& layer) { return layer.id == _renameLayer.value(); });
+        if (! present)
         {
             CloseRenameCard();
         }
@@ -3359,33 +3350,28 @@ void Application::SyncChrome() noexcept
     _chrome->SetDocumentTitle(FileTitle(_documentPath), dirty);
     // The active layer's mask: its row's badge shows the target, and the Layer menu's mask commands follow it (RF-907).
     const ImageLayer* maskOwner = _session.ActiveLayer();
-    const bool hasMask = maskOwner != nullptr && maskOwner->mask.has_value();
-    const bool maskTargeted = hasMask && _session.IsMaskSelected();
-    _chrome->SetMaskCommands(hasMask, maskTargeted, hasMask && maskOwner->mask->linked,
-                             !hasMask || maskOwner->mask->enabled);
-    _chrome->SetUndoRedoNames(_session.history.UndoName(), _session.history.RedoName(), _session.history.CanUndo(),
-                              _session.history.CanRedo());
-    _chrome->SetEditTargets(
-        _session.IsMaskSelected() && _session.ActiveLayer() != nullptr && _session.ActiveLayer()->mask.has_value(),
-        _session.CanTransformSelection(),
-        _session.ActiveLayer() != nullptr && _session.ActiveLayer()->maskSourceID.has_value(),
-        [&]
-        {
-            const std::optional<DocumentSession::MergePlan> plan = _session.PlanMerge();
-            return !plan.has_value() ? 0 : plan->action == L"Merge Group" ? 1 : plan->action == L"Merge Layers" ? 2 : 0;
-        }());
+    const bool hasMask          = maskOwner != nullptr && maskOwner->mask.has_value();
+    const bool maskTargeted     = hasMask && _session.IsMaskSelected();
+    _chrome->SetMaskCommands(hasMask, maskTargeted, hasMask && maskOwner->mask->linked, ! hasMask || maskOwner->mask->enabled);
+    _chrome->SetUndoRedoNames(_session.history.UndoName(), _session.history.RedoName(), _session.history.CanUndo(), _session.history.CanRedo());
+    _chrome->SetEditTargets(_session.IsMaskSelected() && _session.ActiveLayer() != nullptr && _session.ActiveLayer()->mask.has_value(),
+                            _session.CanTransformSelection(),
+                            _session.ActiveLayer() != nullptr && _session.ActiveLayer()->maskSourceID.has_value(),
+                            [&]
+    {
+        const std::optional<DocumentSession::MergePlan> plan = _session.PlanMerge();
+        return ! plan.has_value() ? 0 : plan->action == L"Merge Group" ? 1 : plan->action == L"Merge Layers" ? 2 : 0;
+    }());
     SyncAdjustPanel();
     SyncSizeCard();
     SyncStatus();
     _chrome->SetTool(_tool);
     // A targeted mask's wells show the mask palette per the Paint choice (RF-1113, legacy paletteColor).
-    _chrome->SetPalette(_session.ForegroundColor(), _session.BackgroundColor(),
-                        maskTargeted ? std::optional<bool>(_session.maskPaintWhite) : std::nullopt);
+    _chrome->SetPalette(_session.ForegroundColor(), _session.BackgroundColor(), maskTargeted ? std::optional<bool>(_session.maskPaintWhite) : std::nullopt);
     const ImageLayer* activeLayer = _session.ActiveLayer();
     // The stepper waits while a panel owns the document (legacy canEditAppearance).
-    _chrome->SetActiveLayerOpacity(activeLayer != nullptr && !activeLayer->isGroup && !_session.HasColorEdit()
-                                       ? std::optional<double>(activeLayer->opacity)
-                                       : std::nullopt);
+    _chrome->SetActiveLayerOpacity(activeLayer != nullptr && ! activeLayer->isGroup && ! _session.HasColorEdit() ? std::optional<double>(activeLayer->opacity)
+                                                                                                                 : std::nullopt);
 
     // The canvas hole follows the layout the pushes above asked for, and the overlays below follow the hole: lay out,
     // push the rest. Renderer::Render prepares the chrome once at the frame boundary (RF-1001).
@@ -3399,8 +3385,7 @@ void Application::SyncChrome() noexcept
     else
         _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID(), maskTargeted);
     const CanvasHole hole = _chrome->HolePixels();
-    _viewport.Resize(Vec2{std::max(1.0f, hole.width), std::max(1.0f, hole.height)}, std::max(1.0f, dpi / 96.0f),
-                     DocumentSize());
+    _viewport.Resize(Vec2{std::max(1.0f, hole.width), std::max(1.0f, hole.height)}, std::max(1.0f, dpi / 96.0f), DocumentSize());
 
     // The Move tool's header, box and snap guides follow the pending edit or the active layer.
     _chrome->SetTransformInspector(TransformInspector());
@@ -3409,72 +3394,71 @@ void Application::SyncChrome() noexcept
     // Selection tools: the header mirrors the session; the outline shows in every tool.
     const bool hasDocument = _session.Document().has_value();
     SelectionInspectorState selection;
-    selection.visible = EditorToolIsSelection(_tool);
-    selection.enabled = hasDocument;
-    selection.tool = selection.visible ? _tool : EditorTool::Marquee;
+    selection.visible     = EditorToolIsSelection(_tool);
+    selection.enabled     = hasDocument;
+    selection.tool        = selection.visible ? _tool : EditorTool::Marquee;
     selection.marqueeKind = _session.marqueeKind == LassoKind::Ellipse ? 1 : 0;
-    selection.lassoKind = _session.lassoKind == LassoKind::Polygonal ? 1 : 0;
-    selection.mode = static_cast<int>(_session.DisplayedSelectionMode());
-    selection.antialiasVisible = _tool == EditorTool::Lasso || _tool == EditorTool::Wand ||
-                                 (_tool == EditorTool::Marquee && _session.marqueeKind == LassoKind::Ellipse);
-    selection.antialiased = _session.selectionAntialiased;
-    selection.tolerance = _session.wandSettings.tolerance;
-    selection.sampleSize = static_cast<int>(_session.wandSettings.sampleSize);
+    selection.lassoKind   = _session.lassoKind == LassoKind::Polygonal ? 1 : 0;
+    selection.mode        = static_cast<int>(_session.DisplayedSelectionMode());
+    selection.antialiasVisible =
+        _tool == EditorTool::Lasso || _tool == EditorTool::Wand || (_tool == EditorTool::Marquee && _session.marqueeKind == LassoKind::Ellipse);
+    selection.antialiased     = _session.selectionAntialiased;
+    selection.tolerance       = _session.wandSettings.tolerance;
+    selection.sampleSize      = static_cast<int>(_session.wandSettings.sampleSize);
     selection.sampleAllLayers = _session.wandSettings.sampleAllLayers;
-    selection.contiguous = _session.wandSettings.contiguous;
-    selection.canModify = _session.CanModifySelection();
-    selection.expandAmount = _selectionExpandAmount;
-    selection.contractAmount = _selectionContractAmount;
+    selection.contiguous      = _session.wandSettings.contiguous;
+    selection.canModify       = _session.CanModifySelection();
+    selection.expandAmount    = _selectionExpandAmount;
+    selection.contractAmount  = _selectionContractAmount;
     // The overlay shares the original pixel-move geometry; dragging changes only its scalar mapping.
     const SelectionDisplayValue current = _session.DisplayedSelectionValue();
-    selection.hasSelection = current.selection.has_value();
-    selection.isEmpty = current.selection.has_value() && current.selection->IsEmpty();
+    selection.hasSelection              = current.selection.has_value();
+    selection.isEmpty                   = current.selection.has_value() && current.selection->IsEmpty();
     _chrome->SetSelectionInspector(selection);
     SyncSelectionOverlay(&current);
 
     // Brush and Eraser: the header mirrors the session; the tip circle follows the pointer.
     BrushInspectorState brush;
-    brush.visible = EditorToolIsBrush(_tool);
-    brush.enabled = hasDocument;
-    brush.tool = EditorToolIsBrush(_tool) ? _tool : EditorTool::Brush;
-    brush.mode = _session.brushMode == BrushToolMode::Erase ? 1 : 0;
-    brush.size = _session.brushSettings.diameter;
-    brush.hardness = _session.brushSettings.hardness * 100.0;
-    brush.opacity = _session.brushSettings.opacity * 100.0;
-    brush.maskSelected = _session.IsMaskSelected();
+    brush.visible        = EditorToolIsBrush(_tool);
+    brush.enabled        = hasDocument;
+    brush.tool           = EditorToolIsBrush(_tool) ? _tool : EditorTool::Brush;
+    brush.mode           = _session.brushMode == BrushToolMode::Erase ? 1 : 0;
+    brush.size           = _session.brushSettings.diameter;
+    brush.hardness       = _session.brushSettings.hardness * 100.0;
+    brush.opacity        = _session.brushSettings.opacity * 100.0;
+    brush.maskSelected   = _session.IsMaskSelected();
     brush.maskPaintWhite = _session.maskPaintWhite;
     brush.foregroundArgb = _session.ForegroundColor();
-    brush.healMode = static_cast<int>(_session.spotHealingMode);
-    brush.cloneAligned = _session.cloneSettings.aligned;
+    brush.healMode       = static_cast<int>(_session.spotHealingMode);
+    brush.cloneAligned   = _session.cloneSettings.aligned;
     brush.cloneAllLayers = _session.cloneSettings.sampleAllLayers;
     brush.cloneHasSource = _session.cloneSource.has_value();
-    brush.smearMode = static_cast<int>(_session.smearMode);
+    brush.smearMode      = static_cast<int>(_session.smearMode);
     _chrome->SetBrushInspector(brush);
     SyncBrushCursor();
 
     // Gradient and Shape headers.
     const auto argbOf = [](const std::array<double, 4>& color)
     {
-        const auto byte = [](double value)
-        { return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0, 1.0) * 255.0)); };
+        const auto byte = [](double value) { return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0, 1.0) * 255.0)); };
         return (byte(color[3]) << 24) | (byte(color[0]) << 16) | (byte(color[1]) << 8) | byte(color[2]);
     };
     const std::array<std::array<double, 4>, 2> ends = _session.GradientColors();
     GradientInspectorState gradient;
-    gradient.enabled = hasDocument;
-    gradient.shape = _session.gradientSettings.shape == GradientShape::Radial ? 1 : 0;
-    gradient.style = _session.gradientSettings.style == GradientStyle::ForegroundToTransparent ? 1 : 0;
-    gradient.reversed = _session.gradientSettings.reversed;
-    gradient.opacity = _session.gradientSettings.opacity * 100.0;
+    gradient.enabled      = hasDocument;
+    gradient.shape        = _session.gradientSettings.shape == GradientShape::Radial ? 1 : 0;
+    gradient.style        = _session.gradientSettings.style == GradientStyle::ForegroundToTransparent ? 1 : 0;
+    gradient.reversed     = _session.gradientSettings.reversed;
+    gradient.opacity      = _session.gradientSettings.opacity * 100.0;
     gradient.maskSelected = _session.IsMaskSelected();
-    gradient.pending = _session.PendingGradient() != nullptr;
-    gradient.startArgb = argbOf(ends[0]);
-    gradient.endArgb = argbOf(ends[1]);
+    gradient.pending      = _session.PendingGradient() != nullptr;
+    gradient.startArgb    = argbOf(ends[0]);
+    gradient.endArgb      = argbOf(ends[1]);
     _chrome->SetGradientInspector(gradient);
     ShapeInspectorState shape;
-    shape.enabled = hasDocument;
-    shape.kind = _session.shapeKind == ShapeKind::Ellipse ? 1 : 0;
-    shape.radius = _session.shapeCornerRadius;
+    shape.enabled        = hasDocument;
+    shape.kind           = _session.shapeKind == ShapeKind::Ellipse ? 1 : 0;
+    shape.radius         = _session.shapeCornerRadius;
     shape.foregroundArgb = _session.ForegroundColor();
     _chrome->SetShapeInspector(shape);
     SyncCropChrome();
@@ -3487,7 +3471,7 @@ void Application::SyncChrome() noexcept
 
 void Application::SyncView() noexcept
 {
-    if (!_chrome)
+    if (! _chrome)
     {
         return;
     }
@@ -3505,8 +3489,7 @@ void Application::SyncView() noexcept
 
 float Application::ChromeDpi() const noexcept
 {
-    const float dpi = _screenshotDpi != 0 ? static_cast<float>(_screenshotDpi)
-                                          : (_window ? static_cast<float>(GetDpiForWindow(_window.get())) : 96.0f);
+    const float dpi = _screenshotDpi != 0 ? static_cast<float>(_screenshotDpi) : (_window ? static_cast<float>(GetDpiForWindow(_window.get())) : 96.0f);
     return dpi > 0.0f ? dpi : 96.0f;
 }
 
@@ -3515,25 +3498,24 @@ void Application::SyncStatus() noexcept
     // The three texts are formatted only when what they show changed: a pan changes none of them.
     const std::optional<CanvasDocument>& document = _session.Document();
     StatusKey key;
-    key.percent = static_cast<int>(_viewport.zoom * 100.0 + 0.5);
+    key.percent  = static_cast<int>(_viewport.zoom * 100.0 + 0.5);
     key.document = document.has_value();
-    key.width = document.has_value() ? document->width : 0;
-    key.height = document.has_value() ? document->height : 0;
-    key.tool = _tool;
-    key.chrome = _chrome->DisplayRevision();
+    key.width    = document.has_value() ? document->width : 0;
+    key.height   = document.has_value() ? document->height : 0;
+    key.tool     = _tool;
+    key.chrome   = _chrome->DisplayRevision();
     if (_statusKey == key)
     {
         return;
     }
-    _statusKey = key;
+    _statusKey        = key;
     std::wstring zoom = FormatStringResource(nullptr, IDS_STATUS_ZOOM, key.percent);
-    std::wstring size = key.document ? FormatStringResource(nullptr, IDS_STATUS_SIZE, key.width, key.height)
-                                     : LoadStringResource(nullptr, IDS_STATUS_NO_DOCUMENT);
+    std::wstring size =
+        key.document ? FormatStringResource(nullptr, IDS_STATUS_SIZE, key.width, key.height) : LoadStringResource(nullptr, IDS_STATUS_NO_DOCUMENT);
     // The tool's effective chord (a replacement or the catalog default); a tool whose key was cleared shows its name.
-    std::wstring toolName = LoadStringResource(nullptr, EditorToolNameId(_tool));
+    std::wstring toolName        = LoadStringResource(nullptr, EditorToolNameId(_tool));
     const std::wstring toolChord = _chrome->CommandChordText(ChromeHost::SelectToolCommand(_tool));
-    std::wstring tool =
-        toolChord.empty() ? std::move(toolName) : FormatStringResource(nullptr, IDS_STATUS_TOOL, toolName, toolChord);
+    std::wstring tool            = toolChord.empty() ? std::move(toolName) : FormatStringResource(nullptr, IDS_STATUS_TOOL, toolName, toolChord);
     _chrome->SetStatus(std::move(zoom), std::move(size), std::move(tool));
 }
 
@@ -3541,12 +3523,12 @@ TransformInspectorState Application::TransformInspector() const
 {
     TransformInspectorState inspector;
     inspector.visible = _tool == EditorTool::Move;
-    if (!_session.Document().has_value() || !inspector.visible)
+    if (! _session.Document().has_value() || ! inspector.visible)
     {
         return inspector;
     }
     const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
-    const ImageLayer* active = _session.ActiveLayer();
+    const ImageLayer* active                 = _session.ActiveLayer();
     std::optional<LayerTransform> value;
     if (edit.has_value())
     {
@@ -3556,67 +3538,63 @@ TransformInspectorState Application::TransformInspector() const
     {
         value = _session.EditedTransform(*active);
     }
-    inspector.enabled = _session.CanTransform() || edit.has_value();
-    inspector.editing = edit.has_value();
-    inspector.distorted = edit.has_value() && edit->corners.has_value();
+    inspector.enabled     = _session.CanTransform() || edit.has_value();
+    inspector.editing     = edit.has_value();
+    inspector.distorted   = edit.has_value() && edit->corners.has_value();
     inspector.targetsMask = _session.TransformTargetsMask();
     if (value.has_value())
     {
         const std::optional<Vec2> pixels = _session.TransformPixelSize();
-        Vec2 pixelSize = value->size;
+        Vec2 pixelSize                   = value->size;
         if (pixels.has_value())
         {
             pixelSize = pixels.value();
         }
         else if (active != nullptr && active->asset.has_value() && active->asset->image.HasStorage())
         {
-            pixelSize = Vec2{static_cast<double>(active->asset->image.Width()),
-                             static_cast<double>(active->asset->image.Height())};
+            pixelSize = Vec2{static_cast<double>(active->asset->image.Width()), static_cast<double>(active->asset->image.Height())};
         }
-        inspector.x = value->origin.x;
-        inspector.y = value->origin.y;
-        inspector.width = value->size.x;
-        inspector.height = value->size.y;
-        inspector.scale = value->ScalePercent(pixelSize);
+        inspector.x        = value->origin.x;
+        inspector.y        = value->origin.y;
+        inspector.width    = value->size.x;
+        inspector.height   = value->size.y;
+        inspector.scale    = value->ScalePercent(pixelSize);
         inspector.rotation = value->rotation;
-        inspector.sampling = value->sampling == LayerSampling::Nearest  ? 0
-                             : value->sampling == LayerSampling::Smooth ? 1
-                                                                        : 2;
+        inspector.sampling = value->sampling == LayerSampling::Nearest ? 0 : value->sampling == LayerSampling::Smooth ? 1 : 2;
     }
-    inspector.autoSelect = _transformAutoSelect;
+    inspector.autoSelect   = _transformAutoSelect;
     inspector.showControls = _showsTransformControls;
-    inspector.lockRatio = _locksTransformRatio;
+    inspector.lockRatio    = _locksTransformRatio;
     return inspector;
 }
 
 std::optional<TransformOverlayGeometry> Application::TransformBox() const
 {
-    if (_tool != EditorTool::Move || !_session.Document().has_value())
+    if (_tool != EditorTool::Move || ! _session.Document().has_value())
     {
         return std::nullopt;
     }
-    const Vec2 documentSize = DocumentSize();
+    const Vec2 documentSize                  = DocumentSize();
     const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
-    const ImageLayer* active = _session.ActiveLayer();
-    if (!_showsTransformControls && !(edit.has_value() && edit->persistent))
+    const ImageLayer* active                 = _session.ActiveLayer();
+    if (! _showsTransformControls && ! (edit.has_value() && edit->persistent))
     {
         return std::nullopt;
     }
-    if ((edit.has_value() && edit->group.has_value()) || (!edit.has_value() && _session.TransformsAsGroup()))
+    if ((edit.has_value() && edit->group.has_value()) || (! edit.has_value() && _session.TransformsAsGroup()))
     {
         if (edit.has_value() && edit->corners.has_value())
         {
             return TransformOverlayGeometry::FromCorners(edit->corners.value(), _viewport, documentSize);
         }
-        const std::optional<LayerTransform> box =
-            edit.has_value() ? std::optional<LayerTransform>(edit->draft) : _session.GroupTransformBox();
+        const std::optional<LayerTransform> box = edit.has_value() ? std::optional<LayerTransform>(edit->draft) : _session.GroupTransformBox();
         if (box.has_value())
         {
             return TransformOverlayGeometry::FromTransform(box.value(), _viewport, documentSize);
         }
         return std::nullopt;
     }
-    if (active != nullptr && active->asset.has_value() && !active->isGroup && _session.CanTransform())
+    if (active != nullptr && active->asset.has_value() && ! active->isGroup && _session.CanTransform())
     {
         if (edit.has_value() && edit->layerID == active->id && edit->corners.has_value())
         {
@@ -3654,21 +3632,20 @@ void Application::SyncTransformOverlay() noexcept
     _chrome->SetTransformOverlay(_overlayGeometry, _guideXs, _guideYs);
 }
 
-bool Application::AdoptPreparedSelectionOutlineOwner(PreparedSelectionOutline outline,
-                                                     std::vector<CanvasOverlay::OutlineLoop>& retired) noexcept
+bool Application::AdoptPreparedSelectionOutlineOwner(PreparedSelectionOutline outline, std::vector<CanvasOverlay::OutlineLoop>& retired) noexcept
 {
-    if (!_chrome || !_session.Document() || !outline.HasStorage() || _selectionOutlineInitialized)
+    if (! _chrome || ! _session.Document() || ! outline.HasStorage() || _selectionOutlineInitialized)
         return false; // The original numeric result retires in its original worker; no unused owner cache.
-    const auto shown = _session.DisplayedSelectionValue();
+    const auto shown    = _session.DisplayedSelectionValue();
     const auto identity = shown.selection ? shown.selection->loops.Identity() : nullptr;
     if (outline.SourceIdentity() != identity)
         return false; // Another displayed edit cannot adopt a different source's points.
     const auto anchor = outline.Anchor();
-    if (!_chrome->SetPreparedSelectionOutline(std::move(outline), retired))
+    if (! _chrome->SetPreparedSelectionOutline(std::move(outline), retired))
         return false;
-    _overlaySelection = shown.selection;
+    _overlaySelection       = shown.selection;
     _overlaySelectionAnchor = anchor;
-    _overlayScale = 0; // Force the existing scalar mapping update at the ensuing SelectionChanged sync.
+    _overlayScale           = 0; // Force the existing scalar mapping update at the ensuing SelectionChanged sync.
     return true;
 }
 
@@ -3679,24 +3656,23 @@ void Application::SyncSelectionOverlay(const SelectionDisplayValue* shown) noexc
         SyncPreparedSelectionOutlineOwner(shown);
         return;
     }
-    const bool hasDocument = _session.Document().has_value();
-    const auto& current = shown ? shown->selection : _overlaySelection;
-    const Vec2 translation = shown ? shown->translation : _overlaySelectionTranslation;
+    const bool hasDocument  = _session.Document().has_value();
+    const auto& current     = shown ? shown->selection : _overlaySelection;
+    const Vec2 translation  = shown ? shown->translation : _overlaySelectionTranslation;
     const Vec2 documentSize = DocumentSize();
-    const Vec2 origin = _viewport.DocumentRectOrigin(documentSize);
-    const double scale = _viewport.ViewScale();
-    _marchingAnts = hasDocument && current.has_value() && !current->IsEmpty();
+    const Vec2 origin       = _viewport.DocumentRectOrigin(documentSize);
+    const double scale      = _viewport.ViewScale();
+    _marchingAnts           = hasDocument && current.has_value() && ! current->IsEmpty();
     // Source identity is held by the cache. View and pixel-move changes never compare or convert every point.
-    const bool geometryChanged =
-        shown && (current.has_value() != _overlaySelection.has_value() ||
-                  (current && current.value().loops.Identity() != _overlaySelection.value().loops.Identity()));
-    if (!hasDocument)
+    const bool geometryChanged = shown && (current.has_value() != _overlaySelection.has_value() ||
+                                           (current && current.value().loops.Identity() != _overlaySelection.value().loops.Identity()));
+    if (! hasDocument)
     {
         if (_overlaySelection)
         {
             _overlaySelection.reset();
             _overlaySelectionTranslation = {};
-            _overlaySelectionAnchor = {};
+            _overlaySelectionAnchor      = {};
             _chrome->SetSelectionOutline({});
         }
     }
@@ -3714,24 +3690,23 @@ void Application::SyncSelectionOverlay(const SelectionDisplayValue* shown) noexc
                 std::vector<D2D1_POINT_2F> converted;
                 converted.reserve(loop.size());
                 for (const Vec2& point : loop)
-                    converted.push_back(D2D1::Point2F(static_cast<float>(point.x - _overlaySelectionAnchor.x),
-                                                      static_cast<float>(point.y - _overlaySelectionAnchor.y)));
+                    converted.push_back(
+                        D2D1::Point2F(static_cast<float>(point.x - _overlaySelectionAnchor.x), static_cast<float>(point.y - _overlaySelectionAnchor.y)));
                 loops.push_back(std::move(converted));
             }
         }
         _overlaySelection = current;
         _chrome->SetSelectionOutline(std::move(loops));
     }
-    if (hasDocument && (geometryChanged || origin != _overlayOrigin || scale != _overlayScale ||
-                        _viewport.backingScale != _overlayBacking || translation != _overlaySelectionTranslation))
+    if (hasDocument && (geometryChanged || origin != _overlayOrigin || scale != _overlayScale || _viewport.backingScale != _overlayBacking ||
+                        translation != _overlaySelectionTranslation))
     {
         // Add the anchor in double before narrowing; large translated coordinates do not cancel in float.
-        const Vec2 mapped{origin.x + (_overlaySelectionAnchor.x + translation.x) * scale,
-                          origin.y + (_overlaySelectionAnchor.y + translation.y) * scale};
+        const Vec2 mapped{origin.x + (_overlaySelectionAnchor.x + translation.x) * scale, origin.y + (_overlaySelectionAnchor.y + translation.y) * scale};
         _chrome->SetSelectionMapping(mapped, scale, ChromeDpi());
-        _overlayOrigin = origin;
-        _overlayScale = scale;
-        _overlayBacking = _viewport.backingScale;
+        _overlayOrigin               = origin;
+        _overlayScale                = scale;
+        _overlayBacking              = _viewport.backingScale;
         _overlaySelectionTranslation = translation;
     }
     SyncLassoOverlay();
@@ -3745,8 +3720,8 @@ void Application::SyncLassoOverlay() noexcept
         return;
     }
     const bool hasDocument = _session.Document().has_value();
-    const Vec2 origin = _viewport.DocumentRectOrigin(DocumentSize());
-    const double scale = _viewport.ViewScale();
+    const Vec2 origin      = _viewport.DocumentRectOrigin(DocumentSize());
+    const double scale     = _viewport.ViewScale();
     std::optional<CanvasOverlay::Draft> draft;
     if (hasDocument && _session.PendingLasso().has_value())
     {
@@ -3756,13 +3731,12 @@ void Application::SyncLassoOverlay() noexcept
         converted.points.reserve(pending.points.size());
         for (const Vec2& point : pending.points)
         {
-            converted.points.push_back(D2D1::Point2F(static_cast<float>(origin.x + point.x * scale),
-                                                     static_cast<float>(origin.y + point.y * scale)));
+            converted.points.push_back(D2D1::Point2F(static_cast<float>(origin.x + point.x * scale), static_cast<float>(origin.y + point.y * scale)));
         }
         if (pending.cursor.has_value())
         {
-            converted.cursor = D2D1::Point2F(static_cast<float>(origin.x + pending.cursor->x * scale),
-                                             static_cast<float>(origin.y + pending.cursor->y * scale));
+            converted.cursor =
+                D2D1::Point2F(static_cast<float>(origin.x + pending.cursor->x * scale), static_cast<float>(origin.y + pending.cursor->y * scale));
         }
         draft = std::move(converted);
     }
@@ -3771,9 +3745,9 @@ void Application::SyncLassoOverlay() noexcept
 
 void Application::BindCompositionDevice() noexcept
 {
-    ID3D11Device* device = _renderer.Device();
+    ID3D11Device* device         = _renderer.Device();
     ID3D11DeviceContext* context = _renderer.Context();
-    if (!device || !context)
+    if (! device || ! context)
     {
         _strokeFinishSource.PrepareDeviceReplacementOwner();
         _gpuWork.RetireDevice();
@@ -3798,7 +3772,7 @@ void Application::BindCompositionDevice() noexcept
     {
         _strokeFinishSource.PrepareDeviceReplacementOwner();
         _boundDeviceGeneration = _renderer.DeviceGeneration();
-        _gpuBindingError = _composition.CreateDeviceResources(device, context);
+        _gpuBindingError       = _composition.CreateDeviceResources(device, context);
         if (_gpuWorkInitialized)
         {
             _gpuWork.RetireDevice();
@@ -3847,7 +3821,7 @@ void Application::Shutdown() noexcept
     {
         return;
     }
-    _shutdownStarted = true;
+    _shutdownStarted  = true;
     _shutdownDeferred = false;
     _selectionCursorRequests.Close();
     if (_selectionCursorTicket)
@@ -3882,135 +3856,130 @@ void Application::Shutdown() noexcept
     _gpuWork.StopNotifications();
     // The only normal host join: the window is hidden and its close has already been confirmed. All borrowed
     // session/device/chrome owners and the localization satellite remain alive until every callback returns.
-    _jobs.Close(
-        {[](void* opaque) noexcept
-         {
-             auto& owner = *static_cast<Application*>(opaque);
-             // Producer callbacks and their wrappers have joined; graphics ownership remains here.
-             if (auto* probe = owner._shutdownTestProbe; probe && probe->checkJoined)
-                 probe->checkJoined(probe->checkContext);
-             // The native callback joined, but its event remains alive through final worker IO acknowledgement.
-             owner._pathReadWait.DetachJoinedOwner();
-             // Detach engines without CancelBrush's synchronous CPU-graph destruction.
-             owner._session.DetachCoverageForShutdown();
-             owner._brushEngine.Release();
-             owner._retryWait.CloseAfterWorkers();
-             owner.ClearPreparedLayerRows();
-             // Retire the owner-held semantic snapshot while the full-graph sink/pool still exist. External
-             // providers retain their independent immutable source and endpoint through later disconnection.
-             if (owner._chrome)
-                 owner._chrome->DetachAccessibility();
-             owner._layerRowsSource.CloseAfterWorkers();
-             owner._historyResidencySource.CloseAfterWorkers();
-             owner.PrepareStrokeFinishJoinedShutdownOwner();
-             if (owner._recordedCommandsInitialized)
-                 owner._recordedCommands.AcknowledgeJoinedShutdownOwner();
-             if (owner._committedDisplayInitialized)
-             {
-                 owner._pendingDisplay.JoinedShutdownOwner();
-                 owner._committedDisplay.JoinedShutdownOwner();
-             }
-             if (owner._selectionOutlineInitialized)
-                 owner._selectionOutlineDisplay.JoinedShutdownOwner();
-             owner._gpuWork.CloseAfterWorkers();
-             owner._gpuWorkInitialized = false;
-             owner._shapeCommitPreview.reset();
-             owner._composition.EndStroke();
-             owner._composition.SetAdjustmentPreview(std::nullopt);
-             owner._composition.ReleaseDeviceResources();
-             if (auto* probe = owner._shutdownTestProbe)
-             {
-                 ++probe->ownerCalls;
-                 probe->draftAliveAtDetach = !probe->draft.expired();
-                 probe->liveDraftAliveAtDetach = !probe->liveDraft.expired();
-                 probe->graphicsDetachedOnOwner =
-                     GetCurrentThreadId() == probe->owner && !owner._brushEngine.Ready() && owner._renderer.Device();
-                 probe->reservationAndWakeAlive = owner._jobs.WakeHandle() && owner._jobs.ReservedMemoryBytes() != 0;
-                 if (probe->checkOwner)
-                     probe->checkOwner(probe->checkContext);
-             }
-         },
-         [](void* opaque) noexcept
-         {
-             auto& owner = *static_cast<Application*>(opaque);
-             if (owner._committedDisplayInitialized)
-             {
-                 owner._pendingDisplay.RetireShutdownForWork();
-                 owner._committedDisplay.RetireShutdownForWork();
-             }
-             if (owner._selectionOutlineInitialized)
-                 owner._selectionOutlineDisplay.RetireShutdownForWork();
-             // MSVC hash-container move construction can allocate. Release every large owning root
-             // directly on the final worker instead; shutdown must remain safe under allocation refusal.
-             owner._session.RetireCpuForShutdown();
-             owner._canvasCloneSample.reset();
-             // Producer callbacks and owner-affine graphics detachment have finished. These host caches own
-             // only CPU pixels/selection geometry and can otherwise keep the final large reference on owner.
-             owner._drag.emplace<std::monostate>();
-             owner._overlaySelection.reset();
-             owner._overlayLassoDraft.reset();
-             if (owner._uiBenchmark)
-             {
-                 // RunUiBenchmark and UiTimingCapture still borrow the state after Run returns. Keep result/
-                 // timing/path metadata alive; release only its immutable document and raster ownership here.
-                 static_assert(std::is_nothrow_default_constructible_v<CanvasDocument> &&
-                               std::is_nothrow_move_assignable_v<CanvasDocument>);
-                 owner._uiBenchmark->fixture = {};
-                 owner._uiBenchmark->imageImportBaseline = {};
-                 owner._uiBenchmark->previousImage = {};
-                 owner._uiBenchmark->previousPreview = {};
-             }
-             if (auto* probe = owner._shutdownTestProbe)
-             {
-                 APTTYPE apartment{};
-                 APTTYPEQUALIFIER qualifier{};
-                 probe->mta.store(SUCCEEDED(CoGetApartmentType(&apartment, &qualifier)) && apartment == APTTYPE_MTA);
-                 probe->offOwner.store(GetCurrentThreadId() != probe->owner);
-                 probe->draftRetired.store(probe->draft.expired());
-                 probe->liveDraftRetired.store(probe->liveDraft.expired());
-                 probe->hostCpuRootsRetired.store(
-                     std::holds_alternative<std::monostate>(owner._drag) && !owner._overlaySelection &&
-                     (!owner._uiBenchmark || (owner._uiBenchmark->fixture.layers.empty() &&
-                                              owner._uiBenchmark->imageImportBaseline.layers.empty() &&
-                                              !owner._uiBenchmark->previousImage.HasStorage() &&
-                                              !owner._uiBenchmark->previousPreview.HasStorage())));
-                 probe->workerCalls.fetch_add(1);
-             }
-         },
-         this});
+    _jobs.Close({[](void* opaque) noexcept
+    {
+        auto& owner = *static_cast<Application*>(opaque);
+        // Producer callbacks and their wrappers have joined; graphics ownership remains here.
+        if (auto* probe = owner._shutdownTestProbe; probe && probe->checkJoined)
+            probe->checkJoined(probe->checkContext);
+        // The native callback joined, but its event remains alive through final worker IO acknowledgement.
+        owner._pathReadWait.DetachJoinedOwner();
+        // Detach engines without CancelBrush's synchronous CPU-graph destruction.
+        owner._session.DetachCoverageForShutdown();
+        owner._brushEngine.Release();
+        owner._retryWait.CloseAfterWorkers();
+        owner.ClearPreparedLayerRows();
+        // Retire the owner-held semantic snapshot while the full-graph sink/pool still exist. External
+        // providers retain their independent immutable source and endpoint through later disconnection.
+        if (owner._chrome)
+            owner._chrome->DetachAccessibility();
+        owner._layerRowsSource.CloseAfterWorkers();
+        owner._historyResidencySource.CloseAfterWorkers();
+        owner.PrepareStrokeFinishJoinedShutdownOwner();
+        if (owner._recordedCommandsInitialized)
+            owner._recordedCommands.AcknowledgeJoinedShutdownOwner();
+        if (owner._committedDisplayInitialized)
+        {
+            owner._pendingDisplay.JoinedShutdownOwner();
+            owner._committedDisplay.JoinedShutdownOwner();
+        }
+        if (owner._selectionOutlineInitialized)
+            owner._selectionOutlineDisplay.JoinedShutdownOwner();
+        owner._gpuWork.CloseAfterWorkers();
+        owner._gpuWorkInitialized = false;
+        owner._shapeCommitPreview.reset();
+        owner._composition.EndStroke();
+        owner._composition.SetAdjustmentPreview(std::nullopt);
+        owner._composition.ReleaseDeviceResources();
+        if (auto* probe = owner._shutdownTestProbe)
+        {
+            ++probe->ownerCalls;
+            probe->draftAliveAtDetach      = ! probe->draft.expired();
+            probe->liveDraftAliveAtDetach  = ! probe->liveDraft.expired();
+            probe->graphicsDetachedOnOwner = GetCurrentThreadId() == probe->owner && ! owner._brushEngine.Ready() && owner._renderer.Device();
+            probe->reservationAndWakeAlive = owner._jobs.WakeHandle() && owner._jobs.ReservedMemoryBytes() != 0;
+            if (probe->checkOwner)
+                probe->checkOwner(probe->checkContext);
+        }
+    },
+                 [](void* opaque) noexcept
+    {
+        auto& owner = *static_cast<Application*>(opaque);
+        if (owner._committedDisplayInitialized)
+        {
+            owner._pendingDisplay.RetireShutdownForWork();
+            owner._committedDisplay.RetireShutdownForWork();
+        }
+        if (owner._selectionOutlineInitialized)
+            owner._selectionOutlineDisplay.RetireShutdownForWork();
+        // MSVC hash-container move construction can allocate. Release every large owning root
+        // directly on the final worker instead; shutdown must remain safe under allocation refusal.
+        owner._session.RetireCpuForShutdown();
+        owner._canvasCloneSample.reset();
+        // Producer callbacks and owner-affine graphics detachment have finished. These host caches own
+        // only CPU pixels/selection geometry and can otherwise keep the final large reference on owner.
+        owner._drag.emplace<std::monostate>();
+        owner._overlaySelection.reset();
+        owner._overlayLassoDraft.reset();
+        if (owner._uiBenchmark)
+        {
+            // RunUiBenchmark and UiTimingCapture still borrow the state after Run returns. Keep result/
+            // timing/path metadata alive; release only its immutable document and raster ownership here.
+            static_assert(std::is_nothrow_default_constructible_v<CanvasDocument> && std::is_nothrow_move_assignable_v<CanvasDocument>);
+            owner._uiBenchmark->fixture             = {};
+            owner._uiBenchmark->imageImportBaseline = {};
+            owner._uiBenchmark->previousImage       = {};
+            owner._uiBenchmark->previousPreview     = {};
+        }
+        if (auto* probe = owner._shutdownTestProbe)
+        {
+            APTTYPE apartment{};
+            APTTYPEQUALIFIER qualifier{};
+            probe->mta.store(SUCCEEDED(CoGetApartmentType(&apartment, &qualifier)) && apartment == APTTYPE_MTA);
+            probe->offOwner.store(GetCurrentThreadId() != probe->owner);
+            probe->draftRetired.store(probe->draft.expired());
+            probe->liveDraftRetired.store(probe->liveDraft.expired());
+            probe->hostCpuRootsRetired.store(
+                std::holds_alternative<std::monostate>(owner._drag) && ! owner._overlaySelection &&
+                (! owner._uiBenchmark || (owner._uiBenchmark->fixture.layers.empty() && owner._uiBenchmark->imageImportBaseline.layers.empty() &&
+                                          ! owner._uiBenchmark->previousImage.HasStorage() && ! owner._uiBenchmark->previousPreview.HasStorage())));
+            probe->workerCalls.fetch_add(1);
+        }
+    },
+                 this});
     _pathClassificationTicket.reset();
     _pathReadWait.CloseAfterFinalWorkers();
     // Real Close has returned from final worker retirement; no useful parent or borrowed route remains.
     if (_utilityReadbackInitialized)
     {
-        if (!_utilityReadback.ReleaseJoinedChargesOwner() || !_utilityReadback.CloseOwner())
+        if (! _utilityReadback.ReleaseJoinedChargesOwner() || ! _utilityReadback.CloseOwner())
             std::terminate();
         _utilityReadbackInitialized = false;
     }
     if (_selectionOutlineInitialized)
     {
-        if (!_selectionOutlineDisplay.CloseAfterWorkersOwner())
+        if (! _selectionOutlineDisplay.CloseAfterWorkersOwner())
             std::terminate();
         _selectionOutlineInitialized = false;
-        _selectionOutlineViewValid = false;
-        _lassoDraftDisplayEnabled = false;
-        _lassoDraftViewValid = false;
+        _selectionOutlineViewValid   = false;
+        _lassoDraftDisplayEnabled    = false;
+        _lassoDraftViewValid         = false;
     }
     _finalPublicationShutdownGpu.ResetOwner();
     _strokeFinishShutdownGpu.ResetOwner();
     _strokeFinishShutdownDisplayGpu.ResetOwner();
     if (_committedDisplayInitialized)
     {
-        if (!_pendingDisplay.CloseAfterWorkersOwner() || !_committedDisplay.CloseAfterWorkersOwner())
+        if (! _pendingDisplay.CloseAfterWorkersOwner() || ! _committedDisplay.CloseAfterWorkersOwner())
             std::terminate();
-        _pendingDisplayInitialized = false;
-        _committedDisplayInitialized = false;
+        _pendingDisplayInitialized          = false;
+        _committedDisplayInitialized        = false;
         _committedDisplayAllowHiddenForTest = false;
-        _acknowledgedCommittedDisplay = nullptr;
+        _acknowledgedCommittedDisplay       = nullptr;
     }
     if (_recordedCommandsInitialized)
     {
-        if (!_recordedCommands.CloseOwner())
+        if (! _recordedCommands.CloseOwner())
             std::terminate();
         _recordedCommandsInitialized = false;
     }
@@ -4075,20 +4044,20 @@ void Application::Shutdown() noexcept
     if (_lassoInput.Busy())
         (void)_lassoInput.Drop(_lassoInput.Opening());
     _lassoAcquiredOpening = 0;
-    _lassoSessionOpening = 0;
-    _lassoFinishQueued = false;
+    _lassoSessionOpening  = 0;
+    _lassoFinishQueued    = false;
     if (_selectionOffsetStamp)
         (void)_historyWork.Finish(*_selectionOffsetStamp);
     _selectionOffsetStamp.reset();
     _selectionOffsetTicket.reset();
     // Close suppresses useful completion callbacks. Its joined retirement acknowledges the original
     // selection-press parent; only now finish its exact barrier and discard a never-started prefix.
-    assert(!_selectionPressState || !_selectionPressState->controller);
+    assert(! _selectionPressState || ! _selectionPressState->controller);
     if (_selectionPressStamp)
         (void)_historyWork.Finish(*_selectionPressStamp);
     _selectionPressStamp.reset();
     // Joined Close suppresses useful Polygonal notifications too; only its acknowledgement releases this stamp.
-    assert(!_polygonalPressState || !_polygonalPressState->controller);
+    assert(! _polygonalPressState || ! _polygonalPressState->controller);
     if (_polygonalPressStamp)
         (void)_historyWork.Finish(*_polygonalPressStamp);
     _polygonalPressStamp.reset();
@@ -4098,12 +4067,12 @@ void Application::Shutdown() noexcept
         while (_polygonalPressInput.Take(_polygonalPressFamily))
         {
         }
-        if (!_polygonalPressInput.Closed())
+        if (! _polygonalPressInput.Closed())
             (void)_polygonalPressInput.CloseInput(_polygonalPressFamily);
-        if (!_polygonalPressInput.Finish(_polygonalPressFamily))
+        if (! _polygonalPressInput.Finish(_polygonalPressFamily))
             std::terminate();
     }
-    assert(!_polygonalDrawing || !_polygonalDrawing->controller);
+    assert(! _polygonalDrawing || ! _polygonalDrawing->controller);
     if (_polygonalStamp)
         (void)_historyWork.Finish(_polygonalStamp.value());
     _polygonalStamp.reset();
@@ -4149,10 +4118,10 @@ void Application::Shutdown() noexcept
             (void)ShutdownBlockReasonDestroy(_window.get());
         }
     }
-    _endSessionPending = false;
+    _endSessionPending        = false;
     _endSessionPromptDeferred = false;
-    _closeDeferred = false;
-    _closeConfirmed = false;
+    _closeDeferred            = false;
+    _closeConfirmed           = false;
     _renderer.SetChrome(nullptr);
     DropBrushEngine();
     _composition.ReleaseDeviceResources();
@@ -4177,19 +4146,19 @@ bool Application::WaitUntilMessage(DWORD timeout) noexcept
 {
     // The job event and settings watch wait beside messages, including while hidden. No periodic job timer.
     HANDLE handles[3]{};
-    DWORD count = 0;
-    const DWORD noIndex = MAXDWORD;
-    DWORD jobIndex = noIndex;
-    DWORD watchIndex = noIndex;
+    DWORD count            = 0;
+    const DWORD noIndex    = MAXDWORD;
+    DWORD jobIndex         = noIndex;
+    DWORD watchIndex       = noIndex;
     DWORD observationIndex = noIndex;
     if (const HANDLE wake = _jobs.WakeHandle(); wake != nullptr)
     {
-        jobIndex = count;
+        jobIndex         = count;
         handles[count++] = wake;
     }
     if (const HANDLE watch = SettingsWatchHandle(); watch != nullptr)
     {
-        watchIndex = count;
+        watchIndex       = count;
         handles[count++] = watch;
     }
     if (const HANDLE observation = UiCancellationWakeHandle(); observation != nullptr)
@@ -4197,8 +4166,7 @@ bool Application::WaitUntilMessage(DWORD timeout) noexcept
         observationIndex = count;
         handles[count++] = observation;
     }
-    const DWORD waitResult =
-        MsgWaitForMultipleObjectsEx(count, count ? handles : nullptr, timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+    const DWORD waitResult = MsgWaitForMultipleObjectsEx(count, count ? handles : nullptr, timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
     if (waitResult == WAIT_OBJECT_0 + count || waitResult == WAIT_TIMEOUT)
     {
         return true;
@@ -4222,25 +4190,25 @@ bool Application::WaitUntilMessage(DWORD timeout) noexcept
 bool Application::WaitForFrameLatency() noexcept
 {
     const HANDLE waitable = _renderer.FrameLatencyWaitableObject();
-    if (!waitable)
+    if (! waitable)
     {
         return true;
     }
     HANDLE handles[4]{};
-    DWORD count = 0;
+    DWORD count            = 0;
     DWORD observationIndex = MAXDWORD;
-    DWORD jobIndex = MAXDWORD;
-    DWORD watchIndex = MAXDWORD;
+    DWORD jobIndex         = MAXDWORD;
+    DWORD watchIndex       = MAXDWORD;
     if (const HANDLE wake = _jobs.WakeHandle(); wake != nullptr)
     {
-        jobIndex = count;
+        jobIndex         = count;
         handles[count++] = wake;
     }
     const DWORD frameIndex = count;
-    handles[count++] = waitable;
+    handles[count++]       = waitable;
     if (const HANDLE watch = SettingsWatchHandle(); watch != nullptr)
     {
-        watchIndex = count;
+        watchIndex       = count;
         handles[count++] = watch;
     }
     if (const HANDLE observation = UiCancellationWakeHandle(); observation != nullptr)
@@ -4275,7 +4243,7 @@ bool Application::WaitForFrameLatency() noexcept
 
 void Application::CheckDeviceAdapter() noexcept
 {
-    if (!_rendererReady || !_window)
+    if (! _rendererReady || ! _window)
     {
         return;
     }
@@ -4309,7 +4277,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         return;
     }
 
-    if (!_chrome)
+    if (! _chrome)
     {
         return;
     }
@@ -4321,21 +4289,27 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
         const CanvasHole hole = _chrome->HolePixels();
         const Vec2 view{static_cast<float>(point.x) - hole.left, static_cast<float>(point.y) - hole.top};
-        const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+        const Vec2 pixel  = _viewport.DocumentFromView(view, DocumentSize());
         const bool inside = view.x >= 0 && view.y >= 0 && view.x < hole.width && view.y < hole.height;
-        std::printf("WAND POINTER message=%u client=%ld,%ld document=%.3f,%.3f modifiers=%u inside=%d\n", message,
-                    point.x, point.y, pixel.x, pixel.y, event.modifiers, inside);
+        std::printf("WAND POINTER message=%u client=%ld,%ld document=%.3f,%.3f modifiers=%u inside=%d\n",
+                    message,
+                    point.x,
+                    point.y,
+                    pixel.x,
+                    pixel.y,
+                    event.modifiers,
+                    inside);
     }
     if (message == WM_MOUSEWHEEL)
     {
         POINT screen{point};
-        if (!ScreenToClient(_window.get(), &screen))
+        if (! ScreenToClient(_window.get(), &screen))
         {
             return;
         }
-        point = screen;
+        point            = screen;
         event.wheelDelta = static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam));
-        event.action = DxUi::PointerAction::Wheel;
+        event.action     = DxUi::PointerAction::Wheel;
     }
     else if (message == WM_MOUSELEAVE)
     {
@@ -4357,10 +4331,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     else if (message == WM_LBUTTONUP || message == WM_RBUTTONUP)
     {
         event.action = DxUi::PointerAction::Up;
-        if (GetCapture() == _window.get() &&
-            !(message == WM_RBUTTONUP &&
-              (_canvasBrushInput.Sampling() || _canvasPanLast || _selectionPressInput.Sampling() ||
-               (_polygonalPressInput.Busy() && _polygonalPressLeftDown))))
+        if (GetCapture() == _window.get() && ! (message == WM_RBUTTONUP && (_canvasBrushInput.Sampling() || _canvasPanLast || _selectionPressInput.Sampling() ||
+                                                                            (_polygonalPressInput.Busy() && _polygonalPressLeftDown))))
         {
             // A refused right gesture cannot release an admitted left path's capture. Its own left release
             // below ends that path; this release is not a capture loss.
@@ -4372,13 +4344,13 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     else
     {
         event.action = DxUi::PointerAction::Move;
-        if (!_mouseTracked)
+        if (! _mouseTracked)
         {
             TRACKMOUSEEVENT track{};
-            track.cbSize = sizeof(track);
-            track.dwFlags = TME_LEAVE;
+            track.cbSize    = sizeof(track);
+            track.dwFlags   = TME_LEAVE;
             track.hwndTrack = _window.get();
-            _mouseTracked = TrackMouseEvent(&track) != FALSE;
+            _mouseTracked   = TrackMouseEvent(&track) != FALSE;
         }
     }
     event.xPixels = static_cast<float>(point.x);
@@ -4405,18 +4377,16 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         }
         else if (event.action == DxUi::PointerAction::Move || message == WM_LBUTTONUP)
             RecordCanvasBrush(event, capturedView);
-        else if (event.action == DxUi::PointerAction::Leave && !(_canvasLifetime && _canvasLifetime->presenting))
+        else if (event.action == DxUi::PointerAction::Leave && ! (_canvasLifetime && _canvasLifetime->presenting))
             LoseCanvasBrush(true);
         return; // A canvas press owns its captured samples over chrome until its terminal is acknowledged.
     }
-    if (event.action == DxUi::PointerAction::Down && !PointerBusy())
+    if (event.action == DxUi::PointerAction::Down && ! PointerBusy())
     {
         // RF-907 (legacy NativeLayerList's thumbnails): a press on a layer row's Mask badge targets that mask, Shift
         // turning it off or on, and takes the press; a press elsewhere on the row whose mask is the target targets
         // the layer's pixels and goes on to the tree, which selects the row as usual.
-        if (const std::optional<ChromeHost::LayerTargetPress> target =
-                _chrome->LayerTargetAt(event.xPixels, event.yPixels);
-            target.has_value())
+        if (const std::optional<ChromeHost::LayerTargetPress> target = _chrome->LayerTargetAt(event.xPixels, event.yPixels); target.has_value())
         {
             TargetLayer(target->id, target->mask, target->mask && (event.modifiers & MK_SHIFT) != 0);
             if (target->mask)
@@ -4428,9 +4398,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     }
     // An interaction the canvas took keeps the pointer's moves and release until it ends, over the chrome too (the
     // view that took the press keeps the drag, as the legacy canvas did); anything else lands on the chrome first.
-    const bool canvasDrag =
-        PointerBusy() && (event.action == DxUi::PointerAction::Move || event.action == DxUi::PointerAction::Up);
-    if (!canvasDrag && _chrome->DispatchPointer(event))
+    const bool canvasDrag = PointerBusy() && (event.action == DxUi::PointerAction::Move || event.action == DxUi::PointerAction::Up);
+    if (! canvasDrag && _chrome->DispatchPointer(event))
     {
         InvalidateFrame();
         // DxUi takes every leave for its hover; the canvas still hears it (the tip circle and a drag end there).
@@ -4447,71 +4416,71 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     }
 
     const CanvasHole hole = _chrome->HolePixels();
-    const bool inHole = event.xPixels >= hole.left && event.yPixels >= hole.top &&
-                        event.xPixels < hole.left + hole.width && event.yPixels < hole.top + hole.height;
+    const bool inHole =
+        event.xPixels >= hole.left && event.yPixels >= hole.top && event.xPixels < hole.left + hole.width && event.yPixels < hole.top + hole.height;
     const Vec2 view{event.xPixels - hole.left, event.yPixels - hole.top};
     switch (event.action)
     {
-    case DxUi::PointerAction::Wheel:
-        if (inHole)
-        {
-            // 1.1 per notch, a fraction of it per partial delta: a precision touchpad's many small deltas (or a
-            // pinch) zoom as far as the notches they add up to, and a zero delta does nothing (RF-404).
-            const double factor = CanvasViewport::WheelZoomFactor(static_cast<double>(event.wheelDelta));
-            if (factor != 1.0)
+        case DxUi::PointerAction::Wheel:
+            if (inHole)
             {
-                _viewport.SetZoom(_viewport.zoom * factor, view, DocumentSize());
-                SyncView();
+                // 1.1 per notch, a fraction of it per partial delta: a precision touchpad's many small deltas (or a
+                // pinch) zoom as far as the notches they add up to, and a zero delta does nothing (RF-404).
+                const double factor = CanvasViewport::WheelZoomFactor(static_cast<double>(event.wheelDelta));
+                if (factor != 1.0)
+                {
+                    _viewport.SetZoom(_viewport.zoom * factor, view, DocumentSize());
+                    SyncView();
+                }
             }
-        }
-        return;
-    case DxUi::PointerAction::Down:
-        if (inHole)
-        {
-            if (message == WM_LBUTTONDOWN && !_spacePan && QueueCanvasBrush(event, view))
-                return;
-            // Read-only pan/sampling input remains available while a typed edit is settling.
-            // A mutation press must obtain the acknowledged prerequisite or explicitly refuse admission.
-            const bool viewPress = _spacePan || _tool == EditorTool::Hand || SamplesColor();
-            if (!viewPress && !CloseOpacityEdit())
+            return;
+        case DxUi::PointerAction::Down:
+            if (inHole)
             {
-                if (!_hostExecuting)
-                    ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_BUSY)));
-                return;
+                if (message == WM_LBUTTONDOWN && ! _spacePan && QueueCanvasBrush(event, view))
+                    return;
+                // Read-only pan/sampling input remains available while a typed edit is settling.
+                // A mutation press must obtain the acknowledged prerequisite or explicitly refuse admission.
+                const bool viewPress = _spacePan || _tool == EditorTool::Hand || SamplesColor();
+                if (! viewPress && ! CloseOpacityEdit())
+                {
+                    if (! _hostExecuting)
+                        ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_BUSY)));
+                    return;
+                }
+                if (! PointerBusy())
+                {
+                    PressCanvas(event, message, view, point);
+                }
             }
-            if (!PointerBusy())
+            return;
+        case DxUi::PointerAction::Leave:
+            // No capture holds the pointer: a drag ends where it is, as its release would; the tip circle goes.
+            EndPointerDrag(PointerEnd::Left);
+            if (_brushHover.has_value())
             {
-                PressCanvas(event, message, view, point);
+                _brushHover.reset();
+                SyncBrushCursor();
             }
-        }
-        return;
-    case DxUi::PointerAction::Leave:
-        // No capture holds the pointer: a drag ends where it is, as its release would; the tip circle goes.
-        EndPointerDrag(PointerEnd::Left);
-        if (_brushHover.has_value())
-        {
-            _brushHover.reset();
-            SyncBrushCursor();
-        }
-        return;
-    case ::DxUi::PointerAction::Cancel:
-    case ::DxUi::PointerAction::Move:
-    case ::DxUi::PointerAction::Up:
-    case ::DxUi::PointerAction::MiddleDown: // The host sends no middle button to DxUi.
-    case ::DxUi::PointerAction::MiddleUp:
-    default:
-        if (!DragPointer(event, view) && event.action == DxUi::PointerAction::Move)
-        {
-            HoverCanvas(event, view, inHole);
-        }
-        return;
+            return;
+        case ::DxUi::PointerAction::Cancel:
+        case ::DxUi::PointerAction::Move:
+        case ::DxUi::PointerAction::Up:
+        case ::DxUi::PointerAction::MiddleDown: // The host sends no middle button to DxUi.
+        case ::DxUi::PointerAction::MiddleUp:
+        default:
+            if (! DragPointer(event, view) && event.action == DxUi::PointerAction::Move)
+            {
+                HoverCanvas(event, view, inHole);
+            }
+            return;
     }
 }
 
 bool Application::PointerBusy() const noexcept
 {
-    return (_polygonalPressInput.Busy() && _polygonalPressLeftDown) || !std::holds_alternative<std::monostate>(_drag) ||
-           _session.PendingBrush() != nullptr || _session.HasPendingWarp() || _session.PendingShape().has_value();
+    return (_polygonalPressInput.Busy() && _polygonalPressLeftDown) || ! std::holds_alternative<std::monostate>(_drag) || _session.PendingBrush() != nullptr ||
+           _session.HasPendingWarp() || _session.PendingShape().has_value();
 }
 
 void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec2 view, POINT client) noexcept
@@ -4527,20 +4496,20 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
     {
         return;
     }
-    const bool left = message == WM_LBUTTONDOWN;
+    const bool left  = message == WM_LBUTTONDOWN;
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     if (left && SamplesColor())
     {
         // Only a scalar descriptor is captured here. One admitted original root serves this accepted prefix.
         const auto opening = CanQueueSampler() ? BeginSamplerOpening(pixel) : std::nullopt;
-        if (!opening)
+        if (! opening)
         {
             _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
             return;
         }
         const auto* source = FindSamplerOpening(opening.value());
-        _drag = ColorSampling{source->originalArgb, std::nullopt, pixel, opening};
-        _layoutDirty = true;
+        _drag              = ColorSampling{source->originalArgb, std::nullopt, pixel, opening};
+        _layoutDirty       = true;
         InvalidateFrame();
         return;
     }
@@ -4572,7 +4541,7 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
         {
             BeginWarpStroke(view);
         }
-        else if (_session.CanPaint() && !(_tool == EditorTool::Heal && _session.IsMaskSelected()))
+        else if (_session.CanPaint() && ! (_tool == EditorTool::Heal && _session.IsMaskSelected()))
         {
             // Accepted paint/erase/healing/blur presses already entered QueueCanvasBrush. A refused or
             // unsupported opening cannot fall through to owner coverage/sample construction.
@@ -4615,7 +4584,7 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
 bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexcept
 {
     const bool release = event.action == DxUi::PointerAction::Up;
-    if (!release && event.action != DxUi::PointerAction::Move)
+    if (! release && event.action != DxUi::PointerAction::Move)
     {
         return false;
     }
@@ -4641,8 +4610,7 @@ bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexce
     if (_session.PendingShape().has_value())
     {
         // Shift squares; Alt, which has no other job here, draws from the center as in Photoshop.
-        _session.DragShape(_viewport.DocumentFromView(view, DocumentSize()), (event.modifiers & MK_SHIFT) != 0,
-                           KeyboardState::Held(VK_MENU));
+        _session.DragShape(_viewport.DocumentFromView(view, DocumentSize()), (event.modifiers & MK_SHIFT) != 0, KeyboardState::Held(VK_MENU));
         if (release)
         {
             FinishShapeDraft();
@@ -4675,16 +4643,15 @@ bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexce
         if (release)
         {
             _drag = PointerDrag{};
-            if (!drag.moved)
+            if (! drag.moved)
             {
-                _viewport.SetZoom(_viewport.zoom * (KeyboardState::Held(VK_MENU) ? 0.5 : 2.0), drag.anchor,
-                                  DocumentSize());
+                _viewport.SetZoom(_viewport.zoom * (KeyboardState::Held(VK_MENU) ? 0.5 : 2.0), drag.anchor, DocumentSize());
                 SyncView();
             }
             return true;
         }
         const double dragDip = (view.x - drag.anchor.x) / _viewport.DipToView(1.0);
-        zoom->moved = drag.moved || std::fabs(dragDip) >= 3.0;
+        zoom->moved          = drag.moved || std::fabs(dragDip) >= 3.0;
         if (zoom->moved)
         {
             _viewport.SetZoom(drag.zoom * CanvasViewport::DragZoomFactor(dragDip), drag.anchor, DocumentSize());
@@ -4725,8 +4692,7 @@ bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexce
         }
         return true;
     }
-    if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<DraftDrag>(_drag) ||
-        std::holds_alternative<PixelDrag>(_drag))
+    if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<DraftDrag>(_drag) || std::holds_alternative<PixelDrag>(_drag))
     {
         if (release)
         {
@@ -4850,10 +4816,10 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
     else if (const MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag); move != nullptr && lost)
     {
         // The box goes back to where the drag started: a drag-only edit drops, an Alt-drag's duplicate with it.
-        const TransformDrag drag = move->drag;
-        _drag = PointerDrag{};
+        const TransformDrag drag                 = move->drag;
+        _drag                                    = PointerDrag{};
         const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
-        if (edit.has_value() && !edit->persistent)
+        if (edit.has_value() && ! edit->persistent)
         {
             (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Escape);
         }
@@ -4871,13 +4837,13 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
     {
         EndTransformDrag();
     }
-    else if (std::holds_alternative<OutlineDrag>(_drag) && _session.IsMovingSelection() && !_hostExecuting)
+    else if (std::holds_alternative<OutlineDrag>(_drag) && _session.IsMovingSelection() && ! _hostExecuting)
     {
         (void)QueueSelectionMoveClose(false);
         SelectionChanged();
     }
-    else if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<DraftDrag>(_drag) ||
-             std::holds_alternative<PixelDrag>(_drag) || _session.PendingLasso().has_value())
+    else if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<DraftDrag>(_drag) || std::holds_alternative<PixelDrag>(_drag) ||
+             _session.PendingLasso().has_value())
     {
         // Marquee and freehand outlines drop while a polygonal one stays; an outline move keeps its place; lifted
         // pixels drop.
@@ -4898,7 +4864,7 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
     else if (const auto* hue = std::get_if<HueTargetDrag>(&_drag))
     {
         const auto opening = hue->opening;
-        _drag = PointerDrag{};
+        _drag              = PointerDrag{};
         if (opening)
             SealHueInputOwner(opening.value(), true);
         else
@@ -4914,49 +4880,47 @@ bool Application::SkipsTransformSettle(int command) noexcept
 {
     switch (command)
     {
-    // The save prompt's Cancel keeps a pending transform: these settle after the answer, or apply it as they write.
-    case ChromeHost::kCommandNew:
-    case ChromeHost::kCommandNewCanvas:
-    case ChromeHost::kCommandOpen:
-    case ChromeHost::kCommandCloseProject:
-    case ChromeHost::kCommandExit:
-    case ChromeHost::kCommandUndo:
-    case ChromeHost::kCommandRedo:
-    case ChromeHost::kCommandZoomFit:
-    case ChromeHost::kCommandZoomActual:
-    case ChromeHost::kCommandZoomIn:
-    case ChromeHost::kCommandZoomOut:
-    case ChromeHost::kCommandSampleRing:
-    case ChromeHost::kCommandKeyboardShortcuts:
-    case ChromeHost::kCommandAbout:
-    case ChromeHost::kCommandFreeTransform:
-    case ChromeHost::kCommandRenameLayer:
-    case ChromeHost::kCommandSwapPalette:
-    case ChromeHost::kCommandResetPalette:
-    case ChromeHost::kCommandNudgeSelectionLeft:
-    case ChromeHost::kCommandNudgeSelectionRight:
-    case ChromeHost::kCommandNudgeSelectionUp:
-    case ChromeHost::kCommandNudgeSelectionDown:
-    case ChromeHost::kCommandNudgeLayerLeft:
-    case ChromeHost::kCommandNudgeLayerRight:
-    case ChromeHost::kCommandNudgeLayerUp:
-    case ChromeHost::kCommandNudgeLayerDown:
-    case ChromeHost::kCommandNudgePixelsLeft:
-    case ChromeHost::kCommandNudgePixelsRight:
-    case ChromeHost::kCommandNudgePixelsUp:
-    case ChromeHost::kCommandNudgePixelsDown:
-    case ChromeHost::kCommandBrushSmaller:
-    case ChromeHost::kCommandBrushLarger:
-    case ChromeHost::kCommandBrushSofter:
-    case ChromeHost::kCommandBrushHarder:
-    case ChromeHost::kCommandBlendPrevious:
-    case ChromeHost::kCommandBlendNext:
-    case ChromeHost::kCommandToggleMarqueeKind:
-    case ChromeHost::kCommandToggleLassoKind:
-    case ChromeHost::kCommandToggleShapeKind:
-        return true;
-    default:
-        return false;
+        // The save prompt's Cancel keeps a pending transform: these settle after the answer, or apply it as they write.
+        case ChromeHost::kCommandNew:
+        case ChromeHost::kCommandNewCanvas:
+        case ChromeHost::kCommandOpen:
+        case ChromeHost::kCommandCloseProject:
+        case ChromeHost::kCommandExit:
+        case ChromeHost::kCommandUndo:
+        case ChromeHost::kCommandRedo:
+        case ChromeHost::kCommandZoomFit:
+        case ChromeHost::kCommandZoomActual:
+        case ChromeHost::kCommandZoomIn:
+        case ChromeHost::kCommandZoomOut:
+        case ChromeHost::kCommandSampleRing:
+        case ChromeHost::kCommandKeyboardShortcuts:
+        case ChromeHost::kCommandAbout:
+        case ChromeHost::kCommandFreeTransform:
+        case ChromeHost::kCommandRenameLayer:
+        case ChromeHost::kCommandSwapPalette:
+        case ChromeHost::kCommandResetPalette:
+        case ChromeHost::kCommandNudgeSelectionLeft:
+        case ChromeHost::kCommandNudgeSelectionRight:
+        case ChromeHost::kCommandNudgeSelectionUp:
+        case ChromeHost::kCommandNudgeSelectionDown:
+        case ChromeHost::kCommandNudgeLayerLeft:
+        case ChromeHost::kCommandNudgeLayerRight:
+        case ChromeHost::kCommandNudgeLayerUp:
+        case ChromeHost::kCommandNudgeLayerDown:
+        case ChromeHost::kCommandNudgePixelsLeft:
+        case ChromeHost::kCommandNudgePixelsRight:
+        case ChromeHost::kCommandNudgePixelsUp:
+        case ChromeHost::kCommandNudgePixelsDown:
+        case ChromeHost::kCommandBrushSmaller:
+        case ChromeHost::kCommandBrushLarger:
+        case ChromeHost::kCommandBrushSofter:
+        case ChromeHost::kCommandBrushHarder:
+        case ChromeHost::kCommandBlendPrevious:
+        case ChromeHost::kCommandBlendNext:
+        case ChromeHost::kCommandToggleMarqueeKind:
+        case ChromeHost::kCommandToggleLassoKind:
+        case ChromeHost::kCommandToggleShapeKind: return true;
+        default: return false;
     }
 }
 
@@ -4967,9 +4931,7 @@ void Application::OnCommand(int command) noexcept
         RetryPreparedLayerRows();
         return; // Derived display retry neither settles nor changes an open editing transaction.
     }
-    if (!_hostExecuting &&
-        (command == ChromeHost::kCommandSwapPalette || command == ChromeHost::kCommandResetPalette) &&
-        CanChangePaletteDuringSampling())
+    if (! _hostExecuting && (command == ChromeHost::kCommandSwapPalette || command == ChromeHost::kCommandResetPalette) && CanChangePaletteDuringSampling())
     {
         if (_chrome && _chrome->ColorPickerOpen())
             _chrome->CloseColorPicker(false);
@@ -4982,98 +4944,66 @@ void Application::OnCommand(int command) noexcept
         InvalidateFrame();
         return; // Explicit input invalidates old sample publication at event time, outside document history.
     }
-    if (!_hostExecuting && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo) &&
-        CancelCanvasBrush(true))
+    if (! _hostExecuting && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo) && CancelCanvasBrush(true))
         return; // Pointer-down cancels its draft; a sealed stroke retains its ordinal and queues Undo below.
     // View/chrome commands keep pumping. Every document mutation waits behind admitted history/input, preserving
     // its event-time command instead of settling a panel inline and falling through on failure.
-    const bool view = command == ChromeHost::kCommandZoomFit || command == ChromeHost::kCommandZoomActual ||
-                      command == ChromeHost::kCommandZoomIn || command == ChromeHost::kCommandZoomOut ||
-                      command == ChromeHost::kCommandAbout || command == ChromeHost::kCommandSampleRing ||
-                      command == ChromeHost::kCommandKeyboardShortcuts;
-    const bool file = command == ChromeHost::kCommandNew || command == ChromeHost::kCommandOpen ||
-                      command == ChromeHost::kCommandImportImages || command == ChromeHost::kCommandSave ||
-                      command == ChromeHost::kCommandSaveAs || command == ChromeHost::kCommandExportPng ||
-                      command == ChromeHost::kCommandExportJpeg || command == ChromeHost::kCommandCloseProject ||
-                      command == ChromeHost::kCommandExit;
-    const bool rasterEdit = command == ChromeHost::kCommandFillForeground ||
-                            command == ChromeHost::kCommandFillBackground ||
-                            command == ChromeHost::kCommandClearPixels || command == ChromeHost::kCommandInvert ||
-                            command == ChromeHost::kCommandDeleteKey;
-    const bool clipboard = command == ChromeHost::kCommandCut || command == ChromeHost::kCommandCopy ||
-                           command == ChromeHost::kCommandCopyMerged || command == ChromeHost::kCommandPaste;
-    const bool maskEdit = command == ChromeHost::kCommandAddMask || command == ChromeHost::kCommandAddBlackMask;
-    const bool layerCopy = command == ChromeHost::kCommandLayerViaCopy;
-    const bool loadedSelection =
-        command == ChromeHost::kCommandLoadLayerSelection || command == ChromeHost::kCommandLoadMaskSelection;
-    const bool settledSelection = (command == ChromeHost::kCommandSelectAll ||
-                                   command == ChromeHost::kCommandDeselect || command == ChromeHost::kCommandInverse) &&
-                                  _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
+    const bool view       = command == ChromeHost::kCommandZoomFit || command == ChromeHost::kCommandZoomActual || command == ChromeHost::kCommandZoomIn ||
+                            command == ChromeHost::kCommandZoomOut || command == ChromeHost::kCommandAbout || command == ChromeHost::kCommandSampleRing ||
+                            command == ChromeHost::kCommandKeyboardShortcuts;
+    const bool file       = command == ChromeHost::kCommandNew || command == ChromeHost::kCommandOpen || command == ChromeHost::kCommandImportImages ||
+                            command == ChromeHost::kCommandSave || command == ChromeHost::kCommandSaveAs || command == ChromeHost::kCommandExportPng ||
+                            command == ChromeHost::kCommandExportJpeg || command == ChromeHost::kCommandCloseProject || command == ChromeHost::kCommandExit;
+    const bool rasterEdit = command == ChromeHost::kCommandFillForeground || command == ChromeHost::kCommandFillBackground ||
+                            command == ChromeHost::kCommandClearPixels || command == ChromeHost::kCommandInvert || command == ChromeHost::kCommandDeleteKey;
+    const bool clipboard  = command == ChromeHost::kCommandCut || command == ChromeHost::kCommandCopy || command == ChromeHost::kCommandCopyMerged ||
+                            command == ChromeHost::kCommandPaste;
+    const bool maskEdit   = command == ChromeHost::kCommandAddMask || command == ChromeHost::kCommandAddBlackMask;
+    const bool layerCopy  = command == ChromeHost::kCommandLayerViaCopy;
+    const bool loadedSelection = command == ChromeHost::kCommandLoadLayerSelection || command == ChromeHost::kCommandLoadMaskSelection;
+    const bool settledSelection =
+        (command == ChromeHost::kCommandSelectAll || command == ChromeHost::kCommandDeselect || command == ChromeHost::kCommandInverse) &&
+        _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
     const auto selectedTool = ChromeHost::ToolForSelectCommand(command);
     const bool closesOutline =
-        _session.IsMovingSelection() &&
-        (SelectionMoveEndCommand(command) || (selectedTool != EditorTool::Count && selectedTool != _tool));
-    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy || settledSelection || loadedSelection ||
-                            closesOutline || command == ChromeHost::kCommandFreeTransform))
+        _session.IsMovingSelection() && (SelectionMoveEndCommand(command) || (selectedTool != EditorTool::Count && selectedTool != _tool));
+    if (! _hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy || settledSelection || loadedSelection || closesOutline ||
+                             command == ChromeHost::kCommandFreeTransform))
     {
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
     }
-    if (!_hostExecuting && file)
+    if (! _hostExecuting && file)
     {
         switch (command)
         {
-        case ChromeHost::kCommandNew:
-            NewDocument();
-            break;
-        case ChromeHost::kCommandOpen:
-            OpenDocument();
-            break;
-        case ChromeHost::kCommandImportImages:
-            ImportImages();
-            break;
-        case ChromeHost::kCommandSave:
-            (void)SaveDocument(false);
-            break;
-        case ChromeHost::kCommandSaveAs:
-            (void)SaveDocument(true);
-            break;
-        case ChromeHost::kCommandExportPng:
-            ExportFlattened(false);
-            break;
-        case ChromeHost::kCommandExportJpeg:
-            ExportFlattened(true);
-            break;
-        case ChromeHost::kCommandCloseProject:
-            CloseProject();
-            break;
-        case ChromeHost::kCommandExit:
-            ReportHostAdmission(QueueHostInput(HostCloseWindowInput{}));
-            break;
+            case ChromeHost::kCommandNew: NewDocument(); break;
+            case ChromeHost::kCommandOpen: OpenDocument(); break;
+            case ChromeHost::kCommandImportImages: ImportImages(); break;
+            case ChromeHost::kCommandSave: (void)SaveDocument(false); break;
+            case ChromeHost::kCommandSaveAs: (void)SaveDocument(true); break;
+            case ChromeHost::kCommandExportPng: ExportFlattened(false); break;
+            case ChromeHost::kCommandExportJpeg: ExportFlattened(true); break;
+            case ChromeHost::kCommandCloseProject: CloseProject(); break;
+            case ChromeHost::kCommandExit: ReportHostAdmission(QueueHostInput(HostCloseWindowInput{})); break;
         }
         return;
     }
-    if (!_hostExecuting && !_historyWork.Busy() && !_activeHostRequest && _hostRequests.Size() == 0 &&
-        _session.HasColorEdit() && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
+    if (! _hostExecuting && ! _historyWork.Busy() && ! _activeHostRequest && _hostRequests.Size() == 0 && _session.HasColorEdit() &&
+        (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
     {
         return; // an open, uncommitted panel owns history until OK/Cancel
     }
-    if (!_hostExecuting && command >= ChromeHost::kCommandNudgeSelectionLeft &&
-        command <= ChromeHost::kCommandNudgeSelectionDown && !_session.IsMovingSelection() &&
-        CanQueueSelectionMoveClick())
+    if (! _hostExecuting && command >= ChromeHost::kCommandNudgeSelectionLeft && command <= ChromeHost::kCommandNudgeSelectionDown &&
+        ! _session.IsMovingSelection() && CanQueueSelectionMoveClick())
     {
         const int step = _acceleratorShift ? 10 : 1;
-        const int dx = command == ChromeHost::kCommandNudgeSelectionLeft    ? -step
-                       : command == ChromeHost::kCommandNudgeSelectionRight ? step
-                                                                            : 0;
-        const int dy = command == ChromeHost::kCommandNudgeSelectionUp     ? -step
-                       : command == ChromeHost::kCommandNudgeSelectionDown ? step
-                                                                           : 0;
+        const int dx   = command == ChromeHost::kCommandNudgeSelectionLeft ? -step : command == ChromeHost::kCommandNudgeSelectionRight ? step : 0;
+        const int dy   = command == ChromeHost::kCommandNudgeSelectionUp ? -step : command == ChromeHost::kCommandNudgeSelectionDown ? step : 0;
         ReportHostAdmission(QueueHostInput(HostSelectionNudgeInput{dx, dy}));
         return;
     }
-    if (!_hostExecuting && command >= ChromeHost::kCommandNudgePixelsLeft &&
-        command <= ChromeHost::kCommandNudgePixelsDown)
+    if (! _hostExecuting && command >= ChromeHost::kCommandNudgePixelsLeft && command <= ChromeHost::kCommandNudgePixelsDown)
     {
         const double step = _acceleratorShift ? 10.0 : 1.0;
         const Vec2 offset{command == ChromeHost::kCommandNudgePixelsLeft    ? -step
@@ -5085,8 +5015,7 @@ void Application::OnCommand(int command) noexcept
         ReportHostAdmission(QueueHostInput(HostPixelNudgeInput{offset}));
         return;
     }
-    if (!_hostExecuting && command >= ChromeHost::kCommandNudgeLayerLeft &&
-        command <= ChromeHost::kCommandNudgeLayerDown)
+    if (! _hostExecuting && command >= ChromeHost::kCommandNudgeLayerLeft && command <= ChromeHost::kCommandNudgeLayerDown)
     {
         const double step = _acceleratorShift ? 10.0 : 1.0;
         const Vec2 offset{command == ChromeHost::kCommandNudgeLayerLeft    ? -step
@@ -5098,28 +5027,26 @@ void Application::OnCommand(int command) noexcept
         ReportHostAdmission(QueueHostInput(HostLayerNudgeInput{offset}));
         return;
     }
-    if (!_hostExecuting && !view && !file &&
-        (_polygonalPressInput.Busy() || PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
-         _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() || _opacityEdit ||
-         _activeHostRequest || _hostRequests.Size()))
+    if (! _hostExecuting && ! view && ! file &&
+        (_polygonalPressInput.Busy() || PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.HasColorEdit() ||
+         _session.PendingGradient() || _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         if (_duplicateGesture && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
             _duplicateGesture->pointerDown = false;
-        if (_session.PendingTransformEdit() &&
-            (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
+        if (_session.PendingTransformEdit() && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
             DropDrag<MoveToolDrag>(); // The admitted history request ends pointer input before worker acknowledgement.
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
     }
     // A typed opacity edit records its entry before any command runs, so nothing folds into it or bakes it in.
-    if (!view)
+    if (! view)
     {
-        if (!CloseOpacityEdit())
+        if (! CloseOpacityEdit())
             return;
     }
     // Commands that change layers or files settle a pending transform first, as Enter would; view, history and About
     // do not.
-    if (!SkipsTransformSettle(command))
+    if (! SkipsTransformSettle(command))
     {
         (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
     }
@@ -5130,505 +5057,454 @@ void Application::OnCommand(int command) noexcept
     }
     switch (command)
     {
-    case ChromeHost::kCommandNew:
-        NewDocument();
-        break;
-    case ChromeHost::kCommandOpen:
-        OpenDocument();
-        break;
-    case ChromeHost::kCommandNewCanvas:
-        OpenSizeCard(SizeCardKind::NewCanvas);
-        break;
-    case ChromeHost::kCommandImportImages:
-        ImportImages();
-        break;
-    case ChromeHost::kCommandCloseProject:
-        CloseProject();
-        break;
-    case ChromeHost::kCommandCanvasSize:
-        OpenSizeCard(SizeCardKind::CanvasSize);
-        break;
-    case ChromeHost::kCommandImageSize:
-        OpenSizeCard(SizeCardKind::ImageSize);
-        break;
-    case ChromeHost::kCommandGroupLayers:
-        _session.GroupSelectedLayers();
-        DocumentChanged();
-        break;
-    case ChromeHost::kCommandRenameLayer:
-        RenameActiveLayer();
-        break;
-    case ChromeHost::kCommandMoveLayerUp:
-        _session.MoveActiveLayer(1);
-        DocumentChanged();
-        break;
-    case ChromeHost::kCommandMoveLayerDown:
-        _session.MoveActiveLayer(-1);
-        DocumentChanged();
-        break;
-    case ChromeHost::kCommandClipToggle:
-        if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr)
-        {
-            _session.ToggleClippingMask(active->id);
+        case ChromeHost::kCommandNew: NewDocument(); break;
+        case ChromeHost::kCommandOpen: OpenDocument(); break;
+        case ChromeHost::kCommandNewCanvas: OpenSizeCard(SizeCardKind::NewCanvas); break;
+        case ChromeHost::kCommandImportImages: ImportImages(); break;
+        case ChromeHost::kCommandCloseProject: CloseProject(); break;
+        case ChromeHost::kCommandCanvasSize: OpenSizeCard(SizeCardKind::CanvasSize); break;
+        case ChromeHost::kCommandImageSize: OpenSizeCard(SizeCardKind::ImageSize); break;
+        case ChromeHost::kCommandGroupLayers:
+            _session.GroupSelectedLayers();
             DocumentChanged();
+            break;
+        case ChromeHost::kCommandRenameLayer: RenameActiveLayer(); break;
+        case ChromeHost::kCommandMoveLayerUp:
+            _session.MoveActiveLayer(1);
+            DocumentChanged();
+            break;
+        case ChromeHost::kCommandMoveLayerDown:
+            _session.MoveActiveLayer(-1);
+            DocumentChanged();
+            break;
+        case ChromeHost::kCommandClipToggle:
+            if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr)
+            {
+                _session.ToggleClippingMask(active->id);
+                DocumentChanged();
+            }
+            break;
+        case ChromeHost::kCommandMergeDown: MergeLayersCommand(); break;
+        case ChromeHost::kCommandSave: (void)SaveDocument(false); break;
+        case ChromeHost::kCommandSaveAs: (void)SaveDocument(true); break;
+        case ChromeHost::kCommandExportPng: ExportFlattened(false); break;
+        case ChromeHost::kCommandExportJpeg: ExportFlattened(true); break;
+        case ChromeHost::kCommandExit:
+            if (_window)
+            {
+                PostMessageW(_window.get(), WM_CLOSE, 0, 0);
+            }
+            break;
+        case ChromeHost::kCommandUndo:
+        case ChromeHost::kCommandRedo:
+            // The first Undo or Redo goes to the edit under way, in the order Escape uses (RF-904): it drops with its drag
+            // (a transform drag too, so moving on after an Alt-press duplicates nothing) and its preview, and history
+            // stays put; otherwise history moves.
+            if (! EndFirstCanvasEdit(EditEnd::Undo))
+            {
+                if (! _hostExecuting)
+                {
+                    ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
+                    return;
+                }
+                _hostExecutionError = StartHistoryRestore(command == ChromeHost::kCommandRedo);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_HISTORY_RESTORE);
+            }
+            DocumentChanged();
+            break;
+        case ChromeHost::kCommandNewLayer:
+            _session.AddBlankLayer();
+            DocumentChanged();
+            break;
+        case ChromeHost::kCommandNewFolder:
+            _session.AddGroup();
+            DocumentChanged();
+            break;
+        case ChromeHost::kCommandDeleteLayer:
+            // The item follows the layers panel target: the mask when it is targeted, else the layer.
+            _session.DeleteLayerOrMask();
+            DocumentChanged();
+            break;
+        case ChromeHost::kCommandToggleLayerVisibility:
+            if (_session.ActiveLayerID().has_value())
+            {
+                _hostExecutionError = StartLayerMetadata(LayerMetadataKind::ToggleVisibility, _session.ActiveLayerID().value());
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
+            }
+            break;
+        case ChromeHost::kCommandMoveOutOfGroup:
+            _session.MoveActiveLayerOutOfGroup();
+            DocumentChanged();
+            break;
+        case ChromeHost::kCommandZoomFit:
+            _viewport.Fit(DocumentSize());
+            SyncView();
+            break;
+        case ChromeHost::kCommandZoomActual:
+            _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+            SyncView();
+            break;
+        case ChromeHost::kCommandZoomIn: ZoomBy(kCommandZoomStep); break;
+        case ChromeHost::kCommandZoomOut: ZoomBy(1.0 / kCommandZoomStep); break;
+        case ChromeHost::kCommandSampleRing:
+            _settings.sampleRing = ! _settings.sampleRing;
+            if (_chrome)
+            {
+                _chrome->SetCommandChecked(ChromeHost::kCommandSampleRing, _settings.sampleRing);
+            }
+            break;
+        case ChromeHost::kCommandKeyboardShortcuts:
+            if (_chrome)
+            {
+                if (_chrome->ShortcutsOpen())
+                {
+                    _chrome->CloseShortcuts();
+                }
+                else
+                {
+                    _chrome->OpenShortcuts();
+                }
+            }
+            break;
+        case ChromeHost::kCommandAbout:
+        {
+            // REDPRISM_VERSION_BUILD is a ResourceCompile-only define (Specs/Build/Build_Toolchain.md), so the
+            // compile-time REDPRISM_VERSION_STRING_W is always "0.1.0.0"; read this module's own VS_VERSIONINFO
+            // resource instead, falling back to the compile-time string if that ever fails (RF-704).
+            const std::wstring text = FormatStringResource(nullptr, IDS_ABOUT_TEXT, RedPrism::FormatRunningModuleVersion(L"" REDPRISM_VERSION_STRING_W));
+            _prompts->ShowInfo(_window.get(), text, LoadStringResource(nullptr, IDS_APP_TITLE));
         }
         break;
-    case ChromeHost::kCommandMergeDown:
-        MergeLayersCommand();
-        break;
-    case ChromeHost::kCommandSave:
-        (void)SaveDocument(false);
-        break;
-    case ChromeHost::kCommandSaveAs:
-        (void)SaveDocument(true);
-        break;
-    case ChromeHost::kCommandExportPng:
-        ExportFlattened(false);
-        break;
-    case ChromeHost::kCommandExportJpeg:
-        ExportFlattened(true);
-        break;
-    case ChromeHost::kCommandExit:
-        if (_window)
+        case ChromeHost::kCommandSwapPalette:
+            if (_chrome != nullptr && _chrome->ColorPickerOpen())
+            {
+                _chrome->CloseColorPicker(false);
+            }
+            _session.SwapPaletteColors();
+            SyncChrome();
+            InvalidateFrame();
+            break;
+        case ChromeHost::kCommandResetPalette:
+            if (_chrome != nullptr && _chrome->ColorPickerOpen())
+            {
+                _chrome->CloseColorPicker(false);
+            }
+            _session.ResetPaletteColors();
+            SyncChrome();
+            InvalidateFrame();
+            break;
+        case ChromeHost::kCommandNudgeSelectionLeft:
+        case ChromeHost::kCommandNudgeSelectionRight:
+        case ChromeHost::kCommandNudgeSelectionUp:
+        case ChromeHost::kCommandNudgeSelectionDown:
+        case ChromeHost::kCommandNudgeLayerLeft:
+        case ChromeHost::kCommandNudgeLayerRight:
+        case ChromeHost::kCommandNudgeLayerUp:
+        case ChromeHost::kCommandNudgeLayerDown:
+        case ChromeHost::kCommandNudgePixelsLeft:
+        case ChromeHost::kCommandNudgePixelsRight:
+        case ChromeHost::kCommandNudgePixelsUp:
+        case ChromeHost::kCommandNudgePixelsDown:
         {
-            PostMessageW(_window.get(), WM_CLOSE, 0, 0);
+            const double step = _acceleratorShift ? 10.0 : 1.0;
+            const double x    = (command == ChromeHost::kCommandNudgeSelectionLeft || command == ChromeHost::kCommandNudgeLayerLeft ||
+                                 command == ChromeHost::kCommandNudgePixelsLeft)
+                                    ? -step
+                                : (command == ChromeHost::kCommandNudgeSelectionRight || command == ChromeHost::kCommandNudgeLayerRight ||
+                                   command == ChromeHost::kCommandNudgePixelsRight)
+                                    ? step
+                                    : 0.0;
+            const double y =
+                (command == ChromeHost::kCommandNudgeSelectionUp || command == ChromeHost::kCommandNudgeLayerUp || command == ChromeHost::kCommandNudgePixelsUp)
+                    ? -step
+                : (command == ChromeHost::kCommandNudgeSelectionDown || command == ChromeHost::kCommandNudgeLayerDown ||
+                   command == ChromeHost::kCommandNudgePixelsDown)
+                    ? step
+                    : 0.0;
+            if (command >= ChromeHost::kCommandNudgePixelsLeft)
+            {
+                ExecutePixelNudge(Vec2{x, y});
+            }
+            else if (command >= ChromeHost::kCommandNudgeLayerLeft)
+            {
+                ExecuteLayerNudge(Vec2{x, y});
+            }
+            else
+            {
+                _session.NudgeSelection(x, y);
+                SelectionChanged();
+            }
+            break;
         }
-        break;
-    case ChromeHost::kCommandUndo:
-    case ChromeHost::kCommandRedo:
-        // The first Undo or Redo goes to the edit under way, in the order Escape uses (RF-904): it drops with its drag
-        // (a transform drag too, so moving on after an Alt-press duplicates nothing) and its preview, and history
-        // stays put; otherwise history moves.
-        if (!EndFirstCanvasEdit(EditEnd::Undo))
-        {
-            if (!_hostExecuting)
+        case ChromeHost::kCommandBrushSmaller:
+        case ChromeHost::kCommandBrushLarger:
+            _session.ChangeBrushSize(command == ChromeHost::kCommandBrushLarger);
+            SyncChrome();
+            break;
+        case ChromeHost::kCommandBrushSofter:
+        case ChromeHost::kCommandBrushHarder:
+            _session.ChangeBrushHardness(command == ChromeHost::kCommandBrushHarder);
+            SyncChrome();
+            break;
+        case ChromeHost::kCommandBlendPrevious:
+        case ChromeHost::kCommandBlendNext:
+            if (const auto* layer = _session.ActiveLayer(); layer && ! layer->isGroup && ! _session.HasColorEdit())
+            {
+                const int direction = command == ChromeHost::kCommandBlendNext ? 1 : -1;
+                const int count     = LayerBlendModeCount();
+                const auto mode     = static_cast<LayerBlendMode>((static_cast<int>(layer->blendMode) + direction + count) % count);
+                _hostExecutionError = StartLayerMetadata(LayerMetadataKind::SetBlendMode, layer->id, {}, 1.0, mode);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
+            }
+            break;
+        case ChromeHost::kCommandDeleteKey:
+            if (_session.Selection())
+            {
+                ExecuteRasterEditCommand(RasterEditKind::Clear);
+                break;
+            }
+            _session.DeleteKeyPressed();
+            static_cast<void>(_session.TakeLastBrushCommit());
+            DocumentChanged();
+            break;
+        case ChromeHost::kCommandToggleMarqueeKind:
+            if (_lassoInput.Busy())
+                CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+            _session.ToggleMarqueeKind();
+            SyncChrome();
+            break;
+        case ChromeHost::kCommandToggleLassoKind:
+            if (_lassoInput.Busy())
+                CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+            _session.ToggleLassoKind();
+            SyncChrome();
+            break;
+        case ChromeHost::kCommandToggleShapeKind:
+            // The session drops a draft with the switch.
+            _session.ToggleShapeKind();
+            SyncChrome();
+            break;
+        case ChromeHost::kCommandFreeTransform:
+            if (_tool != EditorTool::Move)
+            {
+                OnTool(EditorTool::Move);
+            }
+            // With a selection the selected pixels float and transform; otherwise the layer.
+            if (_session.CanTransformSelection())
+            {
+                _hostExecutionError = StartTransformWork(TransformWorkKind::OpenFloating);
+                if (FAILED(_hostExecutionError))
+                {
+                    ++_errorsShown;
+                    _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_PIXEL_EDIT;
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                }
+            }
+            else
+            {
+                (void)_session.BeginDeferredTransform(true);
+                DocumentChanged();
+            }
+            break;
+        case ChromeHost::kCommandFlipLayerHorizontal:
+        case ChromeHost::kCommandFlipLayerVertical:
+            if (! _hostExecuting)
             {
                 ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
-                return;
+                break;
             }
-            _hostExecutionError = StartHistoryRestore(command == ChromeHost::kCommandRedo);
-            if (FAILED(_hostExecutionError))
-                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_HISTORY_RESTORE);
-        }
-        DocumentChanged();
-        break;
-    case ChromeHost::kCommandNewLayer:
-        _session.AddBlankLayer();
-        DocumentChanged();
-        break;
-    case ChromeHost::kCommandNewFolder:
-        _session.AddGroup();
-        DocumentChanged();
-        break;
-    case ChromeHost::kCommandDeleteLayer:
-        // The item follows the layers panel target: the mask when it is targeted, else the layer.
-        _session.DeleteLayerOrMask();
-        DocumentChanged();
-        break;
-    case ChromeHost::kCommandToggleLayerVisibility:
-        if (_session.ActiveLayerID().has_value())
-        {
-            _hostExecutionError =
-                StartLayerMetadata(LayerMetadataKind::ToggleVisibility, _session.ActiveLayerID().value());
-            if (FAILED(_hostExecutionError))
-                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
-        }
-        break;
-    case ChromeHost::kCommandMoveOutOfGroup:
-        _session.MoveActiveLayerOutOfGroup();
-        DocumentChanged();
-        break;
-    case ChromeHost::kCommandZoomFit:
-        _viewport.Fit(DocumentSize());
-        SyncView();
-        break;
-    case ChromeHost::kCommandZoomActual:
-        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
-        SyncView();
-        break;
-    case ChromeHost::kCommandZoomIn:
-        ZoomBy(kCommandZoomStep);
-        break;
-    case ChromeHost::kCommandZoomOut:
-        ZoomBy(1.0 / kCommandZoomStep);
-        break;
-    case ChromeHost::kCommandSampleRing:
-        _settings.sampleRing = !_settings.sampleRing;
-        if (_chrome)
-        {
-            _chrome->SetCommandChecked(ChromeHost::kCommandSampleRing, _settings.sampleRing);
-        }
-        break;
-    case ChromeHost::kCommandKeyboardShortcuts:
-        if (_chrome)
-        {
-            if (_chrome->ShortcutsOpen())
+            if (_session.ActiveLayerID() && _session.history.CaptureState().Depth() == 0 &&
+                _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()) && ! _session.TransformsAsGroup())
             {
-                _chrome->CloseShortcuts();
+                // Complete admission precedes immutable capture. Record cloning, mask placement and history
+                // preparation run on the existing metadata worker; failure never falls back to owner work.
+                const auto kind     = command == ChromeHost::kCommandFlipLayerHorizontal ? LayerMetadataKind::FlipHorizontal : LayerMetadataKind::FlipVertical;
+                _hostExecutionError = StartLayerMetadata(kind, _session.ActiveLayerID().value());
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
             }
             else
             {
-                _chrome->OpenShortcuts();
+                _session.FlipLayers(command == ChromeHost::kCommandFlipLayerHorizontal);
+                DocumentChanged();
             }
-        }
-        break;
-    case ChromeHost::kCommandAbout:
-    {
-        // REDPRISM_VERSION_BUILD is a ResourceCompile-only define (Specs/Build/Build_Toolchain.md), so the
-        // compile-time REDPRISM_VERSION_STRING_W is always "0.1.0.0"; read this module's own VS_VERSIONINFO
-        // resource instead, falling back to the compile-time string if that ever fails (RF-704).
-        const std::wstring text = FormatStringResource(
-            nullptr, IDS_ABOUT_TEXT, RedPrism::FormatRunningModuleVersion(L"" REDPRISM_VERSION_STRING_W));
-        _prompts->ShowInfo(_window.get(), text, LoadStringResource(nullptr, IDS_APP_TITLE));
-    }
-    break;
-    case ChromeHost::kCommandSwapPalette:
-        if (_chrome != nullptr && _chrome->ColorPickerOpen())
+            break;
+        case ChromeHost::kCommandFlipCanvasHorizontal:
+            _session.FlipCanvas(true);
+            DocumentChanged();
+            break;
+        case ChromeHost::kCommandFlipCanvasVertical:
+            _session.FlipCanvas(false);
+            DocumentChanged();
+            break;
+        case ChromeHost::kCommandCut:
+            EndSelectionInteraction(false);
+            _hostExecutionError = StartClipboardCopy(true);
+            break;
+        case ChromeHost::kCommandCopy:
+            // The copy takes the pixels the canvas shows: a pending gradient applies first as its own entry (Decision D3,
+            // as CopySelection would), and its preview ends with it.
+            _hostExecutionError = StartClipboardCopy(false);
+            break;
+        case ChromeHost::kCommandCopyMerged: _hostExecutionError = StartClipboardMerged(); break;
+        case ChromeHost::kCommandPaste:
+            EndSelectionInteraction(false);
+            _hostExecutionError = StartClipboardPaste();
+            break;
+        case ChromeHost::kCommandFillForeground:
+        case ChromeHost::kCommandFillBackground:
+            ExecuteRasterEditCommand(RasterEditKind::Fill, command == ChromeHost::kCommandFillForeground ? FillSource::Foreground : FillSource::Background);
+            break;
+        case ChromeHost::kCommandClearPixels: ExecuteRasterEditCommand(RasterEditKind::Clear); break;
+        case ChromeHost::kCommandInvert: ExecuteRasterEditCommand(RasterEditKind::Invert); break;
+        case ChromeHost::kCommandLayerViaCopy:
         {
-            _chrome->CloseColorPicker(false);
-        }
-        _session.SwapPaletteColors();
-        SyncChrome();
-        InvalidateFrame();
-        break;
-    case ChromeHost::kCommandResetPalette:
-        if (_chrome != nullptr && _chrome->ColorPickerOpen())
-        {
-            _chrome->CloseColorPicker(false);
-        }
-        _session.ResetPaletteColors();
-        SyncChrome();
-        InvalidateFrame();
-        break;
-    case ChromeHost::kCommandNudgeSelectionLeft:
-    case ChromeHost::kCommandNudgeSelectionRight:
-    case ChromeHost::kCommandNudgeSelectionUp:
-    case ChromeHost::kCommandNudgeSelectionDown:
-    case ChromeHost::kCommandNudgeLayerLeft:
-    case ChromeHost::kCommandNudgeLayerRight:
-    case ChromeHost::kCommandNudgeLayerUp:
-    case ChromeHost::kCommandNudgeLayerDown:
-    case ChromeHost::kCommandNudgePixelsLeft:
-    case ChromeHost::kCommandNudgePixelsRight:
-    case ChromeHost::kCommandNudgePixelsUp:
-    case ChromeHost::kCommandNudgePixelsDown:
-    {
-        const double step = _acceleratorShift ? 10.0 : 1.0;
-        const double x =
-            (command == ChromeHost::kCommandNudgeSelectionLeft || command == ChromeHost::kCommandNudgeLayerLeft ||
-             command == ChromeHost::kCommandNudgePixelsLeft)
-                ? -step
-            : (command == ChromeHost::kCommandNudgeSelectionRight || command == ChromeHost::kCommandNudgeLayerRight ||
-               command == ChromeHost::kCommandNudgePixelsRight)
-                ? step
-                : 0.0;
-        const double y =
-            (command == ChromeHost::kCommandNudgeSelectionUp || command == ChromeHost::kCommandNudgeLayerUp ||
-             command == ChromeHost::kCommandNudgePixelsUp)
-                ? -step
-            : (command == ChromeHost::kCommandNudgeSelectionDown || command == ChromeHost::kCommandNudgeLayerDown ||
-               command == ChromeHost::kCommandNudgePixelsDown)
-                ? step
-                : 0.0;
-        if (command >= ChromeHost::kCommandNudgePixelsLeft)
-        {
-            ExecutePixelNudge(Vec2{x, y});
-        }
-        else if (command >= ChromeHost::kCommandNudgeLayerLeft)
-        {
-            ExecuteLayerNudge(Vec2{x, y});
-        }
-        else
-        {
-            _session.NudgeSelection(x, y);
-            SelectionChanged();
-        }
-        break;
-    }
-    case ChromeHost::kCommandBrushSmaller:
-    case ChromeHost::kCommandBrushLarger:
-        _session.ChangeBrushSize(command == ChromeHost::kCommandBrushLarger);
-        SyncChrome();
-        break;
-    case ChromeHost::kCommandBrushSofter:
-    case ChromeHost::kCommandBrushHarder:
-        _session.ChangeBrushHardness(command == ChromeHost::kCommandBrushHarder);
-        SyncChrome();
-        break;
-    case ChromeHost::kCommandBlendPrevious:
-    case ChromeHost::kCommandBlendNext:
-        if (const auto* layer = _session.ActiveLayer(); layer && !layer->isGroup && !_session.HasColorEdit())
-        {
-            const int direction = command == ChromeHost::kCommandBlendNext ? 1 : -1;
-            const int count = LayerBlendModeCount();
-            const auto mode =
-                static_cast<LayerBlendMode>((static_cast<int>(layer->blendMode) + direction + count) % count);
-            _hostExecutionError = StartLayerMetadata(LayerMetadataKind::SetBlendMode, layer->id, {}, 1.0, mode);
-            if (FAILED(_hostExecutionError))
-                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
-        }
-        break;
-    case ChromeHost::kCommandDeleteKey:
-        if (_session.Selection())
-        {
-            ExecuteRasterEditCommand(RasterEditKind::Clear);
+            EndSelectionInteraction(false);
+            const auto result = StartLayerCopy();
+            if (FAILED(result))
+            {
+                _hostExecutionError = result;
+                if (result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+                    ReportBudgetRefusal();
+                else
+                {
+                    ++_errorsShown;
+                    _lastErrorId = IDS_ERROR_PIXEL_EDIT;
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                }
+            }
             break;
         }
-        _session.DeleteKeyPressed();
-        static_cast<void>(_session.TakeLastBrushCommit());
-        DocumentChanged();
-        break;
-    case ChromeHost::kCommandToggleMarqueeKind:
-        if (_lassoInput.Busy())
-            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
-        _session.ToggleMarqueeKind();
-        SyncChrome();
-        break;
-    case ChromeHost::kCommandToggleLassoKind:
-        if (_lassoInput.Busy())
-            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
-        _session.ToggleLassoKind();
-        SyncChrome();
-        break;
-    case ChromeHost::kCommandToggleShapeKind:
-        // The session drops a draft with the switch.
-        _session.ToggleShapeKind();
-        SyncChrome();
-        break;
-    case ChromeHost::kCommandFreeTransform:
-        if (_tool != EditorTool::Move)
+        case ChromeHost::kCommandCurves:
+        case ChromeHost::kCommandLevels:
+        case ChromeHost::kCommandHueSaturation:
+        case ChromeHost::kCommandExposure:
+        case ChromeHost::kCommandGradientMap:
+        case ChromeHost::kCommandGrain:
+        case ChromeHost::kCommandGaussianBlur:
+        case ChromeHost::kCommandMotionBlur:
+        case ChromeHost::kCommandAddNoise:
+        case ChromeHost::kCommandLensCorrection:
+        case ChromeHost::kCommandContentAwareFill:
+            EndSelectionInteraction(false);
+            static_cast<void>(BeginColorEdit(command));
+            break;
+        case ChromeHost::kCommandNewLevelsAdjustment:
+        case ChromeHost::kCommandNewCurvesAdjustment:
+        case ChromeHost::kCommandNewHueSaturationAdjustment:
+        case ChromeHost::kCommandNewExposureAdjustment:
+        case ChromeHost::kCommandNewGradientMapAdjustment:
+        case ChromeHost::kCommandNewGrainAdjustment:
+            EndSelectionInteraction(false);
+            AddAdjustmentLayer(command);
+            break;
+        case ChromeHost::kCommandEditAdjustment: EditActiveAdjustment(); break;
+        case ChromeHost::kCommandAddMask:
+        case ChromeHost::kCommandAddBlackMask:
         {
-            OnTool(EditorTool::Move);
-        }
-        // With a selection the selected pixels float and transform; otherwise the layer.
-        if (_session.CanTransformSelection())
-        {
-            _hostExecutionError = StartTransformWork(TransformWorkKind::OpenFloating);
-            if (FAILED(_hostExecutionError))
+            EndSelectionInteraction(false);
+            const auto result = StartMask(command == ChromeHost::kCommandAddMask);
+            if (FAILED(result))
             {
-                ++_errorsShown;
-                _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE
-                                                                                               : IDS_ERROR_PIXEL_EDIT;
-                _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                _hostExecutionError = result;
+                if (result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+                    ReportBudgetRefusal();
+                else
+                {
+                    ++_errorsShown;
+                    _lastErrorId = IDS_ERROR_PIXEL_EDIT;
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                }
             }
-        }
-        else
-        {
-            (void)_session.BeginDeferredTransform(true);
-            DocumentChanged();
-        }
-        break;
-    case ChromeHost::kCommandFlipLayerHorizontal:
-    case ChromeHost::kCommandFlipLayerVertical:
-        if (!_hostExecuting)
-        {
-            ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
             break;
         }
-        if (_session.ActiveLayerID() && _session.history.CaptureState().Depth() == 0 &&
-            _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()) && !_session.TransformsAsGroup())
-        {
-            // Complete admission precedes immutable capture. Record cloning, mask placement and history
-            // preparation run on the existing metadata worker; failure never falls back to owner work.
-            const auto kind = command == ChromeHost::kCommandFlipLayerHorizontal ? LayerMetadataKind::FlipHorizontal
-                                                                                 : LayerMetadataKind::FlipVertical;
-            _hostExecutionError = StartLayerMetadata(kind, _session.ActiveLayerID().value());
-            if (FAILED(_hostExecutionError))
-                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
-        }
-        else
-        {
-            _session.FlipLayers(command == ChromeHost::kCommandFlipLayerHorizontal);
-            DocumentChanged();
-        }
-        break;
-    case ChromeHost::kCommandFlipCanvasHorizontal:
-        _session.FlipCanvas(true);
-        DocumentChanged();
-        break;
-    case ChromeHost::kCommandFlipCanvasVertical:
-        _session.FlipCanvas(false);
-        DocumentChanged();
-        break;
-    case ChromeHost::kCommandCut:
-        EndSelectionInteraction(false);
-        _hostExecutionError = StartClipboardCopy(true);
-        break;
-    case ChromeHost::kCommandCopy:
-        // The copy takes the pixels the canvas shows: a pending gradient applies first as its own entry (Decision D3,
-        // as CopySelection would), and its preview ends with it.
-        _hostExecutionError = StartClipboardCopy(false);
-        break;
-    case ChromeHost::kCommandCopyMerged:
-        _hostExecutionError = StartClipboardMerged();
-        break;
-    case ChromeHost::kCommandPaste:
-        EndSelectionInteraction(false);
-        _hostExecutionError = StartClipboardPaste();
-        break;
-    case ChromeHost::kCommandFillForeground:
-    case ChromeHost::kCommandFillBackground:
-        ExecuteRasterEditCommand(RasterEditKind::Fill, command == ChromeHost::kCommandFillForeground
-                                                           ? FillSource::Foreground
-                                                           : FillSource::Background);
-        break;
-    case ChromeHost::kCommandClearPixels:
-        ExecuteRasterEditCommand(RasterEditKind::Clear);
-        break;
-    case ChromeHost::kCommandInvert:
-        ExecuteRasterEditCommand(RasterEditKind::Invert);
-        break;
-    case ChromeHost::kCommandLayerViaCopy:
-    {
-        EndSelectionInteraction(false);
-        const auto result = StartLayerCopy();
-        if (FAILED(result))
-        {
-            _hostExecutionError = result;
-            if (result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
-                ReportBudgetRefusal();
+        case ChromeHost::kCommandTargetLayerMask:
+            // The active layer's mask, or its pixels when the mask is the target (RF-907).
+            if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr && active->mask.has_value())
+            {
+                TargetLayer(active->id, ! _session.IsMaskSelected(), false);
+            }
+            break;
+        case ChromeHost::kCommandToggleMaskLink:
+        case ChromeHost::kCommandToggleLayerMask:
+            // Not under a stroke or warp in progress (legacy canEditLayers), whose layer and mask they change.
+            if (const ImageLayer* active = _session.ActiveLayer();
+                active != nullptr && active->mask.has_value() && _session.PendingBrush() == nullptr && ! _session.HasPendingWarp())
+            {
+                // The link and the switch change what the layer shows: a pending gradient applies first (Decision D3).
+                const Guid id = active->id;
+                CommitGradient();
+                if (command == ChromeHost::kCommandToggleMaskLink)
+                {
+                    _session.ToggleMaskLink(id);
+                }
+                else
+                {
+                    _session.ToggleLayerMask(id);
+                }
+                DocumentChanged();
+            }
+            break;
+        case ChromeHost::kCommandSelectAll:
+        case ChromeHost::kCommandDeselect:
+            if (_hostExecuting && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+            {
+                _hostExecutionError =
+                    StartSelectionCommand(command == ChromeHost::kCommandSelectAll ? SelectionCommandKind::SelectAll : SelectionCommandKind::Deselect);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+            }
             else
+            {
+                // Live selection/stroke closure keeps its qualified legacy route until ordered replay lands.
+                EndSelectionInteraction(false);
+                if (command == ChromeHost::kCommandSelectAll)
+                    _session.SelectAll();
+                else
+                    _session.Deselect();
+                SelectionChanged();
+            }
+            break;
+        case ChromeHost::kCommandInverse:
+            if (_hostExecuting && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+            {
+                _hostExecutionError = StartInverseSelection();
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+            }
+            else
+            {
+                // Live selection/stroke closure retains the reference route until ordered replay qualifies.
+                EndSelectionInteraction(false);
+                _session.InvertSelection();
+                SelectionChanged();
+            }
+            break;
+        case ChromeHost::kCommandLoadLayerSelection:
+        case ChromeHost::kCommandLoadMaskSelection:
+            if (! _hostExecuting)
+            {
+                _hostExecutionError = E_ABORT;
+                return; // Ordinary commands must retain their original ordered request through acknowledgement.
+            }
+            _hostExecutionError = StartLoadedLayerSelection(command == ChromeHost::kCommandLoadMaskSelection);
+            if (FAILED(_hostExecutionError))
             {
                 ++_errorsShown;
-                _lastErrorId = IDS_ERROR_PIXEL_EDIT;
+                _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_SELECTION_EDIT;
                 _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
             }
-        }
-        break;
-    }
-    case ChromeHost::kCommandCurves:
-    case ChromeHost::kCommandLevels:
-    case ChromeHost::kCommandHueSaturation:
-    case ChromeHost::kCommandExposure:
-    case ChromeHost::kCommandGradientMap:
-    case ChromeHost::kCommandGrain:
-    case ChromeHost::kCommandGaussianBlur:
-    case ChromeHost::kCommandMotionBlur:
-    case ChromeHost::kCommandAddNoise:
-    case ChromeHost::kCommandLensCorrection:
-    case ChromeHost::kCommandContentAwareFill:
-        EndSelectionInteraction(false);
-        static_cast<void>(BeginColorEdit(command));
-        break;
-    case ChromeHost::kCommandNewLevelsAdjustment:
-    case ChromeHost::kCommandNewCurvesAdjustment:
-    case ChromeHost::kCommandNewHueSaturationAdjustment:
-    case ChromeHost::kCommandNewExposureAdjustment:
-    case ChromeHost::kCommandNewGradientMapAdjustment:
-    case ChromeHost::kCommandNewGrainAdjustment:
-        EndSelectionInteraction(false);
-        AddAdjustmentLayer(command);
-        break;
-    case ChromeHost::kCommandEditAdjustment:
-        EditActiveAdjustment();
-        break;
-    case ChromeHost::kCommandAddMask:
-    case ChromeHost::kCommandAddBlackMask:
-    {
-        EndSelectionInteraction(false);
-        const auto result = StartMask(command == ChromeHost::kCommandAddMask);
-        if (FAILED(result))
-        {
-            _hostExecutionError = result;
-            if (result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
-                ReportBudgetRefusal();
-            else
-            {
-                ++_errorsShown;
-                _lastErrorId = IDS_ERROR_PIXEL_EDIT;
-                _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
-            }
-        }
-        break;
-    }
-    case ChromeHost::kCommandTargetLayerMask:
-        // The active layer's mask, or its pixels when the mask is the target (RF-907).
-        if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr && active->mask.has_value())
-        {
-            TargetLayer(active->id, !_session.IsMaskSelected(), false);
-        }
-        break;
-    case ChromeHost::kCommandToggleMaskLink:
-    case ChromeHost::kCommandToggleLayerMask:
-        // Not under a stroke or warp in progress (legacy canEditLayers), whose layer and mask they change.
-        if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr && active->mask.has_value() &&
-                                                               _session.PendingBrush() == nullptr &&
-                                                               !_session.HasPendingWarp())
-        {
-            // The link and the switch change what the layer shows: a pending gradient applies first (Decision D3).
-            const Guid id = active->id;
-            CommitGradient();
-            if (command == ChromeHost::kCommandToggleMaskLink)
-            {
-                _session.ToggleMaskLink(id);
-            }
-            else
-            {
-                _session.ToggleLayerMask(id);
-            }
-            DocumentChanged();
-        }
-        break;
-    case ChromeHost::kCommandSelectAll:
-    case ChromeHost::kCommandDeselect:
-        if (_hostExecuting && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
-        {
-            _hostExecutionError =
-                StartSelectionCommand(command == ChromeHost::kCommandSelectAll ? SelectionCommandKind::SelectAll
-                                                                               : SelectionCommandKind::Deselect);
-            if (FAILED(_hostExecutionError))
-                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
-        }
-        else
-        {
-            // Live selection/stroke closure keeps its qualified legacy route until ordered replay lands.
-            EndSelectionInteraction(false);
-            if (command == ChromeHost::kCommandSelectAll)
-                _session.SelectAll();
-            else
-                _session.Deselect();
-            SelectionChanged();
-        }
-        break;
-    case ChromeHost::kCommandInverse:
-        if (_hostExecuting && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
-        {
-            _hostExecutionError = StartInverseSelection();
-            if (FAILED(_hostExecutionError))
-                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
-        }
-        else
-        {
-            // Live selection/stroke closure retains the reference route until ordered replay qualifies.
-            EndSelectionInteraction(false);
-            _session.InvertSelection();
-            SelectionChanged();
-        }
-        break;
-    case ChromeHost::kCommandLoadLayerSelection:
-    case ChromeHost::kCommandLoadMaskSelection:
-        if (!_hostExecuting)
-        {
-            _hostExecutionError = E_ABORT;
-            return; // Ordinary commands must retain their original ordered request through acknowledgement.
-        }
-        _hostExecutionError = StartLoadedLayerSelection(command == ChromeHost::kCommandLoadMaskSelection);
-        if (FAILED(_hostExecutionError))
-        {
-            ++_errorsShown;
-            _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE
-                                                                                           : IDS_ERROR_SELECTION_EDIT;
-            _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
-        }
-        break;
-    default:
-        break;
+            break;
+        default: break;
     }
 }
 
 bool Application::SettleInteractions(bool applyPanels) noexcept
 {
-    if (!CloseOpacityEdit())
+    if (! CloseOpacityEdit())
         return false;
     CloseRenameCard();
     EndCanvasEdits(applyPanels ? EditEnd::ToolSwitch : EditEnd::DocumentGoes);
@@ -5642,219 +5518,209 @@ bool Application::EditUnderWay(CanvasEdit edit) const noexcept
 {
     switch (edit)
     {
-    case CanvasEdit::SizeCard:
-        return SizeCardOpen();
-    case CanvasEdit::Panel:
-        return _session.HasColorEdit();
-    case CanvasEdit::PixelMove:
-        return _session.PendingPixelMove() != nullptr || std::holds_alternative<PixelDrag>(_drag);
-    case CanvasEdit::Warp:
-        return _session.HasPendingWarp();
-    case CanvasEdit::Brush:
-        return _session.PendingBrush() != nullptr;
-    case CanvasEdit::Shape:
-        return _session.PendingShape().has_value();
-    case CanvasEdit::OutlineMove:
-        return _session.IsMovingSelection();
-    case CanvasEdit::Lasso:
-        return _session.PendingLasso().has_value() || _lassoInput.Busy();
-    case CanvasEdit::Gradient:
-        return _session.PendingGradient() != nullptr;
-    case CanvasEdit::Transform:
-        return _session.PendingTransformEdit().has_value() || std::holds_alternative<MoveToolDrag>(_drag);
-    case CanvasEdit::Crop:
-        // The Crop tool always shows a frame: the whole canvas when none is pending.
-        return _tool == EditorTool::Crop || _session.CropFrame().has_value() || std::holds_alternative<CropDrag>(_drag);
+        case CanvasEdit::SizeCard: return SizeCardOpen();
+        case CanvasEdit::Panel: return _session.HasColorEdit();
+        case CanvasEdit::PixelMove: return _session.PendingPixelMove() != nullptr || std::holds_alternative<PixelDrag>(_drag);
+        case CanvasEdit::Warp: return _session.HasPendingWarp();
+        case CanvasEdit::Brush: return _session.PendingBrush() != nullptr;
+        case CanvasEdit::Shape: return _session.PendingShape().has_value();
+        case CanvasEdit::OutlineMove: return _session.IsMovingSelection();
+        case CanvasEdit::Lasso: return _session.PendingLasso().has_value() || _lassoInput.Busy();
+        case CanvasEdit::Gradient: return _session.PendingGradient() != nullptr;
+        case CanvasEdit::Transform: return _session.PendingTransformEdit().has_value() || std::holds_alternative<MoveToolDrag>(_drag);
+        case CanvasEdit::Crop:
+            // The Crop tool always shows a frame: the whole canvas when none is pending.
+            return _tool == EditorTool::Crop || _session.CropFrame().has_value() || std::holds_alternative<CropDrag>(_drag);
     }
     return false;
 }
 
 bool Application::EndCanvasEdit(CanvasEdit edit, EditEnd end) noexcept
 {
-    if (!EditUnderWay(edit))
+    if (! EditUnderWay(edit))
     {
         return false;
     }
     const bool drops = end == EditEnd::Escape || end == EditEnd::Undo;
     switch (edit)
     {
-    case CanvasEdit::SizeCard:
-        // A card, not a document edit: history moves under it and a write leaves it open.
-        if (end == EditEnd::Undo || end == EditEnd::Write)
-        {
-            return false;
-        }
-        if (end == EditEnd::Enter)
-        {
-            ApplySizeCard();
-        }
-        else
-        {
-            CancelSizeCard();
-        }
-        return true;
-    case CanvasEdit::Panel:
-        if (end == EditEnd::Undo)
-        {
-            return true; // the panel owns the document: history waits for OK or Cancel
-        }
-        if (end == EditEnd::Enter || end == EditEnd::ToolSwitch || end == EditEnd::Write)
-        {
-            ApplyColorEdit();
-        }
-        if (end == EditEnd::Escape || end == EditEnd::DocumentGoes)
-        {
-            // Explicit discard/cancel is independent of a failed required commit.
-            CancelColorEdit(end != EditEnd::DocumentGoes);
-        }
-        return true;
-    case CanvasEdit::PixelMove:
-        // Lifted pixels record nothing before their release: whatever else ends them drops them.
-        if (end == EditEnd::Enter || end == EditEnd::Write)
-        {
-            return false;
-        }
-        CancelPixelDrag();
-        return true;
-    case CanvasEdit::Warp:
-        if (end == EditEnd::Enter)
-        {
-            return false;
-        }
-        if (drops)
-        {
-            CancelWarpStroke();
-        }
-        else
-        {
-            FinishWarpStroke();
-        }
-        return true;
-    case CanvasEdit::Brush:
-        if (end == EditEnd::Enter)
-        {
-            return false;
-        }
-        if (drops)
-        {
-            CancelBrushStroke();
-        }
-        else
-        {
-            FinishBrushStroke();
-        }
-        return true;
-    case CanvasEdit::Shape:
-        if (end == EditEnd::Enter || end == EditEnd::Write)
-        {
-            return false;
-        }
-        CancelShapeDraft();
-        return true;
-    case CanvasEdit::OutlineMove:
-        // Escape and Undo put the outline back where the drag began, ending the drag, and history stays where it was;
-        // a settle ends the move where the outline is.
-        if (end == EditEnd::Enter || end == EditEnd::Write)
-        {
-            return false;
-        }
-        if (drops)
-        {
-            DropDrag<OutlineDrag>();
-            if (!_hostExecuting)
-                (void)QueueSelectionMoveClose(true);
+        case CanvasEdit::SizeCard:
+            // A card, not a document edit: history moves under it and a write leaves it open.
+            if (end == EditEnd::Undo || end == EditEnd::Write)
+            {
+                return false;
+            }
+            if (end == EditEnd::Enter)
+            {
+                ApplySizeCard();
+            }
             else
-                _session.CancelSelectionMove();
-            SelectionChanged();
-        }
-        else
-        {
-            EndSelectionInteraction(false);
-        }
-        return true;
-    case CanvasEdit::Lasso:
-        if (end == EditEnd::Write)
-        {
-            return false;
-        }
-        if (end == EditEnd::Enter)
-        {
-            if (!QueueLassoFinishOwner(_session.selectionAntialiased))
-                _session.FinishLasso();
-        }
-        else
-        {
-            if (_lassoInput.Busy())
-                CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
-            else
-                _session.CancelLasso();
-        }
-        DropDrag<DraftDrag>();
-        SelectionChanged();
-        return end != EditEnd::Undo; // Undo drops the outline and history still moves, as the session's Undo does
-    case CanvasEdit::Gradient:
-        if (drops)
-        {
-            CancelGradient();
-        }
-        else
-        {
-            CommitGradient();
-        }
-        return true;
-    case CanvasEdit::Transform:
-        DropDrag<MoveToolDrag>();
-        if (!_hostExecuting && FinishDuplicateGesture(drops))
+            {
+                CancelSizeCard();
+            }
             return true;
-        if (!_session.PendingTransformEdit())
+        case CanvasEdit::Panel:
+            if (end == EditEnd::Undo)
+            {
+                return true; // the panel owns the document: history waits for OK or Cancel
+            }
+            if (end == EditEnd::Enter || end == EditEnd::ToolSwitch || end == EditEnd::Write)
+            {
+                ApplyColorEdit();
+            }
+            if (end == EditEnd::Escape || end == EditEnd::DocumentGoes)
+            {
+                // Explicit discard/cancel is independent of a failed required commit.
+                CancelColorEdit(end != EditEnd::DocumentGoes);
+            }
             return true;
-        if (_hostExecuting && _session.PendingTransformEdit()->deferred)
-        {
-            // Selected production requests must settle through their preceding host stage. Refuse an
-            // unexpected direct dispatch instead of running a reference kernel or removing its draft.
-            _hostExecutionError = E_ABORT;
+        case CanvasEdit::PixelMove:
+            // Lifted pixels record nothing before their release: whatever else ends them drops them.
+            if (end == EditEnd::Enter || end == EditEnd::Write)
+            {
+                return false;
+            }
+            CancelPixelDrag();
             return true;
-        }
-        if (!_hostExecuting)
-        {
-            const auto& pending = _session.PendingTransformEdit();
-            const HostTransformFinishInput input{pending->layerID, _session.TransformDraftRevision(), drops};
+        case CanvasEdit::Warp:
+            if (end == EditEnd::Enter)
+            {
+                return false;
+            }
             if (drops)
-                CancelHostContinuations();
-            ReportHostAdmission(QueueHostInput(input));
+            {
+                CancelWarpStroke();
+            }
+            else
+            {
+                FinishWarpStroke();
+            }
             return true;
-        }
-        if (drops)
-        {
-            _session.CancelTransform();
-        }
-        else
-        {
-            _session.CommitTransform();
-        }
-        DocumentChanged();
-        return true;
-    case CanvasEdit::Crop:
-        if (end == EditEnd::Write)
-        {
-            return false;
-        }
-        if (end == EditEnd::Undo)
-        {
-            // Not an edit in progress: the session's Undo drops the frame and still moves history, as legacy restore()
-            // cancels the crop (with nothing to undo the frame stays).
-            DropDrag<CropDrag>();
-            return false;
-        }
-        if (end == EditEnd::Enter)
-        {
-            ApplyCrop();
-        }
-        else
-        {
-            CancelCropFrame();
-        }
-        return true;
+        case CanvasEdit::Brush:
+            if (end == EditEnd::Enter)
+            {
+                return false;
+            }
+            if (drops)
+            {
+                CancelBrushStroke();
+            }
+            else
+            {
+                FinishBrushStroke();
+            }
+            return true;
+        case CanvasEdit::Shape:
+            if (end == EditEnd::Enter || end == EditEnd::Write)
+            {
+                return false;
+            }
+            CancelShapeDraft();
+            return true;
+        case CanvasEdit::OutlineMove:
+            // Escape and Undo put the outline back where the drag began, ending the drag, and history stays where it was;
+            // a settle ends the move where the outline is.
+            if (end == EditEnd::Enter || end == EditEnd::Write)
+            {
+                return false;
+            }
+            if (drops)
+            {
+                DropDrag<OutlineDrag>();
+                if (! _hostExecuting)
+                    (void)QueueSelectionMoveClose(true);
+                else
+                    _session.CancelSelectionMove();
+                SelectionChanged();
+            }
+            else
+            {
+                EndSelectionInteraction(false);
+            }
+            return true;
+        case CanvasEdit::Lasso:
+            if (end == EditEnd::Write)
+            {
+                return false;
+            }
+            if (end == EditEnd::Enter)
+            {
+                if (! QueueLassoFinishOwner(_session.selectionAntialiased))
+                    _session.FinishLasso();
+            }
+            else
+            {
+                if (_lassoInput.Busy())
+                    CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+                else
+                    _session.CancelLasso();
+            }
+            DropDrag<DraftDrag>();
+            SelectionChanged();
+            return end != EditEnd::Undo; // Undo drops the outline and history still moves, as the session's Undo does
+        case CanvasEdit::Gradient:
+            if (drops)
+            {
+                CancelGradient();
+            }
+            else
+            {
+                CommitGradient();
+            }
+            return true;
+        case CanvasEdit::Transform:
+            DropDrag<MoveToolDrag>();
+            if (! _hostExecuting && FinishDuplicateGesture(drops))
+                return true;
+            if (! _session.PendingTransformEdit())
+                return true;
+            if (_hostExecuting && _session.PendingTransformEdit()->deferred)
+            {
+                // Selected production requests must settle through their preceding host stage. Refuse an
+                // unexpected direct dispatch instead of running a reference kernel or removing its draft.
+                _hostExecutionError = E_ABORT;
+                return true;
+            }
+            if (! _hostExecuting)
+            {
+                const auto& pending = _session.PendingTransformEdit();
+                const HostTransformFinishInput input{pending->layerID, _session.TransformDraftRevision(), drops};
+                if (drops)
+                    CancelHostContinuations();
+                ReportHostAdmission(QueueHostInput(input));
+                return true;
+            }
+            if (drops)
+            {
+                _session.CancelTransform();
+            }
+            else
+            {
+                _session.CommitTransform();
+            }
+            DocumentChanged();
+            return true;
+        case CanvasEdit::Crop:
+            if (end == EditEnd::Write)
+            {
+                return false;
+            }
+            if (end == EditEnd::Undo)
+            {
+                // Not an edit in progress: the session's Undo drops the frame and still moves history, as legacy restore()
+                // cancels the crop (with nothing to undo the frame stays).
+                DropDrag<CropDrag>();
+                return false;
+            }
+            if (end == EditEnd::Enter)
+            {
+                ApplyCrop();
+            }
+            else
+            {
+                CancelCropFrame();
+            }
+            return true;
     }
     return false;
 }
@@ -5882,10 +5748,9 @@ void Application::EndCanvasEdits(EditEnd end) noexcept
 
 void Application::OnTool(EditorTool tool) noexcept
 {
-    if (!_hostExecuting && tool != _tool &&
-        (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.IsMovingSelection() ||
-         _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() || _opacityEdit ||
-         _activeHostRequest || _hostRequests.Size()))
+    if (! _hostExecuting && tool != _tool &&
+        (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.IsMovingSelection() || _session.HasColorEdit() ||
+         _session.PendingGradient() || _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostToolInput{tool}));
         return;
@@ -5893,7 +5758,7 @@ void Application::OnTool(EditorTool tool) noexcept
     if (tool != _tool)
     {
         // Switching tools settles a pending transform, as selecting another layer does.
-        if (!SettleInteractions(true))
+        if (! SettleInteractions(true))
             return;
         _session.SwitchBrushTipFamily(EditorToolTipFamily(_tool), EditorToolTipFamily(tool));
         if (tool == EditorTool::Crop)
@@ -5915,7 +5780,7 @@ void Application::OnTool(EditorTool tool) noexcept
 
 void Application::NewDocument() noexcept
 {
-    if (!_hostExecuting)
+    if (! _hostExecuting)
     {
         ReportHostAdmission(QueueHostInput(HostNewInput{}));
         return;
@@ -5933,7 +5798,7 @@ void Application::OpenDocument() noexcept
 {
     // A quiet run never waits on a dialog: a stray Open, Save As or Export in the self-test fails its step instead
     // of blocking the run behind a file dialog on the user's desktop (RF-1110).
-    if (_quietUi || !_window)
+    if (_quietUi || ! _window)
     {
         return;
     }
@@ -5992,7 +5857,7 @@ LRESULT CALLBACK Application::WindowProcedure(HWND window, UINT message, WPARAM 
     if (message == WM_NCCREATE)
     {
         const auto* create = reinterpret_cast<const CREATESTRUCTW*>(lParam);
-        application = static_cast<Application*>(create->lpCreateParams);
+        application        = static_cast<Application*>(create->lpCreateParams);
         application->_window.reset(window);
         SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(application));
     }
@@ -6017,323 +5882,300 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
     if (_uiBenchmark && _uiBenchmark->displayContinuityCaptured)
     {
         const bool monitorIdentityChanged =
-            message == WM_MOVE && reinterpret_cast<std::uintptr_t>(MonitorFromWindow(window, MONITOR_DEFAULTTONULL)) !=
-                                      _uiBenchmark->initialMonitorIdentity;
+            message == WM_MOVE && reinterpret_cast<std::uintptr_t>(MonitorFromWindow(window, MONITOR_DEFAULTTONULL)) != _uiBenchmark->initialMonitorIdentity;
         _uiBenchmark->displayContinuity.ObserveMessage(message, monitorIdentityChanged);
     }
     switch (message)
     {
-    case kUiBenchmarkMessage:
-        ExecuteUiBenchmarkStep();
-        return 0;
-    case WM_SIZE:
-        return OnSize(LOWORD(lParam), HIWORD(lParam));
-    case WM_GETMINMAXINFO:
-        OnGetMinMaxInfo(window, reinterpret_cast<MINMAXINFO*>(lParam));
-        return 0;
-    case WM_DPICHANGED:
-    {
-        const LRESULT dpiResult = OnDpiChanged(window, reinterpret_cast<const RECT*>(lParam));
-        CheckDeviceAdapter();
-        return dpiResult;
-    }
-    case WM_GETOBJECT:
-        if (_chrome)
+        case kUiBenchmarkMessage: ExecuteUiBenchmarkStep(); return 0;
+        case WM_SIZE: return OnSize(LOWORD(lParam), HIWORD(lParam));
+        case WM_GETMINMAXINFO: OnGetMinMaxInfo(window, reinterpret_cast<MINMAXINFO*>(lParam)); return 0;
+        case WM_DPICHANGED:
         {
-            if (const LRESULT provider = _chrome->HandleGetObject(wParam, lParam); provider != 0)
+            const LRESULT dpiResult = OnDpiChanged(window, reinterpret_cast<const RECT*>(lParam));
+            CheckDeviceAdapter();
+            return dpiResult;
+        }
+        case WM_GETOBJECT:
+            if (_chrome)
             {
-                return provider;
-            }
-        }
-        break;
-    case WM_MOVE:
-    case WM_SETFOCUS:
-        if (_chrome)
-        {
-            _chrome->UpdateAccessibilityPlacement();
-        }
-        break;
-    case WM_KILLFOCUS:
-        // The keys and the pointer go elsewhere: a Space held for panning or a drag would never hear its release.
-        if (HonorsPointerLoss())
-        {
-            EndPointerInteractions();
-        }
-        if (_chrome)
-        {
-            _chrome->LeaveMenuKeyboard(); // a tapped Alt's menu bar does not keep the keyboard either
-            _chrome->UpdateAccessibilityPlacement();
-        }
-        break;
-    case WM_CAPTURECHANGED:
-        // Our own button-up release ends its drag itself; a dialog, a menu or another window taking the pointer
-        // ends every drag as the legacy canvas does when it resigns first responder.
-        if (!_releasingCapture && reinterpret_cast<HWND>(lParam) != window && HonorsPointerLoss())
-        {
-            EndPointerInteractions();
-        }
-        return 0;
-    case WM_CANCELMODE:
-        // A dialog or message box is about to show: end the drags, then let DefWindowProc release the capture.
-        if (HonorsPointerLoss())
-        {
-            EndPointerInteractions();
-        }
-        break;
-    case WM_ACTIVATEAPP:
-        if (wParam == FALSE && HonorsPointerLoss())
-        {
-            EndPointerInteractions();
-        }
-        if (wParam == FALSE && _chrome)
-        {
-            _chrome->LeaveMenuKeyboard();
-        }
-        break;
-    case WM_QUERYENDSESSION:
-        return OnQueryEndSession(lParam) ? TRUE : FALSE;
-    case WM_ENDSESSION:
-        OnEndSession(wParam != FALSE);
-        return 0;
-    case kEndSessionMessage:
-        if (static_cast<std::uint64_t>(wParam) == _endSessionGeneration)
-        {
-            RunEndSessionPrompt();
-        }
-        return 0;
-    case WM_SETTINGCHANGE:
-    case WM_THEMECHANGED:
-    case WM_SYSCOLORCHANGE:
-        // High contrast or the app mode changed: the palette follows (Specs/UI/UI_ApplicationChrome.md, Theme).
-        RefreshTheme();
-        break;
-    case WM_EXITSIZEMOVE:
-        CheckDeviceAdapter();
-        break;
-    case WM_DISPLAYCHANGE:
-        CheckDeviceAdapter();
-        break;
-    case WM_SHOWWINDOW:
-        _windowVisible = wParam != FALSE;
-        ReleaseSurfacesWhileUnseen();
-        if (_chrome)
-        {
-            _chrome->SetVisible(_windowVisible);
-        }
-        if (!_windowVisible)
-        {
-            _composition.ReleaseDocumentSurfaces();
-        }
-        if (_windowVisible)
-        {
-            InvalidateFrame();
-        }
-        return 0;
-    case WM_DROPFILES:
-    {
-        const HDROP drop = reinterpret_cast<HDROP>(wParam);
-        const auto release = wil::scope_exit([drop] { DragFinish(drop); });
-        const UINT count = DragQueryFileW(drop, 0xFFFFFFFFu, nullptr, 0);
-        if (count == 0)
-            return 0;
-        if (count > HostInputBudget::kMaxPaths)
-        {
-            ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)));
-            return 0;
-        }
-        std::array<std::size_t, HostInputBudget::kMaxPaths> lengths{};
-        for (UINT index = 0; index < count; ++index)
-        {
-            const UINT length = DragQueryFileW(drop, index, nullptr, 0);
-            if (length == 0 || length > HostInputBudget::kMaxPathUnits)
-            {
-                ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_INVALID_DATA)));
-                return 0;
-            }
-            lengths[index] = length;
-        }
-        // Images added as layers center on the drop point when it lands on the canvas (legacy ContentView.onDrop),
-        // anywhere else on the canvas's middle.
-        std::optional<Vec2> dropPoint;
-        POINT client{};
-        if (DragQueryPoint(drop, &client) != FALSE && _chrome && _session.Document().has_value() &&
-            _chrome->IsCanvasPoint(static_cast<float>(client.x), static_cast<float>(client.y)))
-        {
-            const CanvasHole hole = _chrome->HolePixels();
-            dropPoint = _viewport.DocumentFromView(
-                Vec2{static_cast<double>(client.x) - hole.left, static_cast<double>(client.y) - hole.top},
-                DocumentSize());
-        }
-        try
-        {
-            HostPathReadFailure failure;
-            auto request = HostRequest::TryReadPaths(
-                std::span<const std::size_t>(lengths.data(), count), HostPathAction::OpenPaths, dropPoint,
-                _hostInputBudget,
-                [drop](std::size_t index, std::span<wchar_t> destination) noexcept
+                if (const LRESULT provider = _chrome->HandleGetObject(wParam, lParam); provider != 0)
                 {
-                    return DragQueryFileW(drop, static_cast<UINT>(index), destination.data(),
-                                          static_cast<UINT>(destination.size())) == destination.size() - 1 &&
-                           destination.back() == L'\0';
-                },
-                failure);
-            ReportHostAdmission(
-                request ? QueueHostRequest(std::move(request.value()))
-                        : ContinuationReceipt::Failure(HRESULT_FROM_WIN32(
-                              failure == HostPathReadFailure::Quota ? ERROR_NOT_ENOUGH_QUOTA : ERROR_INVALID_DATA)));
-        }
-        catch (const std::bad_alloc&)
-        {
-            ReportHostAdmission(ContinuationReceipt::Failure(E_OUTOFMEMORY));
-        }
-        return 0;
-    }
-    case WM_MOUSEMOVE:
-    case WM_LBUTTONDOWN:
-    case WM_LBUTTONUP:
-    case WM_RBUTTONDOWN:
-    case WM_RBUTTONUP:
-    case WM_MOUSEWHEEL:
-    case WM_MOUSELEAVE:
-        OnPointer(message, wParam, lParam);
-        return 0;
-    case WM_INPUTLANGCHANGE:
-        OnKeyboardLayoutChanged(); // ApplicationKeyboard.cpp
-        break;
-    case WM_KEYDOWN:
-    case WM_SYSKEYDOWN:
-        // ApplicationKeyboard.cpp: the effective binding table, edit gestures and the chrome, in that order.
-        return OnKeyDown(window, message, wParam, lParam);
-    case WM_KEYUP:
-    case WM_SYSKEYUP:
-        return OnKeyUp(window, message, wParam, lParam);
-    case WM_SETCURSOR:
-        if (LOWORD(lParam) == HTCLIENT)
-        {
-            if (ApplyCanvasCursor())
-            {
-                return TRUE;
-            }
-            // Off the canvas the chrome decides (the arrow, the splitter's resize arrows): a tool cursor never lingers.
-            POINT point{};
-            if (_chrome && GetCursorPos(&point) && ScreenToClient(window, &point) &&
-                _chrome->ApplyChromeCursor(static_cast<float>(point.x), static_cast<float>(point.y)))
-            {
-                return TRUE;
-            }
-        }
-        break;
-    case WM_CHAR:
-    case WM_SYSCHAR:
-        return OnCharacter(window, message, wParam, lParam);
-    case WM_SYSCOMMAND:
-        // SC_KEYMENU (a tapped Alt, F10, an Alt+letter no command took) goes to the DxUi menu bar, never to the
-        // system-menu loop of a window that has no menu; Alt+Space still opens the system menu.
-        if ((wParam & 0xFFF0u) == SC_KEYMENU && lParam != L' ')
-        {
-            OnKeyMenu(static_cast<wchar_t>(lParam));
-            return 0;
-        }
-        break;
-    case WM_TIMER:
-        if (_uiBenchmark && OnUiCancellationTimer(wParam))
-            return 0;
-        if (wParam == kUiBenchmarkTimerId && _uiBenchmark)
-        {
-            (void)KillTimer(window, kUiBenchmarkTimerId);
-            FailUiBenchmark("failure-timeout");
-            return 0;
-        }
-        if (wParam == kJobIndicatorTimerId)
-        {
-            OnJobIndicatorTimer();
-            return 0;
-        }
-        if (wParam == kSettingsTimerId)
-        {
-            (void)KillTimer(window, kSettingsTimerId);
-            (void)ReloadSettingsIfChanged();
-            return 0;
-        }
-        if (wParam == kScreenshotTimerId && !_screenshotPath.empty() && _window)
-        {
-            (void)KillTimer(window, kScreenshotTimerId);
-            _screenshotResult = RedPrism::SaveWindowScreenshot(window, _screenshotPath.c_str());
-            if (FAILED(_screenshotResult))
-            {
-                OutputDebugStringW(L"Screenshot capture failed.\n");
-            }
-            PostMessageW(window, WM_CLOSE, 0, 0);
-            return 0;
-        }
-        break;
-    case WM_POWERBROADCAST:
-        if (wParam == PBT_POWERSETTINGCHANGE && lParam != 0)
-        {
-            const auto* setting = reinterpret_cast<const POWERBROADCAST_SETTING*>(lParam);
-            if (setting && setting->PowerSetting == GUID_SESSION_DISPLAY_STATUS && setting->DataLength >= sizeof(DWORD))
-            {
-                DWORD displayStatus = 0;
-                std::memcpy(&displayStatus, setting->Data, sizeof(displayStatus));
-                _displayPoweredOn = displayStatus != 0;
-                ReleaseSurfacesWhileUnseen();
-                if (_displayPoweredOn)
-                {
-                    InvalidateFrame();
+                    return provider;
                 }
             }
-        }
-        return TRUE;
-    case Renderer::kOcclusionStatusMessage:
-        _occlusionStatusChanged = true;
-        return 0;
-    case WM_ERASEBKGND:
-        return 1;
-    case WM_PAINT:
-        InvalidateFrame();
-        ValidateRect(window, nullptr);
-        return 0;
-    case WM_CLOSE:
-        if (_jobs.InUiCallback())
+            break;
+        case WM_MOVE:
+        case WM_SETFOCUS:
+            if (_chrome)
+            {
+                _chrome->UpdateAccessibilityPlacement();
+            }
+            break;
+        case WM_KILLFOCUS:
+            // The keys and the pointer go elsewhere: a Space held for panning or a drag would never hear its release.
+            if (HonorsPointerLoss())
+            {
+                EndPointerInteractions();
+            }
+            if (_chrome)
+            {
+                _chrome->LeaveMenuKeyboard(); // a tapped Alt's menu bar does not keep the keyboard either
+                _chrome->UpdateAccessibilityPlacement();
+            }
+            break;
+        case WM_CAPTURECHANGED:
+            // Our own button-up release ends its drag itself; a dialog, a menu or another window taking the pointer
+            // ends every drag as the legacy canvas does when it resigns first responder.
+            if (! _releasingCapture && reinterpret_cast<HWND>(lParam) != window && HonorsPointerLoss())
+            {
+                EndPointerInteractions();
+            }
+            return 0;
+        case WM_CANCELMODE:
+            // A dialog or message box is about to show: end the drags, then let DefWindowProc release the capture.
+            if (HonorsPointerLoss())
+            {
+                EndPointerInteractions();
+            }
+            break;
+        case WM_ACTIVATEAPP:
+            if (wParam == FALSE && HonorsPointerLoss())
+            {
+                EndPointerInteractions();
+            }
+            if (wParam == FALSE && _chrome)
+            {
+                _chrome->LeaveMenuKeyboard();
+            }
+            break;
+        case WM_QUERYENDSESSION: return OnQueryEndSession(lParam) ? TRUE : FALSE;
+        case WM_ENDSESSION: OnEndSession(wParam != FALSE); return 0;
+        case kEndSessionMessage:
+            if (static_cast<std::uint64_t>(wParam) == _endSessionGeneration)
+            {
+                RunEndSessionPrompt();
+            }
+            return 0;
+        case WM_SETTINGCHANGE:
+        case WM_THEMECHANGED:
+        case WM_SYSCOLORCHANGE:
+            // High contrast or the app mode changed: the palette follows (Specs/UI/UI_ApplicationChrome.md, Theme).
+            RefreshTheme();
+            break;
+        case WM_EXITSIZEMOVE: CheckDeviceAdapter(); break;
+        case WM_DISPLAYCHANGE: CheckDeviceAdapter(); break;
+        case WM_SHOWWINDOW:
+            _windowVisible = wParam != FALSE;
+            ReleaseSurfacesWhileUnseen();
+            if (_chrome)
+            {
+                _chrome->SetVisible(_windowVisible);
+            }
+            if (! _windowVisible)
+            {
+                _composition.ReleaseDocumentSurfaces();
+            }
+            if (_windowVisible)
+            {
+                InvalidateFrame();
+            }
+            return 0;
+        case WM_DROPFILES:
         {
-            _jobCloseRequested = true;
+            const HDROP drop   = reinterpret_cast<HDROP>(wParam);
+            const auto release = wil::scope_exit([drop] { DragFinish(drop); });
+            const UINT count   = DragQueryFileW(drop, 0xFFFFFFFFu, nullptr, 0);
+            if (count == 0)
+                return 0;
+            if (count > HostInputBudget::kMaxPaths)
+            {
+                ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)));
+                return 0;
+            }
+            std::array<std::size_t, HostInputBudget::kMaxPaths> lengths{};
+            for (UINT index = 0; index < count; ++index)
+            {
+                const UINT length = DragQueryFileW(drop, index, nullptr, 0);
+                if (length == 0 || length > HostInputBudget::kMaxPathUnits)
+                {
+                    ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_INVALID_DATA)));
+                    return 0;
+                }
+                lengths[index] = length;
+            }
+            // Images added as layers center on the drop point when it lands on the canvas (legacy ContentView.onDrop),
+            // anywhere else on the canvas's middle.
+            std::optional<Vec2> dropPoint;
+            POINT client{};
+            if (DragQueryPoint(drop, &client) != FALSE && _chrome && _session.Document().has_value() &&
+                _chrome->IsCanvasPoint(static_cast<float>(client.x), static_cast<float>(client.y)))
+            {
+                const CanvasHole hole = _chrome->HolePixels();
+                dropPoint =
+                    _viewport.DocumentFromView(Vec2{static_cast<double>(client.x) - hole.left, static_cast<double>(client.y) - hole.top}, DocumentSize());
+            }
+            try
+            {
+                HostPathReadFailure failure;
+                auto request = HostRequest::TryReadPaths(std::span<const std::size_t>(lengths.data(), count),
+                                                         HostPathAction::OpenPaths,
+                                                         dropPoint,
+                                                         _hostInputBudget,
+                                                         [drop](std::size_t index, std::span<wchar_t> destination) noexcept
+                {
+                    return DragQueryFileW(drop, static_cast<UINT>(index), destination.data(), static_cast<UINT>(destination.size())) ==
+                               destination.size() - 1 &&
+                           destination.back() == L'\0';
+                },
+                                                         failure);
+                ReportHostAdmission(request ? QueueHostRequest(std::move(request.value()))
+                                            : ContinuationReceipt::Failure(
+                                                  HRESULT_FROM_WIN32(failure == HostPathReadFailure::Quota ? ERROR_NOT_ENOUGH_QUOTA : ERROR_INVALID_DATA)));
+            }
+            catch (const std::bad_alloc&)
+            {
+                ReportHostAdmission(ContinuationReceipt::Failure(E_OUTOFMEMORY));
+            }
             return 0;
         }
-        // Inside a modal loop or a chrome dispatch the chrome is still on the stack: the close runs once it unwinds.
-        if (CloseMustWait())
-        {
-            _closeDeferred = true;
-            return 0;
-        }
-        // A modified document asks first; a failure on its way out and a quiet run never ask, and neither does the
-        // close the answered session-end prompt posted.
-        if (!std::exchange(_closeConfirmed, false) && _runtimeFailure == S_OK && !_quietUi)
-        {
-            ReportHostAdmission(QueueHostInput(HostCloseWindowInput{}));
-            return 0;
-        }
-        CloseMainWindow();
-        return 0;
-    case kNoticeMessage:
-        if (_prompts->ShowNotice(_chrome.get(),
-                                 FormatPostedNotice(static_cast<UINT>(wParam), static_cast<int>(lParam))))
-        {
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_MOUSEWHEEL:
+        case WM_MOUSELEAVE: OnPointer(message, wParam, lParam); return 0;
+        case WM_INPUTLANGCHANGE:
+            OnKeyboardLayoutChanged(); // ApplicationKeyboard.cpp
+            break;
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+            // ApplicationKeyboard.cpp: the effective binding table, edit gestures and the chrome, in that order.
+            return OnKeyDown(window, message, wParam, lParam);
+        case WM_KEYUP:
+        case WM_SYSKEYUP: return OnKeyUp(window, message, wParam, lParam);
+        case WM_SETCURSOR:
+            if (LOWORD(lParam) == HTCLIENT)
+            {
+                if (ApplyCanvasCursor())
+                {
+                    return TRUE;
+                }
+                // Off the canvas the chrome decides (the arrow, the splitter's resize arrows): a tool cursor never lingers.
+                POINT point{};
+                if (_chrome && GetCursorPos(&point) && ScreenToClient(window, &point) &&
+                    _chrome->ApplyChromeCursor(static_cast<float>(point.x), static_cast<float>(point.y)))
+                {
+                    return TRUE;
+                }
+            }
+            break;
+        case WM_CHAR:
+        case WM_SYSCHAR: return OnCharacter(window, message, wParam, lParam);
+        case WM_SYSCOMMAND:
+            // SC_KEYMENU (a tapped Alt, F10, an Alt+letter no command took) goes to the DxUi menu bar, never to the
+            // system-menu loop of a window that has no menu; Alt+Space still opens the system menu.
+            if ((wParam & 0xFFF0u) == SC_KEYMENU && lParam != L' ')
+            {
+                OnKeyMenu(static_cast<wchar_t>(lParam));
+                return 0;
+            }
+            break;
+        case WM_TIMER:
+            if (_uiBenchmark && OnUiCancellationTimer(wParam))
+                return 0;
+            if (wParam == kUiBenchmarkTimerId && _uiBenchmark)
+            {
+                (void)KillTimer(window, kUiBenchmarkTimerId);
+                FailUiBenchmark("failure-timeout");
+                return 0;
+            }
+            if (wParam == kJobIndicatorTimerId)
+            {
+                OnJobIndicatorTimer();
+                return 0;
+            }
+            if (wParam == kSettingsTimerId)
+            {
+                (void)KillTimer(window, kSettingsTimerId);
+                (void)ReloadSettingsIfChanged();
+                return 0;
+            }
+            if (wParam == kScreenshotTimerId && ! _screenshotPath.empty() && _window)
+            {
+                (void)KillTimer(window, kScreenshotTimerId);
+                _screenshotResult = RedPrism::SaveWindowScreenshot(window, _screenshotPath.c_str());
+                if (FAILED(_screenshotResult))
+                {
+                    OutputDebugStringW(L"Screenshot capture failed.\n");
+                }
+                PostMessageW(window, WM_CLOSE, 0, 0);
+                return 0;
+            }
+            break;
+        case WM_POWERBROADCAST:
+            if (wParam == PBT_POWERSETTINGCHANGE && lParam != 0)
+            {
+                const auto* setting = reinterpret_cast<const POWERBROADCAST_SETTING*>(lParam);
+                if (setting && setting->PowerSetting == GUID_SESSION_DISPLAY_STATUS && setting->DataLength >= sizeof(DWORD))
+                {
+                    DWORD displayStatus = 0;
+                    std::memcpy(&displayStatus, setting->Data, sizeof(displayStatus));
+                    _displayPoweredOn = displayStatus != 0;
+                    ReleaseSurfacesWhileUnseen();
+                    if (_displayPoweredOn)
+                    {
+                        InvalidateFrame();
+                    }
+                }
+            }
+            return TRUE;
+        case Renderer::kOcclusionStatusMessage: _occlusionStatusChanged = true; return 0;
+        case WM_ERASEBKGND: return 1;
+        case WM_PAINT:
             InvalidateFrame();
-        }
-        return 0;
-    case WM_DESTROY:
-        _displayPowerNotification.reset();
-        PostQuitMessage(0);
-        return 0;
-    case WM_NCDESTROY:
-        if (_window.get() == window)
-        {
-            (void)_window.release();
-        }
-        SetWindowLongPtrW(window, GWLP_USERDATA, 0);
-        return DefWindowProcW(window, message, wParam, lParam);
-    default:
-        break;
+            ValidateRect(window, nullptr);
+            return 0;
+        case WM_CLOSE:
+            if (_jobs.InUiCallback())
+            {
+                _jobCloseRequested = true;
+                return 0;
+            }
+            // Inside a modal loop or a chrome dispatch the chrome is still on the stack: the close runs once it unwinds.
+            if (CloseMustWait())
+            {
+                _closeDeferred = true;
+                return 0;
+            }
+            // A modified document asks first; a failure on its way out and a quiet run never ask, and neither does the
+            // close the answered session-end prompt posted.
+            if (! std::exchange(_closeConfirmed, false) && _runtimeFailure == S_OK && ! _quietUi)
+            {
+                ReportHostAdmission(QueueHostInput(HostCloseWindowInput{}));
+                return 0;
+            }
+            CloseMainWindow();
+            return 0;
+        case kNoticeMessage:
+            if (_prompts->ShowNotice(_chrome.get(), FormatPostedNotice(static_cast<UINT>(wParam), static_cast<int>(lParam))))
+            {
+                InvalidateFrame();
+            }
+            return 0;
+        case WM_DESTROY:
+            _displayPowerNotification.reset();
+            PostQuitMessage(0);
+            return 0;
+        case WM_NCDESTROY:
+            if (_window.get() == window)
+            {
+                (void)_window.release();
+            }
+            SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+            return DefWindowProcW(window, message, wParam, lParam);
+        default: break;
     }
     return DefWindowProcW(window, message, wParam, lParam);
 }
@@ -6344,7 +6186,7 @@ LRESULT Application::OnSize(UINT width, UINT height) noexcept
     {
         _chrome->UpdateAccessibilityPlacement();
     }
-    if (!_rendererReady)
+    if (! _rendererReady)
     {
         return 0;
     }
@@ -6382,15 +6224,16 @@ void Application::OnGetMinMaxInfo(HWND window, MINMAXINFO* info) const noexcept
     {
         return;
     }
-    const float widthDip = ChromeHost::kRailWidthDip + ChromeHost::kCanvasMinDip + ChromeHost::kSplitterWidthDip +
-                           ChromeHost::kLayersMinDip;
-    const float heightDip = ChromeHost::kMenuHeightDip + ChromeHost::kTabHeightDip + ChromeHost::kHeaderHeightDip +
-                            ChromeHost::kCanvasMinDip + ChromeHost::kStatusHeightDip;
-    RECT bounds{0, 0, MulDiv(static_cast<int>(std::ceil(widthDip)), static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI),
+    const float widthDip = ChromeHost::kRailWidthDip + ChromeHost::kCanvasMinDip + ChromeHost::kSplitterWidthDip + ChromeHost::kLayersMinDip;
+    const float heightDip =
+        ChromeHost::kMenuHeightDip + ChromeHost::kTabHeightDip + ChromeHost::kHeaderHeightDip + ChromeHost::kCanvasMinDip + ChromeHost::kStatusHeightDip;
+    RECT bounds{0,
+                0,
+                MulDiv(static_cast<int>(std::ceil(widthDip)), static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI),
                 MulDiv(static_cast<int>(std::ceil(heightDip)), static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI)};
-    const DWORD style = static_cast<DWORD>(GetWindowLongPtrW(window, GWL_STYLE));
+    const DWORD style         = static_cast<DWORD>(GetWindowLongPtrW(window, GWL_STYLE));
     const DWORD extendedStyle = static_cast<DWORD>(GetWindowLongPtrW(window, GWL_EXSTYLE));
-    if (!AdjustWindowRectExForDpi(&bounds, style, FALSE, extendedStyle, dpi))
+    if (! AdjustWindowRectExForDpi(&bounds, style, FALSE, extendedStyle, dpi))
     {
         return;
     }
@@ -6400,13 +6243,17 @@ void Application::OnGetMinMaxInfo(HWND window, MINMAXINFO* info) const noexcept
 
 LRESULT Application::OnDpiChanged(HWND window, const RECT* suggestedBounds) noexcept
 {
-    if (!suggestedBounds)
+    if (! suggestedBounds)
     {
         return 0;
     }
-    if (!SetWindowPos(window, nullptr, suggestedBounds->left, suggestedBounds->top,
-                      suggestedBounds->right - suggestedBounds->left, suggestedBounds->bottom - suggestedBounds->top,
-                      SWP_NOZORDER | SWP_NOACTIVATE))
+    if (! SetWindowPos(window,
+                       nullptr,
+                       suggestedBounds->left,
+                       suggestedBounds->top,
+                       suggestedBounds->right - suggestedBounds->left,
+                       suggestedBounds->bottom - suggestedBounds->top,
+                       SWP_NOZORDER | SWP_NOACTIVATE))
     {
         return 0;
     }
@@ -6419,7 +6266,7 @@ LRESULT Application::OnDpiChanged(HWND window, const RECT* suggestedBounds) noex
 
 void Application::ApplyDemo() noexcept
 {
-    if (!_session.Document().has_value())
+    if (! _session.Document().has_value())
     {
         return;
     }
@@ -6437,10 +6284,8 @@ void Application::ApplyDemo() noexcept
         InsertPaintedLayer(_session, L"Backdrop", 520, 340, Vec2{110, 120}, 0.0, 0xFF2F6FB0u);
         InsertPaintedLayer(_session, L"Card", 340, 220, Vec2{560, 320}, 0.0, 0xFFE58A2Eu);
         _session.marqueeKind = LassoKind::Ellipse;
-        _session.ApplySelection(SelectionGeometry::Ellipse(180, 160, 380, 260), SelectionMode::New,
-                                L"Elliptical Marquee");
-        _session.ApplySelection(SelectionGeometry::Rect(640, 380, 220, 130), SelectionMode::Add,
-                                L"Rectangular Marquee");
+        _session.ApplySelection(SelectionGeometry::Ellipse(180, 160, 380, 260), SelectionMode::New, L"Elliptical Marquee");
+        _session.ApplySelection(SelectionGeometry::Rect(640, 380, 220, 130), SelectionMode::Add, L"Rectangular Marquee");
         OnTool(EditorTool::Marquee);
         return;
     }
@@ -6452,12 +6297,12 @@ void Application::ApplyDemo() noexcept
         const auto stroke = [&](const BrushSettings& settings, std::initializer_list<Vec2> points, bool erase)
         {
             _session.brushSettings = settings;
-            bool first = true;
+            bool first             = true;
             for (const Vec2& point : points)
             {
                 if (first)
                 {
-                    if (!_session.BeginBrush(point, erase))
+                    if (! _session.BeginBrush(point, erase))
                     {
                         return;
                     }
@@ -6470,13 +6315,12 @@ void Application::ApplyDemo() noexcept
             }
             _session.FinishBrush();
         };
-        stroke(BrushSettings{90, 0, 0.90, 0.54, 0.18, 1},
-               {Vec2{220, 200}, Vec2{420, 160}, Vec2{620, 260}, Vec2{800, 200}}, false);
+        stroke(BrushSettings{90, 0, 0.90, 0.54, 0.18, 1}, {Vec2{220, 200}, Vec2{420, 160}, Vec2{620, 260}, Vec2{800, 200}}, false);
         stroke(BrushSettings{36, 1, 0.96, 0.96, 0.96, 1}, {Vec2{230, 360}, Vec2{500, 300}, Vec2{760, 380}}, false);
         stroke(BrushSettings{60, 0.5, 0.20, 0.72, 0.36, 0.6}, {Vec2{300, 440}, Vec2{700, 430}}, false);
         stroke(BrushSettings{70, 1, 0, 0, 0, 1}, {Vec2{560, 330}, Vec2{620, 420}}, true);
         _session.brushSettings = BrushSettings{60, 0.5, 0.90, 0.54, 0.18, 1};
-        _brushHover = Vec2{880, 430};
+        _brushHover            = Vec2{880, 430};
         OnTool(EditorTool::Brush);
         return;
     }
@@ -6550,62 +6394,52 @@ void Application::ApplyDemo() noexcept
 
 void Application::OnTransformAction(TransformAction action, double value) noexcept
 {
-    if (!_hostExecuting && PolygonalInputOwner(_lassoInput.Opening()) && action != TransformAction::AutoSelect &&
-        action != TransformAction::ShowControls && action != TransformAction::LockRatio)
+    if (! _hostExecuting && PolygonalInputOwner(_lassoInput.Opening()) && action != TransformAction::AutoSelect && action != TransformAction::ShowControls &&
+        action != TransformAction::LockRatio)
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return; // Selected Polygonal scope does not admit a competing transform writer.
     }
-    if (!_hostExecuting && (action == TransformAction::Apply || action == TransformAction::Cancel))
+    if (! _hostExecuting && (action == TransformAction::Apply || action == TransformAction::Cancel))
     {
         (void)EndCanvasEdit(CanvasEdit::Transform, action == TransformAction::Apply ? EditEnd::Enter : EditEnd::Escape);
         return;
     }
-    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) &&
-        action != TransformAction::AutoSelect && action != TransformAction::ShowControls &&
-        action != TransformAction::LockRatio)
+    if (! _hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) && action != TransformAction::AutoSelect &&
+        action != TransformAction::ShowControls && action != TransformAction::LockRatio)
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return;
     }
     switch (action)
     {
-    case TransformAction::Apply:
-    case TransformAction::Cancel:
-        // The header's Apply and Cancel are Enter and Escape of the pending transform.
-        (void)EndCanvasEdit(CanvasEdit::Transform, action == TransformAction::Apply ? EditEnd::Enter : EditEnd::Escape);
-        return;
-    case TransformAction::AutoSelect:
-        _transformAutoSelect = value != 0.0;
-        SyncChrome();
-        return;
-    case TransformAction::ShowControls:
-        _showsTransformControls = value != 0.0;
-        SyncChrome();
-        InvalidateFrame();
-        return;
-    case TransformAction::LockRatio:
-        _locksTransformRatio = value != 0.0;
-        SyncChrome();
-        return;
-    case TransformAction::FlipHorizontal:
-        ChangeTransform([](LayerTransform& transform) { transform.flipX = !transform.flipX; });
-        return;
-    case TransformAction::FlipVertical:
-        ChangeTransform([](LayerTransform& transform) { transform.flipY = !transform.flipY; });
-        return;
-    case TransformAction::SetX:
-        ChangeTransform([value](LayerTransform& transform) { transform.origin.x = value; });
-        return;
-    case TransformAction::SetY:
-        ChangeTransform([value](LayerTransform& transform) { transform.origin.y = value; });
-        return;
-    case TransformAction::SetWidth:
-        if (value >= 1.0)
-        {
-            const bool lock = _locksTransformRatio;
-            ChangeTransform(
-                [value, lock](LayerTransform& transform)
+        case TransformAction::Apply:
+        case TransformAction::Cancel:
+            // The header's Apply and Cancel are Enter and Escape of the pending transform.
+            (void)EndCanvasEdit(CanvasEdit::Transform, action == TransformAction::Apply ? EditEnd::Enter : EditEnd::Escape);
+            return;
+        case TransformAction::AutoSelect:
+            _transformAutoSelect = value != 0.0;
+            SyncChrome();
+            return;
+        case TransformAction::ShowControls:
+            _showsTransformControls = value != 0.0;
+            SyncChrome();
+            InvalidateFrame();
+            return;
+        case TransformAction::LockRatio:
+            _locksTransformRatio = value != 0.0;
+            SyncChrome();
+            return;
+        case TransformAction::FlipHorizontal: ChangeTransform([](LayerTransform& transform) { transform.flipX = ! transform.flipX; }); return;
+        case TransformAction::FlipVertical: ChangeTransform([](LayerTransform& transform) { transform.flipY = ! transform.flipY; }); return;
+        case TransformAction::SetX: ChangeTransform([value](LayerTransform& transform) { transform.origin.x = value; }); return;
+        case TransformAction::SetY: ChangeTransform([value](LayerTransform& transform) { transform.origin.y = value; }); return;
+        case TransformAction::SetWidth:
+            if (value >= 1.0)
+            {
+                const bool lock = _locksTransformRatio;
+                ChangeTransform([value, lock](LayerTransform& transform)
                 {
                     if (lock)
                     {
@@ -6613,14 +6447,13 @@ void Application::OnTransformAction(TransformAction action, double value) noexce
                     }
                     transform.size.x = value;
                 });
-        }
-        return;
-    case TransformAction::SetHeight:
-        if (value >= 1.0)
-        {
-            const bool lock = _locksTransformRatio;
-            ChangeTransform(
-                [value, lock](LayerTransform& transform)
+            }
+            return;
+        case TransformAction::SetHeight:
+            if (value >= 1.0)
+            {
+                const bool lock = _locksTransformRatio;
+                ChangeTransform([value, lock](LayerTransform& transform)
                 {
                     if (lock)
                     {
@@ -6628,44 +6461,35 @@ void Application::OnTransformAction(TransformAction action, double value) noexce
                     }
                     transform.size.y = value;
                 });
-        }
-        return;
-    case TransformAction::SetScale:
-        if (value > 0.0)
-        {
-            // 100 % draws the layer's pixels 1:1 (a blank layer's size before this edit, so typing never compounds).
-            const std::optional<Vec2> pixels = _session.TransformPixelSize();
-            ChangeTransform(
-                [value, pixels](LayerTransform& transform)
-                {
-                    transform = transform.ScaledToPercent(value, pixels.has_value() ? pixels.value() : transform.size);
-                });
-        }
-        return;
-    case TransformAction::SetRotation:
-        ChangeTransform([value](LayerTransform& transform) { transform.rotation = std::fmod(value, 360.0); });
-        return;
-    case TransformAction::SetSampling:
-        ChangeTransform(
-            [value](LayerTransform& transform)
+            }
+            return;
+        case TransformAction::SetScale:
+            if (value > 0.0)
             {
-                transform.sampling = value <= 0.5   ? LayerSampling::Nearest
-                                     : value <= 1.5 ? LayerSampling::Smooth
-                                                    : LayerSampling::High;
+                // 100 % draws the layer's pixels 1:1 (a blank layer's size before this edit, so typing never compounds).
+                const std::optional<Vec2> pixels = _session.TransformPixelSize();
+                ChangeTransform([value, pixels](LayerTransform& transform)
+                { transform = transform.ScaledToPercent(value, pixels.has_value() ? pixels.value() : transform.size); });
+            }
+            return;
+        case TransformAction::SetRotation: ChangeTransform([value](LayerTransform& transform) { transform.rotation = std::fmod(value, 360.0); }); return;
+        case TransformAction::SetSampling:
+            ChangeTransform([value](LayerTransform& transform) {
+                transform.sampling = value <= 0.5 ? LayerSampling::Nearest : value <= 1.5 ? LayerSampling::Smooth : LayerSampling::High;
             });
-        return;
+            return;
     }
 }
 
 void Application::ChangeTransform(const std::function<void(LayerTransform&)>& update) noexcept
 {
-    if (!_session.PendingTransformEdit().has_value())
+    if (! _session.PendingTransformEdit().has_value())
     {
         (void)_session.BeginDeferredTransform(true);
     }
     const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
     // Numbers describe an ordinary transform; while distorted, the handles are the controls.
-    if (!edit.has_value() || edit->corners.has_value() || !update)
+    if (! edit.has_value() || edit->corners.has_value() || ! update)
     {
         return;
     }
@@ -6679,32 +6503,30 @@ Application::TransformPressRule Application::CurrentTransformPressRule() const
 {
     TransformPressRule rule;
     rule.document = _session.Document().has_value();
-    if (!rule.document)
+    if (! rule.document)
     {
         return rule;
     }
     const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
-    const ImageLayer* active = _session.ActiveLayer();
-    rule.picks = !edit.has_value();
-    rule.autoSelect = _transformAutoSelect;
-    rule.active = _session.ActiveLayerID();
-    rule.group = _session.TransformsAsGroup() && rule.active.has_value();
+    const ImageLayer* active                 = _session.ActiveLayer();
+    rule.picks                               = ! edit.has_value();
+    rule.autoSelect                          = _transformAutoSelect;
+    rule.active                              = _session.ActiveLayerID();
+    rule.group                               = _session.TransformsAsGroup() && rule.active.has_value();
     if (rule.group)
     {
         rule.groupBox = edit.has_value() ? std::optional<LayerTransform>(edit->draft) : _session.GroupTransformBox();
     }
-    if (active != nullptr && active->asset.has_value() && !active->isGroup && !_session.TransformsAsGroup() &&
-        _session.CanTransform())
+    if (active != nullptr && active->asset.has_value() && ! active->isGroup && ! _session.TransformsAsGroup() && _session.CanTransform())
     {
         rule.activeBox = _session.EditedTransform(*active);
     }
     return rule;
 }
 
-std::optional<std::pair<Guid, bool>> Application::TransformPressLayer(const TransformPressRule& rule, Vec2 pixel,
-                                                                      bool control) const
+std::optional<std::pair<Guid, bool>> Application::TransformPressLayer(const TransformPressRule& rule, Vec2 pixel, bool control) const
 {
-    if (!rule.document)
+    if (! rule.document)
     {
         return std::nullopt;
     }
@@ -6713,7 +6535,7 @@ std::optional<std::pair<Guid, bool>> Application::TransformPressLayer(const Tran
     std::optional<std::optional<Guid>> found;
     const auto underPointer = [&]() -> const std::optional<Guid>&
     {
-        if (!found.has_value())
+        if (! found.has_value())
         {
             found = LayerUnderPointer(pixel);
         }
@@ -6727,8 +6549,7 @@ std::optional<std::pair<Guid, bool>> Application::TransformPressLayer(const Tran
     }
     if (rule.group)
     {
-        if ((rule.groupBox.has_value() && rule.groupBox->Contains(pixel)) || !(rule.picks && rule.autoSelect) ||
-            !underPointer().has_value())
+        if ((rule.groupBox.has_value() && rule.groupBox->Contains(pixel)) || ! (rule.picks && rule.autoSelect) || ! underPointer().has_value())
         {
             return std::make_pair(rule.active.value(), false);
         }
@@ -6793,7 +6614,7 @@ std::optional<Guid> Application::LayerUnderPointer(Vec2 pixel) const
                 return layer.id;
             }
         }
-        if (!stale)
+        if (! stale)
         {
             return std::nullopt;
         }
@@ -6804,29 +6625,29 @@ std::optional<Guid> Application::LayerUnderPointer(Vec2 pixel) const
 
 void Application::BeginTransformDrag(Vec2 view, UINT modifiers) noexcept
 {
-    if (!_session.Document().has_value() || _duplicateGesture)
+    if (! _session.Document().has_value() || _duplicateGesture)
     {
         return;
     }
-    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    const Vec2 pixel   = _viewport.DocumentFromView(view, DocumentSize());
     const bool control = (modifiers & MK_CONTROL) != 0;
-    const bool alt = KeyboardState::Held(VK_MENU);
+    const bool alt     = KeyboardState::Held(VK_MENU);
     std::optional<TransformHit> hit;
     if (_overlayGeometry.has_value())
     {
         hit = _overlayGeometry->Hit(view);
     }
     TransformDrag::Mode mode = TransformDrag::Mode::Move;
-    int handle = -1;
+    int handle               = -1;
     if (hit.has_value())
     {
-        mode = hit->mode;
+        mode   = hit->mode;
         handle = hit->handle;
     }
     else
     {
         const std::optional<std::pair<Guid, bool>> target = TransformPressLayer(pixel, control);
-        if (!target.has_value())
+        if (! target.has_value())
         {
             return;
         }
@@ -6835,13 +6656,12 @@ void Application::BeginTransformDrag(Vec2 view, UINT modifiers) noexcept
             _session.SelectLayer(target->first);
         }
     }
-    if (!_session.PendingTransformEdit().has_value())
+    if (! _session.PendingTransformEdit().has_value())
     {
         (void)_session.BeginDeferredTransform(false);
     }
     // Ctrl-dragging a handle distorts, as in Photoshop; once distorted, handles keep distorting.
-    if (mode == TransformDrag::Mode::Resize && _session.PendingTransformEdit().has_value() &&
-        (control || _session.PendingTransformEdit()->corners.has_value()))
+    if (mode == TransformDrag::Mode::Resize && _session.PendingTransformEdit().has_value() && (control || _session.PendingTransformEdit()->corners.has_value()))
     {
         _session.BeginDistort();
         if (_session.PendingTransformEdit()->corners.has_value())
@@ -6850,13 +6670,12 @@ void Application::BeginTransformDrag(Vec2 view, UINT modifiers) noexcept
         }
     }
     const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
-    if (!edit.has_value())
+    if (! edit.has_value())
     {
         return;
     }
     // Alt-dragging the body duplicates the layer once the pointer moves.
-    _drag = MoveToolDrag{TransformDrag{mode, handle, edit->draft, pixel, edit->corners},
-                         mode == TransformDrag::Mode::Move && alt};
+    _drag = MoveToolDrag{TransformDrag{mode, handle, edit->draft, pixel, edit->corners}, mode == TransformDrag::Mode::Move && alt};
     SyncChrome();
 }
 
@@ -6865,16 +6684,14 @@ void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
     if (_duplicateGesture)
     {
         auto& gesture = _duplicateGesture.value();
-        if (!gesture.pointerDown || gesture.finishQueued || gesture.abandoned ||
-            gesture.documentSerial != _session.DocumentSerial() || _hostRequests.Size() ||
-            !std::holds_alternative<MoveToolDrag>(_drag))
+        if (! gesture.pointerDown || gesture.finishQueued || gesture.abandoned || gesture.documentSerial != _session.DocumentSerial() || _hostRequests.Size() ||
+            ! std::holds_alternative<MoveToolDrag>(_drag))
             return;
-        gesture.latest = _viewport.DocumentFromView(view, DocumentSize());
+        gesture.latest    = _viewport.DocumentFromView(view, DocumentSize());
         gesture.modifiers = modifiers;
-        gesture.alt = KeyboardState::Held(VK_MENU);
-        if (gesture.copy && !_historyWork.Busy() && !_activeHostRequest && _session.PendingTransformEdit() &&
-            _session.PendingTransformEdit()->layerID == gesture.copy &&
-            _session.PendingTransformEdit()->opening == gesture.copyOpening)
+        gesture.alt       = KeyboardState::Held(VK_MENU);
+        if (gesture.copy && ! _historyWork.Busy() && ! _activeHostRequest && _session.PendingTransformEdit() &&
+            _session.PendingTransformEdit()->layerID == gesture.copy && _session.PendingTransformEdit()->opening == gesture.copyOpening)
         {
             ApplyTransformDragGeometry(gesture.drag, gesture.latest, gesture.modifiers, gesture.alt);
             DocumentChanged();
@@ -6884,13 +6701,13 @@ void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
     if (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size())
         return; // Released or queued geometry cannot mutate a captured worker input.
     MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag);
-    if (move == nullptr || !_session.Document().has_value())
+    if (move == nullptr || ! _session.Document().has_value())
     {
         return;
     }
     const TransformDrag drag = move->drag;
-    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    const bool alt = KeyboardState::Held(VK_MENU);
+    const Vec2 pixel         = _viewport.DocumentFromView(view, DocumentSize());
+    const bool alt           = KeyboardState::Held(VK_MENU);
     if (std::exchange(move->duplicateOnMove, false))
     {
         if (StartDuplicateGesture(drag, pixel, modifiers, alt))
@@ -6902,8 +6719,8 @@ void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
 
 void Application::ApplyTransformDragGeometry(const TransformDrag& drag, Vec2 pixel, UINT modifiers, bool alt) noexcept
 {
-    const bool shift = (modifiers & MK_SHIFT) != 0;
-    const bool control = (modifiers & MK_CONTROL) != 0;
+    const bool shift                                 = (modifiers & MK_SHIFT) != 0;
+    const bool control                               = (modifiers & MK_CONTROL) != 0;
     const std::optional<std::array<Vec2, 4>> corners = drag.Corners(pixel, shift);
     if (corners.has_value())
     {
@@ -6914,7 +6731,7 @@ void Application::ApplyTransformDragGeometry(const TransformDrag& drag, Vec2 pix
         // Dragging, scaling and rotating land on whole pixels and degrees; typed values stay exact. Moving snaps
         // to the canvas and the other layers unless Ctrl is held; resizing and rotating are left alone.
         LayerTransform draft = drag.Updated(pixel, _locksTransformRatio, shift, alt).Rounded();
-        if (drag.mode == TransformDrag::Mode::Move && !control)
+        if (drag.mode == TransformDrag::Mode::Move && ! control)
         {
             std::unordered_set<Guid> moving;
             const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
@@ -6948,7 +6765,7 @@ void Application::EndTransformDrag() noexcept
         return;
     }
     const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
-    if (edit.has_value() && !edit->persistent)
+    if (edit.has_value() && ! edit->persistent)
     {
         (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
     }
@@ -6957,17 +6774,17 @@ void Application::EndTransformDrag() noexcept
 
 bool Application::ApplyCanvasCursor() noexcept
 {
-    if (!_window || !_chrome)
+    if (! _window || ! _chrome)
     {
         return false;
     }
     POINT point{};
-    if (!GetCursorPos(&point) || !ScreenToClient(_window.get(), &point))
+    if (! GetCursorPos(&point) || ! ScreenToClient(_window.get(), &point))
     {
         return false;
     }
     const std::optional<LPCWSTR> cursor = CanvasCursorAt(point);
-    if (!cursor.has_value())
+    if (! cursor.has_value())
     {
         return false;
     }
@@ -6977,14 +6794,14 @@ bool Application::ApplyCanvasCursor() noexcept
 
 std::optional<LPCWSTR> Application::CanvasCursorAt(POINT point) noexcept
 {
-    if (!_chrome)
+    if (! _chrome)
     {
         return std::nullopt;
     }
-    const CanvasHole hole = _chrome->HolePixels();
-    const bool inHole = _chrome->IsCanvasPoint(static_cast<float>(point.x), static_cast<float>(point.y));
+    const CanvasHole hole    = _chrome->HolePixels();
+    const bool inHole        = _chrome->IsCanvasPoint(static_cast<float>(point.x), static_cast<float>(point.y));
     const MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag);
-    if (!inHole && move == nullptr)
+    if (! inHole && move == nullptr)
     {
         return std::nullopt;
     }
@@ -6998,8 +6815,7 @@ std::optional<LPCWSTR> Application::CanvasCursorAt(POINT point) noexcept
     {
         cursor = IDC_CROSS;
     }
-    else if (std::holds_alternative<ColorSampling>(_drag) || SamplesColor() || _tool == EditorTool::Gradient ||
-             _tool == EditorTool::Shape)
+    else if (std::holds_alternative<ColorSampling>(_drag) || SamplesColor() || _tool == EditorTool::Gradient || _tool == EditorTool::Shape)
     {
         cursor = IDC_CROSS;
     }
@@ -7017,10 +6833,10 @@ std::optional<LPCWSTR> Application::CanvasCursorAt(POINT point) noexcept
     {
         // A crosshair draws; over the selection in New mode (and while moving it) the four-way arrow moves the
         // outline. The add/subtract badges of the legacy cursors wait on custom cursors.
-        const bool shift = KeyboardState::Held(VK_SHIFT);
-        const bool alt = KeyboardState::Held(VK_MENU);
-        const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-        cursor = IDC_CROSS;
+        const bool shift   = KeyboardState::Held(VK_SHIFT);
+        const bool alt     = KeyboardState::Held(VK_MENU);
+        const Vec2 pixel   = _viewport.DocumentFromView(view, DocumentSize());
+        cursor             = IDC_CROSS;
         const bool control = KeyboardState::Held(VK_CONTROL);
         if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<PixelDrag>(_drag) ||
             ((control || _session.LassoCursorMode(shift, alt) == SelectionMode::New) && CursorOverSelection(pixel)))
@@ -7048,20 +6864,15 @@ std::optional<LPCWSTR> Application::CanvasCursorAt(POINT point) noexcept
         {
             const bool distorting = hit->mode == TransformDrag::Mode::Distort ||
                                     (hit->mode == TransformDrag::Mode::Resize &&
-                                     (control || (_session.PendingTransformEdit().has_value() &&
-                                                  _session.PendingTransformEdit()->corners.has_value())));
+                                     (control || (_session.PendingTransformEdit().has_value() && _session.PendingTransformEdit()->corners.has_value())));
             if (distorting || hit->mode == TransformDrag::Mode::Rotate)
             {
                 cursor = IDC_CROSS;
             }
             else if (hit->mode == TransformDrag::Mode::Resize)
             {
-                const int direction =
-                    _overlayGeometry.has_value() ? _overlayGeometry->ResizeCursorDirection(hit->handle) : 0;
-                cursor = direction == 0   ? IDC_SIZEWE
-                         : direction == 1 ? IDC_SIZENWSE
-                         : direction == 2 ? IDC_SIZENS
-                                          : IDC_SIZENESW;
+                const int direction = _overlayGeometry.has_value() ? _overlayGeometry->ResizeCursorDirection(hit->handle) : 0;
+                cursor              = direction == 0 ? IDC_SIZEWE : direction == 1 ? IDC_SIZENWSE : direction == 2 ? IDC_SIZENS : IDC_SIZENESW;
             }
             else
             {
@@ -7081,15 +6892,14 @@ bool Application::CursorPressesLayer(Vec2 pixel, bool control) noexcept
     // Once per pointer position and session state: WM_SETCURSOR repeats for one position (every pointer message,
     // Alt), and the session changes only through SyncChrome, which moves `_cursorRevision` (RF-1002).
     CursorProbe& probe = _layerProbe;
-    if (!probe.valid || probe.revision != _cursorRevision || probe.pixel != pixel || probe.control != control)
+    if (! probe.valid || probe.revision != _cursorRevision || probe.pixel != pixel || probe.control != control)
     {
         if (_pressRuleRevision != _cursorRevision)
         {
-            _pressRule = CurrentTransformPressRule();
+            _pressRule         = CurrentTransformPressRule();
             _pressRuleRevision = _cursorRevision;
         }
-        probe = CursorProbe{pixel, control, _cursorRevision,
-                            TransformPressLayer(_pressRule, pixel, control).has_value(), true};
+        probe = CursorProbe{pixel, control, _cursorRevision, TransformPressLayer(_pressRule, pixel, control).has_value(), true};
     }
     return probe.result;
 }
@@ -7109,17 +6919,16 @@ bool Application::CursorOverSelection(Vec2 pixel) noexcept
         _selectionReachRevision = _cursorRevision;
         _selectionReach.reset();
         const std::optional<DocumentSelection>& selection = _session.Selection();
-        if (selection.has_value() && !selection->loops.empty())
+        if (selection.has_value() && ! selection->loops.empty())
         {
             _selectionReach = selection->Bounds();
         }
     }
     // The winding test counts a point on the outline (within 1e-9) as inside: the bounds keep a margin for it.
     constexpr double kMargin = 1e-6;
-    const bool reachable = _selectionReach.has_value() && pixel.x >= _selectionReach->minX - kMargin &&
-                           pixel.x <= _selectionReach->maxX + kMargin && pixel.y >= _selectionReach->minY - kMargin &&
-                           pixel.y <= _selectionReach->maxY + kMargin;
-    bool inside = false;
+    const bool reachable     = _selectionReach.has_value() && pixel.x >= _selectionReach->minX - kMargin && pixel.x <= _selectionReach->maxX + kMargin &&
+                               pixel.y >= _selectionReach->minY - kMargin && pixel.y <= _selectionReach->maxY + kMargin;
+    bool inside              = false;
     if (reachable)
     {
         ++_cursorSelectionTests;
@@ -7131,7 +6940,7 @@ bool Application::CursorOverSelection(Vec2 pixel) noexcept
 
 void Application::OnSelectionAction(SelectionAction action, double value) noexcept
 {
-    if (!_hostExecuting && (_polygonalPressInput.Busy() || PolygonalInputOwner(_lassoInput.Opening())))
+    if (! _hostExecuting && (_polygonalPressInput.Busy() || PolygonalInputOwner(_lassoInput.Opening())))
     {
         if (action == SelectionAction::Deselect)
         {
@@ -7144,99 +6953,76 @@ void Application::OnSelectionAction(SelectionAction action, double value) noexce
             return; // Never fall through to owner geometry or a second serial selection producer.
         }
     }
-    if (!_hostExecuting && (action == SelectionAction::Expand || action == SelectionAction::Contract) &&
+    if (! _hostExecuting && (action == SelectionAction::Expand || action == SelectionAction::Contract) &&
         _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
     {
         const int amount = action == SelectionAction::Expand ? _selectionExpandAmount : -_selectionContractAmount;
         ReportHostAdmission(QueueHostInput(HostSelectionOffsetInput{amount}));
         return;
     }
-    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    if (! _hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return;
     }
-    if (!_hostExecuting && _session.IsMovingSelection() && CanQueueSelectionMoveClick() &&
-        SelectionMoveHeaderAction(action))
+    if (! _hostExecuting && _session.IsMovingSelection() && CanQueueSelectionMoveClick() && SelectionMoveHeaderAction(action))
     {
         (void)QueueSelectionMoveHeader(action, value);
         return;
     }
-    const auto whole = [value](int minimum, int maximum)
-    { return std::clamp(static_cast<int>(std::lround(value)), minimum, maximum); };
+    const auto whole = [value](int minimum, int maximum) { return std::clamp(static_cast<int>(std::lround(value)), minimum, maximum); };
     switch (action)
     {
-    case SelectionAction::SetMarqueeKind:
-        EndSelectionInteraction(false);
-        _session.marqueeKind = value >= 0.5 ? LassoKind::Ellipse : LassoKind::Rectangle;
-        break;
-    case SelectionAction::SetLassoKind:
-        EndSelectionInteraction(false);
-        _session.lassoKind = value >= 0.5 ? LassoKind::Polygonal : LassoKind::Freehand;
-        break;
-    case SelectionAction::SetMode:
-        _session.selectionModeChoice = static_cast<SelectionMode>(whole(0, 2));
-        break;
-    case SelectionAction::SetAntialias:
-        _session.selectionAntialiased = value != 0.0;
-        break;
-    case SelectionAction::SetTolerance:
-        _session.wandSettings.tolerance = whole(0, 255);
-        break;
-    case SelectionAction::SetSampleSize:
-        _session.wandSettings.sampleSize = static_cast<WandSampleSize>(whole(0, 2));
-        break;
-    case SelectionAction::SetSampleAllLayers:
-        _session.wandSettings.sampleAllLayers = value != 0.0;
-        break;
-    case SelectionAction::SetContiguous:
-        _session.wandSettings.contiguous = value != 0.0;
-        break;
-    case SelectionAction::SetExpandAmount:
-        _selectionExpandAmount = whole(1, DocumentSession::kSelectionModifyLimit);
-        break;
-    case SelectionAction::Expand:
-        _session.ExpandSelection(_selectionExpandAmount);
-        break;
-    case SelectionAction::SetContractAmount:
-        _selectionContractAmount = whole(1, DocumentSession::kSelectionModifyLimit);
-        break;
-    case SelectionAction::Contract:
-        _session.ContractSelection(_selectionContractAmount);
-        break;
-    case SelectionAction::Deselect:
-        EndSelectionInteraction(false);
-        _session.Deselect();
-        break;
+        case SelectionAction::SetMarqueeKind:
+            EndSelectionInteraction(false);
+            _session.marqueeKind = value >= 0.5 ? LassoKind::Ellipse : LassoKind::Rectangle;
+            break;
+        case SelectionAction::SetLassoKind:
+            EndSelectionInteraction(false);
+            _session.lassoKind = value >= 0.5 ? LassoKind::Polygonal : LassoKind::Freehand;
+            break;
+        case SelectionAction::SetMode: _session.selectionModeChoice = static_cast<SelectionMode>(whole(0, 2)); break;
+        case SelectionAction::SetAntialias: _session.selectionAntialiased = value != 0.0; break;
+        case SelectionAction::SetTolerance: _session.wandSettings.tolerance = whole(0, 255); break;
+        case SelectionAction::SetSampleSize: _session.wandSettings.sampleSize = static_cast<WandSampleSize>(whole(0, 2)); break;
+        case SelectionAction::SetSampleAllLayers: _session.wandSettings.sampleAllLayers = value != 0.0; break;
+        case SelectionAction::SetContiguous: _session.wandSettings.contiguous = value != 0.0; break;
+        case SelectionAction::SetExpandAmount: _selectionExpandAmount = whole(1, DocumentSession::kSelectionModifyLimit); break;
+        case SelectionAction::Expand: _session.ExpandSelection(_selectionExpandAmount); break;
+        case SelectionAction::SetContractAmount: _selectionContractAmount = whole(1, DocumentSession::kSelectionModifyLimit); break;
+        case SelectionAction::Contract: _session.ContractSelection(_selectionContractAmount); break;
+        case SelectionAction::Deselect:
+            EndSelectionInteraction(false);
+            _session.Deselect();
+            break;
     }
     SelectionChanged();
 }
 
 void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexcept
 {
-    if (!_session.Document().has_value())
+    if (! _session.Document().has_value())
     {
         return;
     }
     // A second press within the system double-click time and distance closes a polygonal outline.
-    const ULONGLONG now = GetTickCount64();
-    const bool doubleClick = now - _lastPressTick <= GetDoubleClickTime() &&
-                             std::abs(client.x - _lastPressPoint.x) <= GetSystemMetrics(SM_CXDOUBLECLK) &&
-                             std::abs(client.y - _lastPressPoint.y) <= GetSystemMetrics(SM_CYDOUBLECLK);
-    _lastPressTick = now;
-    _lastPressPoint = client;
+    const ULONGLONG now     = GetTickCount64();
+    const bool doubleClick  = now - _lastPressTick <= GetDoubleClickTime() && std::abs(client.x - _lastPressPoint.x) <= GetSystemMetrics(SM_CXDOUBLECLK) &&
+                              std::abs(client.y - _lastPressPoint.y) <= GetSystemMetrics(SM_CYDOUBLECLK);
+    _lastPressTick          = now;
+    _lastPressPoint         = client;
     const Vec2 documentSize = DocumentSize();
-    const Vec2 pixel = _viewport.DocumentFromView(view, documentSize);
-    const bool shift = (modifiers & MK_SHIFT) != 0;
-    const bool alt = KeyboardState::Held(VK_MENU);
-    if (_lassoInput.Busy() && !LassoInputCurrentOwner(_lassoInput.Opening()))
+    const Vec2 pixel        = _viewport.DocumentFromView(view, documentSize);
+    const bool shift        = (modifiers & MK_SHIFT) != 0;
+    const bool alt          = KeyboardState::Held(VK_MENU);
+    if (_lassoInput.Busy() && ! LassoInputCurrentOwner(_lassoInput.Opening()))
         CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Stale);
     if (_lassoInput.Busy())
     {
         const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
         if (captured && captured->kind == LassoKind::Polygonal)
         {
-            const Vec2 first = _viewport.ViewFromDocument(_lassoInputFirstPoint, documentSize);
+            const Vec2 first     = _viewport.ViewFromDocument(_lassoInputFirstPoint, documentSize);
             const bool nearFirst = std::hypot(view.x - first.x, view.y - first.y) <= _viewport.DipToView(8.0);
             RecordLassoPolygonPressOwner(pixel, nearFirst, doubleClick, _session.selectionAntialiased);
         }
@@ -7248,10 +7034,9 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     if (draft.has_value() && draft->kind == LassoKind::Polygonal && draft->PointCount() != 0)
     {
         // Polygonal adds a corner per click and closes on a click near the first corner or a double-click.
-        const Vec2 first = _viewport.ViewFromDocument(draft->FirstPoint().value(), documentSize);
+        const Vec2 first           = _viewport.ViewFromDocument(draft->FirstPoint().value(), documentSize);
         const double closeDistance = _viewport.DipToView(8.0);
-        if (doubleClick ||
-            (draft->PointCount() >= 3 && std::hypot(view.x - first.x, view.y - first.y) <= closeDistance))
+        if (doubleClick || (draft->PointCount() >= 3 && std::hypot(view.x - first.x, view.y - first.y) <= closeDistance))
         {
             _session.FinishLasso();
         }
@@ -7264,10 +7049,9 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     }
     if (_polygonalDrawingTestEnabled && _tool == EditorTool::Lasso && _session.lassoKind == LassoKind::Polygonal)
     {
-        const auto mode = _session.SelectionModeFor(shift, alt);
+        const auto mode       = _session.SelectionModeFor(shift, alt);
         const auto& selection = _session.Selection();
-        if ((modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL) ||
-            (mode == SelectionMode::New && selection && !selection.value().IsEmpty()))
+        if ((modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL) || (mode == SelectionMode::New && selection && ! selection.value().IsEmpty()))
         {
             ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)));
             return; // Until the exact worker hit/lift dispatcher exists, refuse before any owner containment walk.
@@ -7296,7 +7080,7 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     if (QueueLassoOpeningOwner(pixel, mode, _tool == EditorTool::Marquee))
     {
         if (_lassoInput.Busy())
-            _drag = DraftDrag{std::nullopt, !shift};
+            _drag = DraftDrag{std::nullopt, ! shift};
         SelectionChanged();
         return;
     }
@@ -7311,22 +7095,22 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     if (_session.PendingLasso().has_value())
     {
         // A Shift held at the press means Add; for the Marquee it squares only once pressed afresh.
-        _drag = DraftDrag{std::nullopt, !shift};
+        _drag = DraftDrag{std::nullopt, ! shift};
     }
     SelectionChanged();
 }
 
 bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
 {
-    if (!_session.Document().has_value())
+    if (! _session.Document().has_value())
     {
         return false;
     }
     const bool shift = (modifiers & MK_SHIFT) != 0;
-    const bool alt = KeyboardState::Held(VK_MENU);
+    const bool alt   = KeyboardState::Held(VK_MENU);
     // Keys may have changed while the pointer was elsewhere; the header shows the mode a press would use.
     const bool changed = _session.UpdateHeldSelectionKeys(shift, alt);
-    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    const Vec2 pixel   = _viewport.DocumentFromView(view, DocumentSize());
     if (std::holds_alternative<PixelDrag>(_drag))
     {
         DragPixels(pixel, shift);
@@ -7356,8 +7140,8 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
     if (_lassoInput.Busy())
     {
         const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
-        auto* drawing = std::get_if<DraftDrag>(&_drag);
-        if (!captured)
+        auto* drawing        = std::get_if<DraftDrag>(&_drag);
+        if (! captured)
             return true;
         if (captured->kind == LassoKind::Freehand && drawing)
             RecordLassoInputOwner(_lassoInput.Point(_lassoInput.Opening(), pixel, NextLassoSampleOrdinalOwner()));
@@ -7365,11 +7149,10 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
             RecordLassoInputOwner(_lassoInput.Cursor(_lassoInput.Opening(), pixel, NextLassoSampleOrdinalOwner()));
         else if (drawing)
         {
-            if (!shift)
+            if (! shift)
                 drawing->constrainArmed = true;
             drawing->marqueePixel = pixel;
-            RecordLassoInputOwner(_lassoInput.Marquee(_lassoInput.Opening(), pixel, drawing->constrainArmed && shift,
-                                                      false, NextLassoSampleOrdinalOwner()));
+            RecordLassoInputOwner(_lassoInput.Marquee(_lassoInput.Opening(), pixel, drawing->constrainArmed && shift, false, NextLassoSampleOrdinalOwner()));
         }
         if (changed)
             SelectionChanged();
@@ -7381,29 +7164,27 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
         DraftDrag* drawing = std::get_if<DraftDrag>(&_drag);
         switch (draft->kind)
         {
-        case LassoKind::Freehand:
-            if (drawing != nullptr)
-            {
-                _session.ExtendLasso(pixel);
-            }
-            break;
-        case LassoKind::Polygonal:
-            _session.MoveLassoCursor(pixel);
-            break;
-        case LassoKind::Rectangle:
-        case LassoKind::Ellipse:
-            if (drawing != nullptr)
-            {
-                // Shift squares the box, except a Shift already held when the drag began (it chose Add) until it
-                // has been let go and pressed again.
-                if (!shift)
+            case LassoKind::Freehand:
+                if (drawing != nullptr)
                 {
-                    drawing->constrainArmed = true;
+                    _session.ExtendLasso(pixel);
                 }
-                drawing->marqueePixel = pixel;
-                _session.DragMarquee(pixel, drawing->constrainArmed && shift, false);
-            }
-            break;
+                break;
+            case LassoKind::Polygonal: _session.MoveLassoCursor(pixel); break;
+            case LassoKind::Rectangle:
+            case LassoKind::Ellipse:
+                if (drawing != nullptr)
+                {
+                    // Shift squares the box, except a Shift already held when the drag began (it chose Add) until it
+                    // has been let go and pressed again.
+                    if (! shift)
+                    {
+                        drawing->constrainArmed = true;
+                    }
+                    drawing->marqueePixel = pixel;
+                    _session.DragMarquee(pixel, drawing->constrainArmed && shift, false);
+                }
+                break;
         }
         SelectionChanged();
         return true;
@@ -7426,21 +7207,19 @@ void Application::SelectionRelease(Vec2 view) noexcept
     if (const OutlineDrag* outline = std::get_if<OutlineDrag>(&_drag))
     {
         const OutlineDrag ended = *outline;
-        const bool moved = ended.offset.x != 0.0 || ended.offset.y != 0.0;
-        _drag = PointerDrag{};
+        const bool moved        = ended.offset.x != 0.0 || ended.offset.y != 0.0;
+        _drag                   = PointerDrag{};
         if (moved)
         {
             (void)QueueSelectionMoveClose(false);
             SelectionChanged();
             return;
         }
-        const auto wand =
-            _tool == EditorTool::Wand
-                ? std::optional(HostWandLayerNewInput{ended.start, _session.wandSettings, _session.selectionAntialiased,
-                                                      SelectionMode::New, _session.CapturePanelWandOpening()})
-                : std::nullopt;
-        if (CanQueueSelectionMoveClick(wand ? &wand.value() : nullptr) &&
-            (!wand || !wand->settings.sampleAllLayers || wand->panelOpening))
+        const auto wand = _tool == EditorTool::Wand
+                              ? std::optional(HostWandLayerNewInput{
+                                    ended.start, _session.wandSettings, _session.selectionAntialiased, SelectionMode::New, _session.CapturePanelWandOpening()})
+                              : std::nullopt;
+        if (CanQueueSelectionMoveClick(wand ? &wand.value() : nullptr) && (! wand || ! wand->settings.sampleAllLayers || wand->panelOpening))
         {
             (void)QueueSelectionMoveClick(wand);
             SelectionChanged();
@@ -7478,7 +7257,7 @@ void Application::EndSelectionInteraction(bool keepDraft) noexcept
 {
     if (_polygonalPressInput.Busy())
     {
-        if (!keepDraft)
+        if (! keepDraft)
             LosePolygonalPressOwner();
         DropDrag<DraftDrag>();
         SelectionChanged();
@@ -7486,7 +7265,7 @@ void Application::EndSelectionInteraction(bool keepDraft) noexcept
     }
     if (PolygonalInputOwner(_lassoInput.Opening()))
     {
-        if (!keepDraft)
+        if (! keepDraft)
             CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
         DropDrag<DraftDrag>();
         SelectionChanged();
@@ -7496,11 +7275,11 @@ void Application::EndSelectionInteraction(bool keepDraft) noexcept
     if (_lassoInput.Busy())
     {
         const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
-        if (!captured || !keepDraft || captured->kind != LassoKind::Polygonal)
+        if (! captured || ! keepDraft || captured->kind != LassoKind::Polygonal)
             CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
     }
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
-    if (draft.has_value() && (!keepDraft || draft->kind != LassoKind::Polygonal))
+    if (draft.has_value() && (! keepDraft || draft->kind != LassoKind::Polygonal))
     {
         _session.CancelLasso();
     }
@@ -7512,8 +7291,7 @@ void Application::EndSelectionInteraction(bool keepDraft) noexcept
     {
         CancelPixelDrag();
     }
-    if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<DraftDrag>(_drag) ||
-        std::holds_alternative<PixelDrag>(_drag))
+    if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<DraftDrag>(_drag) || std::holds_alternative<PixelDrag>(_drag))
     {
         _drag = PointerDrag{};
     }
@@ -7522,24 +7300,23 @@ void Application::EndSelectionInteraction(bool keepDraft) noexcept
 
 void Application::UpdateSelectionModifiers() noexcept
 {
-    if (!EditorToolIsSelection(_tool))
+    if (! EditorToolIsSelection(_tool))
     {
         return;
     }
     const bool shift = KeyboardState::Held(VK_SHIFT);
-    const bool alt = KeyboardState::Held(VK_MENU);
-    bool changed = _session.UpdateHeldSelectionKeys(shift, alt);
+    const bool alt   = KeyboardState::Held(VK_MENU);
+    bool changed     = _session.UpdateHeldSelectionKeys(shift, alt);
     // A Marquee drag reshapes as Shift goes down or up, without waiting for the pointer to move.
     if (DraftDrag* drawing = std::get_if<DraftDrag>(&_drag); drawing != nullptr && drawing->marqueePixel.has_value())
     {
-        if (!shift)
+        if (! shift)
         {
             drawing->constrainArmed = true;
         }
         if (_lassoInput.Busy())
-            RecordLassoInputOwner(_lassoInput.Marquee(_lassoInput.Opening(), drawing->marqueePixel.value(),
-                                                      drawing->constrainArmed && shift, false,
-                                                      NextLassoSampleOrdinalOwner()));
+            RecordLassoInputOwner(_lassoInput.Marquee(
+                _lassoInput.Opening(), drawing->marqueePixel.value(), drawing->constrainArmed && shift, false, NextLassoSampleOrdinalOwner()));
         else
             _session.DragMarquee(drawing->marqueePixel.value(), drawing->constrainArmed && shift, false);
         changed = true;
@@ -7565,22 +7342,22 @@ void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
     }
     if (auto panel = _session.CapturePanelWandOpening())
     {
-        ReportHostAdmission(QueueHostInput(HostWandLayerNewInput{
-            pixel, _session.wandSettings, _session.selectionAntialiased, mode, std::move(panel)}));
+        ReportHostAdmission(QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings, _session.selectionAntialiased, mode, std::move(panel)}));
         return;
     }
     if (_traceWandForTest)
-        std::printf("WAND ROUTE point=%.3f,%.3f mode=%u all_layers=%d applicable_history=%d generation=%llu\n", pixel.x,
-                    pixel.y, static_cast<unsigned int>(mode), _session.wandSettings.sampleAllLayers,
+        std::printf("WAND ROUTE point=%.3f,%.3f mode=%u all_layers=%d applicable_history=%d generation=%llu\n",
+                    pixel.x,
+                    pixel.y,
+                    static_cast<unsigned int>(mode),
+                    _session.wandSettings.sampleAllLayers,
                     _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()),
                     static_cast<unsigned long long>(_session.Generation()));
     if (mode <= SelectionMode::Subtract && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
     {
         const auto receipt = _session.wandSettings.sampleAllLayers
-                                 ? QueueHostInput(HostWandCompositeNewInput{pixel, _session.wandSettings,
-                                                                            _session.selectionAntialiased, mode})
-                                 : QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings,
-                                                                        _session.selectionAntialiased, mode});
+                                 ? QueueHostInput(HostWandCompositeNewInput{pixel, _session.wandSettings, _session.selectionAntialiased, mode})
+                                 : QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings, _session.selectionAntialiased, mode});
         if (_traceWandForTest)
             std::printf("WAND ADMISSION outcome=%u\n", static_cast<unsigned int>(receipt.Read().outcome));
         ReportHostAdmission(receipt);
@@ -7590,7 +7367,7 @@ void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
     if (_session.wandSettings.sampleAllLayers)
     {
         composite = WandComposite();
-        if (!composite.has_value())
+        if (! composite.has_value())
         {
             ShowError(IDS_ERROR_READBACK);
             return;
@@ -7608,12 +7385,12 @@ std::optional<Raster> Application::WandComposite() noexcept
 {
     // Every visible layer of the committed document flattened at document size: never a panel's preview or a
     // pending stroke on the canvas (RF-402), as the legacy sampleCompositeColor draws the document itself.
-    if (!_session.Document().has_value())
+    if (! _session.Document().has_value())
     {
         return std::nullopt;
     }
     const std::optional<Raster> raster = ComposeDocumentReadback(_session.Document().value());
-    if (!raster.has_value() || !raster->HasStorage())
+    if (! raster.has_value() || ! raster->HasStorage())
     {
         return std::nullopt;
     }
@@ -7625,8 +7402,7 @@ std::optional<Raster> Application::WandComposite() noexcept
 void Application::OnBrushAction(BrushAction action, double value) noexcept
 {
     if (PolygonalInputOwner(_lassoInput.Opening()) &&
-        ((action == BrushAction::SetMaskPaint && _session.PendingGradient()) ||
-         (action == BrushAction::SetSmearMode && _session.HasPendingWarp())))
+        ((action == BrushAction::SetMaskPaint && _session.PendingGradient()) || (action == BrushAction::SetSmearMode && _session.HasPendingWarp())))
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return;
@@ -7634,53 +7410,47 @@ void Application::OnBrushAction(BrushAction action, double value) noexcept
     // Reached from inside a DxUi callback: chrome re-syncs on the next frame rather than re-entering Prepare.
     switch (action)
     {
-    case BrushAction::SetMode:
-        _session.brushMode = value >= 0.5 ? BrushToolMode::Erase : BrushToolMode::Paint;
-        break;
-    case BrushAction::SetSize:
-        if (std::isfinite(value))
-        {
-            _session.brushSettings.diameter = std::clamp(std::round(value), 1.0, 2000.0);
-        }
-        break;
-    case BrushAction::SetHardness:
-        if (std::isfinite(value))
-        {
-            _session.brushSettings.hardness = std::clamp(value, 0.0, 100.0) / 100.0;
-        }
-        break;
-    case BrushAction::SetOpacity:
-        if (std::isfinite(value))
-        {
-            _session.brushSettings.opacity = std::clamp(value, 1.0, 100.0) / 100.0;
-        }
-        break;
-    case BrushAction::SetMaskPaint:
-        // A pending mask gradient takes its ends from the mask palette (legacy maskPaintWhite didSet, RF-205).
-        _session.maskPaintWhite = value >= 0.5;
-        _session.RefreshGradient();
-        break;
-    case BrushAction::OpenColor:
-        if (_chrome)
-        {
-            _chrome->OpenColorPicker(PickerTarget::Foreground, _session.ForegroundColor());
-        }
-        break;
-    case BrushAction::SetHealMode:
-        _session.spotHealingMode = value >= 1.5   ? SpotHealingMode::ProximityMatch
-                                   : value >= 0.5 ? SpotHealingMode::CreateTexture
-                                                  : SpotHealingMode::ContentAware;
-        break;
-    case BrushAction::SetCloneAligned:
-        _session.cloneSettings.aligned = value >= 0.5;
-        break;
-    case BrushAction::SetCloneSample:
-        _session.cloneSettings.sampleAllLayers = value >= 0.5;
-        break;
-    case BrushAction::SetSmearMode:
-        FinishWarpStroke();
-        _session.smearMode = value >= 1.5 ? SmearMode::Smudge : value >= 0.5 ? SmearMode::Blur : SmearMode::Liquify;
-        break;
+        case BrushAction::SetMode: _session.brushMode = value >= 0.5 ? BrushToolMode::Erase : BrushToolMode::Paint; break;
+        case BrushAction::SetSize:
+            if (std::isfinite(value))
+            {
+                _session.brushSettings.diameter = std::clamp(std::round(value), 1.0, 2000.0);
+            }
+            break;
+        case BrushAction::SetHardness:
+            if (std::isfinite(value))
+            {
+                _session.brushSettings.hardness = std::clamp(value, 0.0, 100.0) / 100.0;
+            }
+            break;
+        case BrushAction::SetOpacity:
+            if (std::isfinite(value))
+            {
+                _session.brushSettings.opacity = std::clamp(value, 1.0, 100.0) / 100.0;
+            }
+            break;
+        case BrushAction::SetMaskPaint:
+            // A pending mask gradient takes its ends from the mask palette (legacy maskPaintWhite didSet, RF-205).
+            _session.maskPaintWhite = value >= 0.5;
+            _session.RefreshGradient();
+            break;
+        case BrushAction::OpenColor:
+            if (_chrome)
+            {
+                _chrome->OpenColorPicker(PickerTarget::Foreground, _session.ForegroundColor());
+            }
+            break;
+        case BrushAction::SetHealMode:
+            _session.spotHealingMode = value >= 1.5   ? SpotHealingMode::ProximityMatch
+                                       : value >= 0.5 ? SpotHealingMode::CreateTexture
+                                                      : SpotHealingMode::ContentAware;
+            break;
+        case BrushAction::SetCloneAligned: _session.cloneSettings.aligned = value >= 0.5; break;
+        case BrushAction::SetCloneSample: _session.cloneSettings.sampleAllLayers = value >= 0.5; break;
+        case BrushAction::SetSmearMode:
+            FinishWarpStroke();
+            _session.smearMode = value >= 1.5 ? SmearMode::Smudge : value >= 0.5 ? SmearMode::Blur : SmearMode::Liquify;
+            break;
     }
     SyncChrome();
     InvalidateFrame();
@@ -7692,17 +7462,16 @@ namespace
 [[nodiscard]] CanvasRenderer::StrokePreview PreviewFor(const BrushStroke& stroke)
 {
     CanvasRenderer::StrokePreview preview;
-    preview.layerID = stroke.LayerID();
-    preview.mask = stroke.IsMask();
-    preview.width = stroke.Width();
-    preview.height = stroke.Height();
-    preview.transform = stroke.PaintTransform();
-    preview.fill = stroke.FillValue();
+    preview.layerID      = stroke.LayerID();
+    preview.mask         = stroke.IsMask();
+    preview.width        = stroke.Width();
+    preview.height       = stroke.Height();
+    preview.transform    = stroke.PaintTransform();
+    preview.fill         = stroke.FillValue();
     const Raster& source = stroke.SourceImage();
-    if (source.HasStorage() && source.Width() == stroke.SourceRect().width &&
-        source.Height() == stroke.SourceRect().height)
+    if (source.HasStorage() && source.Width() == stroke.SourceRect().width && source.Height() == stroke.SourceRect().height)
     {
-        preview.source = source;
+        preview.source  = source;
         preview.sourceX = stroke.SourceRect().x;
         preview.sourceY = stroke.SourceRect().y;
     }
@@ -7722,10 +7491,10 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
     BeginBrushStrokeAt(_viewport.DocumentFromView(view, DocumentSize()), modifiers, BrushKindFor());
 }
 
-void Application::BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKind kind,
-                                     const CanvasBrushContext* captured, const Raster* cloneComposite) noexcept
+void Application::BeginBrushStrokeAt(
+    Vec2 pixel, unsigned int modifiers, BrushKind kind, const CanvasBrushContext* captured, const Raster* cloneComposite) noexcept
 {
-    if (!_session.Document().has_value() || _session.PendingBrush() != nullptr)
+    if (! _session.Document().has_value() || _session.PendingBrush() != nullptr)
     {
         return;
     }
@@ -7733,13 +7502,12 @@ void Application::BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKi
     if (kind == BrushKind::Clone && _session.IsMaskSelected())
         return;
     const bool couldPaint = _session.CanPaint();
-    if (kind == BrushKind::Clone && !(captured && captured->cloneOffset) &&
-        !_session.CloneStrokeOffset(pixel).has_value())
+    if (kind == BrushKind::Clone && ! (captured && captured->cloneOffset) && ! _session.CloneStrokeOffset(pixel).has_value())
     {
         ShowError(IDS_ERROR_CLONE_SOURCE);
         return;
     }
-    if (kind == BrushKind::Clone && !cloneComposite)
+    if (kind == BrushKind::Clone && ! cloneComposite)
     {
         // Every host Clone stroke requires its admitted source. A refused or unsupported input must
         // not fall through to owner layer sampling or synchronous composition/readback.
@@ -7750,8 +7518,7 @@ void Application::BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKi
     BindCompositionDevice();
     const auto begin = [this, kind, cloneComposite, captured](Vec2 point)
     {
-        return captured ? _session.BeginBrush(point, kind, cloneComposite, captured->settings, captured->maskWhite,
-                                              captured->cloneOffset)
+        return captured ? _session.BeginBrush(point, kind, cloneComposite, captured->settings, captured->maskWhite, captured->cloneOffset)
                         : _session.BeginBrush(point, kind, cloneComposite);
     };
     bool begun = false;
@@ -7768,17 +7535,17 @@ void Application::BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKi
             }
         }
     }
-    if (!begun)
+    if (! begun)
     {
         begun = begin(pixel);
     }
     const BrushStroke* stroke = _session.PendingBrush();
-    if (!begun || stroke == nullptr)
+    if (! begun || stroke == nullptr)
     {
         // Spot Healing and Clone Stamp have nothing to do on a mask; anything else that could paint ran out of
         // budget.
         const bool maskRefusal = _session.IsMaskSelected() && (kind == BrushKind::Heal || kind == BrushKind::Clone);
-        if (couldPaint && !maskRefusal)
+        if (couldPaint && ! maskRefusal)
         {
             ShowError(IDS_ERROR_BRUSH_BUDGET);
         }
@@ -7799,7 +7566,7 @@ void Application::BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKi
 void Application::BeginPreparedBrushStrokeAt(Vec2 pixel, unsigned int modifiers) noexcept
 {
     auto* stroke = _session.MutableBrush();
-    if (!stroke || _session.PendingBrushOpening() != _canvasBrushSessionOpening)
+    if (! stroke || _session.PendingBrushOpening() != _canvasBrushSessionOpening)
         return;
     // Empty typed worker draft is already attached under current authority. The accepted press supplies
     // the first sample; opening never deposits density. Shift preserves the existing endpoint rule.
@@ -7825,9 +7592,9 @@ void Application::PushPreviewTiles() noexcept
 {
     // A detached Warp retains its last immutable preview. Never infer settlement or walk another draft
     // while its original worker exclusively owns the mutable tiles.
-    if (_session.HasPendingWarp() && !_session.PendingWarp())
+    if (_session.HasPendingWarp() && ! _session.PendingWarp())
         return;
-    if (!_composition.HasStroke())
+    if (! _composition.HasStroke())
     {
         InvalidateFrame();
         return;
@@ -7843,8 +7610,8 @@ void Application::PushPreviewTiles() noexcept
         // A stroke, a pending gradient or lifted pixels: the tiles of the raster edit that changed since the last
         // push, or every touched tile when the working texture is (re)built.
         GradientEdit* gradient = _session.MutableGradient();
-        PixelMove* move = _session.MutablePixelMove();
-        BrushStroke* raster = _session.MutableBrush();
+        PixelMove* move        = _session.MutablePixelMove();
+        BrushStroke* raster    = _session.MutableBrush();
         if (raster == nullptr && gradient != nullptr && gradient->raster)
         {
             raster = gradient->raster.get();
@@ -7872,7 +7639,7 @@ void Application::PushPreviewTiles() noexcept
             }
         }
     }
-    if (!tiles.empty())
+    if (! tiles.empty())
     {
         (void)_composition.UpdateStrokeTiles(tiles);
     }
@@ -7919,7 +7686,7 @@ void Application::FinishBrushStroke() noexcept
     // Spot Healing rewrites the tiles after the last preview update, so its result uploads on its own instead of
     // adopting the working texture, which still shows the wash.
     const bool healing = pending->Healing();
-    if (!healing)
+    if (! healing)
     {
         // Mouse-up settles the provisional tail into the final curve segment: those tiles reach the working texture
         // before it is adopted, so the canvas and an export show the curve the raster holds (RF-405). The session's
@@ -7949,8 +7716,8 @@ void Application::EndStrokePreview(const std::optional<BrushCommitInfo>& commit)
     {
         for (const ImageLayer& layer : _session.Document().value().layers)
         {
-            const Raster* installed = commit->mask ? (layer.mask.has_value() ? &layer.mask->asset.image : nullptr)
-                                                   : (layer.asset.has_value() ? &layer.asset->image : nullptr);
+            const Raster* installed =
+                commit->mask ? (layer.mask.has_value() ? &layer.mask->asset.image : nullptr) : (layer.asset.has_value() ? &layer.asset->image : nullptr);
             if (installed != nullptr && installed->Identity() == commit->image.Identity())
             {
                 owner = &layer.id;
@@ -7974,8 +7741,7 @@ void Application::SyncStrokePreview() noexcept
     if (_pendingDisplayInitialized)
     {
         _pendingDisplay.RequestOwner(); // Also excludes a closed/zero-input opening from future frames.
-        if ((_session.PendingGradient() && _session.PendingGradient()->deferred) ||
-            (_session.PendingPixelMove() && _session.PendingPixelMove()->deferred))
+        if ((_session.PendingGradient() && _session.PendingGradient()->deferred) || (_session.PendingPixelMove() && _session.PendingPixelMove()->deferred))
         {
             // Completed immutable metadata is consumed by the admitted recorder. No owner tile walk,
             // BeginStroke upload, TakeChanged or mutable CPU preview crosses this route.
@@ -8003,7 +7769,7 @@ void Application::SyncStrokePreview() noexcept
         {
             EndStrokePreview(_session.TakeLastBrushCommit());
         }
-        if (!_composition.HasStroke())
+        if (! _composition.HasStroke())
         {
             BindCompositionDevice();
             (void)_composition.BeginStroke(PreviewFor(*raster));
@@ -8015,7 +7781,7 @@ void Application::SyncStrokePreview() noexcept
     // The one teardown: with no raster edit under way (a stroke or warp dropped or committed, a gradient applied,
     // cancelled or undone, pixels put down) the preview ends, adopting its texture only for the commit the session
     // just made on its own layer and target.
-    if (_composition.HasStroke() && _session.PendingBrush() == nullptr && !_session.HasPendingWarp())
+    if (_composition.HasStroke() && _session.PendingBrush() == nullptr && ! _session.HasPendingWarp())
     {
         EndStrokePreview(_session.TakeLastBrushCommit());
         InvalidateFrame();
@@ -8036,20 +7802,20 @@ void Application::CancelBrushStroke() noexcept
 
 void Application::SyncBrushCursor() noexcept
 {
-    if (!_chrome)
+    if (! _chrome)
     {
         return;
     }
     std::optional<CanvasOverlay::BrushCursor> cursor;
     const bool pickingCloneSource = _tool == EditorTool::Clone && KeyboardState::Held(VK_MENU);
-    if (EditorToolIsBrush(_tool) && _brushHover.has_value() && _session.Document().has_value() && !pickingCloneSource)
+    if (EditorToolIsBrush(_tool) && _brushHover.has_value() && _session.Document().has_value() && ! pickingCloneSource)
     {
         const Vec2 view = _viewport.ViewFromDocument(_brushHover.value(), DocumentSize());
         CanvasOverlay::BrushCursor circle;
-        circle.center = D2D1::Point2F(static_cast<float>(view.x), static_cast<float>(view.y));
-        circle.radius = static_cast<float>(_session.brushSettings.diameter * _viewport.ViewScale() / 2.0);
+        circle.center   = D2D1::Point2F(static_cast<float>(view.x), static_cast<float>(view.y));
+        circle.radius   = static_cast<float>(_session.brushSettings.diameter * _viewport.ViewScale() / 2.0);
         circle.hardness = static_cast<float>(_session.brushSettings.hardness);
-        cursor = circle;
+        cursor          = circle;
     }
     _chrome->SetBrushCursor(cursor);
     InvalidateFrame();
@@ -8066,15 +7832,13 @@ void BenchmarkReport(const std::wstring& text) noexcept
     {
         return;
     }
-    const int size =
-        WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+    const int size = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
     if (size <= 0)
     {
         return;
     }
     std::string utf8(static_cast<size_t>(size), '\0');
-    if (WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), utf8.data(), size, nullptr,
-                            nullptr) != size)
+    if (WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), utf8.data(), size, nullptr, nullptr) != size)
     {
         return;
     }
@@ -8089,12 +7853,10 @@ int Application::RunBenchmark() noexcept
     {
         return RunLayerRowsBenchmark();
     }
-    if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke" ||
-        _bench == L"ui-size-prepared" || _bench == L"ui-size-prepared45" || _bench == L"ui-size-prepared100" ||
-        _bench == L"ui-size-prepared-smoke" || _bench == L"ui-sampler" || _bench == L"ui-sampler45" ||
-        _bench == L"ui-sampler100" || _bench == L"ui-sampler-smoke" || _bench == L"ui-prepared" ||
-        _bench == L"ui-prepared45" || _bench == L"ui-prepared100" || _bench == L"ui-prepared-smoke" ||
-        IsUiCancellationBenchmark(_bench))
+    if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke" || _bench == L"ui-size-prepared" ||
+        _bench == L"ui-size-prepared45" || _bench == L"ui-size-prepared100" || _bench == L"ui-size-prepared-smoke" || _bench == L"ui-sampler" ||
+        _bench == L"ui-sampler45" || _bench == L"ui-sampler100" || _bench == L"ui-sampler-smoke" || _bench == L"ui-prepared" || _bench == L"ui-prepared45" ||
+        _bench == L"ui-prepared100" || _bench == L"ui-prepared-smoke" || IsUiCancellationBenchmark(_bench))
     {
         return RunUiBenchmark();
     }
@@ -8118,8 +7880,8 @@ int Application::RunBenchmark() noexcept
     {
         return 2;
     }
-    _quietUi = true;
-    _prompts = &QuietPrompts();
+    _quietUi       = true;
+    _prompts       = &QuietPrompts();
     _screenshotDpi = 0;
     _renderer.SetLayoutDpi(0);
     if (FAILED(RegisterWindowClass()) || FAILED(CreateMainWindow(false)))
@@ -8140,8 +7902,8 @@ int Application::RunBenchmark() noexcept
         QueryPerformanceCounter(&counter);
         return static_cast<double>(counter.QuadPart) * 1000.0 / static_cast<double>(frequency.QuadPart);
     };
-    std::wstring report = std::format(L"BRUSH BENCH device={} engine={}\n", _renderer.IsWarp() ? L"WARP" : L"hardware",
-                                      _brushEngine.Ready() ? L"compute" : L"cpu");
+    std::wstring report =
+        std::format(L"BRUSH BENCH device={} engine={}\n", _renderer.IsWarp() ? L"WARP" : L"hardware", _brushEngine.Ready() ? L"compute" : L"cpu");
     // The legacy scenario: 4000 x 4000, 40 and 800 px soft white strokes of 120 updates 40 px apart, blank and
     // opaque layers, two passes each; times include the frame that shows each update.
     for (const double diameter : {40.0, 800.0})
@@ -8158,7 +7920,7 @@ int Application::RunBenchmark() noexcept
                 _session.AddBlankLayer();
             }
             _session.history.MarkSaved();
-            _viewport.followsFit = true;
+            _viewport.followsFit   = true;
             _session.brushSettings = BrushSettings{diameter, 0, 1, 1, 1, 1};
             OnTool(EditorTool::Brush);
             DocumentChanged();
@@ -8173,14 +7935,14 @@ int Application::RunBenchmark() noexcept
             for (int pass = 0; pass < 4; ++pass)
             {
                 const bool presented = pass < 2;
-                const double start = now();
+                const double start   = now();
                 BeginBrushStroke(_viewport.ViewFromDocument(Vec2{700, 3200}, DocumentSize()), 0);
                 for (int i = 1; i <= 120; ++i)
                 {
-                    const double t = now();
+                    const double t   = now();
                     const Vec2 point = i <= 60 ? Vec2{700.0, 3200.0 - i * 40.0} : Vec2{700.0 + (i - 60) * 40.0, 800.0};
                     ContinueBrushStroke(_viewport.ViewFromDocument(point, DocumentSize()));
-                    if (!presented)
+                    if (! presented)
                     {
                         alone.push_back(now() - t);
                         continue;
@@ -8196,20 +7958,29 @@ int Application::RunBenchmark() noexcept
                 const bool committed = _session.history.UndoName() == L"Brush Stroke";
                 report += std::format(L"BRUSH BENCH diameter={} opaque={} pass={} presented={} draw={:.1f}ms "
                                       L"commit={:.1f}ms mouseUp={:.1f}ms committed={}\n",
-                                      static_cast<int>(diameter), opaque ? L"true" : L"false", pass,
-                                      presented ? L"true" : L"false", end - start, committedAt - end, now() - end,
+                                      static_cast<int>(diameter),
+                                      opaque ? L"true" : L"false",
+                                      pass,
+                                      presented ? L"true" : L"false",
+                                      end - start,
+                                      committedAt - end,
+                                      now() - end,
                                       committed ? L"true" : L"false");
             }
             const auto stats = [](std::vector<double>& samples)
             {
                 std::sort(samples.begin(), samples.end());
-                return std::format(L"median={:.2f} p95={:.2f} max={:.2f}ms", samples[samples.size() / 2],
+                return std::format(L"median={:.2f} p95={:.2f} max={:.2f}ms",
+                                   samples[samples.size() / 2],
                                    samples[static_cast<std::size_t>(static_cast<double>(samples.size()) * 0.95)],
                                    samples.back());
             };
             report += std::format(L"BRUSH BENCH diameter={} opaque={} update {} frame {} alone {}\n",
-                                  static_cast<int>(diameter), opaque ? L"true" : L"false", stats(updates),
-                                  stats(frames), stats(alone));
+                                  static_cast<int>(diameter),
+                                  opaque ? L"true" : L"false",
+                                  stats(updates),
+                                  stats(frames),
+                                  stats(alone));
         }
     }
     BenchmarkReport(report);
@@ -8222,11 +7993,11 @@ int Application::RunBenchmark() noexcept
 // Shift constrains a gradient line to 45° steps around the other end, as in Photoshop.
 Vec2 Application::SnappedGradientPoint(Vec2 point, Vec2 anchor) noexcept
 {
-    const double dx = point.x - anchor.x;
-    const double dy = point.y - anchor.y;
+    const double dx     = point.x - anchor.x;
+    const double dy     = point.y - anchor.y;
     const double length = std::hypot(dx, dy);
-    const double step = 3.14159265358979323846 / 4.0;
-    const double angle = std::round(std::atan2(dy, dx) / step) * step;
+    const double step   = 3.14159265358979323846 / 4.0;
+    const double angle  = std::round(std::atan2(dy, dx) / step) * step;
     return Vec2{anchor.x + std::cos(angle) * length, anchor.y + std::sin(angle) * length};
 }
 
@@ -8234,28 +8005,23 @@ BrushKind Application::BrushKindFor() const noexcept
 {
     switch (_tool)
     {
-    case EditorTool::Eraser:
-        return BrushKind::Erase;
-    case EditorTool::Heal:
-        return BrushKind::Heal;
-    case EditorTool::Clone:
-        return BrushKind::Clone;
-    case EditorTool::Smear:
-        return BrushKind::Blur;
-    case ::EditorTool::Brush:
-    case ::EditorTool::Count:
-    case ::EditorTool::Crop:
-    case ::EditorTool::Eyedropper:
-    case ::EditorTool::Gradient:
-    case ::EditorTool::Hand:
-    case ::EditorTool::Lasso:
-    case ::EditorTool::Marquee:
-    case ::EditorTool::Move:
-    case ::EditorTool::Shape:
-    case ::EditorTool::Wand:
-    case ::EditorTool::Zoom:
-    default:
-        return _session.brushMode == BrushToolMode::Erase ? BrushKind::Erase : BrushKind::Paint;
+        case EditorTool::Eraser: return BrushKind::Erase;
+        case EditorTool::Heal: return BrushKind::Heal;
+        case EditorTool::Clone: return BrushKind::Clone;
+        case EditorTool::Smear: return BrushKind::Blur;
+        case ::EditorTool::Brush:
+        case ::EditorTool::Count:
+        case ::EditorTool::Crop:
+        case ::EditorTool::Eyedropper:
+        case ::EditorTool::Gradient:
+        case ::EditorTool::Hand:
+        case ::EditorTool::Lasso:
+        case ::EditorTool::Marquee:
+        case ::EditorTool::Move:
+        case ::EditorTool::Shape:
+        case ::EditorTool::Wand:
+        case ::EditorTool::Zoom:
+        default: return _session.brushMode == BrushToolMode::Erase ? BrushKind::Erase : BrushKind::Paint;
     }
 }
 
@@ -8266,7 +8032,7 @@ bool Application::WarpsWithSmear() const noexcept
 
 void Application::BeginWarpStroke(Vec2 view) noexcept
 {
-    if (!_session.Document().has_value() || _session.HasPendingWarp() || _session.PendingBrush() != nullptr)
+    if (! _session.Document().has_value() || _session.HasPendingWarp() || _session.PendingBrush() != nullptr)
     {
         return;
     }
@@ -8277,11 +8043,11 @@ void Application::BeginWarpStroke(Vec2 view) noexcept
         ShowError(IDS_ERROR_SMEAR_MASK);
         return;
     }
-    if (!_session.BeginWarp(pixel))
+    if (! _session.BeginWarp(pixel))
     {
         return;
     }
-    WarpStroke* warp = _session.MutableWarp();
+    WarpStroke* warp        = _session.MutableWarp();
     const ImageLayer* layer = _session.ActiveLayer();
     if (warp == nullptr || layer == nullptr)
     {
@@ -8290,16 +8056,16 @@ void Application::BeginWarpStroke(Vec2 view) noexcept
     }
     // The working copy is document-sized: it shows placed over the whole canvas in the layer's stead.
     CanvasRenderer::StrokePreview preview;
-    preview.layerID = layer->id;
-    preview.mask = false;
-    preview.width = warp->Width();
-    preview.height = warp->Height();
+    preview.layerID          = layer->id;
+    preview.mask             = false;
+    preview.width            = warp->Width();
+    preview.height           = warp->Height();
     preview.transform.origin = Vec2{0, 0};
-    preview.transform.size = Vec2{static_cast<double>(warp->Width()), static_cast<double>(warp->Height())};
-    preview.source = warp->Image();
-    preview.sourceX = 0;
-    preview.sourceY = 0;
-    preview.fill = 0;
+    preview.transform.size   = Vec2{static_cast<double>(warp->Width()), static_cast<double>(warp->Height())};
+    preview.source           = warp->Image();
+    preview.sourceX          = 0;
+    preview.sourceY          = 0;
+    preview.fill             = 0;
     (void)_composition.BeginStroke(preview);
     _previewSource.reset();
     _brushHover = pixel;
@@ -8314,7 +8080,7 @@ void Application::ContinueWarpStroke(Vec2 view) noexcept
         return;
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    _brushHover = pixel;
+    _brushHover      = pixel;
     _session.ContinueWarp(pixel);
     PushPreviewTiles();
     SyncBrushCursor();
@@ -8358,41 +8124,32 @@ void Application::CancelWarpStroke() noexcept
 
 void Application::OnGradientAction(GradientAction action, double value) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    if (! _hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return;
     }
     switch (action)
     {
-    case GradientAction::SetShape:
-        _session.gradientSettings.shape = value >= 0.5 ? GradientShape::Radial : GradientShape::Linear;
-        break;
-    case GradientAction::SetStyle:
-        _session.gradientSettings.style =
-            value >= 0.5 ? GradientStyle::ForegroundToTransparent : GradientStyle::ForegroundToBackground;
-        break;
-    case GradientAction::SetReversed:
-        _session.gradientSettings.reversed = value >= 0.5;
-        break;
-    case GradientAction::SetOpacity:
-        if (std::isfinite(value))
-        {
-            _session.gradientSettings.opacity = std::clamp(value, 1.0, 100.0) / 100.0;
-        }
-        break;
-    case GradientAction::Cancel:
-        CancelGradient();
-        return;
-    case GradientAction::Apply:
-        CommitGradient();
-        return;
-    case GradientAction::OpenColor:
-        if (_chrome)
-        {
-            _chrome->OpenColorPicker(PickerTarget::Foreground, _session.ForegroundColor());
-        }
-        break;
+        case GradientAction::SetShape: _session.gradientSettings.shape = value >= 0.5 ? GradientShape::Radial : GradientShape::Linear; break;
+        case GradientAction::SetStyle:
+            _session.gradientSettings.style = value >= 0.5 ? GradientStyle::ForegroundToTransparent : GradientStyle::ForegroundToBackground;
+            break;
+        case GradientAction::SetReversed: _session.gradientSettings.reversed = value >= 0.5; break;
+        case GradientAction::SetOpacity:
+            if (std::isfinite(value))
+            {
+                _session.gradientSettings.opacity = std::clamp(value, 1.0, 100.0) / 100.0;
+            }
+            break;
+        case GradientAction::Cancel: CancelGradient(); return;
+        case GradientAction::Apply: CommitGradient(); return;
+        case GradientAction::OpenColor:
+            if (_chrome)
+            {
+                _chrome->OpenColorPicker(PickerTarget::Foreground, _session.ForegroundColor());
+            }
+            break;
     }
     _session.RefreshGradient();
     SyncChrome();
@@ -8401,7 +8158,7 @@ void Application::OnGradientAction(GradientAction action, double value) noexcept
 
 void Application::BeginGradientDrag(Vec2 view) noexcept
 {
-    if (!_session.Document().has_value())
+    if (! _session.Document().has_value())
     {
         return;
     }
@@ -8411,8 +8168,8 @@ void Application::BeginGradientDrag(Vec2 view) noexcept
     {
         // A press near an end of the pending line drags that end.
         const double reach = _viewport.DipToView(10.0);
-        const Vec2 start = _viewport.ViewFromDocument(pending->start, DocumentSize());
-        const Vec2 end = _viewport.ViewFromDocument(pending->end, DocumentSize());
+        const Vec2 start   = _viewport.ViewFromDocument(pending->start, DocumentSize());
+        const Vec2 end     = _viewport.ViewFromDocument(pending->end, DocumentSize());
         if (std::hypot(view.x - end.x, view.y - end.y) <= reach)
         {
             _drag = GradientDrag{1};
@@ -8424,7 +8181,7 @@ void Application::BeginGradientDrag(Vec2 view) noexcept
             return;
         }
     }
-    if (!_session.BeginDeferredGradient(_viewport.DocumentFromView(view, DocumentSize())))
+    if (! _session.BeginDeferredGradient(_viewport.DocumentFromView(view, DocumentSize())))
     {
         return;
     }
@@ -8437,13 +8194,13 @@ void Application::BeginGradientDrag(Vec2 view) noexcept
 void Application::DragGradient(Vec2 view, UINT modifiers) noexcept
 {
     const GradientEdit* pending = _session.PendingGradient();
-    const GradientDrag* drag = std::get_if<GradientDrag>(&_drag);
+    const GradientDrag* drag    = std::get_if<GradientDrag>(&_drag);
     if (drag == nullptr || pending == nullptr)
     {
         return;
     }
     const int handle = drag->handle;
-    Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    Vec2 pixel       = _viewport.DocumentFromView(view, DocumentSize());
     if ((modifiers & MK_SHIFT) != 0)
     {
         pixel = SnappedGradientPoint(pixel, handle == 0 ? pending->end : pending->start);
@@ -8480,7 +8237,7 @@ void Application::CommitGradient() noexcept
     {
         // Apply/Enter is an owned event. Dependent selected actions arrive only after GradientSettle, so an
         // unresolved opening here is never permission to run a synchronous kernel or continue a mutation.
-        if (!_hostExecuting)
+        if (! _hostExecuting)
             ReportHostAdmission(QueueHostInput(HostGradientApplyInput{pending->opening}));
         else
             _hostExecutionError = E_UNEXPECTED;
@@ -8510,15 +8267,15 @@ void Application::CancelGradient() noexcept
 
 int Application::RunRenderingSelfTest() noexcept
 {
-    if (!_chrome || !_window)
+    if (! _chrome || ! _window)
     {
         SelfTestFailure(L"The rendering self-test needs the chrome and the window.\n");
         return 5;
     }
-    unsigned renderingFixture = 0;
+    unsigned renderingFixture  = 0;
     unsigned renderingReadback = 0;
-    unsigned renderingFrame = 0;
-    const auto fresh = [&](int width, int height)
+    unsigned renderingFrame    = 0;
+    const auto fresh           = [&](int width, int height)
     {
         ++renderingFixture;
         std::printf("BEGIN rendering.fixture=%u size=%dx%d\n", renderingFixture, width, height);
@@ -8532,7 +8289,7 @@ int Application::RunRenderingSelfTest() noexcept
     const auto readCanvas = [&](int x, int y, std::array<int, 4>& out) -> bool
     {
         std::vector<std::uint8_t> bgra;
-        UINT width = 0;
+        UINT width  = 0;
         UINT height = 0;
         ++renderingReadback;
         std::printf("BEGIN rendering.readback=%u\n", renderingReadback);
@@ -8543,7 +8300,7 @@ int Application::RunRenderingSelfTest() noexcept
             return false;
         }
         const std::size_t index = (static_cast<std::size_t>(y) * width + static_cast<std::size_t>(x)) * 4u;
-        out = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
+        out                     = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
         return true;
     };
     const auto rasterPixel = [](const Raster& raster, int x, int y) -> std::array<int, 4>
@@ -8566,12 +8323,10 @@ int Application::RunRenderingSelfTest() noexcept
     OnTool(EditorTool::Move);
     const CanvasHole hole = _chrome->HolePixels();
     OnCommand(ChromeHost::kCommandZoomActual);
-    const Vec2 size = DocumentSize();
-    const double drawn =
-        _viewport.ViewFromDocument(Vec2{400, 0}, size).x - _viewport.ViewFromDocument(Vec2{0, 0}, size).x;
-    const Vec2 origin = _viewport.DocumentRectOrigin(size);
-    if (_viewport.zoom != 1.0 || std::fabs(drawn - 400.0) > 1e-6 || origin.x != std::round(origin.x) ||
-        origin.y != std::round(origin.y))
+    const Vec2 size    = DocumentSize();
+    const double drawn = _viewport.ViewFromDocument(Vec2{400, 0}, size).x - _viewport.ViewFromDocument(Vec2{0, 0}, size).x;
+    const Vec2 origin  = _viewport.DocumentRectOrigin(size);
+    if (_viewport.zoom != 1.0 || std::fabs(drawn - 400.0) > 1e-6 || origin.x != std::round(origin.x) || origin.y != std::round(origin.y))
     {
         SelfTestFailure(L"Actual Pixels did not draw one device pixel per document pixel on whole pixels.\n");
         return 5;
@@ -8580,11 +8335,9 @@ int Application::RunRenderingSelfTest() noexcept
     // and a zero delta does nothing.
     const auto wheel = [&](int delta)
     {
-        POINT screen{static_cast<LONG>(hole.left + hole.width / 2.0f),
-                     static_cast<LONG>(hole.top + hole.height / 2.0f)};
+        POINT screen{static_cast<LONG>(hole.left + hole.width / 2.0f), static_cast<LONG>(hole.top + hole.height / 2.0f)};
         (void)ClientToScreen(_window.get(), &screen);
-        OnPointer(WM_MOUSEWHEEL, MAKEWPARAM(0, static_cast<WORD>(static_cast<short>(delta))),
-                  MAKELPARAM(screen.x, screen.y));
+        OnPointer(WM_MOUSEWHEEL, MAKEWPARAM(0, static_cast<WORD>(static_cast<short>(delta))), MAKELPARAM(screen.x, screen.y));
     };
     const double beforeWheel = _viewport.zoom;
     for (int step = 0; step < 10; ++step)
@@ -8601,9 +8354,9 @@ int Application::RunRenderingSelfTest() noexcept
     // The Zoom tool zooms by the drag's distance (doubling per 100 DIP right), however many moves report it, and a
     // click zooms in twice (RF-404).
     OnTool(EditorTool::Zoom);
-    const int pressX = static_cast<int>(hole.left + hole.width / 2.0f);
-    const int pressY = static_cast<int>(hole.top + hole.height / 2.0f);
-    const int dragPixels = static_cast<int>(std::lround(_viewport.DipToView(100.0)));
+    const int pressX        = static_cast<int>(hole.left + hole.width / 2.0f);
+    const int pressY        = static_cast<int>(hole.top + hole.height / 2.0f);
+    const int dragPixels    = static_cast<int>(std::lround(_viewport.DipToView(100.0)));
     const double beforeDrag = _viewport.zoom;
     OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(pressX, pressY));
     for (int step = 1; step <= 8; ++step)
@@ -8611,8 +8364,7 @@ int Application::RunRenderingSelfTest() noexcept
         OnPointer(WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(pressX + dragPixels * step / 8, pressY));
     }
     OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(pressX + dragPixels, pressY));
-    const double expectedDrag =
-        beforeDrag * CanvasViewport::DragZoomFactor(static_cast<double>(dragPixels) / _viewport.DipToView(1.0));
+    const double expectedDrag = beforeDrag * CanvasViewport::DragZoomFactor(static_cast<double>(dragPixels) / _viewport.DipToView(1.0));
     if (std::fabs(_viewport.zoom - expectedDrag) > 1e-9 || _viewport.zoom < beforeDrag * 1.9)
     {
         SelfTestFailure(L"The Zoom tool's drag did not zoom by its distance.\n");
@@ -8644,17 +8396,21 @@ int Application::RunRenderingSelfTest() noexcept
         const std::uint64_t generation = _renderer.DeviceGeneration();
         _renderer.FailNextStageForTest(stage, DXGI_ERROR_DEVICE_REMOVED);
         frame();
-        if (!_window || FAILED(_frameLoopFailure) || _failedFrames != 0 || _frameInvalidated ||
-            _renderer.DeviceGeneration() != generation + 1 || _composition.Device() != _renderer.Device() ||
-            _boundDeviceGeneration != _renderer.DeviceGeneration() || !_brushEngine.Ready() ||
+        if (! _window || FAILED(_frameLoopFailure) || _failedFrames != 0 || _frameInvalidated || _renderer.DeviceGeneration() != generation + 1 ||
+            _composition.Device() != _renderer.Device() || _boundDeviceGeneration != _renderer.DeviceGeneration() || ! _brushEngine.Ready() ||
             _composition.CanvasSurfaceBytes() == 0)
         {
-            const std::wstring message = std::format(
-                L"A device removed during {} was not rebuilt and drawn on (failed frames {}, last failure {:#010x} "
-                L"at stage {}, generation {} -> {}, bound {}, brush {}, surfaces {}).\n",
-                name, _failedFrames, static_cast<std::uint32_t>(_lastFrameFailure),
-                static_cast<int>(_renderer.FailedStage()), generation, _renderer.DeviceGeneration(),
-                _composition.Device() == _renderer.Device(), _brushEngine.Ready(), _composition.CanvasSurfaceBytes());
+            const std::wstring message = std::format(L"A device removed during {} was not rebuilt and drawn on (failed frames {}, last failure {:#010x} "
+                                                     L"at stage {}, generation {} -> {}, bound {}, brush {}, surfaces {}).\n",
+                                                     name,
+                                                     _failedFrames,
+                                                     static_cast<std::uint32_t>(_lastFrameFailure),
+                                                     static_cast<int>(_renderer.FailedStage()),
+                                                     generation,
+                                                     _renderer.DeviceGeneration(),
+                                                     _composition.Device() == _renderer.Device(),
+                                                     _brushEngine.Ready(),
+                                                     _composition.CanvasSurfaceBytes());
             SelfTestFailure(message.c_str());
             return 5;
         }
@@ -8663,17 +8419,20 @@ int Application::RunRenderingSelfTest() noexcept
     // never reaches Present, the host draws once more on the same device at once, and nothing counts as failed.
     {
         const std::uint64_t generation = _renderer.DeviceGeneration();
-        const std::uint64_t attempts = _renderer.PresentAttemptCount();
+        const std::uint64_t attempts   = _renderer.PresentAttemptCount();
         _renderer.FailNextStageForTest(Renderer::Stage::ChromePrepare, E_ABORT);
         frame();
-        if (!_window || FAILED(_frameLoopFailure) || _failedFrames != 0 || _frameInvalidated ||
-            _renderer.DeviceGeneration() != generation || _renderer.PresentAttemptCount() != attempts + 1)
+        if (! _window || FAILED(_frameLoopFailure) || _failedFrames != 0 || _frameInvalidated || _renderer.DeviceGeneration() != generation ||
+            _renderer.PresentAttemptCount() != attempts + 1)
         {
-            const std::wstring message = std::format(
-                L"A superseded chrome frame was not drawn again once (failed frames {}, last failure {:#010x}, "
-                L"generation {} -> {}, present attempts {} -> {}).\n",
-                _failedFrames, static_cast<std::uint32_t>(_lastFrameFailure), generation, _renderer.DeviceGeneration(),
-                attempts, _renderer.PresentAttemptCount());
+            const std::wstring message = std::format(L"A superseded chrome frame was not drawn again once (failed frames {}, last failure {:#010x}, "
+                                                     L"generation {} -> {}, present attempts {} -> {}).\n",
+                                                     _failedFrames,
+                                                     static_cast<std::uint32_t>(_lastFrameFailure),
+                                                     generation,
+                                                     _renderer.DeviceGeneration(),
+                                                     attempts,
+                                                     _renderer.PresentAttemptCount());
             SelfTestFailure(message.c_str());
             return 5;
         }
@@ -8683,18 +8442,18 @@ int Application::RunRenderingSelfTest() noexcept
     // the unfixed read as heap-use-after-free).
     {
         _chrome->Detach();
-        const bool allClosedWhileDetached = !_chrome->NoticeOpen() && !_chrome->ShortcutsOpen() &&
-                                            !_chrome->MoreToolsOpen() && !_chrome->ColorPickerOpen() &&
-                                            !_chrome->AdjustPanelOpen() && !_chrome->RenameCardOpen() &&
-                                            !_chrome->SizeCardOpen();
-        const HRESULT reattached = _chrome->Attach(_renderer.Device(), this, &Application::RequestFrameThunk);
+        const bool allClosedWhileDetached = ! _chrome->NoticeOpen() && ! _chrome->ShortcutsOpen() && ! _chrome->MoreToolsOpen() &&
+                                            ! _chrome->ColorPickerOpen() && ! _chrome->AdjustPanelOpen() && ! _chrome->RenameCardOpen() &&
+                                            ! _chrome->SizeCardOpen();
+        const HRESULT reattached          = _chrome->Attach(_renderer.Device(), this, &Application::RequestFrameThunk);
         SyncChrome();
         InvalidateFrame();
-        if (!allClosedWhileDetached || FAILED(reattached))
+        if (! allClosedWhileDetached || FAILED(reattached))
         {
             SelfTestFailure(std::format(L"A detached chrome did not read every card as closed, or did not "
                                         L"reattach (closed {}, reattached {:#010x}).\n",
-                                        allClosedWhileDetached, static_cast<std::uint32_t>(reattached))
+                                        allClosedWhileDetached,
+                                        static_cast<std::uint32_t>(reattached))
                                 .c_str());
             return 5;
         }
@@ -8703,7 +8462,7 @@ int Application::RunRenderingSelfTest() noexcept
     const int noticesBefore = _canvasFailureNotices;
     _renderer.FailNextStageForTest(Renderer::Stage::Compose, E_OUTOFMEMORY);
     frame();
-    if (!_window || FAILED(_frameLoopFailure) || _failedFrames != 0 || _renderer.CanvasFailure() != E_OUTOFMEMORY ||
+    if (! _window || FAILED(_frameLoopFailure) || _failedFrames != 0 || _renderer.CanvasFailure() != E_OUTOFMEMORY ||
         _canvasFailureNotices != noticesBefore + 1)
     {
         SelfTestFailure(L"A canvas that could not be drawn stopped the frame or closed the window.\n");
@@ -8723,15 +8482,15 @@ int Application::RunRenderingSelfTest() noexcept
     InsertPaintedLayer(_session, L"Right", 8500, 300, Vec2{8500, 0}, 0.0, 0xFF0000FFu);
     DocumentChanged();
     frame();
-    if (!_window || FAILED(_frameLoopFailure) || _failedFrames != 0 || FAILED(_renderer.CanvasFailure()) ||
-        _composition.CanvasScale() != 2 || _composition.CanvasSurfaceBytes() == 0)
+    if (! _window || FAILED(_frameLoopFailure) || _failedFrames != 0 || FAILED(_renderer.CanvasFailure()) || _composition.CanvasScale() != 2 ||
+        _composition.CanvasSurfaceBytes() == 0)
     {
         SelfTestFailure(L"A document wider than the device's textures did not draw through its proxy.\n");
         return 5;
     }
     {
         const std::optional<Raster> flat = WandComposite();
-        if (!flat.has_value() || flat->Width() != 17000 || flat->Height() != 300 ||
+        if (! flat.has_value() || flat->Width() != 17000 || flat->Height() != 300 ||
             rasterPixel(flat.value(), 8499, 150) != std::array<int, 4>{0, 0, 255, 255} ||
             rasterPixel(flat.value(), 8500, 150) != std::array<int, 4>{255, 0, 0, 255})
         {
@@ -8744,7 +8503,7 @@ int Application::RunRenderingSelfTest() noexcept
     frame();
     {
         const std::optional<Raster> flat = WandComposite();
-        if (_failedFrames != 0 || FAILED(_renderer.CanvasFailure()) || !flat.has_value() ||
+        if (_failedFrames != 0 || FAILED(_renderer.CanvasFailure()) || ! flat.has_value() ||
             rasterPixel(flat.value(), 16999, 299) != std::array<int, 4>{0, 255, 0, 255})
         {
             SelfTestFailure(L"A layer wider than the device's textures did not draw or read back.\n");
@@ -8757,7 +8516,7 @@ int Application::RunRenderingSelfTest() noexcept
     InsertPaintedLayer(_session, L"White", 200, 150, Vec2{0, 0}, 0.0, 0xFFFFFFFFu);
     DocumentChanged();
     OnTool(EditorTool::Brush);
-    _session.brushMode = BrushToolMode::Paint;
+    _session.brushMode     = BrushToolMode::Paint;
     _session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1};
     _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
     SyncChrome();
@@ -8766,21 +8525,26 @@ int Application::RunRenderingSelfTest() noexcept
     frame();
     {
         std::array<int, 4> shown{};
-        const bool read = readCanvas(100, 75, shown);
+        const bool read                       = readCanvas(100, 75, shown);
         const std::optional<Raster> composite = WandComposite();
-        const std::array<int, 4> flat =
-            composite.has_value() ? rasterPixel(composite.value(), 100, 75) : std::array<int, 4>{-1, -1, -1, -1};
-        if (!read || shown[2] < 250 || shown[1] > 5 || flat != std::array<int, 4>{255, 255, 255, 255})
+        const std::array<int, 4> flat         = composite.has_value() ? rasterPixel(composite.value(), 100, 75) : std::array<int, 4>{-1, -1, -1, -1};
+        if (! read || shown[2] < 250 || shown[1] > 5 || flat != std::array<int, 4>{255, 255, 255, 255})
         {
-            const std::wstring message = std::format(
-                L"The flattened composite read the stroke preview instead of the document (shown {} {} {} {}, "
-                L"flattened {} {} {} {}).\n",
-                shown[0], shown[1], shown[2], shown[3], flat[0], flat[1], flat[2], flat[3]);
+            const std::wstring message = std::format(L"The flattened composite read the stroke preview instead of the document (shown {} {} {} {}, "
+                                                     L"flattened {} {} {} {}).\n",
+                                                     shown[0],
+                                                     shown[1],
+                                                     shown[2],
+                                                     shown[3],
+                                                     flat[0],
+                                                     flat[1],
+                                                     flat[2],
+                                                     flat[3]);
             SelfTestFailure(message.c_str());
             return 5;
         }
         frame();
-        if (!readCanvas(100, 75, shown) || shown[2] < 250 || shown[1] > 5)
+        if (! readCanvas(100, 75, shown) || shown[2] < 250 || shown[1] > 5)
         {
             SelfTestFailure(L"The canvas did not show the stroke preview again after a readback.\n");
             return 5;
@@ -8811,15 +8575,15 @@ int Application::RunRenderingSelfTest() noexcept
     {
         const ImageLayer* painted = _session.ActiveLayer();
         std::vector<std::uint8_t> bgra;
-        UINT width = 0;
+        UINT width  = 0;
         UINT height = 0;
-        int worst = 255;
-        if (painted != nullptr && painted->asset.has_value() && !painted->asset->image.IsMaterialized() &&
+        int worst   = 255;
+        if (painted != nullptr && painted->asset.has_value() && ! painted->asset->image.IsMaterialized() &&
             SUCCEEDED(_composition.Readback(bgra, width, height)) && width == 400 && height == 300)
         {
             const Raster& image = painted->asset->image;
-            const int left = static_cast<int>(std::lround(painted->transform.origin.x));
-            const int top = static_cast<int>(std::lround(painted->transform.origin.y));
+            const int left      = static_cast<int>(std::lround(painted->transform.origin.x));
+            const int top       = static_cast<int>(std::lround(painted->transform.origin.y));
             std::vector<std::uint8_t> row(static_cast<std::size_t>(image.Width()) * 4u);
             worst = 0;
             for (int y = 0; y < image.Height(); ++y)
@@ -8835,17 +8599,15 @@ int Application::RunRenderingSelfTest() noexcept
                     }
                     for (std::size_t c = 0; c < 4; ++c)
                     {
-                        const int canvas =
-                            bgra[(static_cast<std::size_t>(dy) * 400u + static_cast<std::size_t>(dx)) * 4u + c];
-                        worst = std::max(worst, std::abs(canvas - row[static_cast<std::size_t>(x) * 4u + c]));
+                        const int canvas = bgra[(static_cast<std::size_t>(dy) * 400u + static_cast<std::size_t>(dx)) * 4u + c];
+                        worst            = std::max(worst, std::abs(canvas - row[static_cast<std::size_t>(x) * 4u + c]));
                     }
                 }
             }
         }
         if (worst > 2)
         {
-            const std::wstring message = std::format(
-                L"The canvas drawn from the adopted stroke differs from the committed raster by {}.\n", worst);
+            const std::wstring message = std::format(L"The canvas drawn from the adopted stroke differs from the committed raster by {}.\n", worst);
             SelfTestFailure(message.c_str());
             return 5;
         }
@@ -8853,7 +8615,7 @@ int Application::RunRenderingSelfTest() noexcept
 
     // A new gradient never draws into another layer's preview texture (RF-407).
     fresh(300, 200);
-    const Guid first = InsertPaintedLayer(_session, L"First", 300, 200, Vec2{0, 0}, 0.0, 0xFF808080u);
+    const Guid first  = InsertPaintedLayer(_session, L"First", 300, 200, Vec2{0, 0}, 0.0, 0xFF808080u);
     const Guid second = InsertPaintedLayer(_session, L"Second", 300, 200, Vec2{0, 0}, 0.0, 0xFF808080u);
     DocumentChanged();
     OnTool(EditorTool::Gradient);
@@ -8861,8 +8623,7 @@ int Application::RunRenderingSelfTest() noexcept
     SyncChrome();
     BeginGradientDrag(_viewport.ViewFromDocument(Vec2{10, 100}, DocumentSize()));
     DragGradient(_viewport.ViewFromDocument(Vec2{290, 100}, DocumentSize()), 0);
-    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
-        _composition.StrokeLayerID() != std::optional<Guid>(first))
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled || _composition.StrokeLayerID() != std::optional<Guid>(first))
     {
         SelfTestFailure(L"The gradient on the first layer did not preview on it.\n");
         return 5;
@@ -8873,8 +8634,8 @@ int Application::RunRenderingSelfTest() noexcept
     _session.SelectLayer(second);
     BeginGradientDrag(_viewport.ViewFromDocument(Vec2{10, 100}, DocumentSize()));
     DragGradient(_viewport.ViewFromDocument(Vec2{290, 100}, DocumentSize()), 0);
-    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
-        _composition.StrokeLayerID() != std::optional<Guid>(second) || _composition.StrokeTextureMissing())
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled || _composition.StrokeLayerID() != std::optional<Guid>(second) ||
+        _composition.StrokeTextureMissing())
     {
         SelfTestFailure(L"A gradient on another layer drew into the previous layer's preview texture.\n");
         return 5;
@@ -8888,7 +8649,7 @@ int Application::RunRenderingSelfTest() noexcept
     // previews on its own texture, Enter commits it the same way, and the canvas then equals both committed rasters.
     {
         fresh(300, 200);
-        const Guid left = InsertPaintedLayer(_session, L"Left", 150, 200, Vec2{0, 0}, 0.0, 0xFF808080u);
+        const Guid left  = InsertPaintedLayer(_session, L"Left", 150, 200, Vec2{0, 0}, 0.0, 0xFF808080u);
         const Guid right = InsertPaintedLayer(_session, L"Right", 150, 200, Vec2{150, 0}, 0.0, 0xFF808080u);
         OnTool(EditorTool::Gradient);
         _session.SetForegroundColor(0xFF000000u);
@@ -8908,46 +8669,41 @@ int Application::RunRenderingSelfTest() noexcept
             EndGradientDrag();
             return SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled;
         };
-        if (!chooseLayer(left))
+        if (! chooseLayer(left))
             return 5;
-        const int entries = _session.history.UndoCount();
+        const int entries             = _session.history.UndoCount();
         const std::uint64_t adoptions = _composition.AdoptionCount();
-        if (!line(10.0, 140.0))
+        if (! line(10.0, 140.0))
             return 5;
         const bool leftPreview = _composition.StrokeLayerID() == std::optional<Guid>(left);
-        if (!chooseLayer(right))
+        if (! chooseLayer(right))
             return 5;
-        const bool leftCommitted = _session.PendingGradient() == nullptr &&
-                                   _session.history.UndoCount() == entries + 1 && !_composition.HasStroke() &&
+        const bool leftCommitted = _session.PendingGradient() == nullptr && _session.history.UndoCount() == entries + 1 && ! _composition.HasStroke() &&
                                    _composition.AdoptionCount() == adoptions + 1;
-        if (!line(160.0, 290.0))
+        if (! line(160.0, 290.0))
             return 5;
-        const bool rightPreview =
-            _composition.StrokeLayerID() == std::optional<Guid>(right) && !_composition.StrokeTextureMissing();
+        const bool rightPreview = _composition.StrokeLayerID() == std::optional<Guid>(right) && ! _composition.StrokeTextureMissing();
         _chrome->SetCanvasFocused(true);
-        const bool entered = HandleAccelerator(VK_RETURN, 0) &&
-                             SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled;
-        const bool rightCommitted = _session.PendingGradient() == nullptr &&
-                                    _session.history.UndoCount() == entries + 2 &&
-                                    _session.history.UndoName() == L"Gradient" && !_composition.HasStroke() &&
-                                    _composition.AdoptionCount() == adoptions + 2;
+        const bool entered        = HandleAccelerator(VK_RETURN, 0) && SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled;
+        const bool rightCommitted = _session.PendingGradient() == nullptr && _session.history.UndoCount() == entries + 2 &&
+                                    _session.history.UndoName() == L"Gradient" && ! _composition.HasStroke() && _composition.AdoptionCount() == adoptions + 2;
         // Each layer alone on the canvas (a gradient grows its layer over the canvas, so the upper one covers the
         // lower one): what the adopted texture draws equals the committed raster.
         const auto offBy = [&](const Guid& shown) -> int
         {
             EditLayerRecordsForTest(_session,
                                     [&](DocumentFixture& document)
-                                    {
-                                        for (ImageLayer& layer : document.layers)
-                                        {
-                                            layer.visible = layer.id == shown;
-                                        }
-                                    });
+            {
+                for (ImageLayer& layer : document.layers)
+                {
+                    layer.visible = layer.id == shown;
+                }
+            });
             DocumentChanged();
             frame();
             std::vector<std::uint8_t> bgra;
-            UINT width = 0;
-            UINT height = 0;
+            UINT width              = 0;
+            UINT height             = 0;
             const ImageLayer* layer = nullptr;
             for (const ImageLayer& candidate : _session.Document().value().layers)
             {
@@ -8956,14 +8712,13 @@ int Application::RunRenderingSelfTest() noexcept
                     layer = &candidate;
                 }
             }
-            if (layer == nullptr || !layer->asset.has_value() || FAILED(_composition.Readback(bgra, width, height)) ||
-                width != 300 || height != 200)
+            if (layer == nullptr || ! layer->asset.has_value() || FAILED(_composition.Readback(bgra, width, height)) || width != 300 || height != 200)
             {
                 return 255;
             }
             const Raster& image = layer->asset->image;
-            const int originX = static_cast<int>(std::lround(layer->transform.origin.x));
-            const int originY = static_cast<int>(std::lround(layer->transform.origin.y));
+            const int originX   = static_cast<int>(std::lround(layer->transform.origin.x));
+            const int originY   = static_cast<int>(std::lround(layer->transform.origin.y));
             std::vector<std::uint8_t> row(static_cast<std::size_t>(image.Width()) * 4u);
             int worst = 0;
             for (int y = 0; y < image.Height(); ++y)
@@ -8979,25 +8734,29 @@ int Application::RunRenderingSelfTest() noexcept
                     }
                     for (std::size_t c = 0; c < 4; ++c)
                     {
-                        const int canvas =
-                            bgra[(static_cast<std::size_t>(dy) * 300u + static_cast<std::size_t>(dx)) * 4u + c];
-                        worst = std::max(worst, std::abs(canvas - row[static_cast<std::size_t>(x) * 4u + c]));
+                        const int canvas = bgra[(static_cast<std::size_t>(dy) * 300u + static_cast<std::size_t>(dx)) * 4u + c];
+                        worst            = std::max(worst, std::abs(canvas - row[static_cast<std::size_t>(x) * 4u + c]));
                     }
                 }
             }
             return worst;
         };
-        const int leftOff = offBy(left);
+        const int leftOff  = offBy(left);
         const int rightOff = offBy(right);
         OnTool(EditorTool::Move);
-        if (!leftPreview || !leftCommitted || !rightPreview || !entered || !rightCommitted || leftOff > 2 ||
-            rightOff > 2)
+        if (! leftPreview || ! leftCommitted || ! rightPreview || ! entered || ! rightCommitted || leftOff > 2 || rightOff > 2)
         {
             SelfTestFailure(std::format(L"A gradient left pending on another layer did not end its preview with its "
                                         L"own commit (left preview {}, committed {}, right preview {}, Enter {}, "
                                         L"committed {}, adoptions {}, canvas off the rasters by {} and {}).\n",
-                                        leftPreview, leftCommitted, rightPreview, entered, rightCommitted,
-                                        _composition.AdoptionCount() - adoptions, leftOff, rightOff)
+                                        leftPreview,
+                                        leftCommitted,
+                                        rightPreview,
+                                        entered,
+                                        rightCommitted,
+                                        _composition.AdoptionCount() - adoptions,
+                                        leftOff,
+                                        rightOff)
                                 .c_str());
             return 5;
         }
@@ -9009,7 +8768,7 @@ int Application::RunRenderingSelfTest() noexcept
     const bool antsWithSelection = _marchingAnts;
     _session.Deselect();
     SyncChrome();
-    if (!antsWithSelection || _marchingAnts)
+    if (! antsWithSelection || _marchingAnts)
     {
         SelfTestFailure(L"The marching ants did not follow the selection outline.\n");
         return 5;
@@ -9021,17 +8780,17 @@ int Application::RunRenderingSelfTest() noexcept
     frame();
     RECT client{};
     (void)GetClientRect(_window.get(), &client);
-    const UINT clientWidth = static_cast<UINT>(client.right - client.left);
-    const UINT clientHeight = static_cast<UINT>(client.bottom - client.top);
+    const UINT clientWidth      = static_cast<UINT>(client.right - client.left);
+    const UINT clientHeight     = static_cast<UINT>(client.bottom - client.top);
     const bool displayPoweredOn = _displayPoweredOn;
-    _displayPoweredOn = true;
+    _displayPoweredOn           = true;
     _renderer.SetOccludedForTest(false);
     (void)HandleMessage(_window.get(), WM_SIZE, SIZE_MINIMIZED, 0);
     const bool minimizedReleased = _composition.CanvasSurfaceBytes() == 0 && _renderer.IsSuspended();
     (void)HandleMessage(_window.get(), WM_SIZE, SIZE_RESTORED, MAKELPARAM(clientWidth, clientHeight));
     frame();
     const bool restoredDrawn = _composition.CanvasSurfaceBytes() != 0;
-    _windowVisible = true;
+    _windowVisible           = true;
     _renderer.SetOccludedForTest(true);
     ReleaseSurfacesWhileUnseen();
     const bool occludedReleased = _composition.CanvasSurfaceBytes() == 0;
@@ -9040,13 +8799,16 @@ int Application::RunRenderingSelfTest() noexcept
     ReleaseSurfacesWhileUnseen();
     const bool visibleKept = _composition.CanvasSurfaceBytes() != 0;
     _renderer.SetOccludedForTest(std::nullopt);
-    _windowVisible = false;
+    _windowVisible    = false;
     _displayPoweredOn = displayPoweredOn;
-    if (!minimizedReleased || !restoredDrawn || !occludedReleased || !visibleKept)
+    if (! minimizedReleased || ! restoredDrawn || ! occludedReleased || ! visibleKept)
     {
         SelfTestFailure(std::format(L"A minimized or occluded window kept its document surfaces (minimized released "
                                     L"{}, restored drawn {}, occluded released {}, visible kept {}).\n",
-                                    minimizedReleased, restoredDrawn, occludedReleased, visibleKept));
+                                    minimizedReleased,
+                                    restoredDrawn,
+                                    occludedReleased,
+                                    visibleKept));
         return 5;
     }
 
@@ -9060,18 +8822,20 @@ int Application::RunRenderingSelfTest() noexcept
         (void)GetClientRect(_window.get(), &shrunk);
         const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
         const float minimumHeight =
-            (ChromeHost::kMenuHeightDip + ChromeHost::kTabHeightDip + ChromeHost::kHeaderHeightDip +
-             ChromeHost::kCanvasMinDip + ChromeHost::kStatusHeightDip) *
+            (ChromeHost::kMenuHeightDip + ChromeHost::kTabHeightDip + ChromeHost::kHeaderHeightDip + ChromeHost::kCanvasMinDip + ChromeHost::kStatusHeightDip) *
             scale;
         const bool clamped = static_cast<float>(shrunk.bottom - shrunk.top) >= minimumHeight - 1.0f;
-        (void)SetWindowPos(_window.get(), nullptr, 0, 0, frameBounds.right - frameBounds.left,
-                           frameBounds.bottom - frameBounds.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-        const std::optional<D2D1_RECT_F> inverted =
-            CanvasOverlay::ShadeFrame(D2D1::RectF(0.0f, 98.0f, 400.0f, 90.0f), D2D1::RectF(10.0f, 10.0f, 50.0f, 50.0f));
-        const std::optional<D2D1_RECT_F> inside = CanvasOverlay::ShadeFrame(D2D1::RectF(0.0f, 98.0f, 400.0f, 300.0f),
-                                                                            D2D1::RectF(-10.0f, 10.0f, 50.0f, 500.0f));
-        if (!clamped || inverted.has_value() || !inside.has_value() || inside->left != 0.0f || inside->top != 108.0f ||
-            inside->bottom != 300.0f)
+        (void)SetWindowPos(_window.get(),
+                           nullptr,
+                           0,
+                           0,
+                           frameBounds.right - frameBounds.left,
+                           frameBounds.bottom - frameBounds.top,
+                           SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        const std::optional<D2D1_RECT_F> inverted = CanvasOverlay::ShadeFrame(D2D1::RectF(0.0f, 98.0f, 400.0f, 90.0f), D2D1::RectF(10.0f, 10.0f, 50.0f, 50.0f));
+        const std::optional<D2D1_RECT_F> inside =
+            CanvasOverlay::ShadeFrame(D2D1::RectF(0.0f, 98.0f, 400.0f, 300.0f), D2D1::RectF(-10.0f, 10.0f, 50.0f, 500.0f));
+        if (! clamped || inverted.has_value() || ! inside.has_value() || inside->left != 0.0f || inside->top != 108.0f || inside->bottom != 300.0f)
         {
             SelfTestFailure(L"The window shrank below the chrome, or the crop shade clamped with inverted bounds.\n");
             return 5;
@@ -9083,18 +8847,18 @@ int Application::RunRenderingSelfTest() noexcept
     // or never happened.
     {
         const std::wstring savedPath = _screenshotPath;
-        const HRESULT savedResult = _screenshotResult;
-        _screenshotPath = L"capture.png";
-        _screenshotResult = E_NOTIMPL;
-        const int unsupported = ExitCode(0);
-        _screenshotResult = E_ACCESSDENIED;
-        const int failed = ExitCode(0);
-        _screenshotResult = E_PENDING;
-        const int missed = ExitCode(0);
-        _screenshotResult = S_OK;
-        const int captured = ExitCode(0);
-        _screenshotPath = savedPath;
-        _screenshotResult = savedResult;
+        const HRESULT savedResult    = _screenshotResult;
+        _screenshotPath              = L"capture.png";
+        _screenshotResult            = E_NOTIMPL;
+        const int unsupported        = ExitCode(0);
+        _screenshotResult            = E_ACCESSDENIED;
+        const int failed             = ExitCode(0);
+        _screenshotResult            = E_PENDING;
+        const int missed             = ExitCode(0);
+        _screenshotResult            = S_OK;
+        const int captured           = ExitCode(0);
+        _screenshotPath              = savedPath;
+        _screenshotResult            = savedResult;
         if (unsupported != 8 || failed != 9 || missed != 9 || captured != 0)
         {
             SelfTestFailure(L"The screenshot exit codes do not tell an unsupported capture from a failed one.\n");
@@ -9110,11 +8874,11 @@ int Application::RunRenderingSelfTest() noexcept
         frame();
     }
     MSG close{};
-    const bool asked = PeekMessageW(&close, _window.get(), WM_CLOSE, WM_CLOSE, PM_REMOVE) != FALSE;
+    const bool asked   = PeekMessageW(&close, _window.get(), WM_CLOSE, WM_CLOSE, PM_REMOVE) != FALSE;
     const bool stopped = FAILED(_frameLoopFailure) && _runtimeFailure == S_OK && _window;
-    _frameLoopFailure = S_OK;
-    _failedFrames = 0;
-    if (!asked || !stopped)
+    _frameLoopFailure  = S_OK;
+    _failedFrames      = 0;
+    if (! asked || ! stopped)
     {
         SelfTestFailure(L"Failing frames closed the window without the save prompt or kept drawing.\n");
         return 5;
@@ -9127,7 +8891,7 @@ int Application::RunRenderingSelfTest() noexcept
 
 int Application::RunRefusalSelfTest() noexcept
 {
-    if (!_chrome || !_window)
+    if (! _chrome || ! _window)
     {
         SelfTestFailure(L"The refusal self-test needs the chrome and the window.\n");
         return 5;
@@ -9143,17 +8907,16 @@ int Application::RunRefusalSelfTest() noexcept
         }
         _forcedDiscard.reset();
     };
-    const auto layerCount = [&]()
-    { return _session.Document().has_value() ? _session.Document()->layers.size() : std::size_t{0}; };
-    const auto addLayer = [&](ImageLayer layer, bool bottom)
+    const auto layerCount = [&]() { return _session.Document().has_value() ? _session.Document()->layers.size() : std::size_t{0}; };
+    const auto addLayer   = [&](ImageLayer layer, bool bottom)
     {
         _session.BeginEdit(L"Import Image");
         EditLayerRecordsForTest(_session,
                                 [&](DocumentFixture& document)
-                                {
-                                    std::vector<ImageLayer>& layers = document.layers;
-                                    layers.insert(bottom ? layers.begin() : layers.end(), layer);
-                                });
+        {
+            std::vector<ImageLayer>& layers = document.layers;
+            layers.insert(bottom ? layers.begin() : layers.end(), layer);
+        });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
         DocumentChanged();
@@ -9165,58 +8928,65 @@ int Application::RunRefusalSelfTest() noexcept
     // stays silent.
     {
         fresh();
-        constexpr int kSide = 2100;
+        constexpr int kSide      = 2100;
         const bool previousTrace = _traceWandForTest;
-        _traceWandForTest = true;
-        const auto restoreTrace =
-            wil::scope_exit([this, previousTrace]() noexcept { _traceWandForTest = previousTrace; });
+        _traceWandForTest        = true;
+        const auto restoreTrace  = wil::scope_exit([this, previousTrace]() noexcept { _traceWandForTest = previousTrace; });
         std::vector<std::uint8_t> checker(static_cast<std::size_t>(kSide) * static_cast<std::size_t>(kSide));
         std::vector<std::uint8_t> dots(checker.size() * 4u, 0);
         for (int y = 0; y < kSide; ++y)
         {
             for (int x = 0; x < kSide; ++x)
             {
-                const std::size_t index =
-                    static_cast<std::size_t>(y) * static_cast<std::size_t>(kSide) + static_cast<std::size_t>(x);
-                const bool dark = (x + y) % 2 == 0;
-                checker[index] = dark ? 0 : 255;
-                dots[index * 4u + 3u] = dark ? 255 : 0;
+                const std::size_t index = static_cast<std::size_t>(y) * static_cast<std::size_t>(kSide) + static_cast<std::size_t>(x);
+                const bool dark         = (x + y) % 2 == 0;
+                checker[index]          = dark ? 0 : 255;
+                dots[index * 4u + 3u]   = dark ? 255 : 0;
             }
         }
-        const Raster mask = Raster::Make(kSide, kSide, RasterFormat::Gray8, checker.data(), checker.size());
+        const Raster mask   = Raster::Make(kSide, kSide, RasterFormat::Gray8, checker.data(), checker.size());
         const Raster pixels = Raster::Make(kSide, kSide, RasterFormat::Bgra8888, dots.data(), dots.size());
-        ImageLayer layer = ImageLayer::Blank(L"Dots", Vec2{static_cast<double>(kSide), static_cast<double>(kSide)});
-        layer.asset = RasterAsset{pixels, Raster::MakeThumbnail(pixels), layer.name};
-        layer.mask = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), layer.name}, true, std::nullopt, true};
+        ImageLayer layer    = ImageLayer::Blank(L"Dots", Vec2{static_cast<double>(kSide), static_cast<double>(kSide)});
+        layer.asset         = RasterAsset{pixels, Raster::MakeThumbnail(pixels), layer.name};
+        layer.mask          = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), layer.name}, true, std::nullopt, true};
         (void)addLayer(std::move(layer), false);
         const int errors = _errorsShown;
         OnCommand(ChromeHost::kCommandLoadMaskSelection);
         const bool maskAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
-        const int maskErrors = _errorsShown - errors;
-        const UINT maskErrorId = _lastErrorId;
+        const int maskErrors        = _errorsShown - errors;
+        const UINT maskErrorId      = _lastErrorId;
         const bool maskHasSelection = _session.Selection().has_value();
-        const bool maskRefused = maskAcknowledged && _errorsShown == errors + 1 &&
-                                 _lastErrorId == IDS_ERROR_SELECTION_DETAILED && !_session.Selection().has_value();
+        const bool maskRefused =
+            maskAcknowledged && _errorsShown == errors + 1 && _lastErrorId == IDS_ERROR_SELECTION_DETAILED && ! _session.Selection().has_value();
         OnCommand(ChromeHost::kCommandLoadLayerSelection);
         const bool layerAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
-        const int layerErrors = _errorsShown - errors;
-        const UINT layerErrorId = _lastErrorId;
+        const int layerErrors        = _errorsShown - errors;
+        const UINT layerErrorId      = _lastErrorId;
         const bool layerHasSelection = _session.Selection().has_value();
-        const bool layerRefused = layerAcknowledged && _errorsShown == errors + 2 &&
-                                  _lastErrorId == IDS_ERROR_SELECTION_DETAILED && !_session.Selection().has_value();
+        const bool layerRefused =
+            layerAcknowledged && _errorsShown == errors + 2 && _lastErrorId == IDS_ERROR_SELECTION_DETAILED && ! _session.Selection().has_value();
         OnCommand(ChromeHost::kCommandNewLayer);
         OnCommand(ChromeHost::kCommandLoadLayerSelection);
         const bool emptyAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
-        const bool emptySilent = emptyAcknowledged && _errorsShown == errors + 2 && !_session.Selection().has_value();
-        if (!maskRefused || !layerRefused || !emptySilent)
+        const bool emptySilent       = emptyAcknowledged && _errorsShown == errors + 2 && ! _session.Selection().has_value();
+        if (! maskRefused || ! layerRefused || ! emptySilent)
         {
             SelfTestFailure(std::format(L"Load Mask / Layer Selection did not say why it loaded nothing (mask {}, "
                                         L"layer {}, blank layer silent {}, errors {}; "
                                         L"mask settled={} errors={} id={} selection={}; "
                                         L"layer settled={} errors={} id={} selection={}; canvas={}x{}).\n",
-                                        maskRefused, layerRefused, emptySilent, _errorsShown - errors, maskAcknowledged,
-                                        maskErrors, maskErrorId, maskHasSelection, layerAcknowledged, layerErrors,
-                                        layerErrorId, layerHasSelection,
+                                        maskRefused,
+                                        layerRefused,
+                                        emptySilent,
+                                        _errorsShown - errors,
+                                        maskAcknowledged,
+                                        maskErrors,
+                                        maskErrorId,
+                                        maskHasSelection,
+                                        layerAcknowledged,
+                                        layerErrors,
+                                        layerErrorId,
+                                        layerHasSelection,
                                         _session.Document().has_value() ? _session.Document()->width : 0,
                                         _session.Document().has_value() ? _session.Document()->height : 0)
                                 .c_str());
@@ -9229,8 +8999,8 @@ int Application::RunRefusalSelfTest() noexcept
     {
         fresh();
         ImageLayer budget = ImageLayer::Blank(L"Budget", Vec2{100, 100});
-        budget.asset = RasterAsset{Raster::MakeSparse(10000, 9998, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0),
-                                   Raster::Make(1, 1, RasterFormat::Bgra8888), L"Budget"};
+        budget.asset =
+            RasterAsset{Raster::MakeSparse(10000, 9998, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0), Raster::Make(1, 1, RasterFormat::Bgra8888), L"Budget"};
         budget.visible = false;
         (void)addLayer(std::move(budget), true);
         (void)InsertPaintedLayer(_session, L"A", 20, 20, Vec2{0, 0}, 0.0, 0xFFFF0000u);
@@ -9238,8 +9008,8 @@ int Application::RunRefusalSelfTest() noexcept
         (void)InsertPaintedLayer(_session, L"R", 100, 100, Vec2{300, 300}, 0.0, 0xFF00FF00u);
         DocumentChanged();
         const std::size_t layers = layerCount();
-        const int notices = _budgetNotices;
-        const int errors = _errorsShown;
+        const int notices        = _budgetNotices;
+        const int errors         = _errorsShown;
         // Layer via Copy duplicates the 10 000-pixel layer without a selection, and copies it with one.
         OnCommand(ChromeHost::kCommandLayerViaCopy);
         if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
@@ -9258,7 +9028,7 @@ int Application::RunRefusalSelfTest() noexcept
         OnCommand(ChromeHost::kCommandGaussianBlur);
         if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
             return 5;
-        const bool blurRefused = !_session.HasColorEdit() && _budgetNotices == notices + 3;
+        const bool blurRefused = ! _session.HasColorEdit() && _budgetNotices == notices + 3;
         // Merge Down of B onto A spans 200 × 200: the budget refuses it, and IDS_ERROR_FLATTEN is not raised.
         _session.SelectLayer(b);
         SyncChrome();
@@ -9270,12 +9040,17 @@ int Application::RunRefusalSelfTest() noexcept
         }
         const bool mergeRefused = layerCount() == layers && _budgetNotices == notices + 4 && _errorsShown == errors;
         fresh();
-        if (!duplicateRefused || !once || !copyRefused || !blurRefused || !mergeRefused)
+        if (! duplicateRefused || ! once || ! copyRefused || ! blurRefused || ! mergeRefused)
         {
             SelfTestFailure(std::format(L"An edit the pixel budget refused did not raise its notice once (duplicate "
                                         L"{}, once {}, copy {}, blur {}, merge {}, notices {}, errors {}).\n",
-                                        duplicateRefused, once, copyRefused, blurRefused, mergeRefused,
-                                        _budgetNotices - notices, _errorsShown - errors)
+                                        duplicateRefused,
+                                        once,
+                                        copyRefused,
+                                        blurRefused,
+                                        mergeRefused,
+                                        _budgetNotices - notices,
+                                        _errorsShown - errors)
                                 .c_str());
             return 5;
         }
@@ -9286,29 +9061,29 @@ int Application::RunRefusalSelfTest() noexcept
 
 void Application::OnShapeAction(ShapeAction action, double value) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    if (! _hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return;
     }
     switch (action)
     {
-    case ShapeAction::SetKind:
-        CancelShapeDraft();
-        _session.shapeKind = value >= 0.5 ? ShapeKind::Ellipse : ShapeKind::Rectangle;
-        break;
-    case ShapeAction::SetRadius:
-        if (std::isfinite(value))
-        {
-            _session.shapeCornerRadius = std::clamp(std::round(value), 0.0, 5000.0);
-        }
-        break;
-    case ShapeAction::OpenColor:
-        if (_chrome)
-        {
-            _chrome->OpenColorPicker(PickerTarget::Foreground, _session.ForegroundColor());
-        }
-        break;
+        case ShapeAction::SetKind:
+            CancelShapeDraft();
+            _session.shapeKind = value >= 0.5 ? ShapeKind::Ellipse : ShapeKind::Rectangle;
+            break;
+        case ShapeAction::SetRadius:
+            if (std::isfinite(value))
+            {
+                _session.shapeCornerRadius = std::clamp(std::round(value), 0.0, 5000.0);
+            }
+            break;
+        case ShapeAction::OpenColor:
+            if (_chrome)
+            {
+                _chrome->OpenColorPicker(PickerTarget::Foreground, _session.ForegroundColor());
+            }
+            break;
     }
     SyncChrome();
     InvalidateFrame();
@@ -9317,7 +9092,7 @@ void Application::OnShapeAction(ShapeAction action, double value) noexcept
 void Application::CancelShapeDraft() noexcept
 {
     // Escape, a pointer loss, a settle, Undo and the header's kind all drop a draft the one way (RF-904).
-    if (!_session.PendingShape().has_value())
+    if (! _session.PendingShape().has_value())
     {
         return;
     }
@@ -9328,18 +9103,17 @@ void Application::CancelShapeDraft() noexcept
 
 void Application::FinishShapeDraft() noexcept
 {
-    if (!_session.PendingShape())
+    if (! _session.PendingShape())
     {
         return;
     }
-    const auto receipt =
-        QueueHostInput(HostShapeFinishInput{_session.PendingShape().value(), _session.ForegroundColor()});
+    const auto receipt = QueueHostInput(HostShapeFinishInput{_session.PendingShape().value(), _session.ForegroundColor()});
     ReportHostAdmission(receipt);
     if (receipt.Read().outcome == HostOutcome::Pending)
     {
-        _shapeCommitPreview = _session.PendingShape();
+        _shapeCommitPreview         = _session.PendingShape();
         _shapePreviewDocumentSerial = _session.DocumentSerial();
-        _shapePreviewArgb = _session.ForegroundColor();
+        _shapePreviewArgb           = _session.ForegroundColor();
         CancelShapeDraft(); // The owned release keeps its event-time geometry/color through ordered settlement.
     }
 }
@@ -9357,19 +9131,19 @@ bool Application::SamplesColor(EditorTool tool) const noexcept
     }
     // Alt turns the Brush, Spot Healing and Gradient into the eyedropper between strokes.
     const bool alt = KeyboardState::Held(VK_MENU);
-    return alt && (tool == EditorTool::Brush || tool == EditorTool::Heal || tool == EditorTool::Gradient) &&
-           _session.PendingBrush() == nullptr && !std::holds_alternative<GradientDrag>(_drag);
+    return alt && (tool == EditorTool::Brush || tool == EditorTool::Heal || tool == EditorTool::Gradient) && _session.PendingBrush() == nullptr &&
+           ! std::holds_alternative<GradientDrag>(_drag);
 }
 
 void Application::SampleColorAt(Vec2 view) noexcept
 {
     ColorSampling* sampling = std::get_if<ColorSampling>(&_drag);
-    if (!_session.Document().has_value() || sampling == nullptr)
+    if (! _session.Document().has_value() || sampling == nullptr)
     {
         return;
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    sampling->point = pixel;
+    sampling->point  = pixel;
     if (sampling->opening)
     {
         RecordSamplerPoint(sampling->opening.value(), pixel);
@@ -9399,7 +9173,7 @@ void Application::SampleColorAt(Vec2 view) noexcept
 void Application::EndColorSampling() noexcept
 {
     const auto* sampling = std::get_if<ColorSampling>(&_drag);
-    if (!sampling)
+    if (! sampling)
     {
         return;
     }
@@ -9412,43 +9186,40 @@ void Application::EndColorSampling() noexcept
 
 void Application::SyncToolOverlays() noexcept
 {
-    if (!_chrome)
+    if (! _chrome)
     {
         return;
     }
     const bool hasDocument = _session.Document().has_value();
-    const Vec2 size = DocumentSize();
-    const auto viewPoint = [&](Vec2 document)
+    const Vec2 size        = DocumentSize();
+    const auto viewPoint   = [&](Vec2 document)
     {
         const Vec2 view = _viewport.ViewFromDocument(document, size);
         return D2D1::Point2F(static_cast<float>(view.x), static_cast<float>(view.y));
     };
     std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> line;
-    if (const GradientEdit* pending = _session.PendingGradient();
-        hasDocument && pending != nullptr && pending->HasLine() && _tool == EditorTool::Gradient)
+    if (const GradientEdit* pending = _session.PendingGradient(); hasDocument && pending != nullptr && pending->HasLine() && _tool == EditorTool::Gradient)
     {
         line = std::make_pair(viewPoint(pending->start), viewPoint(pending->end));
     }
     _chrome->SetGradientLine(line);
     std::optional<CanvasOverlay::ShapeDraftOverlay> draft;
-    const auto& pendingShape = _session.PendingShape();
-    const auto& committedShape =
-        _shapePreviewDocumentSerial == _session.DocumentSerial() ? _shapeCommitPreview : pendingShape;
+    const auto& pendingShape   = _session.PendingShape();
+    const auto& committedShape = _shapePreviewDocumentSerial == _session.DocumentSerial() ? _shapeCommitPreview : pendingShape;
     if (const std::optional<ShapeDraft>& shape = pendingShape ? pendingShape : committedShape;
         hasDocument && shape.has_value() && shape->rect.maxX > shape->rect.minX && shape->rect.maxY > shape->rect.minY)
     {
         const D2D1_POINT_2F a = viewPoint(Vec2{shape->rect.minX, shape->rect.minY});
         const D2D1_POINT_2F b = viewPoint(Vec2{shape->rect.maxX, shape->rect.maxY});
         CanvasOverlay::ShapeDraftOverlay overlay;
-        overlay.ellipse = shape->kind == ShapeKind::Ellipse;
-        overlay.rect = D2D1::RectF(a.x, a.y, b.x, b.y);
+        overlay.ellipse      = shape->kind == ShapeKind::Ellipse;
+        overlay.rect         = D2D1::RectF(a.x, a.y, b.x, b.y);
         overlay.cornerRadius = static_cast<float>(shape->cornerRadius * _viewport.ViewScale());
         const auto* captured = _canvasBrushInput.CapturedContext(_canvasBrushInput.Opening());
-        overlay.argb = !pendingShape && committedShape ? _shapePreviewArgb
-                       : _canvasBrushReplayed && captured && captured->tool == EditorTool::Shape
-                           ? _canvasResolvedForeground
-                           : _session.ForegroundColor();
-        draft = overlay;
+        overlay.argb         = ! pendingShape && committedShape                                          ? _shapePreviewArgb
+                               : _canvasBrushReplayed && captured && captured->tool == EditorTool::Shape ? _canvasResolvedForeground
+                                                                                                         : _session.ForegroundColor();
+        draft                = overlay;
     }
     _chrome->SetShapeDraft(draft);
     std::optional<CanvasOverlay::SampleRing> ring;
@@ -9456,10 +9227,10 @@ void Application::SyncToolOverlays() noexcept
         hasDocument && sampling != nullptr && sampling->point.has_value() && _settings.sampleRing)
     {
         CanvasOverlay::SampleRing sample;
-        sample.center = viewPoint(sampling->point.value());
+        sample.center       = viewPoint(sampling->point.value());
         sample.originalArgb = sampling->original;
-        sample.sampledArgb = _chrome->ColorPickerOpen() ? _chrome->PickerColor() : _session.ForegroundColor();
-        ring = sample;
+        sample.sampledArgb  = _chrome->ColorPickerOpen() ? _chrome->PickerColor() : _session.ForegroundColor();
+        ring                = sample;
     }
     _chrome->SetSampleRing(ring);
     std::optional<D2D1_POINT_2F> source;
@@ -9479,7 +9250,7 @@ void Application::SyncToolOverlays() noexcept
 void Application::BeginPixelDrag(Vec2 pixel, bool duplicate) noexcept
 {
     static_cast<void>(_session.TakeLastBrushCommit());
-    if (!_session.BeginDeferredPixelMove(duplicate))
+    if (! _session.BeginDeferredPixelMove(duplicate))
     {
         return;
     }

@@ -16,19 +16,19 @@ struct PendingDisplaySource final
         PixelMove
     };
     DocumentReadAuthority authority;
-    Kind kind = Kind::Transform;
-    std::uint64_t opening = 0;
-    std::uint64_t publication = 0;
+    Kind kind                      = Kind::Transform;
+    std::uint64_t opening          = 0;
+    std::uint64_t publication      = 0;
     const CanvasDocument* document = nullptr;
-    const void* sourceIdentity = nullptr; // Only a comparison while the eventual graph holds the source root.
+    const void* sourceIdentity     = nullptr; // Only a comparison while the eventual graph holds the source root.
     Guid target;
-    const Raster* adjustmentSource = nullptr;
-    const Raster* adjustmentCoverage = nullptr;
-    const std::shared_ptr<const AdjustmentLookup>* lookup = nullptr;
-    const LayerAdjustment* original = nullptr;
-    double previewScale = 1;
+    const Raster* adjustmentSource                                    = nullptr;
+    const Raster* adjustmentCoverage                                  = nullptr;
+    const std::shared_ptr<const AdjustmentLookup>* lookup             = nullptr;
+    const LayerAdjustment* original                                   = nullptr;
+    double previewScale                                               = 1;
     const std::shared_ptr<const PreparedRasterPreview>* rasterPreview = nullptr;
-    const std::shared_ptr<const PixelMoveOpening>* pixelOpening = nullptr;
+    const std::shared_ptr<const PixelMoveOpening>* pixelOpening       = nullptr;
     const std::shared_ptr<const SharedPublicationMemory>* pixelMemory = nullptr;
     Vec2 pixelOffset{};
     bool pixelDuplicate = false;

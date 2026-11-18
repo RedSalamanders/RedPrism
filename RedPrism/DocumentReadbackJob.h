@@ -14,13 +14,11 @@ class CanvasRenderer;
 #pragma warning(disable : 4625 4626)
 class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuReadbackProducer
 {
-  public:
-    DocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, CanvasRenderer& composition,
-                        CanvasDocument document, D3D11_BOX region) noexcept;
+public:
+    DocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, CanvasRenderer& composition, CanvasDocument document, D3D11_BOX region) noexcept;
     // Cheap descriptor: the first admitted owner continuation captures its document under the complete graph
     // reservation. Existing direct callers keep the snapshot constructor until their own capture migration.
-    DocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, CanvasRenderer& composition,
-                        D3D11_BOX region) noexcept;
+    DocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, CanvasRenderer& composition, D3D11_BOX region) noexcept;
     ~DocumentReadbackJob() override;
     [[nodiscard]] static std::uint64_t RequiredMemory(const D3D11_BOX& region) noexcept;
     [[nodiscard]] JobResult Run(JobContext& context) final;
@@ -29,7 +27,7 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     [[nodiscard]] HRESULT RecordReadbackSource(ID3D11Texture2D*& source, D3D11_BOX& box) noexcept final;
     void Completed(JobResult result) noexcept final;
 
-  protected:
+protected:
     [[nodiscard]] virtual HRESULT CaptureReadbackDocument(CanvasDocument&) noexcept
     {
         return E_UNEXPECTED;
@@ -78,13 +76,15 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     // total device-restart limit. A live gesture may stay suspended with no polling until input arrives.
     // Success must retain the record (return true from its defer hook); refusal changes no state.
     [[nodiscard]] bool ContinuePixelReadback(JobTicket ticket, unsigned int x, unsigned int y) noexcept;
-    virtual void ResetReadback() noexcept {} // worker-only release of a previous attempt's prepared result
+    virtual void ResetReadback() noexcept
+    {
+    } // worker-only release of a previous attempt's prepared result
     // Owner thread. Ensure the composition and queue use the current device, recovering on a device-lost reason.
     // No waits, modal or message pump. At most two whole-graph restarts; no partial result is published.
-    [[nodiscard]] virtual HRESULT PrepareReadbackDevice(HRESULT reason) noexcept = 0;
+    [[nodiscard]] virtual HRESULT PrepareReadbackDevice(HRESULT reason) noexcept                            = 0;
     virtual void ReadbackCompleted(JobResult result, Raster image, std::uint64_t deviceGeneration) noexcept = 0;
 
-  private:
+private:
     enum class Phase
     {
         Capture,
@@ -109,15 +109,15 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     GpuReadbackRows _rows;
     CancelToken _cancellation;
     JobTicket _ticket;
-    Phase _phase = Phase::Prepare;
-    HRESULT _error = S_OK;
+    Phase _phase                    = Phase::Prepare;
+    HRESULT _error                  = S_OK;
     std::uint64_t _deviceGeneration = 0;
-    unsigned int _tileSide = 0;
+    unsigned int _tileSide          = 0;
     unsigned int _x = 0, _y = 0, _tileWidth = 0, _tileHeight = 0;
-    unsigned int _restarts = 0;
+    unsigned int _restarts      = 0;
     std::uint64_t _copiedPixels = 0;
-    bool _utilityAcquired = false;
-    bool _resetOutput = false;
-    bool _detachedReady = false; // owner-only: the preceding worker and GPU lease are acknowledged
+    bool _utilityAcquired       = false;
+    bool _resetOutput           = false;
+    bool _detachedReady         = false; // owner-only: the preceding worker and GPU lease are acknowledged
 };
 #pragma warning(pop)

@@ -36,7 +36,7 @@ bool Signal(HANDLE handle) noexcept
 
 void SignalBorrowedThreadGate(HANDLE handle) noexcept
 {
-    if (!Signal(handle))
+    if (! Signal(handle))
         ExitOnDeadlock();
 }
 
@@ -52,8 +52,8 @@ wil::unique_handle CreateManualEvent() noexcept
 struct ReadbackRace final
 {
     WorkerWriteCompletion* completion = nullptr;
-    HANDLE startGate = nullptr;
-    HANDLE attempted = nullptr;
+    HANDLE startGate                  = nullptr;
+    HANDLE attempted                  = nullptr;
     std::atomic<unsigned int> fileWriterEntries{0};
     std::atomic<bool> workerBegan{false};
 };
@@ -61,7 +61,7 @@ struct ReadbackRace final
 
 DWORD WINAPI TryReadbackWriter(void* parameter) noexcept
 {
-    auto* const race = static_cast<ReadbackRace*>(parameter);
+    auto* const race       = static_cast<ReadbackRace*>(parameter);
     const DWORD gateResult = WaitForSingleObject(race->startGate, INFINITE);
     if (gateResult == WAIT_OBJECT_0)
     {
@@ -84,10 +84,10 @@ DWORD WINAPI TryReadbackWriter(void* parameter) noexcept
 struct WriterRace final
 {
     WorkerWriteCompletion* completion = nullptr;
-    HANDLE startGate = nullptr;
-    HANDLE acknowledgeGate = nullptr;
-    HANDLE enteredWriting = nullptr;
-    HANDLE beforeAcknowledge = nullptr;
+    HANDLE startGate                  = nullptr;
+    HANDLE acknowledgeGate            = nullptr;
+    HANDLE enteredWriting             = nullptr;
+    HANDLE beforeAcknowledge          = nullptr;
     std::atomic<unsigned int> fileWriterEntries{0};
     std::atomic<bool> workerBegan{false};
 };
@@ -95,10 +95,9 @@ struct WriterRace final
 
 DWORD WINAPI GatedWriter(void* parameter) noexcept
 {
-    auto* const race = static_cast<WriterRace*>(parameter);
+    auto* const race        = static_cast<WriterRace*>(parameter);
     const DWORD startResult = WaitForSingleObject(race->startGate, INFINITE);
-    const bool began =
-        startResult == WAIT_OBJECT_0 && race->completion->BeginWorker(WorkerWriteCompletion::Phase::Readback);
+    const bool began        = startResult == WAIT_OBJECT_0 && race->completion->BeginWorker(WorkerWriteCompletion::Phase::Readback);
     race->workerBegan.store(began, std::memory_order_release);
     if (began)
         race->fileWriterEntries.fetch_add(1, std::memory_order_relaxed);
@@ -114,11 +113,11 @@ DWORD WINAPI GatedWriter(void* parameter) noexcept
 
 int RunWorkerWriteCompletionChecks() noexcept
 {
-    int failures = 0;
+    int failures      = 0;
     const auto expect = [&failures](bool condition, char const* name) noexcept
     {
         std::printf("%s worker-write-completion.%s\n", condition ? "PASS" : "FAIL", name);
-        if (!condition)
+        if (! condition)
             ++failures;
     };
     // Project/job path: queued work enters the sole writer stage and can finish only by acknowledgement.
@@ -128,7 +127,7 @@ int RunWorkerWriteCompletionChecks() noexcept
     expect(project.Current() == WorkerWriteCompletion::Phase::Queued, "project-starts-queued");
 
     unsigned int projectWriterEntries = 0;
-    const bool projectBegan = project.BeginWorker(WorkerWriteCompletion::Phase::Queued);
+    const bool projectBegan           = project.BeginWorker(WorkerWriteCompletion::Phase::Queued);
     if (projectBegan)
         ++projectWriterEntries;
     expect(projectBegan, "project-queued-to-writing");
@@ -137,22 +136,19 @@ int RunWorkerWriteCompletionChecks() noexcept
     const bool duplicateBegan = project.BeginWorker(WorkerWriteCompletion::Phase::Queued);
     if (duplicateBegan)
         ++projectWriterEntries;
-    expect(!duplicateBegan && !project.BeginWorker(WorkerWriteCompletion::Phase::Writing) &&
-               !project.BeginWorker(WorkerWriteCompletion::Phase::Cancelled) &&
-               !project.BeginWorker(WorkerWriteCompletion::Phase::Finished) && projectWriterEntries == 1,
+    expect(! duplicateBegan && ! project.BeginWorker(WorkerWriteCompletion::Phase::Writing) && ! project.BeginWorker(WorkerWriteCompletion::Phase::Cancelled) &&
+               ! project.BeginWorker(WorkerWriteCompletion::Phase::Finished) && projectWriterEntries == 1,
            "duplicate-begin-rejected-no-new-writer");
 
     project.Acknowledge();
     const DWORD projectCompletionWait = project.Event() != nullptr ? WaitBounded(project.Event()) : WAIT_FAILED;
-    expect(project.Current() == WorkerWriteCompletion::Phase::Finished && projectCompletionWait == WAIT_OBJECT_0,
-           "project-acknowledgement-finishes-event");
+    expect(project.Current() == WorkerWriteCompletion::Phase::Finished && projectCompletionWait == WAIT_OBJECT_0, "project-acknowledgement-finishes-event");
 
     // Cancellation wins while readback is still pending. The worker is held until after cancellation.
     WorkerWriteCompletion cancelled(WorkerWriteCompletion::Phase::Readback);
-    auto cancelStart = CreateManualEvent();
-    auto cancelAttempted = CreateManualEvent();
-    const bool cancelSetup =
-        SUCCEEDED(cancelled.CreationError()) && cancelled.Event() != nullptr && cancelStart && cancelAttempted;
+    auto cancelStart       = CreateManualEvent();
+    auto cancelAttempted   = CreateManualEvent();
+    const bool cancelSetup = SUCCEEDED(cancelled.CreationError()) && cancelled.Event() != nullptr && cancelStart && cancelAttempted;
     ReadbackRace cancelRace{&cancelled, cancelStart.get(), cancelAttempted.get()};
     wil::unique_handle cancelThread;
     if (cancelSetup)
@@ -166,66 +162,59 @@ int RunWorkerWriteCompletionChecks() noexcept
     if (cancelThread)
     {
         SignalBorrowedThreadGate(cancelStart.get());
-        const DWORD attemptWait = WaitBounded(cancelAttempted.get(), true);
-        const DWORD joinWait = WaitBounded(cancelThread.get(), true);
+        const DWORD attemptWait     = WaitBounded(cancelAttempted.get(), true);
+        const DWORD joinWait        = WaitBounded(cancelThread.get(), true);
         cancelWorkerAttemptObserved = attemptWait == WAIT_OBJECT_0 && joinWait == WAIT_OBJECT_0;
     }
-    expect(cancelWorkerAttemptObserved && !cancelRace.workerBegan.load(std::memory_order_acquire),
-           "cancelled-readback-worker-cannot-begin");
-    expect(cancelRace.fileWriterEntries.load(std::memory_order_relaxed) == 0,
-           "cancelled-readback-does-not-enter-file-writer");
+    expect(cancelWorkerAttemptObserved && ! cancelRace.workerBegan.load(std::memory_order_acquire), "cancelled-readback-worker-cannot-begin");
+    expect(cancelRace.fileWriterEntries.load(std::memory_order_relaxed) == 0, "cancelled-readback-does-not-enter-file-writer");
 
     // The writer wins the same boundary. It cannot acknowledge until the owner releases the worker gate.
     WorkerWriteCompletion writing(WorkerWriteCompletion::Phase::Readback);
-    auto writerStart = CreateManualEvent();
-    auto acknowledgeGate = CreateManualEvent();
-    auto enteredWriting = CreateManualEvent();
+    auto writerStart       = CreateManualEvent();
+    auto acknowledgeGate   = CreateManualEvent();
+    auto enteredWriting    = CreateManualEvent();
     auto beforeAcknowledge = CreateManualEvent();
-    const bool writerSetup = SUCCEEDED(writing.CreationError()) && writing.Event() != nullptr && writerStart &&
-                             acknowledgeGate && enteredWriting && beforeAcknowledge;
-    WriterRace writerRace{&writing, writerStart.get(), acknowledgeGate.get(), enteredWriting.get(),
-                          beforeAcknowledge.get()};
+    const bool writerSetup =
+        SUCCEEDED(writing.CreationError()) && writing.Event() != nullptr && writerStart && acknowledgeGate && enteredWriting && beforeAcknowledge;
+    WriterRace writerRace{&writing, writerStart.get(), acknowledgeGate.get(), enteredWriting.get(), beforeAcknowledge.get()};
     wil::unique_handle writerThread;
     if (writerSetup)
         writerThread.reset(CreateThread(nullptr, 0, GatedWriter, &writerRace, 0, nullptr));
 
-    bool writerEntered = false;
-    bool cancellationLost = false;
+    bool writerEntered                 = false;
+    bool cancellationLost              = false;
     bool writerStillWritingAfterCancel = false;
-    bool authorityRetainedAfterCancel = false;
-    DWORD beforeAckWait = WAIT_FAILED;
-    DWORD writerCompletionWait = WAIT_FAILED;
-    bool writerJoined = false;
+    bool authorityRetainedAfterCancel  = false;
+    DWORD beforeAckWait                = WAIT_FAILED;
+    DWORD writerCompletionWait         = WAIT_FAILED;
+    bool writerJoined                  = false;
     if (writerThread)
     {
         SignalBorrowedThreadGate(writerStart.get());
-        const DWORD enteredWait = WaitBounded(enteredWriting.get(), true);
-        writerEntered = enteredWait == WAIT_OBJECT_0 && writerRace.workerBegan.load(std::memory_order_acquire);
-        cancellationLost = writerEntered && !writing.CancelReadback();
+        const DWORD enteredWait       = WaitBounded(enteredWriting.get(), true);
+        writerEntered                 = enteredWait == WAIT_OBJECT_0 && writerRace.workerBegan.load(std::memory_order_acquire);
+        cancellationLost              = writerEntered && ! writing.CancelReadback();
         writerStillWritingAfterCancel = writing.Current() == WorkerWriteCompletion::Phase::Writing;
-        authorityRetainedAfterCancel = cancellationLost && writing.Event() != nullptr &&
-                                       writerRace.workerBegan.load(std::memory_order_acquire) &&
-                                       writerStillWritingAfterCancel;
+        authorityRetainedAfterCancel =
+            cancellationLost && writing.Event() != nullptr && writerRace.workerBegan.load(std::memory_order_acquire) && writerStillWritingAfterCancel;
 
         HANDLE const beforeAckHandles[2] = {writing.Event(), beforeAcknowledge.get()};
-        beforeAckWait = beforeAckHandles[0] != nullptr && beforeAckHandles[1] != nullptr
-                            ? WaitForMultipleObjects(2, beforeAckHandles, FALSE, kDeadlockGuardMs)
-                            : WAIT_FAILED;
+        beforeAckWait = beforeAckHandles[0] != nullptr && beforeAckHandles[1] != nullptr ? WaitForMultipleObjects(2, beforeAckHandles, FALSE, kDeadlockGuardMs)
+                                                                                         : WAIT_FAILED;
         if (beforeAckWait != WAIT_OBJECT_0 && beforeAckWait != WAIT_OBJECT_0 + 1)
             ExitOnDeadlock();
 
         SignalBorrowedThreadGate(acknowledgeGate.get());
         writerCompletionWait = writing.Event() != nullptr ? WaitBounded(writing.Event(), true) : WAIT_FAILED;
-        writerJoined = WaitBounded(writerThread.get(), true) == WAIT_OBJECT_0;
+        writerJoined         = WaitBounded(writerThread.get(), true) == WAIT_OBJECT_0;
     }
 
-    expect(writerEntered && writerRace.fileWriterEntries.load(std::memory_order_relaxed) == 1,
-           "writer-enters-before-cancel");
+    expect(writerEntered && writerRace.fileWriterEntries.load(std::memory_order_relaxed) == 1, "writer-enters-before-cancel");
     expect(cancellationLost && writerStillWritingAfterCancel, "writer-wins-cancel-keeps-writing");
     expect(beforeAckWait == WAIT_OBJECT_0 + 1, "writer-event-unset-before-scope-ack");
     expect(writerCompletionWait == WAIT_OBJECT_0 && writerJoined, "owner-waits-for-writer-acknowledgement");
-    expect(writing.Current() == WorkerWriteCompletion::Phase::Finished && writing.Event() != nullptr,
-           "writer-acknowledgement-finishes-event");
+    expect(writing.Current() == WorkerWriteCompletion::Phase::Finished && writing.Event() != nullptr, "writer-acknowledgement-finishes-event");
     expect(authorityRetainedAfterCancel, "cancel-cannot-reclaim-handle-job-authority");
 
     return failures == 0 ? 0 : 1;

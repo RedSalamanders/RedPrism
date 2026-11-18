@@ -17,7 +17,7 @@
 // (`yyjson_get_len`), never a `strlen`-style read that would stop early at an embedded NUL.
 namespace JsonRead
 {
-using unique_doc = wil::unique_any<yyjson_doc*, decltype(&yyjson_doc_free), yyjson_doc_free>;
+using unique_doc     = wil::unique_any<yyjson_doc*, decltype(&yyjson_doc_free), yyjson_doc_free>;
 using unique_mut_doc = wil::unique_any<yyjson_mut_doc*, decltype(&yyjson_mut_doc_free), yyjson_mut_doc_free>;
 
 // `field` as a double: an int, uint or real, finite. An integral real (10.0, as some writers emit for a whole
@@ -35,8 +35,7 @@ using unique_mut_doc = wil::unique_any<yyjson_mut_doc*, decltype(&yyjson_mut_doc
     }
     if (yyjson_is_int(field))
     {
-        value = yyjson_is_uint(field) ? static_cast<double>(yyjson_get_uint(field))
-                                      : static_cast<double>(yyjson_get_sint(field));
+        value = yyjson_is_uint(field) ? static_cast<double>(yyjson_get_uint(field)) : static_cast<double>(yyjson_get_sint(field));
         return true;
     }
     return false;
@@ -49,7 +48,7 @@ using unique_mut_doc = wil::unique_any<yyjson_mut_doc*, decltype(&yyjson_mut_doc
     yyjson_val* field = yyjson_obj_get(object, key);
     if (field == nullptr)
     {
-        return !required;
+        return ! required;
     }
     return NumberValue(field, value);
 }
@@ -61,11 +60,10 @@ using unique_mut_doc = wil::unique_any<yyjson_mut_doc*, decltype(&yyjson_mut_doc
     yyjson_val* field = yyjson_obj_get(object, key);
     if (field == nullptr)
     {
-        return !required;
+        return ! required;
     }
     double number = 0;
-    if (!NumberValue(field, number) || number < static_cast<double>(INT_MIN) || number > static_cast<double>(INT_MAX) ||
-        number != std::floor(number))
+    if (! NumberValue(field, number) || number < static_cast<double>(INT_MIN) || number > static_cast<double>(INT_MAX) || number != std::floor(number))
     {
         return false;
     }
@@ -79,9 +77,9 @@ using unique_mut_doc = wil::unique_any<yyjson_mut_doc*, decltype(&yyjson_mut_doc
     yyjson_val* field = yyjson_obj_get(object, key);
     if (field == nullptr)
     {
-        return !required;
+        return ! required;
     }
-    if (!yyjson_is_bool(field))
+    if (! yyjson_is_bool(field))
     {
         return false;
     }
@@ -97,9 +95,9 @@ using unique_mut_doc = wil::unique_any<yyjson_mut_doc*, decltype(&yyjson_mut_doc
     if (field == nullptr)
     {
         value.clear();
-        return !required;
+        return ! required;
     }
-    if (!yyjson_is_str(field))
+    if (! yyjson_is_str(field))
     {
         return false;
     }

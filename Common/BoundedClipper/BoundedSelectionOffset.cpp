@@ -10,8 +10,7 @@ namespace
 {
 using namespace RedPrismBoundedClipper;
 
-bool ValidInput(const std::vector<SelectionLoop>& subject, const BoundedSelectionBoolean::Limits& limits,
-                const CancelToken& cancellation)
+bool ValidInput(const std::vector<SelectionLoop>& subject, const BoundedSelectionBoolean::Limits& limits, const CancelToken& cancellation)
 {
     std::uint64_t points = 0, loops = 0, work = 0;
     constexpr double coordinateLimit = static_cast<double>(MAX_COORD) / 128.0;
@@ -27,8 +26,7 @@ bool ValidInput(const std::vector<SelectionLoop>& subject, const BoundedSelectio
         {
             if ((work++ & (Workspace::Quantum - 1)) == 0 && cancellation.IsCancelled())
                 return false;
-            if (!std::isfinite(point.x) || !std::isfinite(point.y) || std::abs(point.x) >= coordinateLimit ||
-                std::abs(point.y) >= coordinateLimit)
+            if (! std::isfinite(point.x) || ! std::isfinite(point.y) || std::abs(point.x) >= coordinateLimit || std::abs(point.y) >= coordinateLimit)
                 return false;
         }
     }
@@ -57,27 +55,28 @@ PathsD InputPaths(const std::vector<SelectionLoop>& loops)
 }
 } // namespace
 
-std::optional<std::vector<SelectionLoop>> Run(const std::vector<SelectionLoop>& subject, int signedAmount,
-                                              int canvasWidth, int canvasHeight, CancelToken cancellation,
+std::optional<std::vector<SelectionLoop>> Run(const std::vector<SelectionLoop>& subject,
+                                              int signedAmount,
+                                              int canvasWidth,
+                                              int canvasHeight,
+                                              CancelToken cancellation,
                                               BoundedSelectionBoolean::Limits limits,
                                               BoundedSelectionBoolean::Statistics* statistics,
-                                              void (*checkpoint)(void*, std::uint64_t) noexcept, void* context)
+                                              void (*checkpoint)(void*, std::uint64_t) noexcept,
+                                              void* context)
 {
     if (statistics)
         *statistics = {};
-    if (signedAmount == 0 || signedAmount < -DocumentSession::kSelectionModifyLimit ||
-        signedAmount > DocumentSession::kSelectionModifyLimit || canvasWidth <= 0 || canvasHeight <= 0 ||
-        canvasWidth > kMaxCanvasSide || canvasHeight > kMaxCanvasSide || !limits.workspaceBytes ||
-        !limits.inputPoints || !limits.inputLoops || !limits.outputPoints || !limits.outputLoops ||
-        !ValidInput(subject, limits, cancellation))
+    if (signedAmount == 0 || signedAmount < -DocumentSession::kSelectionModifyLimit || signedAmount > DocumentSession::kSelectionModifyLimit ||
+        canvasWidth <= 0 || canvasHeight <= 0 || canvasWidth > kMaxCanvasSide || canvasHeight > kMaxCanvasSide || ! limits.workspaceBytes ||
+        ! limits.inputPoints || ! limits.inputLoops || ! limits.outputPoints || ! limits.outputLoops || ! ValidInput(subject, limits, cancellation))
         return std::nullopt;
-    Workspace workspace(limits.workspaceBytes, cancellation, checkpoint, context, limits.allocations,
-                        Workspace::AllocationPolicy::ReuseFreed);
+    Workspace workspace(limits.workspaceBytes, cancellation, checkpoint, context, limits.allocations, Workspace::AllocationPolicy::ReuseFreed);
     PathsD normalized;
     {
         ClipperD engine(2);
         engine.AddSubject(InputPaths(subject));
-        if (!engine.Execute(ClipType::Union, FillRule::NonZero, normalized))
+        if (! engine.Execute(ClipType::Union, FillRule::NonZero, normalized))
             Workspace::Refuse();
     }
     int error = 0;
@@ -105,7 +104,7 @@ std::optional<std::vector<SelectionLoop>> Run(const std::vector<SelectionLoop>& 
                                     {static_cast<double>(canvasWidth), static_cast<double>(canvasHeight)},
                                     {0.0, static_cast<double>(canvasHeight)}}});
         PathsD clipped;
-        if (!engine.Execute(ClipType::Intersection, FillRule::NonZero, clipped))
+        if (! engine.Execute(ClipType::Intersection, FillRule::NonZero, clipped))
             Workspace::Refuse();
         paths = std::move(clipped);
     }
@@ -141,8 +140,7 @@ std::optional<std::vector<SelectionLoop>> Run(const std::vector<SelectionLoop>& 
     if (statistics)
     {
         const auto measured = workspace.GetStatistics();
-        *statistics = {measured.capacity,  measured.consumed, measured.allocations,
-                       measured.workUnits, outputPoints,      outputLoops};
+        *statistics         = {measured.capacity, measured.consumed, measured.allocations, measured.workUnits, outputPoints, outputLoops};
     }
     return result;
 }

@@ -27,9 +27,9 @@ enum class KeyFocus : std::uint8_t
 // The session state the commands' conditions read.
 struct KeyState
 {
-    KeyFocus focus = KeyFocus::Canvas;
+    KeyFocus focus  = KeyFocus::Canvas;
     EditorTool tool = EditorTool::Move;
-    bool selection = false;  // a non-empty selection
+    bool selection  = false; // a non-empty selection
     bool lassoDraft = false; // a lasso outline in progress
 };
 
@@ -37,21 +37,21 @@ struct KeyState
 struct KeyPress
 {
     std::uint16_t virtualKey = 0;
-    KeyPosition position = KeyPosition::None; // the physical key its set-1 scan code names, if a position key
-    bool ctrl = false;
-    bool alt = false;
-    bool shift = false;
-    bool repeat = false;         // auto-repeat (lParam bit 30)
-    bool typesCharacter = false; // Ctrl and Alt from AltGr (the right Alt) or in a text input, and the active layout
-                                 // types a character for the key: text, not a chord
+    KeyPosition position     = KeyPosition::None; // the physical key its set-1 scan code names, if a position key
+    bool ctrl                = false;
+    bool alt                 = false;
+    bool shift               = false;
+    bool repeat              = false; // auto-repeat (lParam bit 30)
+    bool typesCharacter      = false; // Ctrl and Alt from AltGr (the right Alt) or in a text input, and the active layout
+                                      // types a character for the key: text, not a chord
 };
 
 struct CommandBinding
 {
     int command = 0;
     KeyChord chord;
-    DefaultChordKind kind = DefaultChordKind::Dispatch;
-    bool replacement = false; // from the settings file
+    DefaultChordKind kind            = DefaultChordKind::Dispatch;
+    bool replacement                 = false; // from the settings file
     const CommandCatalogEntry* entry = nullptr;
 };
 
@@ -65,8 +65,8 @@ enum class KeyMatchResult : std::uint8_t
 struct KeyMatch
 {
     KeyMatchResult result = KeyMatchResult::None;
-    int command = 0;
-    bool shiftAdded = false; // the chord matched with Shift added (a nudge steps by ten), not a chord holding Shift
+    int command           = 0;
+    bool shiftAdded       = false; // the chord matched with Shift added (a nudge steps by ten), not a chord holding Shift
 };
 
 // Window-manager chords no binding may take (Decision D5): Alt+F4 closes the window and Alt+Space opens its system
@@ -78,23 +78,20 @@ struct KeyMatch
         return false;
     }
     const std::uint16_t key = chord.virtualKey;
-    return (key == VirtualKey::kF4 && chord.alt && !chord.ctrl) ||
-           (key == VirtualKey::kSpace && chord.alt && !chord.ctrl) ||
-           (key == VirtualKey::kF10 && !chord.ctrl && !chord.alt) || IsModifierVirtualKey(key);
+    return (key == VirtualKey::kF4 && chord.alt && ! chord.ctrl) || (key == VirtualKey::kSpace && chord.alt && ! chord.ctrl) ||
+           (key == VirtualKey::kF10 && ! chord.ctrl && ! chord.alt) || IsModifierVirtualKey(key);
 }
 
 // Whether `chord` names `press`: the same key (virtual key, or position from the scan code), the same Ctrl and the
 // same Alt; the same Shift, or, `shiftAdded`, a chord without Shift pressed with Shift.
 [[nodiscard]] constexpr bool ChordMatches(const KeyChord& chord, const KeyPress& press, bool shiftAdded) noexcept
 {
-    const bool sameKey = chord.position != KeyPosition::None
-                             ? chord.position == press.position
-                             : chord.virtualKey != 0 && chord.virtualKey == press.virtualKey;
-    if (!sameKey || chord.ctrl != press.ctrl || chord.alt != press.alt)
+    const bool sameKey = chord.position != KeyPosition::None ? chord.position == press.position : chord.virtualKey != 0 && chord.virtualKey == press.virtualKey;
+    if (! sameKey || chord.ctrl != press.ctrl || chord.alt != press.alt)
     {
         return false;
     }
-    return shiftAdded ? !chord.shift && press.shift : chord.shift == press.shift;
+    return shiftAdded ? ! chord.shift && press.shift : chord.shift == press.shift;
 }
 
 // Whether a command of `scope` takes `chord` with the focus where it is (Decision D4: a text input keeps every key
@@ -103,14 +100,11 @@ struct KeyMatch
 {
     switch (scope)
     {
-    case CommandScope::Canvas:
-        return focus == KeyFocus::Canvas;
-    case CommandScope::App:
-        return focus != KeyFocus::TextInput;
-    case CommandScope::Global:
-        return focus != KeyFocus::TextInput || chord.ctrl || chord.alt ||
-               (chord.position == KeyPosition::None && chord.virtualKey >= VirtualKey::kF1 &&
-                chord.virtualKey <= VirtualKey::kF24);
+        case CommandScope::Canvas: return focus == KeyFocus::Canvas;
+        case CommandScope::App: return focus != KeyFocus::TextInput;
+        case CommandScope::Global:
+            return focus != KeyFocus::TextInput || chord.ctrl || chord.alt ||
+                   (chord.position == KeyPosition::None && chord.virtualKey >= VirtualKey::kF1 && chord.virtualKey <= VirtualKey::kF24);
     }
     return false;
 }
@@ -119,31 +113,22 @@ struct KeyMatch
 {
     switch (condition)
     {
-    case CommandCondition::None:
-        return true;
-    case CommandCondition::PixelsSelected:
-        return state.selection && !state.lassoDraft;
-    case CommandCondition::SelectionOnOutline:
-        return EditorToolIsSelection(state.tool) && state.selection && !state.lassoDraft;
-    case CommandCondition::MoveTool:
-        return state.tool == EditorTool::Move;
-    case CommandCondition::BrushTool:
-        return EditorToolIsBrush(state.tool);
-    case CommandCondition::NoLassoDraft:
-        return !state.lassoDraft;
-    case CommandCondition::MarqueeTool:
-        return state.tool == EditorTool::Marquee;
-    case CommandCondition::LassoTool:
-        return state.tool == EditorTool::Lasso;
-    case CommandCondition::ShapeTool:
-        return state.tool == EditorTool::Shape;
+        case CommandCondition::None: return true;
+        case CommandCondition::PixelsSelected: return state.selection && ! state.lassoDraft;
+        case CommandCondition::SelectionOnOutline: return EditorToolIsSelection(state.tool) && state.selection && ! state.lassoDraft;
+        case CommandCondition::MoveTool: return state.tool == EditorTool::Move;
+        case CommandCondition::BrushTool: return EditorToolIsBrush(state.tool);
+        case CommandCondition::NoLassoDraft: return ! state.lassoDraft;
+        case CommandCondition::MarqueeTool: return state.tool == EditorTool::Marquee;
+        case CommandCondition::LassoTool: return state.tool == EditorTool::Lasso;
+        case CommandCondition::ShapeTool: return state.tool == EditorTool::Shape;
     }
     return false;
 }
 
 class CommandBindings final
 {
-  public:
+public:
     // The catalog defaults alone.
     CommandBindings()
     {
@@ -174,33 +159,28 @@ class CommandBindings final
         std::vector<CommandBinding> chosen;
         for (auto binding = replacements.rbegin(); binding != replacements.rend(); ++binding)
         {
-            const int command = CommandForTextId(binding->commandId);
+            const int command    = CommandForTextId(binding->commandId);
             const KeyChord chord = normalize != nullptr ? normalize(binding->chord) : binding->chord;
-            if (command == 0 || chord.IsEmpty() || IsReservedChord(chord) ||
-                std::find(replaced.begin(), replaced.end(), command) != replaced.end())
+            if (command == 0 || chord.IsEmpty() || IsReservedChord(chord) || std::find(replaced.begin(), replaced.end(), command) != replaced.end())
             {
                 continue;
             }
             replaced.push_back(command);
-            const bool taken = std::any_of(chosen.begin(), chosen.end(),
-                                           [&](const CommandBinding& later) { return later.chord == chord; });
-            if (!taken)
+            const bool taken = std::any_of(chosen.begin(), chosen.end(), [&](const CommandBinding& later) { return later.chord == chord; });
+            if (! taken)
             {
-                chosen.push_back(
-                    CommandBinding{command, chord, DefaultChordKind::Dispatch, true, FindCommand(command)});
+                chosen.push_back(CommandBinding{command, chord, DefaultChordKind::Dispatch, true, FindCommand(command)});
             }
         }
         _bindings.assign(chosen.rbegin(), chosen.rend());
         for (const DefaultChord& fallback : DefaultChords())
         {
-            const bool commandReplaced =
-                std::find(replaced.begin(), replaced.end(), fallback.command) != replaced.end();
-            const bool chordTaken = std::any_of(chosen.begin(), chosen.end(), [&](const CommandBinding& replacement)
-                                                { return replacement.chord == fallback.chord; });
-            if (!commandReplaced && !chordTaken)
+            const bool commandReplaced = std::find(replaced.begin(), replaced.end(), fallback.command) != replaced.end();
+            const bool chordTaken =
+                std::any_of(chosen.begin(), chosen.end(), [&](const CommandBinding& replacement) { return replacement.chord == fallback.chord; });
+            if (! commandReplaced && ! chordTaken)
             {
-                _bindings.push_back(CommandBinding{fallback.command, fallback.chord, fallback.kind, false,
-                                                   FindCommand(fallback.command)});
+                _bindings.push_back(CommandBinding{fallback.command, fallback.chord, fallback.kind, false, FindCommand(fallback.command)});
             }
         }
         std::vector<KeyChord> dispatched;
@@ -211,12 +191,9 @@ class CommandBindings final
                 dispatched.push_back(binding.chord);
             }
         }
-        std::erase_if(_bindings,
-                      [&](const CommandBinding& label)
-                      {
-                          return label.kind == DefaultChordKind::SharedLabel &&
-                                 std::find(dispatched.begin(), dispatched.end(), label.chord) == dispatched.end();
-                      });
+        std::erase_if(_bindings, [&](const CommandBinding& label) {
+            return label.kind == DefaultChordKind::SharedLabel && std::find(dispatched.begin(), dispatched.end(), label.chord) == dispatched.end();
+        });
     }
 
     // The command a key runs, if any. A chord matches with the same modifiers first; a command that allows Shift
@@ -230,20 +207,19 @@ class CommandBindings final
         }
         for (const bool shiftAdded : {false, true})
         {
-            if (shiftAdded && !press.shift)
+            if (shiftAdded && ! press.shift)
             {
                 break;
             }
             for (const CommandBinding& binding : _bindings)
             {
-                if (binding.kind != DefaultChordKind::Dispatch || binding.entry == nullptr ||
-                    !ChordMatches(binding.chord, press, shiftAdded) || (shiftAdded && !binding.entry->shiftAllowed) ||
-                    !ScopeAllows(binding.entry->scope, binding.chord, state.focus) ||
-                    !ConditionHolds(binding.entry->condition, state))
+                if (binding.kind != DefaultChordKind::Dispatch || binding.entry == nullptr || ! ChordMatches(binding.chord, press, shiftAdded) ||
+                    (shiftAdded && ! binding.entry->shiftAllowed) || ! ScopeAllows(binding.entry->scope, binding.chord, state.focus) ||
+                    ! ConditionHolds(binding.entry->condition, state))
                 {
                     continue;
                 }
-                if (press.repeat && !binding.entry->repeats)
+                if (press.repeat && ! binding.entry->repeats)
                 {
                     return KeyMatch{KeyMatchResult::HeldKey, binding.command, shiftAdded};
                 }
@@ -271,6 +247,6 @@ class CommandBindings final
         return _bindings;
     }
 
-  private:
+private:
     std::vector<CommandBinding> _bindings;
 };

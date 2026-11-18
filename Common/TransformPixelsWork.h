@@ -26,7 +26,8 @@ struct TransformPixelsResult final
 // The caller owns both immutable inputs for the entire call and reserves document/history metadata separately.
 // Floating selection opening/merge has a different restoration contract and is deliberately refused here.
 // All pixels, masks and live-shape redraws are built privately; failure returns no after-document.
-[[nodiscard]] std::uint64_t TransformPixelsMemoryBytes(const CanvasDocument& source,
-                                                       const TransformEdit& edit) noexcept;
-[[nodiscard]] TransformPixelsResult PrepareTransformPixels(const CanvasDocument& source, const TransformEdit& edit,
-                                                           Executor& executor, CancelToken cancellation = {});
+[[nodiscard]] std::uint64_t TransformPixelsMemoryBytes(const CanvasDocument& source, const TransformEdit& edit) noexcept;
+[[nodiscard]] TransformPixelsResult PrepareTransformPixels(const CanvasDocument& source,
+                                                           const TransformEdit& edit,
+                                                           Executor& executor,
+                                                           CancelToken cancellation = {});

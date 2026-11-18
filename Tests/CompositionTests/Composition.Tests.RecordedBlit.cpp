@@ -26,7 +26,7 @@ unsigned int gFailures = 0;
 void Expect(bool passed, const char* name) noexcept
 {
     std::printf("%s recorded-blit.%s\n", passed ? "PASS" : "FAIL", name);
-    if (!passed)
+    if (! passed)
     {
         ++gFailures;
     }
@@ -37,8 +37,7 @@ void Expect(bool passed, const char* name) noexcept
     return stats.durations[static_cast<std::size_t>(kind)].SampleCount();
 }
 
-[[nodiscard]] int Channel(const std::vector<std::uint8_t>& pixels, UINT width, UINT height, UINT x, UINT y,
-                          std::size_t channel) noexcept
+[[nodiscard]] int Channel(const std::vector<std::uint8_t>& pixels, UINT width, UINT height, UINT x, UINT y, std::size_t channel) noexcept
 {
     if (x >= width || y >= height || channel >= 4)
     {
@@ -48,8 +47,8 @@ void Expect(bool passed, const char* name) noexcept
     return offset < pixels.size() ? pixels[offset] : -1;
 }
 
-[[nodiscard]] bool BlitAndRead(RecordedBlitGraphHarness& graph, const CanvasViewport& viewport, UINT width, UINT height,
-                               UiTimingStats& blitStats, std::vector<std::uint8_t>& pixels)
+[[nodiscard]] bool BlitAndRead(
+    RecordedBlitGraphHarness& graph, const CanvasViewport& viewport, UINT width, UINT height, UiTimingStats& blitStats, std::vector<std::uint8_t>& pixels)
 {
     if (graph.device == nullptr || graph.immediateContext == nullptr)
     {
@@ -57,13 +56,13 @@ void Expect(bool passed, const char* name) noexcept
     }
 
     D3D11_TEXTURE2D_DESC description{};
-    description.Width = width;
-    description.Height = height;
-    description.MipLevels = 1;
-    description.ArraySize = 1;
-    description.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    description.Width            = width;
+    description.Height           = height;
+    description.MipLevels        = 1;
+    description.ArraySize        = 1;
+    description.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
     description.SampleDesc.Count = 1;
-    description.BindFlags = D3D11_BIND_RENDER_TARGET;
+    description.BindFlags        = D3D11_BIND_RENDER_TARGET;
     wil::com_ptr_nothrow<ID3D11Texture2D> target;
     wil::com_ptr_nothrow<ID3D11RenderTargetView> view;
     if (FAILED(graph.device->CreateTexture2D(&description, nullptr, target.put())) ||
@@ -77,16 +76,15 @@ void Expect(bool passed, const char* name) noexcept
     HRESULT result = E_FAIL;
     {
         UiTimingCapture capture{blitStats};
-        result = graph.composition.BlitToTarget(view.get(), width, height, viewport, 0, 0, static_cast<float>(width),
-                                                static_cast<float>(height));
+        result = graph.composition.BlitToTarget(view.get(), width, height, viewport, 0, 0, static_cast<float>(width), static_cast<float>(height));
     }
     if (FAILED(result))
     {
         return false;
     }
 
-    description.BindFlags = 0;
-    description.Usage = D3D11_USAGE_STAGING;
+    description.BindFlags      = 0;
+    description.Usage          = D3D11_USAGE_STAGING;
     description.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
     wil::com_ptr_nothrow<ID3D11Texture2D> staging;
     if (FAILED(graph.device->CreateTexture2D(&description, nullptr, staging.put())))
@@ -105,57 +103,51 @@ void Expect(bool passed, const char* name) noexcept
     pixels.resize(static_cast<std::size_t>(width) * height * 4);
     for (UINT y = 0; y < height; ++y)
     {
-        const auto* source =
-            static_cast<const std::uint8_t*>(mapped.pData) + static_cast<std::size_t>(y) * mapped.RowPitch;
-        auto* destination = pixels.data() + static_cast<std::size_t>(y) * width * 4;
+        const auto* source = static_cast<const std::uint8_t*>(mapped.pData) + static_cast<std::size_t>(y) * mapped.RowPitch;
+        auto* destination  = pixels.data() + static_cast<std::size_t>(y) * width * 4;
         std::copy_n(source, static_cast<std::size_t>(width) * 4, destination);
     }
     return true;
 }
 
-void CheckBlitOnly(RecordedBlitGraphHarness& graph, const CanvasViewport& view, UiTimingStats& stats,
-                   std::vector<std::uint8_t>& pixels, const char* name)
+void CheckBlitOnly(RecordedBlitGraphHarness& graph, const CanvasViewport& view, UiTimingStats& stats, std::vector<std::uint8_t>& pixels, const char* name)
 {
     const std::uint64_t composites = graph.composition.CompositeCount();
-    const bool succeeded = BlitAndRead(graph, view, 16, 8, stats, pixels);
+    const bool succeeded           = BlitAndRead(graph, view, 16, 8, stats, pixels);
     Expect(succeeded, name);
     Expect(graph.composition.CompositeCount() == composites, "pan-zoom-does-not-recompose-document");
 }
 
 } // namespace
 
-int RunRecordedBlitTests(RecordedBlitGraphHarness& pair, RecordedBlitGraphHarness& stripes,
-                         RecordedBlitGraphHarness& tiled)
+int RunRecordedBlitTests(RecordedBlitGraphHarness& pair, RecordedBlitGraphHarness& stripes, RecordedBlitGraphHarness& tiled)
 {
     gFailures = 0;
     std::vector<std::uint8_t> pixels;
-    Expect(pair.composition.PreparedDisplayTextureForTest() != nullptr &&
-               stripes.composition.PreparedDisplayTextureForTest() != nullptr &&
+    Expect(pair.composition.PreparedDisplayTextureForTest() != nullptr && stripes.composition.PreparedDisplayTextureForTest() != nullptr &&
                tiled.composition.PreparedDisplayTextureForTest() != nullptr,
            "all-inputs-are-sealed-prepared-display-graphs");
 
     D3D11_TEXTURE2D_DESC noOpDescription{};
-    noOpDescription.Width = 2;
-    noOpDescription.Height = 2;
-    noOpDescription.MipLevels = 1;
-    noOpDescription.ArraySize = 1;
-    noOpDescription.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    noOpDescription.Width            = 2;
+    noOpDescription.Height           = 2;
+    noOpDescription.MipLevels        = 1;
+    noOpDescription.ArraySize        = 1;
+    noOpDescription.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
     noOpDescription.SampleDesc.Count = 1;
-    noOpDescription.BindFlags = D3D11_BIND_RENDER_TARGET;
+    noOpDescription.BindFlags        = D3D11_BIND_RENDER_TARGET;
     wil::com_ptr_nothrow<ID3D11Texture2D> noOpTarget;
     wil::com_ptr_nothrow<ID3D11RenderTargetView> noOpView;
     const bool noOpReady = SUCCEEDED(pair.device->CreateTexture2D(&noOpDescription, nullptr, noOpTarget.put())) &&
                            SUCCEEDED(pair.device->CreateRenderTargetView(noOpTarget.get(), nullptr, noOpView.put()));
     Expect(noOpReady, "real-no-op-render-target-initializes");
-    if (!noOpReady)
+    if (! noOpReady)
         return 1;
     CanvasViewport noOpViewport;
     noOpViewport.Resize(Vec2{2, 2}, 1, Vec2{2, 2});
     CanvasRenderer noCanvas;
-    Expect(noCanvas.BlitToTarget(noOpView.get(), 2, 2, noOpViewport, 0, 0, 2, 2) == S_FALSE,
-           "missing-canvas-is-successful-no-op-without-source-draw");
-    Expect(pair.composition.BlitToTarget(nullptr, 2, 2, noOpViewport, 0, 0, 2, 2) == S_FALSE,
-           "missing-target-is-successful-no-op-without-source-draw");
+    Expect(noCanvas.BlitToTarget(noOpView.get(), 2, 2, noOpViewport, 0, 0, 2, 2) == S_FALSE, "missing-canvas-is-successful-no-op-without-source-draw");
+    Expect(pair.composition.BlitToTarget(nullptr, 2, 2, noOpViewport, 0, 0, 2, 2) == S_FALSE, "missing-target-is-successful-no-op-without-source-draw");
     Expect(pair.composition.BlitToTarget(noOpView.get(), 0, 2, noOpViewport, 0, 0, 2, 2) == S_FALSE &&
                pair.composition.BlitToTarget(noOpView.get(), 2, 0, noOpViewport, 0, 0, 2, 2) == S_FALSE,
            "zero-target-dimensions-are-successful-no-ops");
@@ -182,12 +174,10 @@ int RunRecordedBlitTests(RecordedBlitGraphHarness& pair, RecordedBlitGraphHarnes
     {
         tiled.immediateContext->RSGetScissorRects(&installedScissorCount, &installedScissor);
     }
-    Expect(tiled.immediateContext != nullptr && installedScissorCount == 1 &&
-               installedScissor.left == staleScissor.left && installedScissor.top == staleScissor.top &&
-               installedScissor.right == staleScissor.right && installedScissor.bottom == staleScissor.bottom,
+    Expect(tiled.immediateContext != nullptr && installedScissorCount == 1 && installedScissor.left == staleScissor.left &&
+               installedScissor.top == staleScissor.top && installedScissor.right == staleScissor.right && installedScissor.bottom == staleScissor.bottom,
            "owner-context-has-deliberate-stale-512-tile-scissor");
-    const bool tiledBlit =
-        tiled.immediateContext != nullptr && BlitAndRead(tiled, tiledView, 16, 8, tiledStats, pixels);
+    const bool tiledBlit = tiled.immediateContext != nullptr && BlitAndRead(tiled, tiledView, 16, 8, tiledStats, pixels);
     Expect(tiledBlit && pixels == baseline, "sealed-graph-blit-restores-full-output-with-512-tile-scissor-installed");
     D3D11_RECT actualScissor{};
     UINT actualScissorCount = 1;
@@ -205,12 +195,10 @@ int RunRecordedBlitTests(RecordedBlitGraphHarness& pair, RecordedBlitGraphHarnes
             blitRasterizer->GetDesc(&blitRasterDescription);
         }
     }
-    Expect(tiledBlit && blitRasterizer && blitRasterDescription.ScissorEnable == TRUE,
-           "sealed-blit-binds-scissor-enabled-rasterizer");
+    Expect(tiledBlit && blitRasterizer && blitRasterDescription.ScissorEnable == TRUE, "sealed-blit-binds-scissor-enabled-rasterizer");
     constexpr D3D11_RECT expectedScissor{0, 0, 16, 8};
-    Expect(tiledBlit && actualScissorCount == 1 && actualScissor.left == expectedScissor.left &&
-               actualScissor.top == expectedScissor.top && actualScissor.right == expectedScissor.right &&
-               actualScissor.bottom == expectedScissor.bottom,
+    Expect(tiledBlit && actualScissorCount == 1 && actualScissor.left == expectedScissor.left && actualScissor.top == expectedScissor.top &&
+               actualScissor.right == expectedScissor.right && actualScissor.bottom == expectedScissor.bottom,
            "successful-blit-leaves-literal-whole-target-scissor");
     Expect(tiled.composition.CompositeCount() == tiledComposites, "tiled-blit-does-not-recompose-document");
     Expect(SampleCount(tiledStats, UiTimingKind::MipGeneration) == 0, "tiled-blit-does-not-generate-canvas-mips");
@@ -220,24 +208,22 @@ int RunRecordedBlitTests(RecordedBlitGraphHarness& pair, RecordedBlitGraphHarnes
     view.Resize(Vec2{16, 8}, 2, Vec2{2, 1});
     view.SetZoom(2, view.Center(), Vec2{2, 1});
     const std::uint64_t pairComposites = pair.composition.CompositeCount();
-    bool rendered = BlitAndRead(pair, view, 16, 8, pairBlitStats, pixels);
+    bool rendered                      = BlitAndRead(pair, view, 16, 8, pairBlitStats, pixels);
     Expect(rendered, "pair-graph-blits-through-acknowledged-context");
-    const bool checkerLeft = Channel(pixels, 16, 8, 5, 4, 0) == 46 || Channel(pixels, 16, 8, 5, 4, 0) == 56;
+    const bool checkerLeft  = Channel(pixels, 16, 8, 5, 4, 0) == 46 || Channel(pixels, 16, 8, 5, 4, 0) == 56;
     const bool checkerRight = Channel(pixels, 16, 8, 10, 4, 0) == 46 || Channel(pixels, 16, 8, 10, 4, 0) == 56;
-    Expect(checkerLeft && checkerRight && Channel(pixels, 16, 8, 6, 4, 0) < 10 &&
-               Channel(pixels, 16, 8, 7, 4, 0) < 10 && Channel(pixels, 16, 8, 8, 4, 0) > 245 &&
-               Channel(pixels, 16, 8, 9, 4, 0) > 245,
+    Expect(checkerLeft && checkerRight && Channel(pixels, 16, 8, 6, 4, 0) < 10 && Channel(pixels, 16, 8, 7, 4, 0) < 10 &&
+               Channel(pixels, 16, 8, 8, 4, 0) > 245 && Channel(pixels, 16, 8, 9, 4, 0) > 245,
            "zoom-2-backing-2-covers-literal-columns-6-through-9");
     Expect(pair.composition.CompositeCount() == pairComposites, "pair-blit-keeps-composite-count");
 
     view.SetZoom(4, view.Center(), Vec2{2, 1});
     rendered = BlitAndRead(pair, view, 16, 8, pairBlitStats, pixels);
-    Expect(rendered && Channel(pixels, 16, 8, 7, 4, 0) < 3 && Channel(pixels, 16, 8, 8, 4, 0) > 252,
-           "crisp-boundary-from-200-percent");
+    Expect(rendered && Channel(pixels, 16, 8, 7, 4, 0) < 3 && Channel(pixels, 16, 8, 8, 4, 0) > 252, "crisp-boundary-from-200-percent");
     Expect(pair.composition.CompositeCount() == pairComposites, "zoom-blit-keeps-composite-count");
 
     view.SetZoom(1.5, view.Center(), Vec2{2, 1});
-    rendered = BlitAndRead(pair, view, 16, 8, pairBlitStats, pixels);
+    rendered                  = BlitAndRead(pair, view, 16, 8, pairBlitStats, pixels);
     const int blendedBoundary = Channel(pixels, 16, 8, 7, 4, 0);
     Expect(rendered && blendedBoundary > 20 && blendedBoundary < 235, "150-percent-boundary-is-filtered");
     Expect(pair.composition.CompositeCount() == pairComposites, "filtered-blit-keeps-composite-count");
@@ -250,21 +236,19 @@ int RunRecordedBlitTests(RecordedBlitGraphHarness& pair, RecordedBlitGraphHarnes
     CanvasViewport reduced;
     reduced.Resize(Vec2{16, 16}, 1, Vec2{64, 64});
     reduced.SetZoom(0.25, reduced.Center(), Vec2{64, 64});
-    reduced.pan = Vec2{0.375, 0.375};
+    reduced.pan                          = Vec2{0.375, 0.375};
     const std::uint64_t stripeComposites = stripes.composition.CompositeCount();
-    rendered = BlitAndRead(stripes, reduced, 16, 16, stripeBlitStats, pixels);
-    bool gray = rendered && pixels.size() == 16u * 16u * 4u;
+    rendered                             = BlitAndRead(stripes, reduced, 16, 16, stripeBlitStats, pixels);
+    bool gray                            = rendered && pixels.size() == 16u * 16u * 4u;
     for (std::size_t index = 0; gray && index < pixels.size(); index += 4)
     {
         gray = pixels[index] >= 100 && pixels[index] <= 155;
     }
     Expect(gray, "25-percent-stripes-read-literal-mid-gray-range-100-through-155");
     Expect(stripes.composition.CompositeCount() == stripeComposites, "stripe-blit-does-not-recompose");
-    Expect(SampleCount(pairBlitStats, UiTimingKind::MipGeneration) == 0 &&
-               SampleCount(stripeBlitStats, UiTimingKind::MipGeneration) == 0,
+    Expect(SampleCount(pairBlitStats, UiTimingKind::MipGeneration) == 0 && SampleCount(stripeBlitStats, UiTimingKind::MipGeneration) == 0,
            "blit-only-pan-zoom-generates-zero-canvas-mips");
-    Expect(SampleCount(pairBlitStats, UiTimingKind::CompositionRecord) == 0 &&
-               SampleCount(stripeBlitStats, UiTimingKind::CompositionRecord) == 0,
+    Expect(SampleCount(pairBlitStats, UiTimingKind::CompositionRecord) == 0 && SampleCount(stripeBlitStats, UiTimingKind::CompositionRecord) == 0,
            "blit-only-pan-zoom-records-zero-composition-work");
 
     return static_cast<int>(gFailures);

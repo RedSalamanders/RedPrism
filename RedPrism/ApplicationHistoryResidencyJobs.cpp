@@ -28,9 +28,8 @@ struct ResidencyPayload final : DeferredReleaseNode
     DWORD ownerThread = 0;
     ResidencyPayload() noexcept
     {
-        bytes = kDeferredReleaseThreshold;
-        destroy = [](DeferredReleaseNode* node) noexcept
-        { const std::unique_ptr<ResidencyPayload> owned(static_cast<ResidencyPayload*>(node)); };
+        bytes   = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* node) noexcept { const std::unique_ptr<ResidencyPayload> owned(static_cast<ResidencyPayload*>(node)); };
     }
     ~ResidencyPayload()
     {
@@ -48,7 +47,7 @@ struct RetireResidencyPayload final
 {
     void operator()(ResidencyPayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload))
+        if (payload && ! TryDeferRelease(*payload))
         {
             const std::unique_ptr<ResidencyPayload> owned(payload);
         }
@@ -58,16 +57,16 @@ struct RetireResidencyPayload final
 
 bool Application::HistoryResidencySource::Start() noexcept
 {
-    if (_enabled || _attached || !_owner._ownerWork.Attach(*this))
+    if (_enabled || _attached || ! _owner._ownerWork.Attach(*this))
         return false;
     _attached = true;
-    if (!_subscription.Start(
+    if (! _subscription.Start(
             [](void* context) noexcept
-            {
-                auto& source = *static_cast<HistoryResidencySource*>(context);
-                source._ready.store(true, std::memory_order_release);
-                source._owner._jobs.NotifyOwnerWork();
-            },
+    {
+        auto& source = *static_cast<HistoryResidencySource*>(context);
+        source._ready.store(true, std::memory_order_release);
+        source._owner._jobs.NotifyOwnerWork();
+    },
             this))
     {
         (void)_owner._ownerWork.Detach(*this);
@@ -93,7 +92,7 @@ void Application::HistoryResidencySource::CloseAfterWorkers() noexcept
     StopNotifications();
     if (_attached)
     {
-        if (!_owner._ownerWork.Detach(*this))
+        if (! _owner._ownerWork.Detach(*this))
             std::terminate(); // Teardown is outside pumps, and notices/pending readiness have joined.
         _attached = false;
     }
@@ -123,13 +122,13 @@ bool Application::HistoryResidencySource::HasReady() const noexcept
 
 void Application::HistoryResidencySource::Pump() noexcept
 {
-    if (!_enabled || !_ready.exchange(false, std::memory_order_acq_rel) || _owner._shutdownStarted)
+    if (! _enabled || ! _ready.exchange(false, std::memory_order_acq_rel) || _owner._shutdownStarted)
         return;
-    if (!_owner._session.history.NeedsResidencyMaintenance())
+    if (! _owner._session.history.NeedsResidencyMaintenance())
         return;
     // Maintenance is an internal history writer. It must not get a younger ordinal ahead of accepted inputs,
     // invalidate a running writer's captured view, or trim an open transaction while a producer owns it.
-    if (!_owner.CanStartHistoryResidencyMaintenance())
+    if (! _owner.CanStartHistoryResidencyMaintenance())
     {
         _deferred = true;
         return;
@@ -149,10 +148,14 @@ void Application::HistoryResidencySource::Pump() noexcept
 #pragma warning(disable : 4625 4626 5026 5027)
 class Application::HistoryResidencyJob final : public Job
 {
-  public:
+public:
     HistoryResidencyJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t retirement) noexcept
-        : _owner(owner), _stamp(stamp), _generation(owner._session.Generation()), _retirement(retirement),
-          _gate(owner._historyResidencyTestGate), _ownerThread(GetCurrentThreadId())
+        : _owner(owner),
+          _stamp(stamp),
+          _generation(owner._session.Generation()),
+          _retirement(retirement),
+          _gate(owner._historyResidencyTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
     }
 
@@ -160,18 +163,15 @@ class Application::HistoryResidencyJob final : public Job
     {
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
-        if (!_payload)
+        if (! _payload)
             return {}; // Admission precedes the resumable owner capture.
         if (_refresh)
         {
             if (_gate)
                 _gate->refreshes.fetch_add(1);
-            const bool refreshed = _payload->publication &&
-                                   DocumentHistory::RefreshPreparedResidency(_payload->publication.value(),
-                                                                             _payload->document, context.cancellation);
-            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
-                   : refreshed                        ? JobResult{}
-                                                      : JobResult{JobStatus::Failed, E_FAIL};
+            const bool refreshed =
+                _payload->publication && DocumentHistory::RefreshPreparedResidency(_payload->publication.value(), _payload->document, context.cancellation);
+            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : refreshed ? JobResult{} : JobResult{JobStatus::Failed, E_FAIL};
         }
         if (_gate)
         {
@@ -179,11 +179,10 @@ class Application::HistoryResidencyJob final : public Job
             if (_gate->throwPrepareFailure)
                 throw std::bad_alloc{};
         }
-        _payload->publication = DocumentHistory::PrepareResidencyMaintenance(std::move(_payload->history),
-                                                                             _payload->document, context.cancellation);
+        _payload->publication = DocumentHistory::PrepareResidencyMaintenance(std::move(_payload->history), _payload->document, context.cancellation);
         if (_payload->publication && _gate && _gate->hold)
         {
-            if (!PostThreadMessageW(_ownerThread, HistoryResidencyTestGate::kMessage, 0, 0))
+            if (! PostThreadMessageW(_ownerThread, HistoryResidencyTestGate::kMessage, 0, 0))
                 return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
             const HANDLE waits[]{_gate->release.get(), context.shutdownEvent};
             const auto waited = WaitForMultipleObjects(2, waits, FALSE, 15000);
@@ -199,11 +198,11 @@ class Application::HistoryResidencyJob final : public Job
 
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (result.status != JobStatus::Finished || !Current() || _owner._historyWork.CancelRequested(_stamp))
+        if (result.status != JobStatus::Finished || ! Current() || _owner._historyWork.CancelRequested(_stamp))
             return false;
         if (_payload)
         {
-            if (!_payload->publication)
+            if (! _payload->publication)
                 return false;
             const auto decision = _permit.TryAcquire(_payload->publication.value());
             if (decision == DocumentHistory::ResidencyValidation::Ready)
@@ -222,18 +221,17 @@ class Application::HistoryResidencyJob final : public Job
         try
         {
             _payload.reset(std::make_unique<ResidencyPayload>().release());
-            _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
-            _payload->gate = _gate;
+            _payload->bytes       = (std::max)(_retirement, kDeferredReleaseThreshold);
+            _payload->gate        = _gate;
             _payload->ownerThread = _ownerThread;
             if (_gate)
             {
                 _gate->captures.fetch_add(1);
-                _gate->reservationHeld.store(_gate->reservationBytes != 0 &&
-                                             _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes);
+                _gate->reservationHeld.store(_gate->reservationBytes != 0 && _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes);
                 if (_gate->throwCaptureFailure)
                     throw std::bad_alloc{};
             }
-            _payload->history = _owner._session.history.CaptureState();
+            _payload->history  = _owner._session.history.CaptureState();
             _payload->document = std::as_const(_owner._session).Document();
             if (_owner._jobs.Resume(ticket))
                 return true;
@@ -249,30 +247,30 @@ class Application::HistoryResidencyJob final : public Job
     void Completed(JobResult result) noexcept override
     {
         const auto releasePermit = wil::scope_exit([this]() noexcept { _permit.Reset(); });
-        HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
-                              : result.status == JobStatus::Failed  ? HostOutcome::Failed
-                                                                    : HostOutcome::Succeeded;
-        std::int32_t error = result.error;
-        if (!Current())
+        HostOutcome outcome      = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
+                                   : result.status == JobStatus::Failed  ? HostOutcome::Failed
+                                                                         : HostOutcome::Succeeded;
+        std::int32_t error       = result.error;
+        if (! Current())
         {
             outcome = HostOutcome::Stale;
-            error = E_ABORT;
+            error   = E_ABORT;
         }
         else if (_owner._historyWork.CancelRequested(_stamp))
         {
             outcome = HostOutcome::Cancelled;
-            error = E_ABORT;
+            error   = E_ABORT;
         }
         else if (_captureError && outcome == HostOutcome::Succeeded)
         {
             outcome = HostOutcome::Failed;
-            error = _captureError;
+            error   = _captureError;
         }
-        else if (outcome == HostOutcome::Succeeded && (!_payload || !_payload->publication ||
-                                                       !_owner._session.history.Publish(_payload->publication.value())))
+        else if (outcome == HostOutcome::Succeeded &&
+                 (! _payload || ! _payload->publication || ! _owner._session.history.Publish(_payload->publication.value())))
         {
             outcome = HostOutcome::Stale;
-            error = E_ABORT;
+            error   = E_ABORT;
         }
         _permit.Reset();
         if (_gate)
@@ -298,12 +296,11 @@ class Application::HistoryResidencyJob final : public Job
         _owner._historyResidencySource.RetryDeferred();
     }
 
-  private:
+private:
     [[nodiscard]] bool Current() const noexcept
     {
-        return !_owner._shutdownStarted && _owner._historyResidencyStamp == _stamp &&
-               _owner._historyWork.IsCurrent(_stamp) && _owner._session.DocumentSerial() == _stamp.documentSerial &&
-               _owner._session.Generation() == _generation;
+        return ! _owner._shutdownStarted && _owner._historyResidencyStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
+               _owner._session.DocumentSerial() == _stamp.documentSerial && _owner._session.Generation() == _generation;
     }
     Application& _owner;
     const HistoryWorkStamp _stamp;
@@ -313,7 +310,7 @@ class Application::HistoryResidencyJob final : public Job
     const DWORD _ownerThread;
     std::unique_ptr<ResidencyPayload, RetireResidencyPayload> _payload;
     DocumentHistory::ResidencyPermit _permit;
-    bool _refresh = false;
+    bool _refresh              = false;
     std::int32_t _captureError = 0;
 };
 #pragma warning(pop)
@@ -322,29 +319,27 @@ bool Application::CanStartHistoryResidencyMaintenance() const noexcept
 {
     // The settled session authority also excludes live brush/warp/shape/lasso/color/transform/move contexts.
     // Captured but unreplayed input owns an older ordinal independently of those session fields.
-    return !_shutdownStarted && !_historyResidencyTicket && !_historyWork.Busy() && !_activeHostRequest &&
-           _hostRequests.Size() == 0 && !_canvasLifetime && !_canvasBrushInput.Busy() && !_opacityEdit &&
-           !_duplicateGesture && std::holds_alternative<std::monostate>(_drag) &&
-           _session.history.CaptureState().Depth() == 0 &&
-           _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
+    return ! _shutdownStarted && ! _historyResidencyTicket && ! _historyWork.Busy() && ! _activeHostRequest && _hostRequests.Size() == 0 && ! _canvasLifetime &&
+           ! _canvasBrushInput.Busy() && ! _opacityEdit && ! _duplicateGesture && std::holds_alternative<std::monostate>(_drag) &&
+           _session.history.CaptureState().Depth() == 0 && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
 }
 
 HRESULT Application::StartHistoryResidencyMaintenance() noexcept
 {
-    if (!CanStartHistoryResidencyMaintenance())
+    if (! CanStartHistoryResidencyMaintenance())
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
-    if (!_session.history.NeedsResidencyMaintenance())
+    if (! _session.history.NeedsResidencyMaintenance())
         return S_OK;
     const auto ordinal = _historyWork.NextOrdinal();
-    if (!ordinal)
+    if (! ordinal)
         return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
     _historyResidencyStamp = _historyWork.Begin(_session.DocumentSerial(), ordinal.value(), HistoryWorkKind::Commit);
-    if (!_historyResidencyStamp)
+    if (! _historyResidencyStamp)
         return E_UNEXPECTED;
-    auto memory = _session.history.EditMemoryBytes(std::as_const(_session).Document());
-    auto retirement = _session.HistoryRestoreRetirementMemoryBytes();
+    auto memory        = _session.history.EditMemoryBytes(std::as_const(_session).Document());
+    auto retirement    = _session.HistoryRestoreRetirementMemoryBytes();
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
-    HRESULT result = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    HRESULT result     = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     // Original private index plus one refresh candidate may coexist. Retain the same reservation until its
     // publication/drop aggregate retires; capture and all graph construction follow successful admission.
     constexpr auto overhead = sizeof(HistoryResidencyJob) + sizeof(ResidencyPayload);
@@ -358,11 +353,9 @@ HRESULT Application::StartHistoryResidencyMaintenance() noexcept
             {
                 if (_historyResidencyTestGate)
                     _historyResidencyTestGate->reservationBytes = memory;
-                std::unique_ptr<Job> job =
-                    std::make_unique<HistoryResidencyJob>(*this, _historyResidencyStamp.value(), retirement);
+                std::unique_ptr<Job> job = std::make_unique<HistoryResidencyJob>(*this, _historyResidencyStamp.value(), retirement);
                 JobTicket ticket;
-                result = static_cast<HRESULT>(
-                    _jobs.Submit(job, {JobClass::Commit, _session.DocumentSerial(), memory}, ticket));
+                result = static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Commit, _session.DocumentSerial(), memory}, ticket));
                 if (SUCCEEDED(result))
                     _historyResidencyTicket = ticket;
             }

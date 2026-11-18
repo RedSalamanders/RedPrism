@@ -10,22 +10,20 @@
 // This class provides no admission, completion fence, swap chain, Present or document mutation.
 class RecordedUtilityGraph final
 {
-  public:
+public:
     explicit RecordedUtilityGraph(std::uint32_t originalOwnerThread) noexcept;
     ~RecordedUtilityGraph();
-    RecordedUtilityGraph(const RecordedUtilityGraph&) = delete;
+    RecordedUtilityGraph(const RecordedUtilityGraph&)            = delete;
     RecordedUtilityGraph& operator=(const RecordedUtilityGraph&) = delete;
-    [[nodiscard]] HRESULT PrepareForWork(ID3D11Device* device, CanvasDocument source, D3D11_BOX region,
-                                         GpuCommandStream& original, CancelToken cancellation) noexcept;
+    [[nodiscard]] HRESULT PrepareForWork(
+        ID3D11Device* device, CanvasDocument source, D3D11_BOX region, GpuCommandStream& original, CancelToken cancellation) noexcept;
     // Only after actual prior copy/row acknowledgement, original transport retirement and RestartOwner.
     // The recording policy must validate a fresh original production epoch, not an arbitrary bool or thread ID.
-    [[nodiscard]] HRESULT RecordNextForWork(D3D11_BOX region, GpuCommandStream& original,
-                                            CancelToken cancellation) noexcept;
+    [[nodiscard]] HRESULT RecordNextForWork(D3D11_BOX region, GpuCommandStream& original, CancelToken cancellation) noexcept;
     // Parent separately acknowledges the original recorder and every original command before this call.
     [[nodiscard]] HRESULT PublishRegionOwner(ID3D11DeviceContext* originalImmediate) noexcept;
     // Borrowed exclusively through the following actual staging copy; no composition/upload on the owner.
-    [[nodiscard]] HRESULT BorrowRegionOwner(ID3D11Device* device, ID3D11DeviceContext* immediate,
-                                            ID3D11Texture2D*& texture, D3D11_BOX& localBox) noexcept;
+    [[nodiscard]] HRESULT BorrowRegionOwner(ID3D11Device* device, ID3D11DeviceContext* immediate, ID3D11Texture2D*& texture, D3D11_BOX& localBox) noexcept;
     // Excludes future borrows only; it never asserts copy/GPU/row acknowledgement or refunds admission.
     [[nodiscard]] bool ExcludeRegionOwner() noexcept;
     [[nodiscard]] bool RetireForWork() noexcept;
@@ -33,7 +31,7 @@ class RecordedUtilityGraph final
     // Worker diagnostic only; cumulative byte count survives successful original-region restarts.
     [[nodiscard]] std::uint64_t RecordedUploadBytesForWork() const noexcept;
 
-  private:
+private:
     enum class Phase : std::uint8_t
     {
         Empty,
@@ -48,7 +46,7 @@ class RecordedUtilityGraph final
     [[nodiscard]] HRESULT RecordRegionForWork(D3D11_BOX region) noexcept;
     void ReleaseForWork() noexcept;
     std::uint32_t _ownerThread;
-    Phase _phase = Phase::Empty;
+    Phase _phase          = Phase::Empty;
     bool _utilityAcquired = false;
     CanvasDocument _source;
     D3D11_BOX _region{};

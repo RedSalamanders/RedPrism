@@ -12,8 +12,8 @@
 #define REDPRISM_VERSION_STRINGIZE(value) REDPRISM_VERSION_STRINGIZE_IMPL(value)
 
 #define REDPRISM_VERSION_NUMERIC REDPRISM_VERSION_MAJOR, REDPRISM_VERSION_MINOR, REDPRISM_VERSION_BUILD, 0
-#define REDPRISM_VERSION_STRING                                                                                        \
-    REDPRISM_VERSION_STRINGIZE(REDPRISM_VERSION_MAJOR)                                                                 \
+#define REDPRISM_VERSION_STRING                                                                                                                                \
+    REDPRISM_VERSION_STRINGIZE(REDPRISM_VERSION_MAJOR)                                                                                                         \
     "." REDPRISM_VERSION_STRINGIZE(REDPRISM_VERSION_MINOR) "." REDPRISM_VERSION_STRINGIZE(REDPRISM_VERSION_BUILD) ".0"
 
 #define REDPRISM_VERSION_WIDE_IMPL(value) L##value

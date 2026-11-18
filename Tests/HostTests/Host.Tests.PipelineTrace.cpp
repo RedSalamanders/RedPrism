@@ -33,12 +33,12 @@
 namespace
 {
 constexpr GUID kPipelineTraceProviderGuid{0x7b5d9c3e, 0x42f1, 0x4b76, {0x9a, 0x2d, 0x61, 0xe8, 0xc4, 0xf0, 0x37, 0xa5}};
-constexpr std::uint64_t kOneMiB = 1'048'576;
-constexpr std::uint32_t kUiTimingSentinelDetail = 0xa100;
-constexpr std::uint32_t kUiTimingSuppressedDetail = 0xb100;
-constexpr std::uint32_t kUiTimingWorkerDetail = 0xc100;
-constexpr std::uint32_t kUiResourceStageSentinelDetail = 0xd100;
-constexpr std::uint32_t kUiResourceStageWorkerDetail = 0xe100;
+constexpr std::uint64_t kOneMiB                          = 1'048'576;
+constexpr std::uint32_t kUiTimingSentinelDetail          = 0xa100;
+constexpr std::uint32_t kUiTimingSuppressedDetail        = 0xb100;
+constexpr std::uint32_t kUiTimingWorkerDetail            = 0xc100;
+constexpr std::uint32_t kUiResourceStageSentinelDetail   = 0xd100;
+constexpr std::uint32_t kUiResourceStageWorkerDetail     = 0xe100;
 constexpr std::uint32_t kUiResourceStageSuppressedDetail = 0xf100;
 
 constexpr std::array<std::uint32_t, 6> kUiResourceStageExpectedIds{6, 7, 8, 9, 10, 11};
@@ -87,15 +87,14 @@ constexpr std::array<TimingSentinel, 6> kUiResourceStageWorkerSentinels{{
     {kUiResourceStageWorkerDetail + 6, 216'006},
 }};
 constexpr TimingSentinel kUiResourceStageSuppressedSentinel{kUiResourceStageSuppressedDetail + 1, 4'000};
-constexpr std::array<std::wstring_view, 6> kUiTimingEventNames{L"UiDispatch", L"UiMessage", L"UiDrain",
-                                                               L"UiApply",    L"UiAction",  L"UiFrame"};
+constexpr std::array<std::wstring_view, 6> kUiTimingEventNames{L"UiDispatch", L"UiMessage", L"UiDrain", L"UiApply", L"UiAction", L"UiFrame"};
 
 int g_failures = 0;
 
 void Expect(bool condition, const char* name) noexcept
 {
     std::printf("%s pipeline-trace.%s\n", condition ? "PASS" : "FAIL", name);
-    if (!condition)
+    if (! condition)
     {
         ++g_failures;
     }
@@ -110,13 +109,13 @@ struct SessionProperties final
 
 struct EventCapture final
 {
-    DWORD uiThreadId = 0;
-    std::uint32_t uiFreeEvents = 0;
-    std::uint32_t workerFreeEvents = 0;
+    DWORD uiThreadId                    = 0;
+    std::uint32_t uiFreeEvents          = 0;
+    std::uint32_t workerFreeEvents      = 0;
     std::uint32_t otherThreadFreeEvents = 0;
-    std::uint32_t undecodedEvents = 0;
-    std::uint32_t largeUiFrees = 0;
-    std::uint64_t uiFreeBytes = 0;
+    std::uint32_t undecodedEvents       = 0;
+    std::uint32_t largeUiFrees          = 0;
+    std::uint64_t uiFreeBytes           = 0;
     std::array<std::uint32_t, 6> uiTimingEvents{};
     std::array<std::uint32_t, 6> uiTimingOwnerEvents{};
     std::array<std::uint32_t, 6> uiTimingKeywordEvents{};
@@ -133,24 +132,21 @@ bool ReadTraceUInt32(PEVENT_RECORD record, const wchar_t* name, std::uint32_t& v
 {
     PROPERTY_DATA_DESCRIPTOR property{};
     property.PropertyName = reinterpret_cast<ULONGLONG>(name);
-    property.ArrayIndex = ULONG_MAX;
-    return TdhGetProperty(record, 0, nullptr, 1, &property, sizeof(value), reinterpret_cast<BYTE*>(&value)) ==
-           ERROR_SUCCESS;
+    property.ArrayIndex   = ULONG_MAX;
+    return TdhGetProperty(record, 0, nullptr, 1, &property, sizeof(value), reinterpret_cast<BYTE*>(&value)) == ERROR_SUCCESS;
 }
 
 bool ReadTraceUInt64(PEVENT_RECORD record, const wchar_t* name, std::uint64_t& value) noexcept
 {
     PROPERTY_DATA_DESCRIPTOR property{};
     property.PropertyName = reinterpret_cast<ULONGLONG>(name);
-    property.ArrayIndex = ULONG_MAX;
-    return TdhGetProperty(record, 0, nullptr, 1, &property, sizeof(value), reinterpret_cast<BYTE*>(&value)) ==
-           ERROR_SUCCESS;
+    property.ArrayIndex   = ULONG_MAX;
+    return TdhGetProperty(record, 0, nullptr, 1, &property, sizeof(value), reinterpret_cast<BYTE*>(&value)) == ERROR_SUCCESS;
 }
 
 void WINAPI CaptureEvent(PEVENT_RECORD record) noexcept
 {
-    if (record == nullptr || record->UserContext == nullptr ||
-        !IsEqualGUID(record->EventHeader.ProviderId, kPipelineTraceProviderGuid))
+    if (record == nullptr || record->UserContext == nullptr || ! IsEqualGUID(record->EventHeader.ProviderId, kPipelineTraceProviderGuid))
     {
         return;
     }
@@ -158,14 +154,13 @@ void WINAPI CaptureEvent(PEVENT_RECORD record) noexcept
     auto& capture = *static_cast<EventCapture*>(record->UserContext);
     alignas(TRACE_EVENT_INFO) std::array<std::byte, 4096> metadata{};
     ULONG metadataBytes = static_cast<ULONG>(metadata.size());
-    if (TdhGetEventInformation(record, 0, nullptr, reinterpret_cast<PTRACE_EVENT_INFO>(metadata.data()),
-                               &metadataBytes) != ERROR_SUCCESS)
+    if (TdhGetEventInformation(record, 0, nullptr, reinterpret_cast<PTRACE_EVENT_INFO>(metadata.data()), &metadataBytes) != ERROR_SUCCESS)
     {
         ++capture.undecodedEvents;
         return;
     }
 
-    const auto* eventInfo = reinterpret_cast<const TRACE_EVENT_INFO*>(metadata.data());
+    const auto* eventInfo  = reinterpret_cast<const TRACE_EVENT_INFO*>(metadata.data());
     const ULONG nameOffset = eventInfo->EventNameOffset;
     if (nameOffset < sizeof(TRACE_EVENT_INFO) || nameOffset >= metadataBytes || metadataBytes > metadata.size() ||
         (metadataBytes - nameOffset) < sizeof(wchar_t))
@@ -174,9 +169,9 @@ void WINAPI CaptureEvent(PEVENT_RECORD record) noexcept
         return;
     }
 
-    const auto* eventName = reinterpret_cast<const wchar_t*>(metadata.data() + nameOffset);
+    const auto* eventName            = reinterpret_cast<const wchar_t*>(metadata.data() + nameOffset);
     const std::size_t availableChars = (metadataBytes - nameOffset) / sizeof(wchar_t);
-    std::size_t eventNameLength = 0;
+    std::size_t eventNameLength      = 0;
     while (eventNameLength < availableChars && eventName[eventNameLength] != L'\0')
     {
         ++eventNameLength;
@@ -189,11 +184,10 @@ void WINAPI CaptureEvent(PEVENT_RECORD record) noexcept
     const std::wstring_view eventNameView{eventName, eventNameLength};
     if (eventNameView == L"UiResourceStage")
     {
-        std::uint32_t stage = 0;
-        std::uint32_t detail = 0;
+        std::uint32_t stage      = 0;
+        std::uint32_t detail     = 0;
         std::uint64_t durationUs = 0;
-        if (!ReadTraceUInt32(record, L"stage", stage) || !ReadTraceUInt32(record, L"detail", detail) ||
-            !ReadTraceUInt64(record, L"durationUs", durationUs))
+        if (! ReadTraceUInt32(record, L"stage", stage) || ! ReadTraceUInt32(record, L"detail", detail) || ! ReadTraceUInt64(record, L"durationUs", durationUs))
         {
             ++capture.undecodedEvents;
             return;
@@ -248,19 +242,18 @@ void WINAPI CaptureEvent(PEVENT_RECORD record) noexcept
             return;
         }
 
-        std::uint32_t detail = 0;
-        const bool hasDetail = timingIndex == 0 || timingIndex == 1 || timingIndex == 3;
+        std::uint32_t detail            = 0;
+        const bool hasDetail            = timingIndex == 0 || timingIndex == 1 || timingIndex == 3;
         const wchar_t* const detailName = timingIndex == 3 ? L"jobClass" : L"msg";
-        std::uint64_t durationUs = 0;
-        if ((hasDetail && !ReadTraceUInt32(record, detailName, detail)) ||
-            !ReadTraceUInt64(record, L"durationUs", durationUs))
+        std::uint64_t durationUs        = 0;
+        if ((hasDetail && ! ReadTraceUInt32(record, detailName, detail)) || ! ReadTraceUInt64(record, L"durationUs", durationUs))
         {
             ++capture.undecodedEvents;
             return;
         }
 
         const auto matches = [detail, durationUs, hasDetail](const TimingSentinel& sentinel) noexcept
-        { return durationUs == sentinel.durationUs && (!hasDetail || detail == sentinel.detail); };
+        { return durationUs == sentinel.durationUs && (! hasDetail || detail == sentinel.detail); };
         if (timingIndex < kUiTimingSentinels.size() && matches(kUiTimingSentinels[timingIndex]))
         {
             ++capture.uiTimingEvents[timingIndex];
@@ -289,10 +282,9 @@ void WINAPI CaptureEvent(PEVENT_RECORD record) noexcept
         ++capture.uiFreeEvents;
         PROPERTY_DATA_DESCRIPTOR property{};
         property.PropertyName = reinterpret_cast<ULONGLONG>(L"bytes");
-        property.ArrayIndex = ULONG_MAX;
-        std::uint64_t bytes = 0;
-        if (TdhGetProperty(record, 0, nullptr, 1, &property, sizeof(bytes), reinterpret_cast<BYTE*>(&bytes)) !=
-            ERROR_SUCCESS)
+        property.ArrayIndex   = ULONG_MAX;
+        std::uint64_t bytes   = 0;
+        if (TdhGetProperty(record, 0, nullptr, 1, &property, sizeof(bytes), reinterpret_cast<BYTE*>(&bytes)) != ERROR_SUCCESS)
         {
             ++capture.undecodedEvents;
         }
@@ -333,23 +325,21 @@ bool BuildSessionNames(SessionProperties& session, std::wstring& loggerName)
     return wcscpy_s(session.loggerName, loggerName.c_str()) == 0;
 }
 
-bool StartCapture(SessionProperties& session, TRACEHANDLE& traceSession, const std::wstring& loggerName,
-                  const std::wstring& logPath) noexcept
+bool StartCapture(SessionProperties& session, TRACEHANDLE& traceSession, const std::wstring& loggerName, const std::wstring& logPath) noexcept
 {
     if (wcscpy_s(session.logFile, logPath.c_str()) != 0)
     {
         return false;
     }
-    session.properties.Wnode.BufferSize = static_cast<ULONG>(sizeof(SessionProperties));
-    session.properties.Wnode.Guid = kPipelineTraceProviderGuid;
-    session.properties.Wnode.Flags = WNODE_FLAG_TRACED_GUID;
-    session.properties.BufferSize = 64;
-    session.properties.MinimumBuffers = 2;
-    session.properties.MaximumBuffers = 8;
-    session.properties.LogFileMode =
-        EVENT_TRACE_FILE_MODE_SEQUENTIAL | EVENT_TRACE_PRIVATE_LOGGER_MODE | EVENT_TRACE_PRIVATE_IN_PROC;
+    session.properties.Wnode.BufferSize  = static_cast<ULONG>(sizeof(SessionProperties));
+    session.properties.Wnode.Guid        = kPipelineTraceProviderGuid;
+    session.properties.Wnode.Flags       = WNODE_FLAG_TRACED_GUID;
+    session.properties.BufferSize        = 64;
+    session.properties.MinimumBuffers    = 2;
+    session.properties.MaximumBuffers    = 8;
+    session.properties.LogFileMode       = EVENT_TRACE_FILE_MODE_SEQUENTIAL | EVENT_TRACE_PRIVATE_LOGGER_MODE | EVENT_TRACE_PRIVATE_IN_PROC;
     session.properties.LogFileNameOffset = static_cast<ULONG>(offsetof(SessionProperties, logFile));
-    session.properties.LoggerNameOffset = static_cast<ULONG>(offsetof(SessionProperties, loggerName));
+    session.properties.LoggerNameOffset  = static_cast<ULONG>(offsetof(SessionProperties, loggerName));
 
     const ULONG startStatus = StartTraceW(&traceSession, loggerName.c_str(), &session.properties);
     if (startStatus != ERROR_SUCCESS)
@@ -358,9 +348,8 @@ bool StartCapture(SessionProperties& session, TRACEHANDLE& traceSession, const s
         return false;
     }
 
-    const ULONG enableStatus =
-        EnableTraceEx2(traceSession, &kPipelineTraceProviderGuid, EVENT_CONTROL_CODE_ENABLE_PROVIDER,
-                       TRACE_LEVEL_VERBOSE, 0xffffffffffffffffULL, 0, 0, nullptr);
+    const ULONG enableStatus = EnableTraceEx2(
+        traceSession, &kPipelineTraceProviderGuid, EVENT_CONTROL_CODE_ENABLE_PROVIDER, TRACE_LEVEL_VERBOSE, 0xffffffffffffffffULL, 0, 0, nullptr);
     if (enableStatus != ERROR_SUCCESS)
     {
         std::printf("INFO pipeline-trace.EnableTraceEx2=%lu\n", enableStatus);
@@ -385,12 +374,11 @@ int RunPipelineTraceTests()
     const std::wstring suffixedLogPath = logPath + L"_" + std::to_wstring(GetCurrentProcessId());
     (void)DeleteFileW(logPath.c_str());
     (void)DeleteFileW(suffixedLogPath.c_str());
-    auto deleteEtls = wil::scope_exit(
-        [&]() noexcept
-        {
-            (void)DeleteFileW(logPath.c_str());
-            (void)DeleteFileW(suffixedLogPath.c_str());
-        });
+    auto deleteEtls = wil::scope_exit([&]() noexcept
+    {
+        (void)DeleteFileW(logPath.c_str());
+        (void)DeleteFileW(suffixedLogPath.c_str());
+    });
 
     const std::int32_t initializeStatus = InitializePipelineTrace();
     Expect(SUCCEEDED(static_cast<HRESULT>(initializeStatus)), "initialize-provider");
@@ -409,20 +397,19 @@ int RunPipelineTraceTests()
     }
 
     TRACEHANDLE traceSession = 0;
-    if (!StartCapture(session, traceSession, loggerName, logPath))
+    if (! StartCapture(session, traceSession, loggerName, logPath))
     {
         Expect(false, "start-private-in-process-etw-session");
         return g_failures;
     }
     bool sessionRunning = true;
-    auto stopSession = wil::scope_exit(
-        [&]() noexcept
+    auto stopSession    = wil::scope_exit([&]() noexcept
+    {
+        if (sessionRunning)
         {
-            if (sessionRunning)
-            {
-                (void)ControlTraceW(traceSession, loggerName.c_str(), &session.properties, EVENT_TRACE_CONTROL_STOP);
-            }
-        });
+            (void)ControlTraceW(traceSession, loggerName.c_str(), &session.properties, EVENT_TRACE_CONTROL_STOP);
+        }
+    });
     Expect(true, "start-private-in-process-etw-session");
 
     EventCapture capture{};
@@ -436,59 +423,40 @@ int RunPipelineTraceTests()
     TracePipelineUi(UiTimingKind::UiAction, kUiTimingSentinels[4].durationUs, 0);
     TracePipelineUi(UiTimingKind::Frame, kUiTimingSentinels[5].durationUs, 0);
 
-    TracePipelineUi(UiTimingKind::TextureCreate, kUiResourceStageSentinels[0].durationUs,
-                    kUiResourceStageSentinels[0].detail);
-    TracePipelineUi(UiTimingKind::ShaderViewCreate, kUiResourceStageSentinels[1].durationUs,
-                    kUiResourceStageSentinels[1].detail);
-    TracePipelineUi(UiTimingKind::MipGeneration, kUiResourceStageSentinels[2].durationUs,
-                    kUiResourceStageSentinels[2].detail);
-    TracePipelineUi(UiTimingKind::RasterUpload, kUiResourceStageSentinels[3].durationUs,
-                    kUiResourceStageSentinels[3].detail);
-    TracePipelineUi(UiTimingKind::CompositionRecord, kUiResourceStageSentinels[4].durationUs,
-                    kUiResourceStageSentinels[4].detail);
-    TracePipelineUi(UiTimingKind::ChromeSync, kUiResourceStageSentinels[5].durationUs,
-                    kUiResourceStageSentinels[5].detail);
-    TracePipelineUi(UiTimingKind::ChromeSync, kUiResourceStageSuppressedSentinel.durationUs,
-                    kUiResourceStageSuppressedSentinel.detail);
+    TracePipelineUi(UiTimingKind::TextureCreate, kUiResourceStageSentinels[0].durationUs, kUiResourceStageSentinels[0].detail);
+    TracePipelineUi(UiTimingKind::ShaderViewCreate, kUiResourceStageSentinels[1].durationUs, kUiResourceStageSentinels[1].detail);
+    TracePipelineUi(UiTimingKind::MipGeneration, kUiResourceStageSentinels[2].durationUs, kUiResourceStageSentinels[2].detail);
+    TracePipelineUi(UiTimingKind::RasterUpload, kUiResourceStageSentinels[3].durationUs, kUiResourceStageSentinels[3].detail);
+    TracePipelineUi(UiTimingKind::CompositionRecord, kUiResourceStageSentinels[4].durationUs, kUiResourceStageSentinels[4].detail);
+    TracePipelineUi(UiTimingKind::ChromeSync, kUiResourceStageSentinels[5].durationUs, kUiResourceStageSentinels[5].detail);
+    TracePipelineUi(UiTimingKind::ChromeSync, kUiResourceStageSuppressedSentinel.durationUs, kUiResourceStageSuppressedSentinel.detail);
 
-    TracePipelineUi(UiTimingKind::MessageDispatch, kUiTimingSuppressedSentinels[0].durationUs,
-                    kUiTimingSuppressedSentinels[0].detail);
-    TracePipelineUi(UiTimingKind::WindowMessage, kUiTimingSuppressedSentinels[1].durationUs,
-                    kUiTimingSuppressedSentinels[1].detail);
+    TracePipelineUi(UiTimingKind::MessageDispatch, kUiTimingSuppressedSentinels[0].durationUs, kUiTimingSuppressedSentinels[0].detail);
+    TracePipelineUi(UiTimingKind::WindowMessage, kUiTimingSuppressedSentinels[1].durationUs, kUiTimingSuppressedSentinels[1].detail);
     TracePipelineUi(UiTimingKind::CompletionDrain, kUiTimingSuppressedSentinels[2].durationUs, 0);
 
     std::atomic<bool> workerTimingEnabled{true};
     TracePipelineFree(kOneMiB - 1);
     TracePipelineFree(kOneMiB);
-    std::thread worker(
-        [&workerTimingEnabled]() noexcept
-        {
-            workerTimingEnabled.store(PipelineUiTimingEnabled(), std::memory_order_relaxed);
-            TracePipelineFree(kOneMiB * 2);
-            TracePipelineUi(UiTimingKind::MessageDispatch, kUiTimingWorkerSentinels[0].durationUs,
-                            kUiTimingWorkerSentinels[0].detail);
-            TracePipelineUi(UiTimingKind::WindowMessage, kUiTimingWorkerSentinels[1].durationUs,
-                            kUiTimingWorkerSentinels[1].detail);
-            TracePipelineUi(UiTimingKind::CompletionDrain, kUiTimingWorkerSentinels[2].durationUs, 0);
-            TracePipelineUi(UiTimingKind::ResultApply, kUiTimingWorkerSentinels[3].durationUs,
-                            kUiTimingWorkerSentinels[3].detail);
-            TracePipelineUi(UiTimingKind::UiAction, kUiTimingWorkerSentinels[4].durationUs, 0);
-            TracePipelineUi(UiTimingKind::Frame, kUiTimingWorkerSentinels[5].durationUs, 0);
-            TracePipelineUi(UiTimingKind::TextureCreate, kUiResourceStageWorkerSentinels[0].durationUs,
-                            kUiResourceStageWorkerSentinels[0].detail);
-            TracePipelineUi(UiTimingKind::ShaderViewCreate, kUiResourceStageWorkerSentinels[1].durationUs,
-                            kUiResourceStageWorkerSentinels[1].detail);
-            TracePipelineUi(UiTimingKind::MipGeneration, kUiResourceStageWorkerSentinels[2].durationUs,
-                            kUiResourceStageWorkerSentinels[2].detail);
-            TracePipelineUi(UiTimingKind::RasterUpload, kUiResourceStageWorkerSentinels[3].durationUs,
-                            kUiResourceStageWorkerSentinels[3].detail);
-            TracePipelineUi(UiTimingKind::CompositionRecord, kUiResourceStageWorkerSentinels[4].durationUs,
-                            kUiResourceStageWorkerSentinels[4].detail);
-            TracePipelineUi(UiTimingKind::ChromeSync, kUiResourceStageWorkerSentinels[5].durationUs,
-                            kUiResourceStageWorkerSentinels[5].detail);
-        });
+    std::thread worker([&workerTimingEnabled]() noexcept
+    {
+        workerTimingEnabled.store(PipelineUiTimingEnabled(), std::memory_order_relaxed);
+        TracePipelineFree(kOneMiB * 2);
+        TracePipelineUi(UiTimingKind::MessageDispatch, kUiTimingWorkerSentinels[0].durationUs, kUiTimingWorkerSentinels[0].detail);
+        TracePipelineUi(UiTimingKind::WindowMessage, kUiTimingWorkerSentinels[1].durationUs, kUiTimingWorkerSentinels[1].detail);
+        TracePipelineUi(UiTimingKind::CompletionDrain, kUiTimingWorkerSentinels[2].durationUs, 0);
+        TracePipelineUi(UiTimingKind::ResultApply, kUiTimingWorkerSentinels[3].durationUs, kUiTimingWorkerSentinels[3].detail);
+        TracePipelineUi(UiTimingKind::UiAction, kUiTimingWorkerSentinels[4].durationUs, 0);
+        TracePipelineUi(UiTimingKind::Frame, kUiTimingWorkerSentinels[5].durationUs, 0);
+        TracePipelineUi(UiTimingKind::TextureCreate, kUiResourceStageWorkerSentinels[0].durationUs, kUiResourceStageWorkerSentinels[0].detail);
+        TracePipelineUi(UiTimingKind::ShaderViewCreate, kUiResourceStageWorkerSentinels[1].durationUs, kUiResourceStageWorkerSentinels[1].detail);
+        TracePipelineUi(UiTimingKind::MipGeneration, kUiResourceStageWorkerSentinels[2].durationUs, kUiResourceStageWorkerSentinels[2].detail);
+        TracePipelineUi(UiTimingKind::RasterUpload, kUiResourceStageWorkerSentinels[3].durationUs, kUiResourceStageWorkerSentinels[3].detail);
+        TracePipelineUi(UiTimingKind::CompositionRecord, kUiResourceStageWorkerSentinels[4].durationUs, kUiResourceStageWorkerSentinels[4].detail);
+        TracePipelineUi(UiTimingKind::ChromeSync, kUiResourceStageWorkerSentinels[5].durationUs, kUiResourceStageWorkerSentinels[5].detail);
+    });
     worker.join();
-    Expect(!workerTimingEnabled.load(std::memory_order_relaxed), "worker-ui-timing-disabled");
+    Expect(! workerTimingEnabled.load(std::memory_order_relaxed), "worker-ui-timing-disabled");
 
     // A real inline free is a second positive control: the production allocator must reach the provider.
     {
@@ -500,21 +468,20 @@ int RunPipelineTraceTests()
         Expect(scheduler.Initialize(2) == S_OK && scheduler.EnableDeferredRelease(), "real-release-queue");
         Expect(InitializePixelBufferRecycle(128 * kOneMiB), "real-recycle-initialize");
         auto closePool = wil::scope_exit([]() noexcept { ClosePixelBufferRecycle(); });
-        auto direct = PixelBuffer::TryAllocate(16 * kOneMiB);
-        auto adopted = PixelBuffer::TryAllocate(16 * kOneMiB);
+        auto direct    = PixelBuffer::TryAllocate(16 * kOneMiB);
+        auto adopted   = PixelBuffer::TryAllocate(16 * kOneMiB);
         Expect(direct && adopted, "real-large-allocations");
         if (direct && adopted)
         {
             std::memset(direct.Data(), 0x37, direct.Size());
             std::memset(adopted.Data(), 0x75, adopted.Size());
-            auto image = Raster::Adopt(2048, 2048, RasterFormat::Bgra8888, std::move(adopted));
+            auto image  = Raster::Adopt(2048, 2048, RasterFormat::Bgra8888, std::move(adopted));
             auto copied = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
-            direct = {};
-            image = {};
-            copied = {};
+            direct      = {};
+            image       = {};
+            copied      = {};
             Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "real-large-releases-settled");
-            Expect(PixelBufferRecycleBytes() == 2 * PixelBuffer::RequiredBytes(16 * kOneMiB),
-                   "real-direct-and-adopted-buffers-returned-exactly-once");
+            Expect(PixelBufferRecycleBytes() == 2 * PixelBuffer::RequiredBytes(16 * kOneMiB), "real-direct-and-adopted-buffers-returned-exactly-once");
         }
         scheduler.Close();
         // Include worker cache trimming in the trace; it must not generate an owner-thread free either.
@@ -524,19 +491,18 @@ int RunPipelineTraceTests()
     }
 
     SessionProperties stopped{};
-    stopped.properties.Wnode.BufferSize = sizeof(stopped);
-    stopped.properties.Wnode.Guid = kPipelineTraceProviderGuid;
-    stopped.properties.Wnode.Flags = WNODE_FLAG_TRACED_GUID;
-    stopped.properties.LogFileMode = session.properties.LogFileMode;
-    stopped.properties.LoggerNameOffset = offsetof(SessionProperties, loggerName);
+    stopped.properties.Wnode.BufferSize  = sizeof(stopped);
+    stopped.properties.Wnode.Guid        = kPipelineTraceProviderGuid;
+    stopped.properties.Wnode.Flags       = WNODE_FLAG_TRACED_GUID;
+    stopped.properties.LogFileMode       = session.properties.LogFileMode;
+    stopped.properties.LoggerNameOffset  = offsetof(SessionProperties, loggerName);
     stopped.properties.LogFileNameOffset = offsetof(SessionProperties, logFile);
-    const ULONG stopStatus =
-        ControlTraceW(traceSession, loggerName.c_str(), &stopped.properties, EVENT_TRACE_CONTROL_STOP);
-    sessionRunning = stopStatus != ERROR_SUCCESS;
+    const ULONG stopStatus               = ControlTraceW(traceSession, loggerName.c_str(), &stopped.properties, EVENT_TRACE_CONTROL_STOP);
+    sessionRunning                       = stopStatus != ERROR_SUCCESS;
     if (stopStatus != ERROR_SUCCESS)
     {
-        std::printf("INFO pipeline-trace.ControlTraceW=%lu guid=%08lx mode=%08lx\n", stopStatus,
-                    session.properties.Wnode.Guid.Data1, session.properties.LogFileMode);
+        std::printf(
+            "INFO pipeline-trace.ControlTraceW=%lu guid=%08lx mode=%08lx\n", stopStatus, session.properties.Wnode.Guid.Data1, session.properties.LogFileMode);
     }
     Expect(stopStatus == ERROR_SUCCESS, "stop-and-flush-session");
     if (stopStatus != ERROR_SUCCESS)
@@ -545,8 +511,7 @@ int RunPipelineTraceTests()
     }
 
     std::array<wchar_t, MAX_PATH> actualLogPath{};
-    DWORD pathLength =
-        GetFileAttributesW(logPath.c_str()) != INVALID_FILE_ATTRIBUTES ? static_cast<DWORD>(logPath.size()) : 0;
+    DWORD pathLength = GetFileAttributesW(logPath.c_str()) != INVALID_FILE_ATTRIBUTES ? static_cast<DWORD>(logPath.size()) : 0;
     if (pathLength != 0)
     {
         (void)wcscpy_s(actualLogPath.data(), actualLogPath.size(), logPath.c_str());
@@ -564,11 +529,11 @@ int RunPipelineTraceTests()
 
     EventCapture* const callbackContext = &capture;
     EVENT_TRACE_LOGFILEW logfile{};
-    logfile.LogFileName = actualLogPath.data();
-    logfile.ProcessTraceMode = PROCESS_TRACE_MODE_EVENT_RECORD;
+    logfile.LogFileName         = actualLogPath.data();
+    logfile.ProcessTraceMode    = PROCESS_TRACE_MODE_EVENT_RECORD;
     logfile.EventRecordCallback = CaptureEvent;
-    logfile.Context = callbackContext;
-    TRACEHANDLE consumer = OpenTraceW(&logfile);
+    logfile.Context             = callbackContext;
+    TRACEHANDLE consumer        = OpenTraceW(&logfile);
     Expect(consumer != INVALID_PROCESSTRACE_HANDLE, "open-etl-consumer");
     if (consumer == INVALID_PROCESSTRACE_HANDLE)
     {
@@ -581,27 +546,18 @@ int RunPipelineTraceTests()
     Expect(stopped.properties.EventsLost == 0 && stopped.properties.LogBuffersLost == 0, "no-lost-trace-events");
     Expect(capture.undecodedEvents == 0, "decode-tracelogging-metadata");
     Expect(capture.uiFreeEvents == 2, "two-ui-positive-controls-and-no-large-ui-free");
-    Expect(capture.uiFreeBytes == 2 * kOneMiB && capture.largeUiFrees == 0,
-           "decoded-free-sizes-exclude-any-large-ui-destruction");
+    Expect(capture.uiFreeBytes == 2 * kOneMiB && capture.largeUiFrees == 0, "decoded-free-sizes-exclude-any-large-ui-destruction");
     Expect(capture.workerFreeEvents == 0 && capture.otherThreadFreeEvents == 0, "worker-one-mib-free-not-emitted");
-    Expect(capture.uiTimingEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
-           "decode-all-six-ui-timing-events-and-properties");
-    Expect(capture.uiTimingOwnerEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
-           "ui-timing-events-run-on-owner-thread");
-    Expect(capture.uiTimingKeywordEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
-           "ui-timing-events-use-keyword-four");
-    Expect(capture.suppressedTimingEvents == std::array<std::uint32_t, 3>{0, 0, 0},
-           "dispatch-message-drain-at-or-below-four-ms-suppressed");
-    Expect(capture.workerTimingEvents == std::array<std::uint32_t, 6>{0, 0, 0, 0, 0, 0},
-           "worker-ui-timing-events-suppressed");
+    Expect(capture.uiTimingEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1}, "decode-all-six-ui-timing-events-and-properties");
+    Expect(capture.uiTimingOwnerEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1}, "ui-timing-events-run-on-owner-thread");
+    Expect(capture.uiTimingKeywordEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1}, "ui-timing-events-use-keyword-four");
+    Expect(capture.suppressedTimingEvents == std::array<std::uint32_t, 3>{0, 0, 0}, "dispatch-message-drain-at-or-below-four-ms-suppressed");
+    Expect(capture.workerTimingEvents == std::array<std::uint32_t, 6>{0, 0, 0, 0, 0, 0}, "worker-ui-timing-events-suppressed");
     Expect(capture.uiResourceStageEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
            "decode-all-six-resource-stage-events-and-properties-for-ids-6-through-11");
-    Expect(capture.uiResourceStageOwnerEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
-           "resource-stage-events-run-on-owner-thread");
-    Expect(capture.uiResourceStageKeywordEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
-           "resource-stage-events-use-keyword-four");
-    Expect(capture.workerResourceStageEvents == std::array<std::uint32_t, 6>{0, 0, 0, 0, 0, 0},
-           "worker-resource-stage-events-suppressed");
+    Expect(capture.uiResourceStageOwnerEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1}, "resource-stage-events-run-on-owner-thread");
+    Expect(capture.uiResourceStageKeywordEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1}, "resource-stage-events-use-keyword-four");
+    Expect(capture.workerResourceStageEvents == std::array<std::uint32_t, 6>{0, 0, 0, 0, 0, 0}, "worker-resource-stage-events-suppressed");
     Expect(capture.suppressedChromeSyncEvents == 0, "chrome-sync-at-four-ms-suppressed");
     return g_failures;
 }

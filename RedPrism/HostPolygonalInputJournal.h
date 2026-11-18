@@ -17,8 +17,8 @@
 // accepted younger Down records when the first original parent retires.
 class HostPolygonalInputJournal final
 {
-  public:
-    using Context = HostSelectionPressInput::Context;
+public:
+    using Context   = HostSelectionPressInput::Context;
     using Modifiers = HostSelectionPressInput::Modifiers;
     enum class Action : std::uint8_t
     {
@@ -44,10 +44,10 @@ class HostPolygonalInputJournal final
         Vec2 point{};
         Modifiers modifiers{};
         std::uint64_t ordinal = 0;
-        double viewScale = 1; // Physical view pixels per document pixel at this event.
-        bool antialiased = true;
-        bool doubleClick = false;
-        bool leftDown = false;
+        double viewScale      = 1; // Physical view pixels per document pixel at this event.
+        bool antialiased      = true;
+        bool doubleClick      = false;
+        bool leftDown         = false;
         Vec2 viewPoint{};
         Vec2 documentOrigin{};
         double dipScale = 1; // Physical view pixels per DIP, including the event-time DPI.
@@ -63,55 +63,52 @@ class HostPolygonalInputJournal final
     static_assert(std::is_trivially_copyable_v<Event> && std::is_trivially_destructible_v<Event>);
     static_assert(std::is_nothrow_copy_constructible_v<Event> && std::is_nothrow_copy_assignable_v<Event>);
 
-    HostPolygonalInputJournal() noexcept = default;
-    HostPolygonalInputJournal(const HostPolygonalInputJournal&) = delete;
+    HostPolygonalInputJournal() noexcept                                   = default;
+    HostPolygonalInputJournal(const HostPolygonalInputJournal&)            = delete;
     HostPolygonalInputJournal& operator=(const HostPolygonalInputJournal&) = delete;
-    HostPolygonalInputJournal(HostPolygonalInputJournal&&) = delete;
-    HostPolygonalInputJournal& operator=(HostPolygonalInputJournal&&) = delete;
+    HostPolygonalInputJournal(HostPolygonalInputJournal&&)                 = delete;
+    HostPolygonalInputJournal& operator=(HostPolygonalInputJournal&&)      = delete;
 
     // Same arithmetic and 8-DIP radius as EditorCanvas/SelectionPress. The original first point is
     // chosen by replay; all view operands come from this physical event, never the current viewport.
     [[nodiscard]] static std::optional<bool> NearFirst(const Sample& sample, Vec2 first) noexcept
     {
-        if (!Valid(sample) || !std::isfinite(first.x) || !std::isfinite(first.y))
+        if (! Valid(sample) || ! std::isfinite(first.x) || ! std::isfinite(first.y))
             return std::nullopt;
-        const Vec2 firstView{sample.documentOrigin.x + first.x * sample.viewScale,
-                             sample.documentOrigin.y + first.y * sample.viewScale};
+        const Vec2 firstView{sample.documentOrigin.x + first.x * sample.viewScale, sample.documentOrigin.y + first.y * sample.viewScale};
         return std::hypot(sample.viewPoint.x - firstView.x, sample.viewPoint.y - firstView.y) <= 8.0 * sample.dipScale;
     }
 
     [[nodiscard]] bool Begin(std::uint64_t stream, const Context& context, Sample sample) noexcept
     {
-        if (_stream || !stream || stream <= _lastStream || !Valid(context, sample))
+        if (_stream || ! stream || stream <= _lastStream || ! Valid(context, sample))
             return false;
         _stream = _lastStream = stream;
-        _document = context.document;
-        _front = 0;
-        _size = 1;
+        _document             = context.document;
+        _front                = 0;
+        _size                 = 1;
         _events[0].emplace(Event{Action::Down, sample, context});
-        _last = sample;
+        _last   = sample;
         _closed = _overflow = _lostConsumed = false;
         _lost.reset();
         return true;
     }
     [[nodiscard]] Admission Down(std::uint64_t stream, const Context& context, Sample sample) noexcept
     {
-        if (!_stream || stream != _stream)
+        if (! _stream || stream != _stream)
             return Admission::Stale;
         if (_closed)
             return Admission::Closed;
-        if (!Valid(context, sample))
+        if (! Valid(context, sample))
             return Admission::Invalid;
-        if (context.document.sessionIdentity != _document.sessionIdentity ||
-            context.document.documentSerial != _document.documentSerial ||
-            context.document.canvasWidth != _document.canvasWidth ||
-            context.document.canvasHeight != _document.canvasHeight)
+        if (context.document.sessionIdentity != _document.sessionIdentity || context.document.documentSerial != _document.documentSerial ||
+            context.document.canvasWidth != _document.canvasWidth || context.document.canvasHeight != _document.canvasHeight)
             return Admission::Stale;
         return Append(stream, Event{Action::Down, sample, context});
     }
     [[nodiscard]] Admission Record(std::uint64_t stream, Action action, Sample sample) noexcept
     {
-        if (!_stream || stream != _stream)
+        if (! _stream || stream != _stream)
             return Admission::Stale;
         if (_closed)
             return Admission::Closed;
@@ -121,7 +118,7 @@ class HostPolygonalInputJournal final
     }
     [[nodiscard]] Admission SealLost(std::uint64_t stream) noexcept
     {
-        if (!_stream || stream != _stream)
+        if (! _stream || stream != _stream)
             return Admission::Stale;
         if (_closed)
             return Admission::Closed;
@@ -133,7 +130,7 @@ class HostPolygonalInputJournal final
     }
     [[nodiscard]] std::optional<Event> Peek(std::uint64_t stream) const noexcept
     {
-        if (!_stream || stream != _stream)
+        if (! _stream || stream != _stream)
             return std::nullopt;
         if (_size)
             return _events[_front];
@@ -142,7 +139,7 @@ class HostPolygonalInputJournal final
     [[nodiscard]] std::optional<Event> Take(std::uint64_t stream) noexcept
     {
         auto result = Peek(stream);
-        if (!result)
+        if (! result)
             return std::nullopt;
         if (_size)
         {
@@ -158,7 +155,7 @@ class HostPolygonalInputJournal final
     // Physical Up and one original parent's completion must never call this for a still-live family.
     [[nodiscard]] bool CloseInput(std::uint64_t stream) noexcept
     {
-        if (!_stream || stream != _stream || _closed)
+        if (! _stream || stream != _stream || _closed)
             return false;
         _closed = true;
         return true;
@@ -167,18 +164,18 @@ class HostPolygonalInputJournal final
     // unread conditional gestures across that parent's acknowledgement and admit them in host order.
     [[nodiscard]] bool Finish(std::uint64_t stream) noexcept
     {
-        if (!_stream || stream != _stream || !_closed || _size || (_lost && !_lostConsumed))
+        if (! _stream || stream != _stream || ! _closed || _size || (_lost && ! _lostConsumed))
             return false;
-        _stream = 0;
+        _stream   = 0;
         _document = {};
-        _last = {};
+        _last     = {};
         _lost.reset();
         _closed = _overflow = _lostConsumed = false;
         return true;
     }
     [[nodiscard]] std::size_t PendingCount() const noexcept
     {
-        return _size + (_lost && !_lostConsumed ? 1 : 0);
+        return _size + (_lost && ! _lostConsumed ? 1 : 0);
     }
     [[nodiscard]] bool Busy() const noexcept
     {
@@ -197,29 +194,26 @@ class HostPolygonalInputJournal final
         return _stream;
     }
 
-  private:
+private:
     [[nodiscard]] static bool Valid(Sample sample) noexcept
     {
-        return sample.ordinal && std::isfinite(sample.point.x) && std::isfinite(sample.point.y) &&
-               std::isfinite(sample.viewScale) && sample.viewScale > 0 && std::isfinite(sample.viewPoint.x) &&
-               std::isfinite(sample.viewPoint.y) && std::isfinite(sample.documentOrigin.x) &&
+        return sample.ordinal && std::isfinite(sample.point.x) && std::isfinite(sample.point.y) && std::isfinite(sample.viewScale) && sample.viewScale > 0 &&
+               std::isfinite(sample.viewPoint.x) && std::isfinite(sample.viewPoint.y) && std::isfinite(sample.documentOrigin.x) &&
                std::isfinite(sample.documentOrigin.y) && std::isfinite(sample.dipScale) && sample.dipScale > 0;
     }
     [[nodiscard]] static bool Valid(const Context& context, Sample sample) noexcept
     {
-        return Valid(sample) && context.ordinal == sample.ordinal && context.document.documentSerial &&
-               context.document.canvasWidth > 0 && context.document.canvasHeight > 0 &&
-               context.tool == HostSelectionPressInput::Tool::Lasso && context.kind == LassoKind::Polygonal &&
-               (context.mode == SelectionMode::New || context.mode == SelectionMode::Add ||
-                context.mode == SelectionMode::Subtract);
+        return Valid(sample) && context.ordinal == sample.ordinal && context.document.documentSerial && context.document.canvasWidth > 0 &&
+               context.document.canvasHeight > 0 && context.tool == HostSelectionPressInput::Tool::Lasso && context.kind == LassoKind::Polygonal &&
+               (context.mode == SelectionMode::New || context.mode == SelectionMode::Add || context.mode == SelectionMode::Subtract);
     }
     [[nodiscard]] Admission Append(std::uint64_t stream, Event event) noexcept
     {
-        if (!_stream || stream != _stream)
+        if (! _stream || stream != _stream)
             return Admission::Stale;
         if (_closed)
             return Admission::Closed;
-        if (!Valid(event.sample) || event.sample.ordinal <= _last.ordinal)
+        if (! Valid(event.sample) || event.sample.ordinal <= _last.ordinal)
             return Admission::Invalid;
         if (_size == kCapacity)
         {
@@ -229,7 +223,7 @@ class HostPolygonalInputJournal final
         }
         _events[(_front + _size) % kCapacity].emplace(event);
         ++_size;
-        _last = event.sample;
+        _last   = event.sample;
         _closed = event.action == Action::Lost;
         return Admission::Recorded;
     }

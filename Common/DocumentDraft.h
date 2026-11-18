@@ -11,12 +11,15 @@
 // A finished document still requires the caller's ordinary validation and checked history/session publication.
 class CanvasDocumentDraft final
 {
-  public:
-    CanvasDocumentDraft(const CanvasDocumentDraft&) = delete;
+public:
+    CanvasDocumentDraft(const CanvasDocumentDraft&)            = delete;
     CanvasDocumentDraft& operator=(const CanvasDocumentDraft&) = delete;
     CanvasDocumentDraft(CanvasDocumentDraft&& other) noexcept
-        : _document(std::move(other._document)), _records(std::move(other._records)), _sealer(std::move(other._sealer)),
-          _limit(std::exchange(other._limit, 0)), _state(std::exchange(other._state, State::Consumed))
+        : _document(std::move(other._document)),
+          _records(std::move(other._records)),
+          _sealer(std::move(other._sealer)),
+          _limit(std::exchange(other._limit, 0)),
+          _state(std::exchange(other._state, State::Consumed))
     {
     }
     CanvasDocumentDraft& operator=(CanvasDocumentDraft&& other) noexcept
@@ -24,34 +27,32 @@ class CanvasDocumentDraft final
         if (this != &other)
         {
             _document = std::move(other._document);
-            _records = std::move(other._records);
-            _sealer = std::move(other._sealer);
-            _limit = std::exchange(other._limit, 0);
-            _state = std::exchange(other._state, State::Consumed);
+            _records  = std::move(other._records);
+            _sealer   = std::move(other._sealer);
+            _limit    = std::exchange(other._limit, 0);
+            _state    = std::exchange(other._state, State::Consumed);
         }
         return *this;
     }
-    [[nodiscard]] static std::optional<CanvasDocumentDraft> Rebuild(const CanvasDocument& state, std::size_t limit,
-                                                                    CancelToken cancellation = {})
+    [[nodiscard]] static std::optional<CanvasDocumentDraft> Rebuild(const CanvasDocument& state, std::size_t limit, CancelToken cancellation = {})
     {
         if (cancellation.IsCancelled() || limit > static_cast<std::size_t>(kMaxLayerCount))
             return std::nullopt;
         CanvasDocumentDraft result(state, limit);
         return cancellation.IsCancelled() ? std::nullopt : std::optional<CanvasDocumentDraft>(std::move(result));
     }
-    [[nodiscard]] static std::optional<CanvasDocumentDraft> Clone(const CanvasDocument& source, std::size_t limit,
-                                                                  CancelToken cancellation = {})
+    [[nodiscard]] static std::optional<CanvasDocumentDraft> Clone(const CanvasDocument& source, std::size_t limit, CancelToken cancellation = {})
     {
         if (cancellation.IsCancelled() || source.layers.size() > limit)
             return std::nullopt;
         auto result = Rebuild(source, limit, cancellation);
-        if (!result)
+        if (! result)
             return std::nullopt;
         for (const auto& layer : source.layers)
         {
             if (cancellation.IsCancelled())
                 return std::nullopt;
-            if (!result.value().Append(layer))
+            if (! result.value().Append(layer))
                 return std::nullopt;
         }
         return cancellation.IsCancelled() ? std::nullopt : std::move(result);
@@ -82,48 +83,46 @@ class CanvasDocumentDraft final
     }
     [[nodiscard]] bool Append(const ImageLayer& layer)
     {
-        if (!IsEditable() || _records.size() >= _limit)
+        if (! IsEditable() || _records.size() >= _limit)
             return false;
         _records.push_back(layer);
         return true;
     }
     [[nodiscard]] bool Append(ImageLayer&& layer) noexcept
     {
-        if (!IsEditable() || _records.size() >= _limit)
+        if (! IsEditable() || _records.size() >= _limit)
             return false;
         _records.push_back(std::move(layer));
         return true;
     }
     [[nodiscard]] bool Insert(std::size_t index, ImageLayer&& layer) noexcept
     {
-        if (!IsEditable() || index > _records.size() || _records.size() >= _limit)
+        if (! IsEditable() || index > _records.size() || _records.size() >= _limit)
             return false;
         _records.insert(_records.begin() + static_cast<std::ptrdiff_t>(index), std::move(layer));
         return true;
     }
     [[nodiscard]] bool Erase(std::size_t index) noexcept
     {
-        if (!IsEditable() || index >= _records.size())
+        if (! IsEditable() || index >= _records.size())
             return false;
         _records.erase(_records.begin() + static_cast<std::ptrdiff_t>(index));
         return true;
     }
-    [[nodiscard]] std::optional<CanvasDocument> Seal(CancelToken cancellation = {},
-                                                     std::shared_ptr<const SharedPublicationMemory> memory = {})
+    [[nodiscard]] std::optional<CanvasDocument> Seal(CancelToken cancellation = {}, std::shared_ptr<const SharedPublicationMemory> memory = {})
     {
         if (_state == State::Consumed || cancellation.IsCancelled())
             return std::nullopt;
         if (_state == State::Editing)
         {
             auto owned = RecordRoot<ImageLayer>::Builder::Adopt(std::move(_records), _limit);
-            if (!owned)
+            if (! owned)
                 return std::nullopt;
             _sealer = std::move(owned);
-            _state = State::Sealing;
+            _state  = State::Sealing;
         }
-        auto root = memory.use_count() ? _sealer.value().SealOwned(std::move(memory), cancellation)
-                                       : _sealer.value().Seal(cancellation);
-        if (!root)
+        auto root = memory.use_count() ? _sealer.value().SealOwned(std::move(memory), cancellation) : _sealer.value().Seal(cancellation);
+        if (! root)
             return std::nullopt;
         _state = State::Consumed;
         if (cancellation.IsCancelled())
@@ -132,15 +131,14 @@ class CanvasDocumentDraft final
         return std::move(_document);
     }
 
-  private:
+private:
     enum class State
     {
         Editing,
         Sealing,
         Consumed
     };
-    explicit CanvasDocumentDraft(CanvasDocument document, std::size_t limit)
-        : _document(std::move(document)), _limit(limit)
+    explicit CanvasDocumentDraft(CanvasDocument document, std::size_t limit) : _document(std::move(document)), _limit(limit)
     {
         _records.reserve(limit);
     }
@@ -148,5 +146,5 @@ class CanvasDocumentDraft final
     std::vector<ImageLayer> _records;
     std::optional<RecordRoot<ImageLayer>::Builder> _sealer;
     std::size_t _limit = 0;
-    State _state = State::Editing;
+    State _state       = State::Editing;
 };

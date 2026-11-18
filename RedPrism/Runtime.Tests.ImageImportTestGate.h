@@ -25,11 +25,11 @@ struct ImageImportTestGate final
     static constexpr UINT kMessage = WM_APP + 0x4B8;
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     std::atomic<unsigned int> visits{0};
-    ImageImportTestPhase phase = ImageImportTestPhase::Probe;
-    bool afterPreparation = false;
+    ImageImportTestPhase phase  = ImageImportTestPhase::Probe;
+    bool afterPreparation       = false;
     bool throwAllocationFailure = false;
-    bool throwAdmissionFailure = false;
-    bool throwCaptureFailure = false;
+    bool throwAdmissionFailure  = false;
+    bool throwCaptureFailure    = false;
     bool captureReservationHeld = false; // observed in the real admitted owner capture hook
     std::atomic<bool> retired{false}, retiredOffOwner{false};
     std::atomic<unsigned int> historyFaultHits{0};

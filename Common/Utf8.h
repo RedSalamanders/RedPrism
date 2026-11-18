@@ -10,15 +10,13 @@
     {
         return {};
     }
-    const int bytes =
-        WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+    const int bytes = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
     if (bytes <= 0)
     {
         return {};
     }
     std::string utf8(static_cast<std::size_t>(bytes), '\0');
-    (void)WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), utf8.data(), bytes, nullptr,
-                              nullptr);
+    (void)WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), utf8.data(), bytes, nullptr, nullptr);
     return utf8;
 }
 

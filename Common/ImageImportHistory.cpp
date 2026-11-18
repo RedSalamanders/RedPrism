@@ -17,21 +17,29 @@ namespace
         return false;
     if (observer.checkpoint)
         observer.checkpoint(observer.context, DocumentHistory::PrepareStage::ReplacementSnapshot);
-    return !cancellation.IsCancelled();
+    return ! cancellation.IsCancelled();
 }
 } // namespace
 
 PreparedImageImport::PreparedImageImport(PreparedImageImport&& source) noexcept
-    : _authority(std::move(source._authority)), _retiredDrafts(std::move(source._retiredDrafts)),
-      _view(std::move(source._view)), _history(std::move(source._history)),
-      _replacement(std::move(source._replacement)), _source(std::move(source._source)),
-      _baseline(std::move(source._baseline)), _document(std::move(source._document)),
-      _retiredDisplay(std::move(source._retiredDisplay)), _active(std::move(source._active)),
-      _selected(std::move(source._selected)), _retiredCollapsed(std::move(source._retiredCollapsed)),
+    : _authority(std::move(source._authority)),
+      _retiredDrafts(std::move(source._retiredDrafts)),
+      _view(std::move(source._view)),
+      _history(std::move(source._history)),
+      _replacement(std::move(source._replacement)),
+      _source(std::move(source._source)),
+      _baseline(std::move(source._baseline)),
+      _document(std::move(source._document)),
+      _retiredDisplay(std::move(source._retiredDisplay)),
+      _active(std::move(source._active)),
+      _selected(std::move(source._selected)),
+      _retiredCollapsed(std::move(source._retiredCollapsed)),
       _retiredBrushCommit(std::move(source._retiredBrushCommit)),
       _retiredAdjustment(std::move(source._retiredAdjustment)),
-      _retiredSnapGuides(std::move(source._retiredSnapGuides)), _retiredWarpImage(std::move(source._retiredWarpImage)),
-      _maskSelected(source._maskSelected), _changesDocument(source._changesDocument),
+      _retiredSnapGuides(std::move(source._retiredSnapGuides)),
+      _retiredWarpImage(std::move(source._retiredWarpImage)),
+      _maskSelected(source._maskSelected),
+      _changesDocument(source._changesDocument),
       _applied(std::exchange(source._applied, true))
 {
 }
@@ -40,33 +48,32 @@ PreparedImageImport& PreparedImageImport::operator=(PreparedImageImport&& source
 {
     if (this != &source)
     {
-        _authority = std::move(source._authority);
-        _retiredDrafts = std::move(source._retiredDrafts);
-        _view = std::move(source._view);
-        _history = std::move(source._history);
-        _replacement = std::move(source._replacement);
-        _source = std::move(source._source);
-        _baseline = std::move(source._baseline);
-        _document = std::move(source._document);
-        _retiredDisplay = std::move(source._retiredDisplay);
-        _active = std::move(source._active);
-        _selected = std::move(source._selected);
-        _retiredCollapsed = std::move(source._retiredCollapsed);
+        _authority          = std::move(source._authority);
+        _retiredDrafts      = std::move(source._retiredDrafts);
+        _view               = std::move(source._view);
+        _history            = std::move(source._history);
+        _replacement        = std::move(source._replacement);
+        _source             = std::move(source._source);
+        _baseline           = std::move(source._baseline);
+        _document           = std::move(source._document);
+        _retiredDisplay     = std::move(source._retiredDisplay);
+        _active             = std::move(source._active);
+        _selected           = std::move(source._selected);
+        _retiredCollapsed   = std::move(source._retiredCollapsed);
         _retiredBrushCommit = std::move(source._retiredBrushCommit);
-        _retiredAdjustment = std::move(source._retiredAdjustment);
-        _retiredSnapGuides = std::move(source._retiredSnapGuides);
-        _retiredWarpImage = std::move(source._retiredWarpImage);
-        _maskSelected = source._maskSelected;
-        _changesDocument = source._changesDocument;
-        _applied = std::exchange(source._applied, true);
+        _retiredAdjustment  = std::move(source._retiredAdjustment);
+        _retiredSnapGuides  = std::move(source._retiredSnapGuides);
+        _retiredWarpImage   = std::move(source._retiredWarpImage);
+        _maskSelected       = source._maskSelected;
+        _changesDocument    = source._changesDocument;
+        _applied            = std::exchange(source._applied, true);
     }
     return *this;
 }
 
-DocumentHistory::ResidencyValidation PreparedImageImport::TryAcquireHistoryResidency(
-    DocumentHistory::ResidencyPermit& permit) noexcept
+DocumentHistory::ResidencyValidation PreparedImageImport::TryAcquireHistoryResidency(DocumentHistory::ResidencyPermit& permit) noexcept
 {
-    if (_applied || !_authority._valid)
+    if (_applied || ! _authority._valid)
         return DocumentHistory::ResidencyValidation::Invalid;
     if (_replacement)
         return permit.TryAcquire(_replacement.value());
@@ -75,95 +82,98 @@ DocumentHistory::ResidencyValidation PreparedImageImport::TryAcquireHistoryResid
 
 bool PreparedImageImport::RefreshHistoryResidency(CancelToken cancellation, DocumentHistory::PrepareObserver observer)
 {
-    if (_applied || !_authority._valid || cancellation.IsCancelled())
+    if (_applied || ! _authority._valid || cancellation.IsCancelled())
         return false;
     if (_replacement)
         return DocumentHistory::RefreshPreparedResidency(_replacement.value(), _document, cancellation, observer);
-    return !_history || DocumentHistory::RefreshPreparedResidency(_history.value(), _document, cancellation, observer);
+    return ! _history || DocumentHistory::RefreshPreparedResidency(_history.value(), _document, cancellation, observer);
 }
 
 ImageImportAuthority DocumentSession::CaptureImageImportAuthority() const noexcept
 {
     ImageImportAuthority result;
-    result._session = _tokenIdentity.value;
+    result._session        = _tokenIdentity.value;
     result._documentSerial = _documentSerial;
-    result._generation = _generation;
-    result._restoreSerial = _restoreSerial;
-    result._documentID = _document ? std::optional(_document->id) : std::optional<Guid>{};
-    result._active = _activeLayerID;
-    result._crop = _cropRect;
-    result._maskSelected = _maskSelected;
-    result._valid = true;
+    result._generation     = _generation;
+    result._restoreSerial  = _restoreSerial;
+    result._documentID     = _document ? std::optional(_document->id) : std::optional<Guid>{};
+    result._active         = _activeLayerID;
+    result._crop           = _cropRect;
+    result._maskSelected   = _maskSelected;
+    result._valid          = true;
     return result;
 }
 
 bool DocumentSession::CanApplyImageImport(const ImageImportAuthority& authority) const noexcept
 {
-    return authority._valid && authority._session == _tokenIdentity.value &&
-           authority._documentSerial == _documentSerial && authority._generation == _generation &&
-           authority._restoreSerial == _restoreSerial && authority._active == _activeLayerID &&
+    return authority._valid && authority._session == _tokenIdentity.value && authority._documentSerial == _documentSerial &&
+           authority._generation == _generation && authority._restoreSerial == _restoreSerial && authority._active == _activeLayerID &&
            authority._maskSelected == _maskSelected && authority._crop == _cropRect &&
            authority._documentID == (_document ? std::optional(_document->id) : std::optional<Guid>{});
 }
 
-std::optional<PreparedImageImport> DocumentSession::PrepareImageImportPublication(
-    ImageImportAuthority authority, std::optional<CanvasDocument> source, std::optional<Guid> sourceActive,
-    DocumentHistory::StateView state, ImageImportBatchResult imported, CancelToken cancellation,
-    DocumentHistory::PrepareObserver observer)
+std::optional<PreparedImageImport> DocumentSession::PrepareImageImportPublication(ImageImportAuthority authority,
+                                                                                  std::optional<CanvasDocument> source,
+                                                                                  std::optional<Guid> sourceActive,
+                                                                                  DocumentHistory::StateView state,
+                                                                                  ImageImportBatchResult imported,
+                                                                                  CancelToken cancellation,
+                                                                                  DocumentHistory::PrepareObserver observer)
 {
-    if (!authority._valid || cancellation.IsCancelled() || sourceActive != authority._active ||
+    if (! authority._valid || cancellation.IsCancelled() || sourceActive != authority._active ||
         (source ? std::optional(source.value().id) : std::optional<Guid>{}) != authority._documentID)
         return std::nullopt;
     PreparedImageImport result(std::move(authority), std::move(state));
     result._source = std::move(source);
-    if (!imported.createdDocument && !imported.importedDocument)
+    if (! imported.createdDocument && ! imported.importedDocument)
         return result; // A batch with no successful image has no publication effect.
     const auto valid = [&](const std::optional<CanvasDocument>& document, const std::optional<Guid>& active)
     {
-        if (!document || !active || cancellation.IsCancelled() ||
-            ValidateDocument(document.value()) != DocumentStatus::Ok)
+        if (! document || ! active || cancellation.IsCancelled() || ValidateDocument(document.value()) != DocumentStatus::Ok)
             return false;
-        return std::any_of(document.value().layers.begin(), document.value().layers.end(),
-                           [&](const ImageLayer& layer) { return layer.id == active.value(); });
+        return std::any_of(document.value().layers.begin(), document.value().layers.end(), [&](const ImageLayer& layer) { return layer.id == active.value(); });
     };
     if (imported.createdDocument)
     {
         result._retiredDrafts = std::make_unique<PreparedImageImport::RetiredDrafts>();
-        if (!valid(imported.createdDocument, imported.createdActiveLayerID) ||
-            (imported.importedDocument &&
-             (!valid(imported.importedDocument, imported.importedActiveLayerID) ||
-              imported.importedDocument.value().id != imported.createdDocument.value().id)))
+        if (! valid(imported.createdDocument, imported.createdActiveLayerID) ||
+            (imported.importedDocument && (! valid(imported.importedDocument, imported.importedActiveLayerID) ||
+                                           imported.importedDocument.value().id != imported.createdDocument.value().id)))
             return std::nullopt;
         result._baseline = std::move(imported.createdDocument);
         if (imported.importedDocument)
         {
             result._document = std::move(imported.importedDocument);
-            result._active = imported.importedActiveLayerID;
+            result._active   = imported.importedActiveLayerID;
         }
         else
         {
-            if (!BeginReplacementSnapshot(cancellation, observer))
+            if (! BeginReplacementSnapshot(cancellation, observer))
                 return std::nullopt;
             result._document = result._baseline; // Private worker copy; the baseline owns the first undo pixels.
-            result._active = imported.createdActiveLayerID;
+            result._active   = imported.createdActiveLayerID;
         }
-        result._replacement = DocumentHistory::PrepareReplacement(
-            std::move(result._view), result._baseline, imported.createdActiveLayerID, result._document, result._active,
-            std::move(imported.historyName), cancellation, observer);
-        if (!result._replacement)
+        result._replacement = DocumentHistory::PrepareReplacement(std::move(result._view),
+                                                                  result._baseline,
+                                                                  imported.createdActiveLayerID,
+                                                                  result._document,
+                                                                  result._active,
+                                                                  std::move(imported.historyName),
+                                                                  cancellation,
+                                                                  observer);
+        if (! result._replacement)
             return std::nullopt;
     }
     else
     {
-        if (!result._source || !valid(imported.importedDocument, imported.importedActiveLayerID) ||
+        if (! result._source || ! valid(imported.importedDocument, imported.importedActiveLayerID) ||
             imported.importedDocument.value().id != result._source.value().id)
             return std::nullopt;
         result._document = std::move(imported.importedDocument);
-        result._active = imported.importedActiveLayerID;
-        result._history =
-            DocumentHistory::PrepareEdit(std::move(result._view), result._source, sourceActive, result._document,
-                                         result._active, std::move(imported.historyName), cancellation, observer);
-        if (!result._history)
+        result._active   = imported.importedActiveLayerID;
+        result._history  = DocumentHistory::PrepareEdit(
+            std::move(result._view), result._source, sourceActive, result._document, result._active, std::move(imported.historyName), cancellation, observer);
+        if (! result._history)
             return std::nullopt;
         if (result._authority._maskSelected && result._authority._active == result._active)
             for (const auto& layer : result._document.value().layers)
@@ -175,75 +185,80 @@ std::optional<PreparedImageImport> DocumentSession::PrepareImageImportPublicatio
     return cancellation.IsCancelled() ? std::nullopt : std::optional<PreparedImageImport>{std::move(result)};
 }
 
-std::optional<PreparedImageImport> DocumentSession::PrepareDocumentReplacementPublication(
-    ImageImportAuthority authority, std::optional<CanvasDocument> source, DocumentHistory::StateView state,
-    CanvasDocument replacement, std::optional<Guid> active, CancelToken cancellation,
-    DocumentHistory::PrepareObserver observer)
+std::optional<PreparedImageImport> DocumentSession::PrepareDocumentReplacementPublication(ImageImportAuthority authority,
+                                                                                          std::optional<CanvasDocument> source,
+                                                                                          DocumentHistory::StateView state,
+                                                                                          CanvasDocument replacement,
+                                                                                          std::optional<Guid> active,
+                                                                                          CancelToken cancellation,
+                                                                                          DocumentHistory::PrepareObserver observer)
 {
-    if (!authority._valid || cancellation.IsCancelled() ||
-        (source ? std::optional(source.value().id) : std::optional<Guid>{}) != authority._documentID ||
+    if (! authority._valid || cancellation.IsCancelled() || (source ? std::optional(source.value().id) : std::optional<Guid>{}) != authority._documentID ||
         ValidateDocument(replacement) != DocumentStatus::Ok)
         return std::nullopt;
     PreparedImageImport result(std::move(authority), std::move(state));
     result._retiredDrafts = std::make_unique<PreparedImageImport::RetiredDrafts>();
-    result._source = std::move(source);
+    result._source        = std::move(source);
     // A project can have no selected layer. Match ReplaceDocument: an absent/unknown active id selects nothing.
-    if (active && !std::any_of(replacement.layers.begin(), replacement.layers.end(),
-                               [&](const ImageLayer& layer) { return layer.id == active.value(); }))
+    if (active && ! std::any_of(replacement.layers.begin(), replacement.layers.end(), [&](const ImageLayer& layer) { return layer.id == active.value(); }))
         active.reset();
     result._baseline = std::move(replacement);
-    if (!BeginReplacementSnapshot(cancellation, observer))
+    if (! BeginReplacementSnapshot(cancellation, observer))
         return std::nullopt;
     result._document = result._baseline;
-    result._active = active;
+    result._active   = active;
     if (active)
         result._selected.insert(active.value());
-    result._replacement = DocumentHistory::PrepareReplacement(std::move(result._view), result._baseline, active,
-                                                              result._document, active, {}, cancellation, observer);
-    if (!result._replacement || cancellation.IsCancelled())
+    result._replacement =
+        DocumentHistory::PrepareReplacement(std::move(result._view), result._baseline, active, result._document, active, {}, cancellation, observer);
+    if (! result._replacement || cancellation.IsCancelled())
         return std::nullopt;
     result._changesDocument = true;
     return result;
 }
 
-std::optional<PreparedImageImport> DocumentSession::PrepareDocumentLifecyclePublication(
-    ImageImportAuthority authority, std::optional<CanvasDocument> source, DocumentHistory::StateView state,
-    std::optional<CanvasDocument> replacement, std::optional<Guid> active, std::wstring name, CancelToken cancellation,
-    DocumentHistory::PrepareObserver observer)
+std::optional<PreparedImageImport> DocumentSession::PrepareDocumentLifecyclePublication(ImageImportAuthority authority,
+                                                                                        std::optional<CanvasDocument> source,
+                                                                                        DocumentHistory::StateView state,
+                                                                                        std::optional<CanvasDocument> replacement,
+                                                                                        std::optional<Guid> active,
+                                                                                        std::wstring name,
+                                                                                        CancelToken cancellation,
+                                                                                        DocumentHistory::PrepareObserver observer)
 {
-    if (!authority._valid || cancellation.IsCancelled() ||
-        (source ? std::optional(source->id) : std::optional<Guid>{}) != authority._documentID)
+    if (! authority._valid || cancellation.IsCancelled() || (source ? std::optional(source->id) : std::optional<Guid>{}) != authority._documentID)
         return std::nullopt;
-    auto result = PrepareDocumentLifecyclePublication(std::move(authority), std::move(state), std::move(replacement),
-                                                      active, std::move(name), cancellation, observer);
+    auto result =
+        PrepareDocumentLifecyclePublication(std::move(authority), std::move(state), std::move(replacement), active, std::move(name), cancellation, observer);
     if (result)
         result->_source = std::move(source);
     return result;
 }
 
-std::optional<PreparedImageImport> DocumentSession::PrepareDocumentLifecyclePublication(
-    ImageImportAuthority authority, DocumentHistory::StateView state, std::optional<CanvasDocument> replacement,
-    std::optional<Guid> active, std::wstring name, CancelToken cancellation, DocumentHistory::PrepareObserver observer)
+std::optional<PreparedImageImport> DocumentSession::PrepareDocumentLifecyclePublication(ImageImportAuthority authority,
+                                                                                        DocumentHistory::StateView state,
+                                                                                        std::optional<CanvasDocument> replacement,
+                                                                                        std::optional<Guid> active,
+                                                                                        std::wstring name,
+                                                                                        CancelToken cancellation,
+                                                                                        DocumentHistory::PrepareObserver observer)
 {
-    if (!authority._valid || cancellation.IsCancelled() ||
-        (replacement && ValidateDocument(*replacement) != DocumentStatus::Ok) || (!replacement && active))
+    if (! authority._valid || cancellation.IsCancelled() || (replacement && ValidateDocument(*replacement) != DocumentStatus::Ok) || (! replacement && active))
         return std::nullopt;
     PreparedImageImport result(std::move(authority), std::move(state));
-    if (!result._authority._documentID && !replacement)
+    if (! result._authority._documentID && ! replacement)
         return result; // Close on an already absent document preserves its existing redo/saved lineage.
-    if (active && !std::any_of(replacement->layers.begin(), replacement->layers.end(),
-                               [&](const ImageLayer& layer) { return layer.id == *active; }))
+    if (active && ! std::any_of(replacement->layers.begin(), replacement->layers.end(), [&](const ImageLayer& layer) { return layer.id == *active; }))
         return std::nullopt;
     result._retiredDrafts = std::make_unique<PreparedImageImport::RetiredDrafts>();
-    if (!BeginReplacementSnapshot(cancellation, observer))
+    if (! BeginReplacementSnapshot(cancellation, observer))
         return std::nullopt;
     result._document = std::move(replacement);
-    result._active = active;
+    result._active   = active;
     if (active)
         result._selected.insert(*active);
-    result._replacement = DocumentHistory::PrepareSavedReplacement(std::move(result._view), result._document, active,
-                                                                   std::move(name), cancellation, observer);
-    if (!result._replacement || cancellation.IsCancelled())
+    result._replacement = DocumentHistory::PrepareSavedReplacement(std::move(result._view), result._document, active, std::move(name), cancellation, observer);
+    if (! result._replacement || cancellation.IsCancelled())
         return std::nullopt;
     result._changesDocument = true;
     return result;
@@ -262,18 +277,17 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
     static_assert(std::is_nothrow_swappable_v<std::optional<GradientEdit>>);
     static_assert(std::is_nothrow_swappable_v<std::optional<PixelMove>>);
     static_assert(std::is_nothrow_swappable_v<std::optional<ColorEdit>>);
-    if (prepared._applied || !CanApplyImageImport(prepared._authority) ||
-        (prepared._replacement && !prepared._retiredDrafts) ||
-        (prepared._replacement ? !history.CanPublishReplacement(prepared._replacement.value())
-         : prepared._history   ? !history.CanPublish(prepared._history.value())
-                               : !history.IsCurrent(prepared._view)))
+    if (prepared._applied || ! CanApplyImageImport(prepared._authority) || (prepared._replacement && ! prepared._retiredDrafts) ||
+        (prepared._replacement ? ! history.CanPublishReplacement(prepared._replacement.value())
+         : prepared._history   ? ! history.CanPublish(prepared._history.value())
+                               : ! history.IsCurrent(prepared._view)))
         return false;
     if (prepared._replacement)
     {
-        if (!history.PublishReplacement(prepared._replacement.value()))
+        if (! history.PublishReplacement(prepared._replacement.value()))
             return false;
     }
-    else if (prepared._history && !history.Publish(prepared._history.value()))
+    else if (prepared._history && ! history.Publish(prepared._history.value()))
         return false;
     if (prepared._document || prepared._replacement)
     {
@@ -320,7 +334,7 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
             std::swap(_adjustmentOriginal, prepared._retiredAdjustment);
             std::swap(_snapGuides, prepared._retiredSnapGuides);
             std::swap(_warpSource.image, prepared._retiredWarpImage);
-            _warpSource.layerID = {};
+            _warpSource.layerID   = {};
             _warpSource.transform = {};
             _cropRect.reset();
             _transformDuplicate.reset();
@@ -332,16 +346,16 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
         }
         NoteDocumentMutation();
     }
-    prepared._applied = true;
+    prepared._applied          = true;
     prepared._authority._valid = false;
     return true;
 }
 
 std::uint64_t DocumentSession::ImageImportRetirementMemoryBytes() const noexcept
 {
-    auto bytes = HistoryRestoreRetirementMemoryBytes();
+    auto bytes         = HistoryRestoreRetirementMemoryBytes();
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
-    const auto add = [&](std::uint64_t count, std::uint64_t size) noexcept
+    const auto add     = [&](std::uint64_t count, std::uint64_t size) noexcept
     {
         if ((size && count > maximum / size) || count * size > maximum - bytes)
             return false;
@@ -351,11 +365,11 @@ std::uint64_t DocumentSession::ImageImportRetirementMemoryBytes() const noexcept
     const auto rasterBytes = [&](const Raster& image) noexcept
     {
         const auto amount = image.RetirementMemoryBytes();
-        return !image.HasStorage() || (amount && add(1, amount));
+        return ! image.HasStorage() || (amount && add(1, amount));
     };
     const auto strokeBytes = [&](const std::shared_ptr<BrushStroke>& stroke) noexcept
     {
-        if (!stroke)
+        if (! stroke)
             return true;
         const auto amount = stroke->RetirementMemoryBytes();
         return amount && add(1, amount);
@@ -364,45 +378,42 @@ std::uint64_t DocumentSession::ImageImportRetirementMemoryBytes() const noexcept
     // metadata and potential sparse assembly. Read one complete bound; no record/name/pixel traversal or copy.
     const auto documentBytes = [&](const std::shared_ptr<CanvasDocument>& document) noexcept
     {
-        if (!document)
+        if (! document)
             return true;
         const auto amount = document->RetirementMemoryBytes();
         return amount && add(1, amount) && add(1, 64); // the shared document's own control allocation
     };
-    if (!bytes || !add(1, sizeof(PreparedImageImport::RetiredDrafts) + 64) ||
-        (_lassoDraft && !add(1, _lassoDraft->RetirementMemoryBytes())) ||
-        (_selectionMoveOrigin && !add(1, _selectionMoveOrigin->loops.StorageBytes())) || !strokeBytes(_brush) ||
-        (_gradient && !strokeBytes(_gradient->raster)) ||
-        (_pixelMove && (!strokeBytes(_pixelMove->raster) || !add(1, _pixelMove->origin.loops.StorageBytes()))))
+    if (! bytes || ! add(1, sizeof(PreparedImageImport::RetiredDrafts) + 64) || (_lassoDraft && ! add(1, _lassoDraft->RetirementMemoryBytes())) ||
+        (_selectionMoveOrigin && ! add(1, _selectionMoveOrigin->loops.StorageBytes())) || ! strokeBytes(_brush) ||
+        (_gradient && ! strokeBytes(_gradient->raster)) ||
+        (_pixelMove && (! strokeBytes(_pixelMove->raster) || ! add(1, _pixelMove->origin.loops.StorageBytes()))))
         return 0;
-    if (_transformEdit && ((_transformEdit->group && !add(_transformEdit->group->originals.capacity(),
-                                                          sizeof(std::pair<Guid, LayerTransform>))) ||
-                           (_transformEdit->floating && !documentBytes(_transformEdit->floating->before))))
+    if (_transformEdit && ((_transformEdit->group && ! add(_transformEdit->group->originals.capacity(), sizeof(std::pair<Guid, LayerTransform>))) ||
+                           (_transformEdit->floating && ! documentBytes(_transformEdit->floating->before))))
         return 0;
     if (_warp)
     {
         const auto amount = _warp->RetirementMemoryBytes();
-        if (!amount || !add(1, amount))
+        if (! amount || ! add(1, amount))
             return 0;
     }
     if (_colorEdit)
     {
         const auto amount = ColorEditHeldMemoryBytes(_colorEdit.value());
-        if (!amount || !add(1, amount))
+        if (! amount || ! add(1, amount))
             return 0;
     }
     if (_adjustmentOriginal)
     {
-        if (!add(1, sizeof(LayerAdjustment)))
+        if (! add(1, sizeof(LayerAdjustment)))
             return 0;
         for (const auto& channel : _adjustmentOriginal.value().curves.channels)
-            if (!add(channel.capacity(), sizeof(channel.front())))
+            if (! add(channel.capacity(), sizeof(channel.front())))
                 return 0;
     }
     return bytes && add(_snapGuides.xs.capacity(), sizeof(double)) && add(_snapGuides.ys.capacity(), sizeof(double)) &&
-                   add(_collapsed.bucket_count(), sizeof(void*)) &&
-                   add(_collapsed.size(), sizeof(Guid) + 4 * sizeof(void*) + 64) &&
-                   (!_lastBrushCommit || rasterBytes(_lastBrushCommit.value().image)) && rasterBytes(_warpSource.image)
+                   add(_collapsed.bucket_count(), sizeof(void*)) && add(_collapsed.size(), sizeof(Guid) + 4 * sizeof(void*) + 64) &&
+                   (! _lastBrushCommit || rasterBytes(_lastBrushCommit.value().image)) && rasterBytes(_warpSource.image)
                ? bytes
                : 0;
 }

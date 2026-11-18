@@ -3,8 +3,7 @@
 #include <exception>
 #include <utility>
 
-RecordedUtilityGraph::RecordedUtilityGraph(std::uint32_t originalOwnerThread) noexcept
-    : _ownerThread(originalOwnerThread)
+RecordedUtilityGraph::RecordedUtilityGraph(std::uint32_t originalOwnerThread) noexcept : _ownerThread(originalOwnerThread)
 {
 }
 
@@ -21,17 +20,15 @@ bool RecordedUtilityGraph::IsOwner() const noexcept
 
 bool RecordedUtilityGraph::ValidRegion(D3D11_BOX region) const noexcept
 {
-    return _source.width > 0 && _source.height > 0 && _source.width <= kMaxCanvasSide &&
-           _source.height <= kMaxCanvasSide && region.front == 0 && region.back == 1 && region.right > region.left &&
-           region.bottom > region.top && region.right <= static_cast<unsigned int>(_source.width) &&
-           region.bottom <= static_cast<unsigned int>(_source.height) && region.right - region.left <= 2048 &&
-           region.bottom - region.top <= 2048;
+    return _source.width > 0 && _source.height > 0 && _source.width <= kMaxCanvasSide && _source.height <= kMaxCanvasSide && region.front == 0 &&
+           region.back == 1 && region.right > region.left && region.bottom > region.top && region.right <= static_cast<unsigned int>(_source.width) &&
+           region.bottom <= static_cast<unsigned int>(_source.height) && region.right - region.left <= 2048 && region.bottom - region.top <= 2048;
 }
 
-HRESULT RecordedUtilityGraph::PrepareForWork(ID3D11Device* device, CanvasDocument source, D3D11_BOX region,
-                                             GpuCommandStream& original, CancelToken cancellation) noexcept
+HRESULT RecordedUtilityGraph::PrepareForWork(
+    ID3D11Device* device, CanvasDocument source, D3D11_BOX region, GpuCommandStream& original, CancelToken cancellation) noexcept
 {
-    if (!_ownerThread || IsOwner() || _phase != Phase::Empty || !device)
+    if (! _ownerThread || IsOwner() || _phase != Phase::Empty || ! device)
         return E_INVALIDARG;
     const HRESULT recordingStatus = original.RecordingStatusForWork();
     if (FAILED(recordingStatus))
@@ -41,13 +38,13 @@ HRESULT RecordedUtilityGraph::PrepareForWork(ID3D11Device* device, CanvasDocumen
     // Concurrent creation is checked before acquiring a device/resource prefix. Unsupported creation refuses.
     D3D11_FEATURE_DATA_THREADING threading{};
     const HRESULT support = device->CheckFeatureSupport(D3D11_FEATURE_THREADING, &threading, sizeof(threading));
-    if (FAILED(support) || !threading.DriverConcurrentCreates)
+    if (FAILED(support) || ! threading.DriverConcurrentCreates)
         return FAILED(support) ? support : DXGI_ERROR_UNSUPPORTED;
-    _phase = Phase::Recording;
+    _phase  = Phase::Recording;
     _source = std::move(source);
-    if (!ValidRegion(region))
+    if (! ValidRegion(region))
         return E_INVALIDARG;
-    _device = device;
+    _device         = device;
     _originalStream = &original;
     _recording.emplace();
     HRESULT result = device->CreateDeferredContext(0, _deferred.put());
@@ -58,7 +55,7 @@ HRESULT RecordedUtilityGraph::PrepareForWork(ID3D11Device* device, CanvasDocumen
     if (SUCCEEDED(result))
     {
         _utilityAcquired = _composition.AcquireUtility();
-        if (!_utilityAcquired)
+        if (! _utilityAcquired)
             result = HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
     }
     return SUCCEEDED(result) ? RecordRegionForWork(region) : result;
@@ -66,7 +63,7 @@ HRESULT RecordedUtilityGraph::PrepareForWork(ID3D11Device* device, CanvasDocumen
 
 HRESULT RecordedUtilityGraph::RecordRegionForWork(D3D11_BOX region) noexcept
 {
-    if (IsOwner() || _phase != Phase::Recording || !_recording || !ValidRegion(region))
+    if (IsOwner() || _phase != Phase::Recording || ! _recording || ! ValidRegion(region))
         return E_INVALIDARG;
     _region = region;
     // Reuses this private composition's source residency. No shared immediate-context cache is mutated.
@@ -81,10 +78,9 @@ HRESULT RecordedUtilityGraph::RecordRegionForWork(D3D11_BOX region) noexcept
     return result;
 }
 
-HRESULT RecordedUtilityGraph::RecordNextForWork(D3D11_BOX region, GpuCommandStream& original,
-                                                CancelToken cancellation) noexcept
+HRESULT RecordedUtilityGraph::RecordNextForWork(D3D11_BOX region, GpuCommandStream& original, CancelToken cancellation) noexcept
 {
-    if (IsOwner() || _phase != Phase::Excluded || &original != _originalStream || !ValidRegion(region) || !_recording)
+    if (IsOwner() || _phase != Phase::Excluded || &original != _originalStream || ! ValidRegion(region) || ! _recording)
         return E_INVALIDARG;
     const HRESULT recordingStatus = original.RecordingStatusForWork();
     if (FAILED(recordingStatus))
@@ -101,34 +97,31 @@ HRESULT RecordedUtilityGraph::RecordNextForWork(D3D11_BOX region, GpuCommandStre
 
 HRESULT RecordedUtilityGraph::PublishRegionOwner(ID3D11DeviceContext* originalImmediate) noexcept
 {
-    if (!IsOwner() || _phase != Phase::Sealed || !originalImmediate || !_regionTexture ||
-        originalImmediate->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
+    if (! IsOwner() || _phase != Phase::Sealed || ! originalImmediate || ! _regionTexture || originalImmediate->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
         return E_INVALIDARG;
     wil::com_ptr_nothrow<ID3D11Device> actualDevice;
     originalImmediate->GetDevice(actualDevice.put());
     if (actualDevice.get() != _device.get())
         return E_ABORT;
     _immediate = originalImmediate;
-    _phase = Phase::Published;
+    _phase     = Phase::Published;
     return S_OK;
 }
 
-HRESULT RecordedUtilityGraph::BorrowRegionOwner(ID3D11Device* device, ID3D11DeviceContext* immediate,
-                                                ID3D11Texture2D*& texture, D3D11_BOX& localBox) noexcept
+HRESULT RecordedUtilityGraph::BorrowRegionOwner(ID3D11Device* device, ID3D11DeviceContext* immediate, ID3D11Texture2D*& texture, D3D11_BOX& localBox) noexcept
 {
-    texture = nullptr;
+    texture  = nullptr;
     localBox = {};
-    if (!IsOwner() || _phase != Phase::Published || device != _device.get() || immediate != _immediate.get() ||
-        !_regionTexture)
+    if (! IsOwner() || _phase != Phase::Published || device != _device.get() || immediate != _immediate.get() || ! _regionTexture)
         return E_ABORT;
-    texture = _regionTexture.get();
+    texture  = _regionTexture.get();
     localBox = {0, 0, 0, _region.right - _region.left, _region.bottom - _region.top, 1};
     return S_OK;
 }
 
 bool RecordedUtilityGraph::ExcludeRegionOwner() noexcept
 {
-    if (!IsOwner() || _phase != Phase::Published)
+    if (! IsOwner() || _phase != Phase::Published)
         return false;
     _phase = Phase::Excluded;
     return true;
@@ -152,7 +145,7 @@ bool RecordedUtilityGraph::RetireUnpublishedForWork() noexcept
 
 std::uint64_t RecordedUtilityGraph::RecordedUploadBytesForWork() const noexcept
 {
-    return !IsOwner() && _recording ? _recording->RecordedUploadBytes() : 0;
+    return ! IsOwner() && _recording ? _recording->RecordedUploadBytes() : 0;
 }
 
 void RecordedUtilityGraph::ReleaseForWork() noexcept
@@ -167,5 +160,5 @@ void RecordedUtilityGraph::ReleaseForWork() noexcept
     _deferred.reset();
     _device.reset();
     _source = {};
-    _phase = Phase::Retired;
+    _phase  = Phase::Retired;
 }

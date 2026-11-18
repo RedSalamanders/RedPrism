@@ -20,10 +20,10 @@
 
 namespace
 {
-int gChecks = 0;
-int gFailures = 0;
+int gChecks                   = 0;
+int gFailures                 = 0;
 constexpr int kExpectedChecks = 21;
-constexpr int kSide = 4;
+constexpr int kSide           = 4;
 constexpr std::array<std::uint8_t, 4> kPixel{23, 47, 89, 255};
 constexpr Vec2 kOpeningPoint{1.25, 1.25};
 constexpr Vec2 kSamplePoint{2.25, 1.25};
@@ -48,11 +48,11 @@ Raster SourceImage()
 CanvasDocument MakeDocument(const Raster& image)
 {
     DocumentFixture fixture;
-    fixture.id = Guid::Generate();
-    fixture.width = kSide;
-    fixture.height = kSide;
+    fixture.id       = Guid::Generate();
+    fixture.width    = kSide;
+    fixture.height   = kSide;
     ImageLayer layer = ImageLayer::Blank(L"Warp retirement", Vec2{kSide, kSide});
-    layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
+    layer.asset      = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
     fixture.layers.push_back(std::move(layer));
     return std::move(fixture).Seal();
 }
@@ -64,7 +64,7 @@ struct Fixture final
     explicit Fixture()
     {
         CanvasDocument document = MakeDocument(SourceImage());
-        target = document.layers.front().id;
+        target                  = document.layers.front().id;
         session.ReplaceDocument(std::move(document), target);
     }
 };
@@ -81,30 +81,28 @@ Opened Open(Fixture& fixture)
     Opened state;
     WarpOpeningOptions options{kSettings, SmearMode::Liquify, kOpeningPoint, std::this_thread::get_id()};
     auto input = fixture.session.PrepareWarpOpeningInput(std::move(options));
-    if (!input)
+    if (! input)
         return state;
 
     std::optional<WarpOpeningResult> result;
-    std::thread worker(
-        [&result, opening = std::move(input.value())]() mutable
-        {
-            auto memory = SharedPublicationMemory::CreateForWork();
-            result.emplace(DocumentSession::PrepareWarpOpeningPublication(std::move(opening), CancelToken{}, {},
-                                                                          std::move(memory)));
-        });
+    std::thread worker([&result, opening = std::move(input.value())]() mutable
+    {
+        auto memory = SharedPublicationMemory::CreateForWork();
+        result.emplace(DocumentSession::PrepareWarpOpeningPublication(std::move(opening), CancelToken{}, {}, std::move(memory)));
+    });
     worker.join();
-    if (!result || result->status != WarpOpeningStatus::Ready || !result->prepared ||
-        !fixture.session.ApplyPreparedWarpOpeningIfCurrent(result->prepared.value()))
+    if (! result || result->status != WarpOpeningStatus::Ready || ! result->prepared ||
+        ! fixture.session.ApplyPreparedWarpOpeningIfCurrent(result->prepared.value()))
         return state;
 
     const auto opening = fixture.session.PendingWarpOpening();
-    auto borrowed = result->prepared->TakeAppliedDraftForOwner();
-    if (!opening || !borrowed || borrowed.get() != fixture.session.PendingWarp())
+    auto borrowed      = result->prepared->TakeAppliedDraftForOwner();
+    if (! opening || ! borrowed || borrowed.get() != fixture.session.PendingWarp())
         return state;
     borrowed.reset();
     state.opening = opening.value();
-    state.draft = fixture.session.PendingWarp();
-    state.plan = state.draft ? state.draft->PlanSampleMemory(kSamplePoint) : std::nullopt;
+    state.draft   = fixture.session.PendingWarp();
+    state.plan    = state.draft ? state.draft->PlanSampleMemory(kSamplePoint) : std::nullopt;
     return state;
 }
 
@@ -126,31 +124,28 @@ void DestroyAndObserve(void* context, DeferredReleaseNode& node) noexcept
 bool RetireDraftOnJoinedWorker(std::optional<WarpRetirementInput>&& retired, ReleaseObservation& observation)
 {
     bool installed = false;
-    std::thread worker(
-        [retired = std::move(retired), &observation, &installed]() mutable
-        {
-            installed = InstallDeferredReleaseSink(DestroyAndObserve, &observation);
-            retired.reset();
-            if (installed)
-                static_cast<void>(ClearDeferredReleaseSink(&observation));
-        });
+    std::thread worker([retired = std::move(retired), &observation, &installed]() mutable
+    {
+        installed = InstallDeferredReleaseSink(DestroyAndObserve, &observation);
+        retired.reset();
+        if (installed)
+            static_cast<void>(ClearDeferredReleaseSink(&observation));
+    });
     worker.join();
     return installed && observation.nodes > 0 && observation.thread != std::this_thread::get_id();
 }
 
-bool RetireBundleOnJoinedWorker(std::optional<WarpRetirementInput>&& retired, std::optional<WarpSampleInput>&& sample,
-                                ReleaseObservation& observation)
+bool RetireBundleOnJoinedWorker(std::optional<WarpRetirementInput>&& retired, std::optional<WarpSampleInput>&& sample, ReleaseObservation& observation)
 {
     bool installed = false;
-    std::thread worker(
-        [retired = std::move(retired), sample = std::move(sample), &observation, &installed]() mutable
-        {
-            installed = InstallDeferredReleaseSink(DestroyAndObserve, &observation);
-            retired.reset();
-            sample.reset();
-            if (installed)
-                static_cast<void>(ClearDeferredReleaseSink(&observation));
-        });
+    std::thread worker([retired = std::move(retired), sample = std::move(sample), &observation, &installed]() mutable
+    {
+        installed = InstallDeferredReleaseSink(DestroyAndObserve, &observation);
+        retired.reset();
+        sample.reset();
+        if (installed)
+            static_cast<void>(ClearDeferredReleaseSink(&observation));
+    });
     worker.join();
     return installed && observation.nodes > 0 && observation.thread != std::this_thread::get_id();
 }
@@ -158,57 +153,53 @@ bool RetireBundleOnJoinedWorker(std::optional<WarpRetirementInput>&& retired, st
 bool ScalarBarrier(const DocumentSession& session, std::uint64_t opening) noexcept
 {
     const auto pending = session.PendingWarpOpening();
-    return session.HasPendingWarp() && pending && pending.value() == opening && !session.PendingWarp();
+    return session.HasPendingWarp() && pending && pending.value() == opening && ! session.PendingWarp();
 }
 
-bool TakeRefusedOnForeignJoinedWorker(DocumentSession& session, std::uint64_t opening,
-                                      std::optional<std::uint64_t> sequence)
+bool TakeRefusedOnForeignJoinedWorker(DocumentSession& session, std::uint64_t opening, std::optional<std::uint64_t> sequence)
 {
     bool accepted = false;
-    std::thread worker(
-        [&]
-        {
-            auto retired = session.TakeWarpRetirementInput(opening, sequence);
-            accepted = retired.has_value();
-        });
+    std::thread worker([&]
+    {
+        auto retired = session.TakeWarpRetirementInput(opening, sequence);
+        accepted     = retired.has_value();
+    });
     worker.join();
-    return !accepted;
+    return ! accepted;
 }
 
 void LiveZeroPointDraftRefusalAndRetirement()
 {
     Fixture fixture;
-    const auto document = fixture.session.Document();
+    const auto document   = fixture.session.Document();
     const auto generation = fixture.session.Generation();
-    const auto revision = fixture.session.history.CurrentRevision();
-    const auto undo = fixture.session.history.UndoCount();
-    Opened state = Open(fixture);
+    const auto revision   = fixture.session.history.CurrentRevision();
+    const auto undo       = fixture.session.history.UndoCount();
+    Opened state          = Open(fixture);
     Expect(state.draft && state.plan && state.draft->Points().empty(), "live.zero-point-opening-is-real-draft");
-    if (!state.draft)
+    if (! state.draft)
         return;
 
-    const auto weak = fixture.session.WeakPendingWarpForTest();
+    const auto weak     = fixture.session.WeakPendingWarpForTest();
     const auto original = state.draft;
-    Expect(TakeRefusedOnForeignJoinedWorker(fixture.session, state.opening, std::nullopt) &&
-               fixture.session.PendingWarp() == original && !weak.expired(),
+    Expect(TakeRefusedOnForeignJoinedWorker(fixture.session, state.opening, std::nullopt) && fixture.session.PendingWarp() == original && ! weak.expired(),
            "live.foreign-worker-refuses-before-draft-transfer");
     auto wrongOpening = fixture.session.TakeWarpRetirementInput(state.opening + 1, std::nullopt);
-    Expect(!wrongOpening && fixture.session.PendingWarp() == original && !weak.expired(),
-           "live.wrong-opening-refuses-with-draft-and-cache-authority-intact");
+    Expect(! wrongOpening && fixture.session.PendingWarp() == original && ! weak.expired(), "live.wrong-opening-refuses-with-draft-and-cache-authority-intact");
 
     auto retired = fixture.session.TakeWarpRetirementInput(state.opening, std::nullopt);
-    Expect(retired && !fixture.session.PendingWarp() && fixture.session.PendingWarpOpening() == state.opening &&
+    Expect(retired && ! fixture.session.PendingWarp() && fixture.session.PendingWarpOpening() == state.opening &&
                fixture.session.CanApplyHistoryRestore(fixture.session.CaptureHistoryRestoreAuthority()) == false,
            "live.capture-keeps-opening-barrier-through-retirement");
-    if (!retired)
+    if (! retired)
         return;
 
     ReleaseObservation observation;
     const bool observedWorkerDestruction = RetireDraftOnJoinedWorker(std::move(retired), observation);
-    const bool exactAck = fixture.session.DiscardWarpFinishIfCurrent(state.opening);
-    Expect(observedWorkerDestruction && weak.expired() && exactAck && !fixture.session.HasPendingWarp() &&
-               fixture.session.Document() == document && fixture.session.Generation() == generation &&
-               fixture.session.history.CurrentRevision() == revision && fixture.session.history.UndoCount() == undo,
+    const bool exactAck                  = fixture.session.DiscardWarpFinishIfCurrent(state.opening);
+    Expect(observedWorkerDestruction && weak.expired() && exactAck && ! fixture.session.HasPendingWarp() && fixture.session.Document() == document &&
+               fixture.session.Generation() == generation && fixture.session.history.CurrentRevision() == revision &&
+               fixture.session.history.UndoCount() == undo,
            "live.joined-worker-destroys-draft-before-exact-ack-without-document-or-history-edit");
 }
 
@@ -216,68 +207,58 @@ void DetachedSampleRetirementAndAck()
 {
     Fixture fixture;
     Opened state = Open(fixture);
-    if (!state.plan || !state.draft)
+    if (! state.plan || ! state.draft)
     {
         Expect(false, "update.fixture-opens-and-plans");
         return;
     }
-    const auto weak = fixture.session.WeakPendingWarpForTest();
+    const auto weak  = fixture.session.WeakPendingWarpForTest();
     auto sampleInput = fixture.session.TakeWarpSampleInput(state.opening, state.plan.value());
     Expect(sampleInput.has_value(), "update.original-sample-worker-receives-draft");
-    if (!sampleInput)
+    if (! sampleInput)
         return;
     const auto sequence = state.plan->sequence;
     std::optional<WarpSampleInput> returned;
     bool appended = false;
-    std::thread producer(
-        [&]
-        {
-            appended = sampleInput->AppendForWork(CancelToken{});
-            returned.emplace(std::move(sampleInput.value()));
-        });
+    std::thread producer([&]
+    {
+        appended = sampleInput->AppendForWork(CancelToken{});
+        returned.emplace(std::move(sampleInput.value()));
+    });
     producer.join();
     sampleInput.reset();
 
     // Actual useful producer joined; the owner has not applied this prepared sample.
-    Expect(appended && returned && ScalarBarrier(fixture.session, state.opening),
-           "update.joined-prepared-sample-keeps-exact-opening-sequence-pending");
-    Expect(TakeRefusedOnForeignJoinedWorker(fixture.session, state.opening, sequence) &&
-               ScalarBarrier(fixture.session, state.opening),
+    Expect(appended && returned && ScalarBarrier(fixture.session, state.opening), "update.joined-prepared-sample-keeps-exact-opening-sequence-pending");
+    Expect(TakeRefusedOnForeignJoinedWorker(fixture.session, state.opening, sequence) && ScalarBarrier(fixture.session, state.opening),
            "update.cached-owner-identity-refuses-foreign-worker-after-draft-detaches");
 
     auto wrongSequence = fixture.session.TakeWarpRetirementInput(state.opening, sequence + 1);
-    Expect(!wrongSequence && ScalarBarrier(fixture.session, state.opening) && !weak.expired(),
-           "update.wrong-sequence-refuses-with-detached-draft-alive");
-    Expect(fixture.session.IsWarpSampleCurrent(returned.value()) && !weak.expired(),
-           "update.prepared-sample-is-current-before-retirement-capture");
+    Expect(! wrongSequence && ScalarBarrier(fixture.session, state.opening) && ! weak.expired(), "update.wrong-sequence-refuses-with-detached-draft-alive");
+    Expect(fixture.session.IsWarpSampleCurrent(returned.value()) && ! weak.expired(), "update.prepared-sample-is-current-before-retirement-capture");
     auto retired = fixture.session.TakeWarpRetirementInput(state.opening, sequence);
-    const bool preparedSampleRefused = returned && !fixture.session.IsWarpSampleCurrent(returned.value()) &&
-                                       !fixture.session.ApplyWarpSampleIfCurrent(returned.value());
+    const bool preparedSampleRefused =
+        returned && ! fixture.session.IsWarpSampleCurrent(returned.value()) && ! fixture.session.ApplyWarpSampleIfCurrent(returned.value());
     Expect(retired && preparedSampleRefused && ScalarBarrier(fixture.session, state.opening),
            "update.capture-revokes-prepared-sample-and-keeps-retirement-barrier");
     auto duplicate = fixture.session.TakeWarpRetirementInput(state.opening, sequence);
-    Expect(!duplicate && ScalarBarrier(fixture.session, state.opening),
-           "update.duplicate-retirement-refuses-while-finishing-authority-is-pending");
-    Expect(TakeRefusedOnForeignJoinedWorker(fixture.session, state.opening, sequence) &&
-               ScalarBarrier(fixture.session, state.opening),
+    Expect(! duplicate && ScalarBarrier(fixture.session, state.opening), "update.duplicate-retirement-refuses-while-finishing-authority-is-pending");
+    Expect(TakeRefusedOnForeignJoinedWorker(fixture.session, state.opening, sequence) && ScalarBarrier(fixture.session, state.opening),
            "update.foreign-worker-refuses-after-retirement-capture");
-    if (!retired || !returned)
+    if (! retired || ! returned)
         return;
 
-    Expect(!weak.expired() && returned && retired,
-           "update.complete-original-bundle-retains-detached-draft-and-cache-wrapper");
+    Expect(! weak.expired() && returned && retired, "update.complete-original-bundle-retains-detached-draft-and-cache-wrapper");
     ReleaseObservation retirementObservation;
-    const bool draftDestroyedOnRetirementWorker =
-        RetireBundleOnJoinedWorker(std::move(retired), std::move(returned), retirementObservation);
+    const bool draftDestroyedOnRetirementWorker = RetireBundleOnJoinedWorker(std::move(retired), std::move(returned), retirementObservation);
     Expect(draftDestroyedOnRetirementWorker && weak.expired() && ScalarBarrier(fixture.session, state.opening),
            "update.complete-bundle-destruction-finishes-before-owner-authority-clears");
-    Expect(!fixture.session.DiscardWarpFinishIfCurrent(state.opening) && ScalarBarrier(fixture.session, state.opening),
+    Expect(! fixture.session.DiscardWarpFinishIfCurrent(state.opening) && ScalarBarrier(fixture.session, state.opening),
            "update.finish-ack-before-sample-ack-refuses-without-clearing-authority");
     const bool sampleAck = fixture.session.DiscardWarpSampleIfCurrent(state.opening, sequence);
-    Expect(sampleAck && ScalarBarrier(fixture.session, state.opening),
-           "update.exact-sample-discard-ack-preserves-finish-retirement-barrier");
+    Expect(sampleAck && ScalarBarrier(fixture.session, state.opening), "update.exact-sample-discard-ack-preserves-finish-retirement-barrier");
     const bool finishAck = fixture.session.DiscardWarpFinishIfCurrent(state.opening);
-    Expect(draftDestroyedOnRetirementWorker && weak.expired() && finishAck && !fixture.session.HasPendingWarp(),
+    Expect(draftDestroyedOnRetirementWorker && weak.expired() && finishAck && ! fixture.session.HasPendingWarp(),
            "update.exact-finish-discard-ack-clears-retirement-after-worker-destruction");
 }
 
@@ -285,68 +266,64 @@ void OldSequenceCannotClearNewUpdate()
 {
     Fixture fixture;
     Opened state = Open(fixture);
-    if (!state.plan || !state.draft)
+    if (! state.plan || ! state.draft)
     {
         Expect(false, "sequence.fixture-opens-and-plans");
         return;
     }
     auto first = fixture.session.TakeWarpSampleInput(state.opening, state.plan.value());
-    if (!first)
+    if (! first)
     {
         Expect(false, "sequence.first-update-transfers");
         return;
     }
     std::optional<WarpSampleInput> returned;
     bool appended = false;
-    std::thread producer(
-        [&]
-        {
-            appended = first->AppendForWork(CancelToken{});
-            returned.emplace(std::move(first.value()));
-        });
+    std::thread producer([&]
+    {
+        appended = first->AppendForWork(CancelToken{});
+        returned.emplace(std::move(first.value()));
+    });
     producer.join();
     first.reset();
     const bool restored = returned && fixture.session.ApplyWarpSampleIfCurrent(returned.value());
     returned.reset();
-    const auto nextPlan =
-        fixture.session.PendingWarp() ? fixture.session.PendingWarp()->PlanSampleMemory(kSamplePoint) : std::nullopt;
-    auto second = nextPlan ? fixture.session.TakeWarpSampleInput(state.opening, nextPlan.value()) : std::nullopt;
-    const auto nextSequence = nextPlan ? nextPlan->sequence : 0;
-    const bool oldAckRefused = !fixture.session.DiscardWarpSampleIfCurrent(state.opening, state.plan->sequence);
-    Expect(appended && restored && second && nextSequence != state.plan->sequence && oldAckRefused &&
-               ScalarBarrier(fixture.session, state.opening),
+    const auto nextPlan      = fixture.session.PendingWarp() ? fixture.session.PendingWarp()->PlanSampleMemory(kSamplePoint) : std::nullopt;
+    auto second              = nextPlan ? fixture.session.TakeWarpSampleInput(state.opening, nextPlan.value()) : std::nullopt;
+    const auto nextSequence  = nextPlan ? nextPlan->sequence : 0;
+    const bool oldAckRefused = ! fixture.session.DiscardWarpSampleIfCurrent(state.opening, state.plan->sequence);
+    Expect(appended && restored && second && nextSequence != state.plan->sequence && oldAckRefused && ScalarBarrier(fixture.session, state.opening),
            "sequence.old-callback-cannot-clear-newer-update-of-same-opening");
-    if (!second)
+    if (! second)
         return;
 
     std::stop_source secondStop;
     static_cast<void>(secondStop.request_stop());
     std::optional<WarpSampleInput> abandoned;
     bool secondCancelled = false;
-    std::thread secondWorker(
-        [&]
-        {
-            secondCancelled = !second->AppendForWork(CancelToken({}, secondStop.get_token()));
-            abandoned.emplace(std::move(second.value()));
-        });
+    std::thread secondWorker([&]
+    {
+        secondCancelled = ! second->AppendForWork(CancelToken({}, secondStop.get_token()));
+        abandoned.emplace(std::move(second.value()));
+    });
     secondWorker.join();
     second.reset();
     auto retired = fixture.session.TakeWarpRetirementInput(state.opening, nextSequence);
     ReleaseObservation observation;
     const bool workerDestruction = RetireBundleOnJoinedWorker(std::move(retired), std::move(abandoned), observation);
-    const bool sampleAck = fixture.session.DiscardWarpSampleIfCurrent(state.opening, nextSequence);
+    const bool sampleAck         = fixture.session.DiscardWarpSampleIfCurrent(state.opening, nextSequence);
     Expect(secondCancelled && workerDestruction && sampleAck && ScalarBarrier(fixture.session, state.opening),
            "sequence.current-sample-ack-keeps-retirement-barrier");
     const bool finishAck = fixture.session.DiscardWarpFinishIfCurrent(state.opening);
-    Expect(finishAck && !fixture.session.HasPendingWarp(), "sequence.current-finish-ack-clears-only-after-sample-ack");
+    Expect(finishAck && ! fixture.session.HasPendingWarp(), "sequence.current-finish-ack-clears-only-after-sample-ack");
 }
 } // namespace
 
 int RunWarpRetirementCoreTests()
 {
-    gChecks = 0;
+    gChecks   = 0;
     gFailures = 0;
-    static_assert(!std::is_copy_constructible_v<WarpRetirementInput>);
+    static_assert(! std::is_copy_constructible_v<WarpRetirementInput>);
     static_assert(std::is_nothrow_move_constructible_v<WarpRetirementInput>);
     LiveZeroPointDraftRefusalAndRetirement();
     DetachedSampleRetirementAndAck();

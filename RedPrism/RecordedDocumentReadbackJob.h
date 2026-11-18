@@ -31,11 +31,16 @@ class RecordedDocumentReadbackJob : public Job,
                                     public GpuReadbackProducer,
                                     public UtilityReadbackOwner
 {
-  public:
-    RecordedDocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, GpuCommandPump& commands,
-                                UtilityReadbackOwnerService& owners, GpuResidencyBudget& gpuBudget,
-                                UtilityReadbackAdmission::Envelope envelope, GpuResidencyReservation originalGpuCharge,
-                                D3D11_BOX region, bool software,
+public:
+    RecordedDocumentReadbackJob(JobScheduler& scheduler,
+                                GpuWorkQueue& queue,
+                                GpuCommandPump& commands,
+                                UtilityReadbackOwnerService& owners,
+                                GpuResidencyBudget& gpuBudget,
+                                UtilityReadbackAdmission::Envelope envelope,
+                                GpuResidencyReservation originalGpuCharge,
+                                D3D11_BOX region,
+                                bool software,
                                 RecordedReadbackCaptureKind captureKind = RecordedReadbackCaptureKind::Gpu) noexcept;
     ~RecordedDocumentReadbackJob() override;
     [[nodiscard]] static std::uint64_t RequiredMemory(D3D11_BOX region) noexcept;
@@ -53,14 +58,13 @@ class RecordedDocumentReadbackJob : public Job,
     void PumpUtilityOwner() noexcept final;
     void StopUtilityOwner() noexcept final;
 
-  protected:
+protected:
     // Original admitted Compute opening, before the owner captures any document/history references.
     [[nodiscard]] virtual JobResult PrepareReadbackOpening(JobContext&)
     {
         return {};
     }
-    [[nodiscard]] virtual HRESULT BindReadbackMemoryForRetirement(JobTicket original,
-                                                                  SharedPublicationMemory& temporary) noexcept;
+    [[nodiscard]] virtual HRESULT BindReadbackMemoryForRetirement(JobTicket original, SharedPublicationMemory& temporary) noexcept;
     [[nodiscard]] virtual HRESULT CaptureReadbackDocument(CanvasDocument&) noexcept = 0;
     [[nodiscard]] virtual JobResult PrepareReadbackSnapshot(CanvasDocument&, JobContext&)
     {
@@ -82,8 +86,10 @@ class RecordedDocumentReadbackJob : public Job,
     {
         return false;
     }
-    virtual void ResetReadback() noexcept {}
-    [[nodiscard]] virtual HRESULT PrepareReadbackDevice(HRESULT reason) noexcept = 0;
+    virtual void ResetReadback() noexcept
+    {
+    }
+    [[nodiscard]] virtual HRESULT PrepareReadbackDevice(HRESULT reason) noexcept                            = 0;
     virtual void ReadbackCompleted(JobResult result, Raster image, std::uint64_t deviceGeneration) noexcept = 0;
     // Only the admitted sampler opts in. No source slot/recorder is held between acknowledged 1x1 results.
     [[nodiscard]] virtual bool KeepReadbackGraphForPixelContinuation() const noexcept
@@ -109,10 +115,9 @@ class RecordedDocumentReadbackJob : public Job,
     }
     // Called in the exact terminal Completed callback, after binding this original complete admission.
     // The derived retirement/adoption aggregate retains the SAME memory owner, including weak lifetime.
-    void TransferReadbackOwners(CanvasDocument& document, PixelBuffer& pixels, Raster& image,
-                                std::shared_ptr<SharedPublicationMemory>& memory) noexcept;
+    void TransferReadbackOwners(CanvasDocument& document, PixelBuffer& pixels, Raster& image, std::shared_ptr<SharedPublicationMemory>& memory) noexcept;
 
-  private:
+private:
     struct Root;
     enum class Phase : std::uint8_t
     {
@@ -169,28 +174,28 @@ class RecordedDocumentReadbackJob : public Job,
     CancelToken _cancellation;
     GpuCommandSourceLease _source;
     GpuReadbackRows _rows;
-    Phase _phase = Phase::Opening;
+    Phase _phase                 = Phase::Opening;
     AfterGraphics _afterGraphics = AfterGraphics::Complete;
     JobResult _terminal;
-    HRESULT _attemptFailure = S_OK;
-    HRESULT _recordingFailure = S_OK; // Immutable from Resume(Recording) through that actual worker ack.
-    std::uint64_t _deviceGeneration = 0;
+    HRESULT _attemptFailure           = S_OK;
+    HRESULT _recordingFailure         = S_OK; // Immutable from Resume(Recording) through that actual worker ack.
+    std::uint64_t _deviceGeneration   = 0;
     std::uint64_t _lastCommandOrdinal = 0;
-    std::uint64_t _copiedPixels = 0;
+    std::uint64_t _copiedPixels       = 0;
     unsigned int _x = 0, _y = 0, _width = 0, _height = 0, _restarts = 0;
-    bool _serviceAttached = false;
-    bool _streamInitialized = false;
-    bool _streamRetired = false;
+    bool _serviceAttached     = false;
+    bool _streamInitialized   = false;
+    bool _streamRetired       = false;
     bool _transportAuthorized = false;
-    bool _sourceAttached = false;
-    bool _graphPrepared = false;
-    bool _graphPublished = false;
-    bool _rowsReady = false;
-    bool _stopOffered = false;
-    bool _resetOutput = false;
-    bool _detachedReady = false;
-    bool _graphicsRetired = true;
-    bool _joinedDestruction = false;
+    bool _sourceAttached      = false;
+    bool _graphPrepared       = false;
+    bool _graphPublished      = false;
+    bool _rowsReady           = false;
+    bool _stopOffered         = false;
+    bool _resetOutput         = false;
+    bool _detachedReady       = false;
+    bool _graphicsRetired     = true;
+    bool _joinedDestruction   = false;
     bool _softwareMemoryAdmitted;
     bool _deviceSoftware = false;
 };

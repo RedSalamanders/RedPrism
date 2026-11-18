@@ -17,7 +17,7 @@
 #pragma warning(disable : 4625 4626 5026 5027)
 class WorkerWriteCompletion final
 {
-  public:
+public:
     // Fixed per-record allowance for this wrapper, its shared control block and native event bookkeeping.
     // The scheduler also applies its process commit/physical headroom before admitting the complete graph.
     static constexpr std::uint64_t kReservationBytes = 4096;
@@ -31,13 +31,12 @@ class WorkerWriteCompletion final
         Finished
     };
 
-    explicit WorkerWriteCompletion(Phase initial) noexcept
-        : _completed(CreateEventW(nullptr, TRUE, FALSE, nullptr)), _phase(initial)
+    explicit WorkerWriteCompletion(Phase initial) noexcept : _completed(CreateEventW(nullptr, TRUE, FALSE, nullptr)), _phase(initial)
     {
-        if (!_completed)
+        if (! _completed)
         {
             const DWORD error = GetLastError();
-            _creationError = error != 0 ? HRESULT_FROM_WIN32(error) : E_FAIL;
+            _creationError    = error != 0 ? HRESULT_FROM_WIN32(error) : E_FAIL;
         }
     }
 
@@ -74,7 +73,7 @@ class WorkerWriteCompletion final
         (void)SetEvent(_completed.get());
     }
 
-  private:
+private:
     wil::unique_handle _completed;
     std::atomic<Phase> _phase;
     HRESULT _creationError = S_OK;

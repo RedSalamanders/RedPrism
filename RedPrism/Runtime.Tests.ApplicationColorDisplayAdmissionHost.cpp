@@ -12,13 +12,13 @@
 
 namespace
 {
-constexpr std::uint64_t kMiB = 1024ull * 1024;
+constexpr std::uint64_t kMiB          = 1024ull * 1024;
 constexpr std::uint64_t kBlockerBytes = 64 * kMiB;
 
 bool SampleAdmissionMemory(void*, MemorySnapshot& snapshot) noexcept
 {
     snapshot.availablePhysicalBytes = kMemoryAdmissionHeadroomBytes + kBlockerBytes;
-    snapshot.availableCommitBytes = kMemoryAdmissionHeadroomBytes + kBlockerBytes;
+    snapshot.availableCommitBytes   = kMemoryAdmissionHeadroomBytes + kBlockerBytes;
     return true;
 }
 
@@ -41,8 +41,10 @@ struct AdmissionBlocker final
 
 class AdmissionBlockerJob final : public Job
 {
-  public:
-    explicit AdmissionBlockerJob(std::shared_ptr<AdmissionBlocker> gate) noexcept : _gate(std::move(gate)) {}
+public:
+    explicit AdmissionBlockerJob(std::shared_ptr<AdmissionBlocker> gate) noexcept : _gate(std::move(gate))
+    {
+    }
 
     JobResult Run(JobContext& context) override
     {
@@ -54,9 +56,11 @@ class AdmissionBlockerJob final : public Job
         return wait == WAIT_OBJECT_0 ? JobResult{} : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
     }
 
-    void Completed(JobResult) noexcept override {}
+    void Completed(JobResult) noexcept override
+    {
+    }
 
-  private:
+private:
     std::shared_ptr<AdmissionBlocker> _gate;
 };
 
@@ -68,29 +72,27 @@ int Application::RunStandaloneColorDisplayAdmissionSelfTest(HINSTANCE instance) 
     {
         ApplicationProcessingTestProbe processing;
         processing.memory = {SampleAdmissionMemory, nullptr};
-        auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
+        auto owner        = std::make_unique<Application>(instance, true, nullptr, 0);
         Raster source;
         std::shared_ptr<AdmissionBlocker> blocker;
         std::shared_ptr<ColorWorkTestGate> colorGate;
-        const auto cleanup = wil::scope_exit(
-            [&]() noexcept
+        const auto cleanup = wil::scope_exit([&]() noexcept
+        {
+            if (! owner)
+                return;
+            owner->_processingTestProbe = nullptr;
+            owner->Shutdown();
+            owner.reset();
+            while (PumpMessages().quit)
             {
-                if (!owner)
-                    return;
-                owner->_processingTestProbe = nullptr;
-                owner->Shutdown();
-                owner.reset();
-                while (PumpMessages().quit)
-                {
-                }
-            });
+            }
+        });
 
-        owner->_quietUi = true;
-        owner->_prompts = &QuietPrompts();
+        owner->_quietUi             = true;
+        owner->_prompts             = &QuietPrompts();
         owner->_processingTestProbe = &processing;
-        if (FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
-            FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) ||
-            FAILED(owner->InitializeChrome()))
+        if (FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) || FAILED(owner->CreateMainWindow(false)) ||
+            FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
         {
             SelfTestFailure(L"Color display admission fixture could not initialize its hidden WARP host.\n");
             return false;
@@ -99,23 +101,22 @@ int Application::RunStandaloneColorDisplayAdmissionSelfTest(HINSTANCE instance) 
 
         owner->_session.CreateDocument(4, 1, false);
         const Guid layer = InsertPaintedLayer(owner->_session, L"Admission source", 4, 1, {}, 0, 0xFF707070u);
-        if (!owner->_session.ActiveLayer() || !owner->_session.ActiveLayer()->asset || !owner->_session.Document())
+        if (! owner->_session.ActiveLayer() || ! owner->_session.ActiveLayer()->asset || ! owner->_session.Document())
         {
             SelfTestFailure(L"Color display admission fixture could not create its source image.\n");
             return false;
         }
         owner->_session.history.MarkSaved();
-        source = owner->_session.ActiveLayer()->asset->image;
+        source                       = owner->_session.ActiveLayer()->asset->image;
         const void* const sourceRoot = owner->_session.Document()->layers.Identity();
-        const Guid historyRevision = owner->_session.history.CurrentRevision();
-        const int undoCount = owner->_session.history.UndoCount();
+        const Guid historyRevision   = owner->_session.history.CurrentRevision();
+        const int undoCount          = owner->_session.history.UndoCount();
 
-        blocker = std::make_shared<AdmissionBlocker>();
+        blocker                          = std::make_shared<AdmissionBlocker>();
         std::unique_ptr<Job> blockingJob = std::make_unique<AdmissionBlockerJob>(blocker);
         JobTicket blockerTicket;
-        if (!blocker->entered || !blocker->release ||
-            owner->_jobs.Submit(blockingJob, {JobClass::Background, 0, kBlockerBytes}, blockerTicket) < 0 ||
-            !WaitForColorWorkTestEvent(owner->_jobs, blocker->entered.get(), DispatchMessageThunk, owner.get()) ||
+        if (! blocker->entered || ! blocker->release || owner->_jobs.Submit(blockingJob, {JobClass::Background, 0, kBlockerBytes}, blockerTicket) < 0 ||
+            ! WaitForColorWorkTestEvent(owner->_jobs, blocker->entered.get(), DispatchMessageThunk, owner.get()) ||
             owner->_jobs.ReservedMemoryBytes() != kBlockerBytes)
         {
             (void)SetEvent(blocker->release.get());
@@ -123,27 +124,26 @@ int Application::RunStandaloneColorDisplayAdmissionSelfTest(HINSTANCE instance) 
             return false;
         }
 
-        colorGate = std::make_shared<ColorWorkTestGate>();
+        colorGate                 = std::make_shared<ColorWorkTestGate>();
         owner->_colorWorkTestGate = colorGate;
         owner->_session.BeginColorEdit(FilterKind::Exposure, true);
-        if (!owner->_session.PendingColorEdit())
+        if (! owner->_session.PendingColorEdit())
         {
             (void)SetEvent(blocker->release.get());
             return false;
         }
-        auto settings = owner->_session.PendingColorEdit()->settings;
+        auto settings              = owner->_session.PendingColorEdit()->settings;
         settings.exposure.exposure = 1.0;
         owner->_session.UpdateColorEdit(settings, true);
         const std::uint64_t sequence = owner->_session.ColorEditSequence();
         owner->DocumentChanged();
 
-        const bool waitingState = owner->_colorPreviewTicket.has_value() &&
-                                  owner->_jobs.ReservedMemoryBytes() == kBlockerBytes &&
-                                  colorGate->visits.load() == 0 && !colorGate->captureReservationHeld.load() &&
-                                  WaitForSingleObject(colorGate->entered.get(), 0) == WAIT_TIMEOUT;
+        const bool waitingState       = owner->_colorPreviewTicket.has_value() && owner->_jobs.ReservedMemoryBytes() == kBlockerBytes &&
+                                        colorGate->visits.load() == 0 && ! colorGate->captureReservationHeld.load() &&
+                                        WaitForSingleObject(colorGate->entered.get(), 0) == WAIT_TIMEOUT;
         const JobTicket previewTicket = owner->_colorPreviewTicket.value_or(JobTicket{});
-        bool reached = false;
-        bool published = false;
+        bool reached                  = false;
+        bool published                = false;
         if (waitingState)
         {
             if (cancelWaiting)
@@ -151,53 +151,41 @@ int Application::RunStandaloneColorDisplayAdmissionSelfTest(HINSTANCE instance) 
                 // The preview keeps its submitted gate. The dismissal is a distinct job with its own capture;
                 // do not let its legitimate admission overwrite the preview's no-capture observation.
                 owner->_colorWorkTestGate.reset();
-                const auto cancel = owner->QueuePanelCancel(owner->_session.PendingColorEdit()->openingSequence);
-                const bool exactCancel = RunUiActions(owner->_jobs) && owner->_colorCommitTicket &&
-                                         owner->_colorPreviewTicket == previewTicket &&
+                const auto cancel      = owner->QueuePanelCancel(owner->_session.PendingColorEdit()->openingSequence);
+                const bool exactCancel = RunUiActions(owner->_jobs) && owner->_colorCommitTicket && owner->_colorPreviewTicket == previewTicket &&
                                          owner->_jobs.ReservedMemoryBytes() == kBlockerBytes;
                 (void)SetEvent(blocker->release.get());
-                reached = SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) == SettleResult::Settled;
+                reached             = SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) == SettleResult::Settled;
                 const auto* display = owner->_session.DisplayDocument();
-                published = exactCancel && reached && cancel.Read().outcome == HostOutcome::Succeeded &&
-                            !owner->_session.HasColorEdit() && !owner->_colorPreviewTicket &&
-                            !owner->_colorHistogramTicket && owner->_jobs.ReservedMemoryBytes() == 0 &&
-                            colorGate->visits.load() == 0 && !colorGate->captureReservationHeld.load() &&
-                            owner->_session.ActiveLayer() && owner->_session.ActiveLayer()->id == layer &&
-                            owner->_session.ActiveLayer()->asset->image == source &&
-                            owner->_session.Document()->layers.Identity() == sourceRoot &&
-                            owner->_session.history.CurrentRevision() == historyRevision &&
-                            owner->_session.history.UndoCount() == undoCount && display &&
-                            display->layers.Identity() == sourceRoot;
+                published = exactCancel && reached && cancel.Read().outcome == HostOutcome::Succeeded && ! owner->_session.HasColorEdit() &&
+                            ! owner->_colorPreviewTicket && ! owner->_colorHistogramTicket && owner->_jobs.ReservedMemoryBytes() == 0 &&
+                            colorGate->visits.load() == 0 && ! colorGate->captureReservationHeld.load() && owner->_session.ActiveLayer() &&
+                            owner->_session.ActiveLayer()->id == layer && owner->_session.ActiveLayer()->asset->image == source &&
+                            owner->_session.Document()->layers.Identity() == sourceRoot && owner->_session.history.CurrentRevision() == historyRevision &&
+                            owner->_session.history.UndoCount() == undoCount && display && display->layers.Identity() == sourceRoot;
             }
             else
             {
                 (void)SetEvent(blocker->release.get());
-                reached = WaitForColorWorkTestEvent(owner->_jobs, colorGate->entered.get(), DispatchMessageThunk,
-                                                    owner.get());
-                const bool sameTicketCaptured = reached && owner->_colorPreviewTicket == previewTicket &&
-                                                colorGate->captureReservationHeld.load() &&
-                                                colorGate->visits.load() == 1;
+                reached = WaitForColorWorkTestEvent(owner->_jobs, colorGate->entered.get(), DispatchMessageThunk, owner.get());
+                const bool sameTicketCaptured =
+                    reached && owner->_colorPreviewTicket == previewTicket && colorGate->captureReservationHeld.load() && colorGate->visits.load() == 1;
                 (void)SetEvent(colorGate->release.get());
-                reached = reached &&
-                          SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) == SettleResult::Settled;
+                reached             = reached && SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) == SettleResult::Settled;
                 const auto* display = owner->_session.DisplayDocument();
-                published = sameTicketCaptured && reached && !owner->_colorPreviewTicket &&
-                            owner->_jobs.ReservedMemoryBytes() == 0 && colorGate->visits.load() == 1 &&
-                            colorGate->payloadRetired.load() && colorGate->payloadRetiredOffOwner.load() &&
-                            owner->_session.PendingColorEdit() &&
-                            owner->_session.PendingColorEdit()->previewSequence == sequence &&
+                published = sameTicketCaptured && reached && ! owner->_colorPreviewTicket && owner->_jobs.ReservedMemoryBytes() == 0 &&
+                            colorGate->visits.load() == 1 && colorGate->payloadRetired.load() && colorGate->payloadRetiredOffOwner.load() &&
+                            owner->_session.PendingColorEdit() && owner->_session.PendingColorEdit()->previewSequence == sequence &&
                             owner->_session.ActiveLayer() && owner->_session.ActiveLayer()->id == layer &&
-                            owner->_session.ActiveLayer()->asset->image == source &&
-                            owner->_session.Document()->layers.Identity() == sourceRoot && display &&
-                            display->layers.Identity() != sourceRoot &&
-                            owner->_session.history.CurrentRevision() == historyRevision &&
+                            owner->_session.ActiveLayer()->asset->image == source && owner->_session.Document()->layers.Identity() == sourceRoot && display &&
+                            display->layers.Identity() != sourceRoot && owner->_session.history.CurrentRevision() == historyRevision &&
                             owner->_session.history.UndoCount() == undoCount;
             }
         }
 
-        const bool pass = Expect(waitingState && reached && published,
-                                 cancelWaiting ? "color-display-host.admission.waiting-cancel-no-capture"
-                                               : "color-display-host.admission.wait-resumes-same-record");
+        const bool pass =
+            Expect(waitingState && reached && published,
+                   cancelWaiting ? "color-display-host.admission.waiting-cancel-no-capture" : "color-display-host.admission.wait-resumes-same-record");
         owner->_processingTestProbe = nullptr;
         owner->Shutdown();
         owner.reset();

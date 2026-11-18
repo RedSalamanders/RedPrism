@@ -24,15 +24,15 @@
 
 namespace
 {
-constexpr DWORD kTimeoutMs = 10000;
+constexpr DWORD kTimeoutMs                   = 10000;
 constexpr std::uint64_t kWholeAdmissionBytes = 2ull * 1024 * 1024;
-constexpr std::uint64_t kAvailableBytes = kMemoryAdmissionHeadroomBytes + 64ull * 1024 * 1024;
-constexpr std::uint64_t kDocumentSerial = 0x5055424c49534831ull;
+constexpr std::uint64_t kAvailableBytes      = kMemoryAdmissionHeadroomBytes + 64ull * 1024 * 1024;
+constexpr std::uint64_t kDocumentSerial      = 0x5055424c49534831ull;
 constexpr Guid kDocumentId{{0x51, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 0, 1}};
 constexpr Guid kLayerId{{0x51, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 0, 2}};
 constexpr const wchar_t* kLayerLabel = L"Publication target";
-unsigned int gPassed = 0;
-unsigned int gFailed = 0;
+unsigned int gPassed                 = 0;
+unsigned int gFailed                 = 0;
 
 void Expect(bool condition, const char* name) noexcept
 {
@@ -51,7 +51,7 @@ void Expect(bool condition, const char* name) noexcept
 wil::unique_handle MakeEvent(const char* name)
 {
     wil::unique_handle event{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    if (!event)
+    if (! event)
         SetupFailure(name, GetLastError());
     return event;
 }
@@ -84,18 +84,18 @@ void Start(JobScheduler& scheduler, Sampler& sampler)
 {
     if (scheduler.Initialize(1, {}, {&SampleMemory, &sampler}) != S_OK)
         SetupFailure("scheduler-initialize");
-    if (!scheduler.EnableDeferredRelease())
+    if (! scheduler.EnableDeferredRelease())
         SetupFailure("deferred-release-enable");
 }
 
 CanvasDocument MakeDocument()
 {
     DocumentFixture fixture;
-    fixture.id = kDocumentId;
-    fixture.width = 1;
-    fixture.height = 1;
+    fixture.id       = kDocumentId;
+    fixture.width    = 1;
+    fixture.height   = 1;
     ImageLayer layer = ImageLayer::Blank(kLayerLabel, {1, 1});
-    layer.id = kLayerId;
+    layer.id         = kLayerId;
     fixture.layers.push_back(std::move(layer));
     return std::move(fixture).Seal();
 }
@@ -113,40 +113,40 @@ struct Probe final
     std::weak_ptr<SharedPublicationMemory> weakPublication;
     HANDLE publicationReady = nullptr;
     HANDLE allowPreparation = nullptr;
-    HANDLE rowsReady = nullptr;
-    HANDLE allowCompletion = nullptr;
+    HANDLE rowsReady        = nullptr;
+    HANDLE allowCompletion  = nullptr;
     JobTicket ticket{};
     std::atomic<DWORD> runThread{0};
     std::atomic<unsigned int> samplerCallsBeforeBind{0};
     std::atomic<unsigned int> samplerCallsAfterBind{0};
-    unsigned int runCount = 0;
-    unsigned int retirementCount = 0;
-    unsigned int deferCount = 0;
-    unsigned int completionCount = 0;
-    std::int32_t outsideBind = E_UNEXPECTED;
-    std::int32_t unboundRowsBind = E_UNEXPECTED;
-    std::int32_t wrongTicketBind = E_UNEXPECTED;
+    unsigned int runCount             = 0;
+    unsigned int retirementCount      = 0;
+    unsigned int deferCount           = 0;
+    unsigned int completionCount      = 0;
+    std::int32_t outsideBind          = E_UNEXPECTED;
+    std::int32_t unboundRowsBind      = E_UNEXPECTED;
+    std::int32_t wrongTicketBind      = E_UNEXPECTED;
     std::int32_t validPublicationBind = E_UNEXPECTED;
-    std::int32_t validRowsBind = E_UNEXPECTED;
-    std::int32_t duplicateRowsBind = E_UNEXPECTED;
-    std::int32_t outsideRebind = E_UNEXPECTED;
-    bool unboundSeal = true;
-    bool validSeal = false;
-    bool wrongTicketPreservedUnbound = false;
-    bool duplicateRowsPreserved = false;
-    bool outsideBindSamplerPreserved = false;
-    bool unboundRowsChargePreserved = false;
-    bool duplicateSeal = true;
-    bool resumeAccepted = false;
-    bool sameTicket = true;
-    bool runOnWorker = false;
-    bool wrapperAliasDroppedOnWorker = false;
-    bool publishedAliasKeptWrapper = false;
-    bool callbackChargeExact = false;
-    bool exactCallbackIdentity = false;
-    bool completedChargeExact = false;
-    std::uint64_t chargeBeforeBind = 0;
-    std::uint64_t chargeAfterBind = 0;
+    std::int32_t validRowsBind        = E_UNEXPECTED;
+    std::int32_t duplicateRowsBind    = E_UNEXPECTED;
+    std::int32_t outsideRebind        = E_UNEXPECTED;
+    bool unboundSeal                  = true;
+    bool validSeal                    = false;
+    bool wrongTicketPreservedUnbound  = false;
+    bool duplicateRowsPreserved       = false;
+    bool outsideBindSamplerPreserved  = false;
+    bool unboundRowsChargePreserved   = false;
+    bool duplicateSeal                = true;
+    bool resumeAccepted               = false;
+    bool sameTicket                   = true;
+    bool runOnWorker                  = false;
+    bool wrapperAliasDroppedOnWorker  = false;
+    bool publishedAliasKeptWrapper    = false;
+    bool callbackChargeExact          = false;
+    bool exactCallbackIdentity        = false;
+    bool completedChargeExact         = false;
+    std::uint64_t chargeBeforeBind    = 0;
+    std::uint64_t chargeAfterBind     = 0;
     std::uint64_t chargeAfterRefusals = 0;
     std::uint64_t finalCallbackCharge = 0;
 };
@@ -158,9 +158,12 @@ struct Probe final
 #pragma warning(disable : 4626 5027)
 class PublicationRowsJob final : public Job
 {
-  public:
+public:
     PublicationRowsJob(Probe& probe, Sampler& sampler, CanvasDocument source, LayerRowsAdmission admission)
-        : _probe(probe), _sampler(sampler), _source(std::move(source)), _admission(admission)
+        : _probe(probe),
+          _sampler(sampler),
+          _source(std::move(source)),
+          _admission(admission)
     {
     }
 
@@ -176,23 +179,22 @@ class PublicationRowsJob final : public Job
                 const std::lock_guard lock{_probe.mutex};
                 _probe.weakPublication = _publication;
             }
-            if (!SetEvent(_probe.publicationReady))
+            if (! SetEvent(_probe.publicationReady))
                 SetupFailure("publication-ready-signal", GetLastError());
             Wait(_probe.allowPreparation, "allow-preparation-wait");
 
             auto rows = LayerRowsWork::Prepare(_source, {}, L"[hidden {0}]", _admission);
-            if (!rows)
+            if (! rows)
                 SetupFailure("layer-rows-prepare");
             _source = {};
-            _rows = PreparedLayerRows::Create(std::move(rows), kWholeAdmissionBytes, kDocumentSerial,
-                                              PreparedLayerRows::FirstItemIdentity, nullptr);
-            if (!_rows)
+            _rows   = PreparedLayerRows::Create(std::move(rows), kWholeAdmissionBytes, kDocumentSerial, PreparedLayerRows::FirstItemIdentity, nullptr);
+            if (! _rows)
                 SetupFailure("prepared-layer-rows-create");
             {
                 const std::lock_guard lock{_probe.mutex};
                 _probe.stagingRows = _rows;
             }
-            if (!SetEvent(_probe.rowsReady))
+            if (! SetEvent(_probe.rowsReady))
                 SetupFailure("rows-ready-signal", GetLastError());
             Wait(_probe.allowCompletion, "allow-completion-wait");
         }
@@ -201,7 +203,7 @@ class PublicationRowsJob final : public Job
             // The actual second worker stage retires the original mutable wrapper alias. Publication owns it now.
             _rows.reset();
             _probe.wrapperAliasDroppedOnWorker = true;
-            _probe.publishedAliasKeptWrapper = static_cast<bool>(_probe.publishedRows);
+            _probe.publishedAliasKeptWrapper   = static_cast<bool>(_probe.publishedRows);
         }
         return {};
     }
@@ -215,34 +217,33 @@ class PublicationRowsJob final : public Job
     {
         ++_probe.deferCount;
         _probe.sameTicket = _probe.sameTicket && ticket == _probe.ticket;
-        if (result.status != JobStatus::Finished || !_publication || !_rows)
+        if (result.status != JobStatus::Finished || ! _publication || ! _rows)
             return false;
         if (_probe.deferCount != 1)
             return false;
 
         _probe.exactCallbackIdentity = _scheduler->InAcknowledgedJobCallback(ticket);
-        _probe.chargeBeforeBind = _scheduler->ReservedMemoryBytes();
+        _probe.chargeBeforeBind      = _scheduler->ReservedMemoryBytes();
         _probe.samplerCallsBeforeBind.store(_sampler.calls.load(std::memory_order_relaxed), std::memory_order_relaxed);
         JobTicket wrong = ticket;
         ++wrong.generation;
-        _probe.wrongTicketBind = _publication->BindForPublication(*_scheduler, wrong);
-        _probe.wrongTicketPreservedUnbound = !_publication->IsBound() && _publication->Bytes() == 0;
-        _probe.chargeAfterRefusals = _scheduler->ReservedMemoryBytes();
-        _probe.validPublicationBind = _publication->BindForPublication(*_scheduler, ticket);
+        _probe.wrongTicketBind             = _publication->BindForPublication(*_scheduler, wrong);
+        _probe.wrongTicketPreservedUnbound = ! _publication->IsBound() && _publication->Bytes() == 0;
+        _probe.chargeAfterRefusals         = _scheduler->ReservedMemoryBytes();
+        _probe.validPublicationBind        = _publication->BindForPublication(*_scheduler, ticket);
         if (_probe.validPublicationBind != S_OK)
             SetupFailure("exact-callback-publication-bind", static_cast<DWORD>(_probe.validPublicationBind));
 
         const std::shared_ptr<const SharedPublicationMemory> immutablePublication = _publication;
-        _probe.validRowsBind = _rows->BindPublicationMemory(immutablePublication);
-        _probe.validSeal = _rows->SealForPublication();
-        _probe.duplicateRowsBind = _rows->BindPublicationMemory(immutablePublication);
-        _probe.duplicateSeal = _rows->SealForPublication();
-        _probe.duplicateRowsPreserved = _rows->HasMemoryLease() && _rows->MemoryBytes() == kWholeAdmissionBytes;
-        _probe.publishedRows = _rows;
-        _probe.weakRows = _rows;
-        _probe.chargeAfterBind = _scheduler->ReservedMemoryBytes();
-        _probe.callbackChargeExact =
-            _probe.chargeBeforeBind == kWholeAdmissionBytes && _probe.chargeAfterBind == kWholeAdmissionBytes;
+        _probe.validRowsBind                                                      = _rows->BindPublicationMemory(immutablePublication);
+        _probe.validSeal                                                          = _rows->SealForPublication();
+        _probe.duplicateRowsBind                                                  = _rows->BindPublicationMemory(immutablePublication);
+        _probe.duplicateSeal                                                      = _rows->SealForPublication();
+        _probe.duplicateRowsPreserved                                             = _rows->HasMemoryLease() && _rows->MemoryBytes() == kWholeAdmissionBytes;
+        _probe.publishedRows                                                      = _rows;
+        _probe.weakRows                                                           = _rows;
+        _probe.chargeAfterBind                                                    = _scheduler->ReservedMemoryBytes();
+        _probe.callbackChargeExact = _probe.chargeBeforeBind == kWholeAdmissionBytes && _probe.chargeAfterBind == kWholeAdmissionBytes;
         _probe.samplerCallsAfterBind.store(_sampler.calls.load(std::memory_order_relaxed), std::memory_order_relaxed);
         _probe.resumeAccepted = _scheduler->Resume(ticket);
         return true;
@@ -251,8 +252,8 @@ class PublicationRowsJob final : public Job
     void Completed(JobResult result) noexcept override
     {
         ++_probe.completionCount;
-        _probe.sameTicket = _probe.sameTicket && result.status == JobStatus::Finished;
-        _probe.finalCallbackCharge = _scheduler->ReservedMemoryBytes();
+        _probe.sameTicket           = _probe.sameTicket && result.status == JobStatus::Finished;
+        _probe.finalCallbackCharge  = _scheduler->ReservedMemoryBytes();
         _probe.completedChargeExact = _probe.finalCallbackCharge == kWholeAdmissionBytes;
     }
 
@@ -265,7 +266,7 @@ class PublicationRowsJob final : public Job
         _scheduler = &scheduler;
     }
 
-  private:
+private:
     Probe& _probe;
     Sampler& _sampler;
     CanvasDocument _source;
@@ -273,7 +274,7 @@ class PublicationRowsJob final : public Job
     std::shared_ptr<SharedPublicationMemory> _publication;
     std::shared_ptr<PreparedLayerRows> _rows;
     JobScheduler* _scheduler = nullptr;
-    DWORD _ownerThread = 0;
+    DWORD _ownerThread       = 0;
 };
 #pragma warning(pop)
 
@@ -290,8 +291,7 @@ void PumpToFirstPublication(JobScheduler& scheduler, Probe& probe)
             SetupFailure("first-publication-deadline", ERROR_TIMEOUT);
         if (scheduler.HasUiWork())
             continue;
-        const DWORD wait =
-            WaitForSingleObject(static_cast<HANDLE>(scheduler.WakeHandle()), static_cast<DWORD>(deadline - now));
+        const DWORD wait = WaitForSingleObject(static_cast<HANDLE>(scheduler.WakeHandle()), static_cast<DWORD>(deadline - now));
         if (wait != WAIT_OBJECT_0)
             SetupFailure("first-publication-wake", wait == WAIT_FAILED ? GetLastError() : wait);
     }
@@ -306,23 +306,22 @@ void SettleOrFail(JobScheduler& scheduler, const char* name)
 void Submit(JobScheduler& scheduler, std::unique_ptr<Job>& job, Probe& probe)
 {
     JobOptions options{};
-    options.kind = JobClass::Background;
-    options.memoryBytes = kWholeAdmissionBytes;
-    options.deferredRetirement = true;
+    options.kind                  = JobClass::Background;
+    options.memoryBytes           = kWholeAdmissionBytes;
+    options.deferredRetirement    = true;
     options.reserveRetainedMemory = true;
-    const std::int32_t result = scheduler.Submit(job, options, probe.ticket);
+    const std::int32_t result     = scheduler.Submit(job, options, probe.ticket);
     if (result != S_OK || job)
         SetupFailure("job-submit", static_cast<DWORD>(result));
 }
 
 void VerifyPreparedRows(PreparedLayerRows& rows)
 {
-    const auto data = rows.Rows();
+    const auto data   = rows.Rows();
     const auto labels = rows.DisplayText();
-    const auto row = rows.FindVisibleRow(kLayerId);
-    const auto item = rows.FindVisibleItem(PreparedLayerRows::FirstItemIdentity);
-    Expect(data.size() == 1 && labels.size() == 1 && data[0].id == kLayerId,
-           "actual-worker-rows-preserve-single-guid-row");
+    const auto row    = rows.FindVisibleRow(kLayerId);
+    const auto item   = rows.FindVisibleItem(PreparedLayerRows::FirstItemIdentity);
+    Expect(data.size() == 1 && labels.size() == 1 && data[0].id == kLayerId, "actual-worker-rows-preserve-single-guid-row");
     Expect(labels.size() == 1 && labels[0] == kLayerLabel, "actual-worker-rows-preserve-literal-display-label");
     Expect(row && *row == 0 && rows.ItemIdAt(0) == PreparedLayerRows::FirstItemIdentity && item && *item == 0,
            "actual-worker-rows-preserve-guid-and-item-identity-lookups");
@@ -336,8 +335,8 @@ struct LifetimeFixture final
 {
     wil::unique_handle publicationReady = MakeEvent("publication-ready-event");
     wil::unique_handle allowPreparation = MakeEvent("allow-preparation-event");
-    wil::unique_handle rowsReady = MakeEvent("rows-ready-event");
-    wil::unique_handle allowCompletion = MakeEvent("allow-completion-event");
+    wil::unique_handle rowsReady        = MakeEvent("rows-ready-event");
+    wil::unique_handle allowCompletion  = MakeEvent("allow-completion-event");
     Probe probe;
     Sampler sampler;
     JobScheduler scheduler;
@@ -346,8 +345,8 @@ struct LifetimeFixture final
     {
         probe.publicationReady = publicationReady.get();
         probe.allowPreparation = allowPreparation.get();
-        probe.rowsReady = rowsReady.get();
-        probe.allowCompletion = allowCompletion.get();
+        probe.rowsReady        = rowsReady.get();
+        probe.allowCompletion  = allowCompletion.get();
         Start(scheduler, sampler);
     }
 };
@@ -356,18 +355,15 @@ struct LifetimeFixture final
 void BuildAndPublish(LifetimeFixture& fixture)
 {
     std::weak_ptr<SharedPublicationMemory> weakPublication;
-    CanvasDocument source = MakeDocument();
+    CanvasDocument source              = MakeDocument();
     const LayerRowsAdmission admission = LayerRowsAdmission::Estimate(source, 0, L"[hidden {0}]");
-    const std::uint64_t rowsBound =
-        admission.Bytes() + PreparedLayerRows::OwnershipAllowance(1) + SharedPublicationMemory::OwnershipAllowance();
-    Expect(admission.IsValid() && rowsBound <= kWholeAdmissionBytes,
-           "fixed-2mib-admission-covers-row-and-both-ownership-allowances");
-    if (!admission.IsValid() || rowsBound > kWholeAdmissionBytes)
+    const std::uint64_t rowsBound      = admission.Bytes() + PreparedLayerRows::OwnershipAllowance(1) + SharedPublicationMemory::OwnershipAllowance();
+    Expect(admission.IsValid() && rowsBound <= kWholeAdmissionBytes, "fixed-2mib-admission-covers-row-and-both-ownership-allowances");
+    if (! admission.IsValid() || rowsBound > kWholeAdmissionBytes)
         SetupFailure("fixture-admission-exceeds-literal-bound");
 
-    auto derivedJob =
-        std::make_unique<PublicationRowsJob>(fixture.probe, fixture.sampler, std::move(source), admission);
-    auto* concrete = derivedJob.get();
+    auto derivedJob = std::make_unique<PublicationRowsJob>(fixture.probe, fixture.sampler, std::move(source), admission);
+    auto* concrete  = derivedJob.get();
     concrete->SetOwnerThread(GetCurrentThreadId());
     concrete->SetScheduler(fixture.scheduler);
     std::unique_ptr<Job> job = std::move(derivedJob);
@@ -379,20 +375,18 @@ void BuildAndPublish(LifetimeFixture& fixture)
         weakPublication = fixture.probe.weakPublication;
     }
     auto publication = weakPublication.lock();
-    if (!publication)
+    if (! publication)
         SetupFailure("worker-publication-owner-missing");
-    const auto outsideBefore = fixture.scheduler.ReservedMemoryBytes();
-    const auto samplerBeforeOutsideBind = fixture.sampler.calls.load(std::memory_order_relaxed);
-    fixture.probe.outsideBind = publication->BindForPublication(fixture.scheduler, fixture.probe.ticket);
-    const auto outsideAfter = fixture.scheduler.ReservedMemoryBytes();
-    fixture.probe.outsideBindSamplerPreserved =
-        samplerBeforeOutsideBind == fixture.sampler.calls.load(std::memory_order_relaxed);
-    Expect(fixture.probe.outsideBind == E_INVALIDARG && !publication->IsBound() && publication->Bytes() == 0 &&
-               outsideBefore == kWholeAdmissionBytes && outsideAfter == outsideBefore &&
-               fixture.probe.outsideBindSamplerPreserved,
+    const auto outsideBefore                  = fixture.scheduler.ReservedMemoryBytes();
+    const auto samplerBeforeOutsideBind       = fixture.sampler.calls.load(std::memory_order_relaxed);
+    fixture.probe.outsideBind                 = publication->BindForPublication(fixture.scheduler, fixture.probe.ticket);
+    const auto outsideAfter                   = fixture.scheduler.ReservedMemoryBytes();
+    fixture.probe.outsideBindSamplerPreserved = samplerBeforeOutsideBind == fixture.sampler.calls.load(std::memory_order_relaxed);
+    Expect(fixture.probe.outsideBind == E_INVALIDARG && ! publication->IsBound() && publication->Bytes() == 0 && outsideBefore == kWholeAdmissionBytes &&
+               outsideAfter == outsideBefore && fixture.probe.outsideBindSamplerPreserved,
            "unbound-outside-callback-bind-refuses-without-charge-or-lease-mutation");
     publication.reset();
-    if (!SetEvent(fixture.allowPreparation.get()))
+    if (! SetEvent(fixture.allowPreparation.get()))
         SetupFailure("allow-preparation-signal", GetLastError());
 
     Wait(fixture.rowsReady.get(), "rows-ready");
@@ -401,16 +395,15 @@ void BuildAndPublish(LifetimeFixture& fixture)
         const std::lock_guard lock{fixture.probe.mutex};
         stagingRows = fixture.probe.stagingRows;
     }
-    if (!stagingRows)
+    if (! stagingRows)
         SetupFailure("worker-prepared-rows-missing");
     VerifyPreparedRows(*stagingRows);
     std::shared_ptr<const SharedPublicationMemory> unboundPublication;
-    const auto unboundChargeBefore = fixture.scheduler.ReservedMemoryBytes();
-    fixture.probe.unboundRowsBind = stagingRows->BindPublicationMemory(unboundPublication);
-    fixture.probe.unboundSeal = stagingRows->SealForPublication();
+    const auto unboundChargeBefore           = fixture.scheduler.ReservedMemoryBytes();
+    fixture.probe.unboundRowsBind            = stagingRows->BindPublicationMemory(unboundPublication);
+    fixture.probe.unboundSeal                = stagingRows->SealForPublication();
     fixture.probe.unboundRowsChargePreserved = fixture.scheduler.ReservedMemoryBytes() == unboundChargeBefore;
-    Expect(fixture.probe.unboundRowsBind == E_INVALIDARG && !fixture.probe.unboundSeal &&
-               !stagingRows->HasMemoryLease() && stagingRows->MemoryBytes() == 0 &&
+    Expect(fixture.probe.unboundRowsBind == E_INVALIDARG && ! fixture.probe.unboundSeal && ! stagingRows->HasMemoryLease() && stagingRows->MemoryBytes() == 0 &&
                unboundChargeBefore == kWholeAdmissionBytes && fixture.probe.unboundRowsChargePreserved,
            "unbound-row-bind-and-seal-refuse-without-state-mutation");
     stagingRows.reset();
@@ -418,13 +411,13 @@ void BuildAndPublish(LifetimeFixture& fixture)
         const std::lock_guard lock{fixture.probe.mutex};
         fixture.probe.stagingRows.reset();
     }
-    if (!SetEvent(fixture.allowCompletion.get()))
+    if (! SetEvent(fixture.allowCompletion.get()))
         SetupFailure("allow-completion-signal", GetLastError());
 
     PumpToFirstPublication(fixture.scheduler, fixture.probe);
     SettleOrFail(fixture.scheduler, "two-stage-settle");
 
-    if (!fixture.probe.publishedRows || fixture.probe.publishedRows->MemoryBytes() != kWholeAdmissionBytes)
+    if (! fixture.probe.publishedRows || fixture.probe.publishedRows->MemoryBytes() != kWholeAdmissionBytes)
         SetupFailure("published-rows-missing-or-wrong-charge");
     // A post-publication duplicate wrapper bind is refused by the sealed wrapper; the shared owner is queried
     // separately through its weak handle so no hidden strong owner changes the retirement test.
@@ -435,31 +428,25 @@ void BuildAndPublish(LifetimeFixture& fixture)
     if (auto boundPublication = weakPublication.lock())
     {
         fixture.probe.outsideRebind = boundPublication->BindForPublication(fixture.scheduler, fixture.probe.ticket);
-        Expect(fixture.probe.outsideRebind == E_INVALIDARG && boundPublication->IsBound() &&
-                   boundPublication->Bytes() == kWholeAdmissionBytes &&
+        Expect(fixture.probe.outsideRebind == E_INVALIDARG && boundPublication->IsBound() && boundPublication->Bytes() == kWholeAdmissionBytes &&
                    fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes,
                "occupied-outside-rebind-refuses-without-lease-or-charge-mutation");
     }
     else
         SetupFailure("bound-publication-owner-expired");
 
-    Expect(fixture.probe.runOnWorker && fixture.probe.runCount == 2 && fixture.probe.retirementCount == 2 &&
-               fixture.probe.deferCount == 2 && fixture.probe.completionCount == 1 && fixture.probe.sameTicket &&
-               fixture.probe.resumeAccepted,
+    Expect(fixture.probe.runOnWorker && fixture.probe.runCount == 2 && fixture.probe.retirementCount == 2 && fixture.probe.deferCount == 2 &&
+               fixture.probe.completionCount == 1 && fixture.probe.sameTicket && fixture.probe.resumeAccepted,
            "real-worker-resume-retirement-and-original-final-callback-counts");
-    Expect(fixture.probe.wrongTicketBind == E_INVALIDARG && fixture.probe.wrongTicketPreservedUnbound &&
-               fixture.probe.validPublicationBind == S_OK && fixture.probe.validRowsBind == S_OK &&
-               fixture.probe.validSeal && fixture.probe.duplicateRowsBind == E_INVALIDARG &&
-               fixture.probe.duplicateRowsPreserved && !fixture.probe.duplicateSeal &&
-               fixture.probe.chargeAfterRefusals == kWholeAdmissionBytes,
+    Expect(fixture.probe.wrongTicketBind == E_INVALIDARG && fixture.probe.wrongTicketPreservedUnbound && fixture.probe.validPublicationBind == S_OK &&
+               fixture.probe.validRowsBind == S_OK && fixture.probe.validSeal && fixture.probe.duplicateRowsBind == E_INVALIDARG &&
+               fixture.probe.duplicateRowsPreserved && ! fixture.probe.duplicateSeal && fixture.probe.chargeAfterRefusals == kWholeAdmissionBytes,
            "exact-ticket-bind-succeeds-once-and-refusals-preserve-whole-charge");
-    Expect(fixture.probe.samplerCallsBeforeBind.load(std::memory_order_relaxed) ==
-                   fixture.probe.samplerCallsAfterBind.load(std::memory_order_relaxed) &&
-               fixture.probe.callbackChargeExact && fixture.probe.completedChargeExact &&
-               fixture.probe.exactCallbackIdentity && fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes,
+    Expect(fixture.probe.samplerCallsBeforeBind.load(std::memory_order_relaxed) == fixture.probe.samplerCallsAfterBind.load(std::memory_order_relaxed) &&
+               fixture.probe.callbackChargeExact && fixture.probe.completedChargeExact && fixture.probe.exactCallbackIdentity &&
+               fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes,
            "publication-bind-is-query-free-and-final-callback-retains-exact-2mib");
-    Expect(fixture.probe.wrapperAliasDroppedOnWorker && fixture.probe.publishedAliasKeptWrapper &&
-               fixture.probe.weakRows.expired() == false,
+    Expect(fixture.probe.wrapperAliasDroppedOnWorker && fixture.probe.publishedAliasKeptWrapper && fixture.probe.weakRows.expired() == false,
            "second-real-worker-stage-drops-job-alias-while-published-owner-keeps-rows");
 }
 
@@ -469,36 +456,31 @@ void ReleaseFinalOwnerOnWorker()
     BuildAndPublish(fixture);
 
     std::shared_ptr<const PreparedLayerRows> finalOwner = std::move(fixture.probe.publishedRows);
-    std::weak_ptr<PreparedLayerRows> weakRows = std::move(fixture.probe.weakRows);
-    if (!finalOwner || weakRows.expired())
+    std::weak_ptr<PreparedLayerRows> weakRows           = std::move(fixture.probe.weakRows);
+    if (! finalOwner || weakRows.expired())
         SetupFailure("worker-retirement-fixture-owner-missing");
     std::atomic<bool> expiredAfterStrongRelease{false};
-    std::thread dropStrong(
-        [owner = std::move(finalOwner), &expiredAfterStrongRelease]() mutable
-        {
-            owner.reset();
-            expiredAfterStrongRelease.store(true, std::memory_order_release);
-        });
+    std::thread dropStrong([owner = std::move(finalOwner), &expiredAfterStrongRelease]() mutable
+    {
+        owner.reset();
+        expiredAfterStrongRelease.store(true, std::memory_order_release);
+    });
     dropStrong.join();
     Expect(expiredAfterStrongRelease.load(std::memory_order_acquire) && weakRows.expired(),
            "worker-final-strong-release-destroys-rows-object-before-owner-drain");
 
     (void)DrainCompletions(fixture.scheduler);
-    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes,
-           "worker-final-strong-release-keeps-charge-through-owner-drain-while-weak-lives");
+    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes, "worker-final-strong-release-keeps-charge-through-owner-drain-while-weak-lives");
 
     std::thread dropWeak([weak = std::move(weakRows)]() mutable { weak.reset(); });
     dropWeak.join();
-    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes,
-           "foreign-final-weak-release-remains-charged-until-owner-acknowledgement");
+    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes, "foreign-final-weak-release-remains-charged-until-owner-acknowledgement");
     (void)DrainCompletions(fixture.scheduler);
-    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes &&
-               fixture.scheduler.ReleasingMemoryBytes() == 0,
+    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes && fixture.scheduler.ReleasingMemoryBytes() == 0,
            "rows-weak-acknowledgement-still-retains-shared-accounting-weak-owner");
     std::thread dropAccountingWeak([weak = std::move(fixture.probe.weakPublication)]() mutable { weak.reset(); });
     dropAccountingWeak.join();
-    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes,
-           "final-accounting-weak-worker-release-awaits-owner-acknowledgement");
+    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes, "final-accounting-weak-worker-release-awaits-owner-acknowledgement");
     (void)DrainCompletions(fixture.scheduler);
     Expect(fixture.scheduler.ReservedMemoryBytes() == 0 && fixture.scheduler.ReleasingMemoryBytes() == 0,
            "worker-weak-control-block-release-acknowledgement-returns-exact-charge");
@@ -516,22 +498,18 @@ void ReleaseFinalOwnerOnOwnerAndAcknowledgeRows()
                fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes,
            "owner-final-strong-release-defers-real-row-destruction-before-weak-release");
     SettleOrFail(fixture.scheduler, "deferred-row-destruction-settle");
-    Expect(fixture.scheduler.ReleasingMemoryBytes() == 0 &&
-               fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes && weakRows.expired(),
+    Expect(fixture.scheduler.ReleasingMemoryBytes() == 0 && fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes && weakRows.expired(),
            "owner-drain-acknowledges-row-destruction-while-weak-control-block-keeps-charge");
 
     std::thread dropWeak([weak = std::move(weakRows)]() mutable { weak.reset(); });
     dropWeak.join();
-    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes,
-           "owner-deferred-case-foreign-final-weak-release-waits-for-owner-ack");
+    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes, "owner-deferred-case-foreign-final-weak-release-waits-for-owner-ack");
     (void)DrainCompletions(fixture.scheduler);
-    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes &&
-               fixture.scheduler.ReleasingMemoryBytes() == 0,
+    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes && fixture.scheduler.ReleasingMemoryBytes() == 0,
            "owner-deferred-rows-weak-ack-still-retains-shared-accounting-weak-owner");
     std::thread dropAccountingWeak([weak = std::move(fixture.probe.weakPublication)]() mutable { weak.reset(); });
     dropAccountingWeak.join();
-    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes,
-           "owner-deferred-final-accounting-weak-worker-release-awaits-owner-ack");
+    Expect(fixture.scheduler.ReservedMemoryBytes() == kWholeAdmissionBytes, "owner-deferred-final-accounting-weak-worker-release-awaits-owner-ack");
     (void)DrainCompletions(fixture.scheduler);
     Expect(fixture.scheduler.ReservedMemoryBytes() == 0 && fixture.scheduler.ReleasingMemoryBytes() == 0,
            "owner-deferred-case-final-weak-acknowledgement-returns-exact-charge");
@@ -543,8 +521,7 @@ int RunPreparedRowPublicationTests()
 {
     ReleaseFinalOwnerOnWorker();
     ReleaseFinalOwnerOnOwnerAndAcknowledgeRows();
-    std::printf("SUMMARY prepared-layer-publication passed=%u failed=%u assertions=%u\n", gPassed, gFailed,
-                gPassed + gFailed);
+    std::printf("SUMMARY prepared-layer-publication passed=%u failed=%u assertions=%u\n", gPassed, gFailed, gPassed + gFailed);
     std::fflush(stdout);
     return gFailed == 0 ? 0 : 1;
 }

@@ -22,14 +22,14 @@ inline void SetStringResourceSatellite(HMODULE module) noexcept
 [[nodiscard]] inline std::wstring LoadStringResource(HMODULE module, UINT id)
 {
     const wchar_t* text = nullptr;
-    int length = 0;
+    int length          = 0;
     if (module == nullptr && g_stringResourceSatellite != nullptr)
     {
         length = LoadStringW(g_stringResourceSatellite, id, reinterpret_cast<wchar_t*>(&text), 0);
     }
     if (length <= 0 || text == nullptr)
     {
-        text = nullptr;
+        text   = nullptr;
         length = LoadStringW(module, id, reinterpret_cast<wchar_t*>(&text), 0);
     }
     if (length <= 0 || text == nullptr)
@@ -84,7 +84,7 @@ template <typename... Args> [[nodiscard]] std::wstring FormatStringResource(HMOD
         }
         name.push_back(caption[index]);
     }
-    while (!name.empty() && (name.back() == L'.' || name.back() == L'…' || name.back() == L' '))
+    while (! name.empty() && (name.back() == L'.' || name.back() == L'…' || name.back() == L' '))
     {
         name.pop_back();
     }

@@ -12,7 +12,7 @@
 namespace
 {
 int gAssertions = 0;
-int gFailures = 0;
+int gFailures   = 0;
 
 void Expect(bool condition, const char* name) noexcept
 {
@@ -31,13 +31,12 @@ bool HasPixel(const std::vector<SelectionLoop>& loops, int width, int height, in
 {
     const Raster coverage = SelectionGeometry::Coverage(loops, width, height, false);
     return coverage.Data() != nullptr && x >= 0 && y >= 0 && x < width && y < height &&
-           coverage.Data()[static_cast<std::size_t>(y) * static_cast<std::size_t>(coverage.Stride()) +
-                           static_cast<std::size_t>(x)] == expected;
+           coverage.Data()[static_cast<std::size_t>(y) * static_cast<std::size_t>(coverage.Stride()) + static_cast<std::size_t>(x)] == expected;
 }
 
 void LegacyNumericGoldens()
 {
-    const auto rect = SelectionGeometry::Rect(40, 40, 20, 20);
+    const auto rect  = SelectionGeometry::Rect(40, 40, 20, 20);
     const auto grown = BoundedSelectionOffset::Run(rect, 5, 100, 100);
     Expect(grown.has_value(), "selection-offset-numeric.expand5-produces-result");
     if (grown)
@@ -61,12 +60,11 @@ void LegacyNumericGoldens()
     else
         Expect(false, "selection-offset-numeric.expand5-contract8-bounds-43-to-57");
 
-    const auto fullCanvas = SelectionGeometry::Rect(0, 0, 100, 100);
+    const auto fullCanvas     = SelectionGeometry::Rect(0, 0, 100, 100);
     const auto expandedCanvas = BoundedSelectionOffset::Run(fullCanvas, 10, 100, 100);
     Expect(expandedCanvas.has_value(), "selection-offset-numeric.full-canvas-expand-produces-result");
     if (expandedCanvas)
-        Expect(HasBounds(*expandedCanvas, 0, 0, 100, 100),
-               "selection-offset-numeric.full-canvas-expand-clipped-to-0-100");
+        Expect(HasBounds(*expandedCanvas, 0, 0, 100, 100), "selection-offset-numeric.full-canvas-expand-clipped-to-0-100");
     else
         Expect(false, "selection-offset-numeric.full-canvas-expand-clipped-to-0-100");
 
@@ -78,8 +76,7 @@ void LegacyNumericGoldens()
     else
         Expect(false, "selection-offset-numeric.full-canvas-contract10-edge-clear-center-selected");
 
-    const auto empty = contractedCanvas ? BoundedSelectionOffset::Run(*contractedCanvas, -45, 100, 100)
-                                        : std::optional<std::vector<SelectionLoop>>{};
+    const auto empty = contractedCanvas ? BoundedSelectionOffset::Run(*contractedCanvas, -45, 100, 100) : std::optional<std::vector<SelectionLoop>>{};
     Expect(empty.has_value(), "selection-offset-numeric.full-canvas-contract10-contract45-produces-result");
     if (empty)
         Expect(empty->empty(), "selection-offset-numeric.full-canvas-contract10-contract45-explicit-empty-vector");
@@ -100,7 +97,7 @@ void CompareLegacyReference()
         {SelectionLoop{{12.25, 11.5}, {48.75, 13.125}, {42.5, 27.25}, {27.75, 23.5}, {23.125, 46.875}, {9.5, 39.25}}},
     };
     constexpr int amounts[]{1, 5, 500, -1, -5, -500};
-    const auto canvas = SelectionGeometry::Rect(0, 0, 100, 100);
+    const auto canvas  = SelectionGeometry::Rect(0, 0, 100, 100);
     unsigned int index = 0;
     for (const auto& input : inputs)
     {
@@ -111,8 +108,7 @@ void CompareLegacyReference()
                 expected = SelectionGeometry::Intersect(expected, canvas);
             const auto actual = BoundedSelectionOffset::Run(input, amount, 100, 100);
             char name[96]{};
-            std::snprintf(name, sizeof(name), "selection-offset-numeric.legacy-vector-input%u-amount%+d", index,
-                          amount);
+            std::snprintf(name, sizeof(name), "selection-offset-numeric.legacy-vector-input%u-amount%+d", index, amount);
             Expect(actual.has_value() && *actual == expected, name);
         }
         ++index;
@@ -123,7 +119,7 @@ void CompareLegacyReference()
 int RunSelectionOffsetNumericTests()
 {
     gAssertions = 0;
-    gFailures = 0;
+    gFailures   = 0;
     LegacyNumericGoldens();
     CompareLegacyReference();
     return gFailures;

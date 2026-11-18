@@ -23,7 +23,7 @@ inline void ZipFileClose(zip_file_t* file) noexcept
     }
 }
 
-using unique_zip = wil::unique_any<zip_t*, decltype(&ZipDiscard), ZipDiscard>;
+using unique_zip      = wil::unique_any<zip_t*, decltype(&ZipDiscard), ZipDiscard>;
 using unique_zip_file = wil::unique_any<zip_file_t*, decltype(&ZipFileClose), ZipFileClose>;
 
 [[nodiscard]] inline bool ZipCommit(unique_zip& owner) noexcept

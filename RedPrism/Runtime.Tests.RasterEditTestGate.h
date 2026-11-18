@@ -30,13 +30,13 @@ struct RasterEditTestGate final
     std::atomic<unsigned int> targetCapturesOnWorker{0};
     std::atomic<std::uint64_t> capturedImageNameUnits{0};
     std::atomic<std::uint64_t> capturedMaskNameUnits{0};
-    bool afterPreparation = false;
+    bool afterPreparation       = false;
     bool throwAllocationFailure = false;
-    bool throwAdmissionFailure = false;
-    bool throwCaptureFailure = false;
+    bool throwAdmissionFailure  = false;
+    bool throwCaptureFailure    = false;
     std::optional<DocumentHistory::PrepareStage> historyFailure;
-    bool captureReservationHeld = false;
-    bool rootOnlyCapturedOnOwner = false;
+    bool captureReservationHeld    = false;
+    bool rootOnlyCapturedOnOwner   = false;
     std::uint64_t reservationBytes = 0;
     std::optional<RasterEditStatus> status;
     JobResult result{};

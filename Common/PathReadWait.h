@@ -15,7 +15,7 @@ enum class PathReadWaitFault : std::uint8_t
 // Reached startup-resource refusal and harness wait observation. Context survives acknowledged Shutdown.
 struct PathReadWaitObserver final
 {
-    void* context = nullptr;
+    void* context                                            = nullptr;
     std::int32_t (*fault)(void*, PathReadWaitFault) noexcept = nullptr;
     // Harness-only acknowledgement that the actual wait callback published readiness. Never IO completion.
     void (*signalled)(void*, std::uint64_t readCycle) noexcept = nullptr;
@@ -25,7 +25,7 @@ struct PathReadWaitObserver final
 
 class PathReadWaitReceiver
 {
-  public:
+public:
     virtual ~PathReadWaitReceiver() = default;
     // Owner pump only. Cancellation requests a worker retirement stage without releasing the read slot.
     // A normal event merely requests an actual nonblocking GetOverlappedResult on the original worker.
@@ -38,10 +38,10 @@ class PathReadWaitReceiver
 // preceding registered readiness and original worker/native acknowledgements have joined.
 class PathReadWait final : public OwnerWorkPump
 {
-  public:
+public:
     PathReadWait() noexcept;
     ~PathReadWait();
-    PathReadWait(const PathReadWait&) = delete;
+    PathReadWait(const PathReadWait&)            = delete;
     PathReadWait& operator=(const PathReadWait&) = delete;
     [[nodiscard]] std::int32_t Initialize(JobScheduler&, OwnerWorkMultiplexer&, PathReadWaitObserver = {}) noexcept;
     // Owner joined-stage callback, before the issuing worker resumes. Reset only with no pending IO.
@@ -64,7 +64,7 @@ class PathReadWait final : public OwnerWorkPump
     void DetachJoinedOwner() noexcept;
     void CloseAfterFinalWorkers() noexcept;
 
-  private:
+private:
     struct Impl;
     std::unique_ptr<Impl> _impl;
 };

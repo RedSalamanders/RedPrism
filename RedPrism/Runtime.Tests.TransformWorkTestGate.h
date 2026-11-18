@@ -26,7 +26,7 @@ enum class TransformWorkTestKind : std::uint8_t
 #pragma warning(disable : 4625 4626 5026 5027)
 struct TransformWorkTestGate final
 {
-    TransformWorkTestKind kind = TransformWorkTestKind::Commit;
+    TransformWorkTestKind kind     = TransformWorkTestKind::Commit;
     static constexpr UINT kMessage = WM_APP + 0x5A;
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     std::atomic<unsigned int> visits{0}, historyFaultHits{0};

@@ -26,17 +26,17 @@ namespace CrashDumps
 {
 namespace
 {
-constexpr DWORD kDumpType = MiniDumpWithDataSegs | MiniDumpWithHandleData | MiniDumpWithThreadInfo |
-                            MiniDumpWithUnloadedModules | MiniDumpWithIndirectlyReferencedMemory;
-constexpr DWORD kTerminateCode = 0xE0000001;
+constexpr DWORD kDumpType =
+    MiniDumpWithDataSegs | MiniDumpWithHandleData | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules | MiniDumpWithIndirectlyReferencedMemory;
+constexpr DWORD kTerminateCode        = 0xE0000001;
 constexpr DWORD kInvalidParameterCode = 0xE0000002;
-constexpr DWORD kPureCallCode = 0xE0000003;
-constexpr DWORD kAbortCode = 0xE0000004;
-constexpr DWORD kProbeCode = 0xE0000005;
-constexpr wchar_t kPendingName[] = L"pending.txt";
+constexpr DWORD kPureCallCode         = 0xE0000003;
+constexpr DWORD kAbortCode            = 0xE0000004;
+constexpr DWORD kProbeCode            = 0xE0000005;
+constexpr wchar_t kPendingName[]      = L"pending.txt";
 
 wchar_t g_directory[kPathCapacity] = {};
-volatile LONG g_ownerThread = 0;
+volatile LONG g_ownerThread        = 0;
 wil::unique_handle g_dumpFinished;
 wil::unique_handle g_competingFault;
 std::atomic<bool> g_handlersInstalled{false};
@@ -74,7 +74,7 @@ bool g_workerProbe = false; // installed before any worker is created
 LONG WINAPI UnhandledFilter(EXCEPTION_POINTERS* pointers) noexcept
 {
     const LONG thread = static_cast<LONG>(GetCurrentThreadId());
-    const LONG owner = InterlockedCompareExchange(&g_ownerThread, thread, 0);
+    const LONG owner  = InterlockedCompareExchange(&g_ownerThread, thread, 0);
     if (owner != 0)
     {
         if (owner != thread)
@@ -149,22 +149,29 @@ std::wstring DefaultDirectory()
 // rather than a WIL wrapper. A heap corruption is the case they exist for (crash-handling skill), so they add
 // nothing beyond the Win32 calls themselves; TakePending and PruneDumps below run on an ordinary start only and
 // use the usual RAII.
-bool WriteMiniDump(const wchar_t* directory, _EXCEPTION_POINTERS* exception, wchar_t* pathOut,
-                   std::size_t pathCapacity) noexcept
+bool WriteMiniDump(const wchar_t* directory, _EXCEPTION_POINTERS* exception, wchar_t* pathOut, std::size_t pathCapacity) noexcept
 {
     if (pathOut == nullptr || pathCapacity == 0)
     {
         return false;
     }
     pathOut[0] = 0;
-    if (directory == nullptr || *directory == 0 || !CreateDirectoryTree(directory))
+    if (directory == nullptr || *directory == 0 || ! CreateDirectoryTree(directory))
     {
         return false;
     }
     SYSTEMTIME time{};
     GetLocalTime(&time);
-    if (swprintf_s(pathOut, pathCapacity, L"%s\\RedPrism-%04u%02u%02u-%02u%02u%02u-%lu.dmp", directory, time.wYear,
-                   time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond,
+    if (swprintf_s(pathOut,
+                   pathCapacity,
+                   L"%s\\RedPrism-%04u%02u%02u-%02u%02u%02u-%lu.dmp",
+                   directory,
+                   time.wYear,
+                   time.wMonth,
+                   time.wDay,
+                   time.wHour,
+                   time.wMinute,
+                   time.wSecond,
                    static_cast<unsigned long>(GetCurrentProcessId())) <= 0)
     {
         pathOut[0] = 0;
@@ -177,14 +184,13 @@ bool WriteMiniDump(const wchar_t* directory, _EXCEPTION_POINTERS* exception, wch
         return false;
     }
     MINIDUMP_EXCEPTION_INFORMATION information{};
-    information.ThreadId = GetCurrentThreadId();
+    information.ThreadId          = GetCurrentThreadId();
     information.ExceptionPointers = exception;
-    information.ClientPointers = FALSE;
-    const BOOL written =
-        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, static_cast<MINIDUMP_TYPE>(kDumpType),
-                          exception ? &information : nullptr, nullptr, nullptr);
+    information.ClientPointers    = FALSE;
+    const BOOL written            = MiniDumpWriteDump(
+        GetCurrentProcess(), GetCurrentProcessId(), file, static_cast<MINIDUMP_TYPE>(kDumpType), exception ? &information : nullptr, nullptr, nullptr);
     (void)CloseHandle(file);
-    if (!written)
+    if (! written)
     {
         (void)DeleteFileW(pathOut);
         pathOut[0] = 0;
@@ -200,25 +206,24 @@ bool RecordPending(const wchar_t* directory, const wchar_t* dumpPath) noexcept
         return false;
     }
     wchar_t marker[kPathCapacity];
-    if (!JoinPath(directory, kPendingName, marker, kPathCapacity))
+    if (! JoinPath(directory, kPendingName, marker, kPathCapacity))
     {
         return false;
     }
     char utf8[kPathCapacity * 3];
-    const int bytes =
-        WideCharToMultiByte(CP_UTF8, 0, dumpPath, -1, utf8, static_cast<int>(sizeof(utf8)) - 1, nullptr, nullptr);
+    const int bytes = WideCharToMultiByte(CP_UTF8, 0, dumpPath, -1, utf8, static_cast<int>(sizeof(utf8)) - 1, nullptr, nullptr);
     if (bytes <= 1)
     {
         return false;
     }
-    utf8[bytes - 1] = '\n';
+    utf8[bytes - 1]   = '\n';
     const HANDLE file = CreateFileW(marker, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE)
     {
         return false;
     }
     DWORD writtenBytes = 0;
-    const BOOL ok = WriteFile(file, utf8, static_cast<DWORD>(bytes), &writtenBytes, nullptr);
+    const BOOL ok      = WriteFile(file, utf8, static_cast<DWORD>(bytes), &writtenBytes, nullptr);
     (void)CloseHandle(file);
     return ok && writtenBytes == static_cast<DWORD>(bytes);
 }
@@ -227,12 +232,12 @@ std::optional<std::wstring> TakePending(const std::wstring& directory)
 {
     const std::wstring marker = directory + L"\\" + kPendingName;
     std::string bytes;
-    if (!SettingsStore::ReadFileBytes(marker, bytes))
+    if (! SettingsStore::ReadFileBytes(marker, bytes))
     {
         return std::nullopt;
     }
     (void)DeleteFileW(marker.c_str());
-    while (!bytes.empty() && (bytes.back() == '\n' || bytes.back() == '\r'))
+    while (! bytes.empty() && (bytes.back() == '\n' || bytes.back() == '\r'))
     {
         bytes.pop_back();
     }
@@ -253,7 +258,7 @@ std::size_t PruneDumps(const std::wstring& directory, std::size_t keep)
     std::vector<std::wstring> names;
     WIN32_FIND_DATAW found{};
     wil::unique_hfind search{FindFirstFileW((directory + L"\\RedPrism-*.dmp").c_str(), &found)};
-    if (!search)
+    if (! search)
     {
         return 0;
     }
@@ -288,14 +293,14 @@ HRESULT InstallCrashHandler(const wchar_t* directory, bool workerProbe) noexcept
         return HRESULT_FROM_WIN32(ERROR_ALREADY_INITIALIZED);
     }
     g_dumpFinished.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-    if (!g_dumpFinished)
+    if (! g_dumpFinished)
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
     if (workerProbe)
     {
         g_competingFault.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-        if (!g_competingFault)
+        if (! g_competingFault)
         {
             return HRESULT_FROM_WIN32(GetLastError());
         }
@@ -318,7 +323,7 @@ HRESULT InstallCrashHandler(const wchar_t* directory, bool workerProbe) noexcept
 void InstallWorkerTerminateHandler() noexcept
 {
     thread_local bool installed = false;
-    if (!installed && g_handlersInstalled.load(std::memory_order_acquire))
+    if (! installed && g_handlersInstalled.load(std::memory_order_acquire))
     {
         (void)std::set_terminate(OnTerminate);
         installed = true;

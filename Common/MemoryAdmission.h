@@ -26,12 +26,9 @@ struct MemoryAdmissionResult final
                                                                       std::uint64_t outstandingReservedBytes,
                                                                       std::uint64_t releasingBytes) noexcept
 {
-    const std::uint64_t availableSnapshot =
-        availablePhysicalBytes < availableCommitBytes ? availablePhysicalBytes : availableCommitBytes;
-    const std::uint64_t afterHeadroom =
-        availableSnapshot > kMemoryAdmissionHeadroomBytes ? availableSnapshot - kMemoryAdmissionHeadroomBytes : 0;
-    const std::uint64_t availableAfterReservations =
-        afterHeadroom > outstandingReservedBytes ? afterHeadroom - outstandingReservedBytes : 0;
+    const std::uint64_t availableSnapshot          = availablePhysicalBytes < availableCommitBytes ? availablePhysicalBytes : availableCommitBytes;
+    const std::uint64_t afterHeadroom              = availableSnapshot > kMemoryAdmissionHeadroomBytes ? availableSnapshot - kMemoryAdmissionHeadroomBytes : 0;
+    const std::uint64_t availableAfterReservations = afterHeadroom > outstandingReservedBytes ? afterHeadroom - outstandingReservedBytes : 0;
 
     if (requestBytes == 0)
     {
@@ -42,6 +39,5 @@ struct MemoryAdmissionResult final
     {
         return {MemoryAdmission::Ready, availableAfterReservations};
     }
-    return {outstandingReservedBytes != 0 || releasingBytes != 0 ? MemoryAdmission::Waiting : MemoryAdmission::Refused,
-            availableAfterReservations};
+    return {outstandingReservedBytes != 0 || releasingBytes != 0 ? MemoryAdmission::Waiting : MemoryAdmission::Refused, availableAfterReservations};
 }

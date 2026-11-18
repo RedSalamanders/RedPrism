@@ -15,7 +15,7 @@
 // Captured body notices are diagnostics, never owner/GPU acknowledgement or permission to release input.
 template <std::size_t Capacity> class UiCancellationCapture final
 {
-  public:
+public:
     static_assert(Capacity > 0);
     static_assert(Capacity < (std::numeric_limits<std::uint64_t>::max)() - JobScheduler::kCapacity);
     static_assert(std::atomic<std::uint64_t>::is_always_lock_free);
@@ -34,8 +34,8 @@ template <std::size_t Capacity> class UiCancellationCapture final
         Failed
     };
 
-    UiCancellationCapture() noexcept = default;
-    UiCancellationCapture(const UiCancellationCapture&) = delete;
+    UiCancellationCapture() noexcept                               = default;
+    UiCancellationCapture(const UiCancellationCapture&)            = delete;
     UiCancellationCapture& operator=(const UiCancellationCapture&) = delete;
 
     [[nodiscard]] bool Publish(JobExecutionNotice notice, std::int64_t ticks) noexcept
@@ -48,7 +48,7 @@ template <std::size_t Capacity> class UiCancellationCapture final
             _overflow.store(true, std::memory_order_release);
             return false;
         }
-        auto& cell = _cells[static_cast<std::size_t>(index)];
+        auto& cell  = _cells[static_cast<std::size_t>(index)];
         cell.sample = {notice, ticks};
         cell.ready.store(true, std::memory_order_release);
         return true;
@@ -63,7 +63,7 @@ template <std::size_t Capacity> class UiCancellationCapture final
         if (index >= Capacity || index >= _reserved.load(std::memory_order_acquire))
             return ReadResult::Exhausted;
         const auto& cell = _cells[index];
-        if (!cell.ready.load(std::memory_order_acquire))
+        if (! cell.ready.load(std::memory_order_acquire))
             return ReadResult::Pending;
         output = cell.sample;
         return ReadResult::Published;
@@ -74,7 +74,7 @@ template <std::size_t Capacity> class UiCancellationCapture final
         return _overflow.load(std::memory_order_acquire);
     }
 
-  private:
+private:
     struct Cell final
     {
         Sample sample;

@@ -11,12 +11,12 @@
 
 bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
 {
-    const bool marquee = _tool == EditorTool::Marquee;
+    const bool marquee  = _tool == EditorTool::Marquee;
     const bool freehand = _tool == EditorTool::Lasso && _session.lassoKind == LassoKind::Freehand;
-    const auto kind = marquee ? _session.marqueeKind : _session.lassoKind;
-    const auto mode = _session.SelectionModeFor((modifiers & MK_SHIFT) != 0, KeyboardState::Held(VK_MENU));
-    const bool control = (modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL);
-    if (!_selectionPressTestEnabled || (!marquee && !freehand) ||
+    const auto kind     = marquee ? _session.marqueeKind : _session.lassoKind;
+    const auto mode     = _session.SelectionModeFor((modifiers & MK_SHIFT) != 0, KeyboardState::Held(VK_MENU));
+    const bool control  = (modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL);
+    if (! _selectionPressTestEnabled || (! marquee && ! freehand) ||
         (kind != LassoKind::Rectangle && kind != LassoKind::Ellipse && kind != LassoKind::Freehand) ||
         (mode != SelectionMode::New && mode != SelectionMode::Add && mode != SelectionMode::Subtract))
         return false;
@@ -26,7 +26,7 @@ bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
         return true;
     }
     const auto authority = _session.CaptureDocumentReadAuthority();
-    if (!authority || _selectionPressOpening == (std::numeric_limits<std::uint64_t>::max)())
+    if (! authority || _selectionPressOpening == (std::numeric_limits<std::uint64_t>::max)())
     {
         ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW)));
         return true;
@@ -40,16 +40,16 @@ bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
     }
     HostSelectionPressInput::Context context;
     context.document = *authority;
-    context.tool = marquee ? HostSelectionPressInput::Tool::Marquee : HostSelectionPressInput::Tool::Lasso;
-    context.kind = kind;
-    context.mode = mode;
+    context.tool     = marquee ? HostSelectionPressInput::Tool::Marquee : HostSelectionPressInput::Tool::Lasso;
+    context.kind     = kind;
+    context.mode     = mode;
     // These are scalar event-time settings. Mutable source geometry/history is captured after admission.
     context.active = _session.ActiveLayerID();
-    context.crop = _session.CropFrame();
-    context.mask = _session.IsMaskSelected();
+    context.crop   = _session.CropFrame();
+    context.mask   = _session.IsMaskSelected();
     for (std::size_t i = 0; i < _hostRequests.Size(); ++i)
     {
-        const auto* entry = _hostRequests.PendingAt(i);
+        const auto* entry  = _hostRequests.PendingAt(i);
         const auto* canvas = entry ? std::get_if<HostCanvasBrushInput>(&entry->input.Input()) : nullptr;
         if (canvas && canvas->kind == HostCanvasInputKind::SelectionPress && canvas->opening == opening)
         {
@@ -57,9 +57,8 @@ bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
             break;
         }
     }
-    if (!_selectionPressInput.Begin(opening, context, pixel,
-                                    {(modifiers & MK_SHIFT) != 0, control, KeyboardState::Held(VK_MENU)},
-                                    _session.selectionAntialiased))
+    if (! _selectionPressInput.Begin(
+            opening, context, pixel, {(modifiers & MK_SHIFT) != 0, control, KeyboardState::Held(VK_MENU)}, _session.selectionAntialiased))
     {
         ReportHostAdmission(ContinuationReceipt::Failure(E_INVALIDARG));
         return true; // The exact queued descriptor fails without source capture.
@@ -71,10 +70,9 @@ bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
 
 bool Application::RouteSelectionPressOwner(const DxUi::PointerEvent& event, UINT message) noexcept
 {
-    if (!_selectionPressInput.Busy())
+    if (! _selectionPressInput.Busy())
         return false;
-    if (_selectionPressReceipt.Read().outcome != HostOutcome::Pending &&
-        (!_selectionPressState || !_selectionPressState->controller))
+    if (_selectionPressReceipt.Read().outcome != HostOutcome::Pending && (! _selectionPressState || ! _selectionPressState->controller))
     {
         (void)_selectionPressInput.Drop(_selectionPressInput.Opening());
         return false;
@@ -87,45 +85,45 @@ bool Application::RouteSelectionPressOwner(const DxUi::PointerEvent& event, UINT
             LoseSelectionPressOwner();
         return true;
     }
-    if (!_selectionPressInput.Sampling())
+    if (! _selectionPressInput.Sampling())
         return true;
     if (event.action != DxUi::PointerAction::Move && message != WM_LBUTTONUP)
         return true; // Right release cannot become the accepted left path's terminal.
     const auto ordinal = _historyWork.NextOrdinal();
-    if (!ordinal)
+    if (! ordinal)
     {
         LoseSelectionPressOwner(); // Reserved terminal reuses the last accepted ordinal, never wraps.
         return true;
     }
     const auto opening = _selectionPressInput.Opening();
-    const auto hole = _chrome->HolePixels();
+    const auto hole    = _chrome->HolePixels();
     const Vec2 view{event.xPixels - hole.left, event.yPixels - hole.top};
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     const auto admission =
         message == WM_LBUTTONUP
             ? _selectionPressInput.Finish(opening, _session.selectionAntialiased, *ordinal)
-            : _selectionPressInput.Move(opening, pixel,
-                                        {(event.modifiers & MK_SHIFT) != 0, (event.modifiers & MK_CONTROL) != 0,
-                                         KeyboardState::Held(VK_MENU)},
-                                        _session.selectionAntialiased, *ordinal);
+            : _selectionPressInput.Move(opening,
+                                        pixel,
+                                        {(event.modifiers & MK_SHIFT) != 0, (event.modifiers & MK_CONTROL) != 0, KeyboardState::Held(VK_MENU)},
+                                        _session.selectionAntialiased,
+                                        *ordinal);
     if (admission == HostSelectionPressInput::Admission::Invalid)
         (void)_selectionPressInput.SealLost(opening);
-    if (!_jobs.RequestUiActionSource(_continuationAction))
+    if (! _jobs.RequestUiActionSource(_continuationAction))
         std::terminate();
     return true;
 }
 void Application::LoseSelectionPressOwner() noexcept
 {
-    if (!_selectionPressInput.Sampling())
+    if (! _selectionPressInput.Sampling())
         return;
-    if (_selectionPressInput.SealLost(_selectionPressInput.Opening()) == HostSelectionPressInput::Admission::Recorded &&
-        !_shutdownStarted && !_jobs.RequestUiActionSource(_continuationAction))
+    if (_selectionPressInput.SealLost(_selectionPressInput.Opening()) == HostSelectionPressInput::Admission::Recorded && ! _shutdownStarted &&
+        ! _jobs.RequestUiActionSource(_continuationAction))
         std::terminate();
 }
 void Application::PumpSelectionPressOwner() noexcept
 {
-    if (_selectionPressState && _selectionPressState->controller && _selectionPressState->waiting &&
-        _selectionPressInput.PendingCount())
+    if (_selectionPressState && _selectionPressState->controller && _selectionPressState->waiting && _selectionPressInput.PendingCount())
         (void)_selectionPressState->controller->NotifyInput();
 }
 void Application::SelectionPressEventOwner(SelectionOutlineGestureState::Event event) noexcept
@@ -134,8 +132,8 @@ void Application::SelectionPressEventOwner(SelectionOutlineGestureState::Event e
         ++_selectionPressMovePresentations;
     if (event == SelectionOutlineGestureState::Event::Terminal && _selectionPressState && _selectionPressStamp)
     {
-        const auto stamp = *_selectionPressStamp;
-        const auto result = _selectionPressState->outcome;
+        const auto stamp   = *_selectionPressStamp;
+        const auto result  = _selectionPressState->outcome;
         const auto outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                              : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                    : HostOutcome::Succeeded;
@@ -143,10 +141,9 @@ void Application::SelectionPressEventOwner(SelectionOutlineGestureState::Event e
         _selectionPressStamp.reset();
         ResumeHostHistory(stamp, outcome, result.error);
     }
-    if (!_shutdownStarted)
+    if (! _shutdownStarted)
     {
-        if (event == SelectionOutlineGestureState::Event::Terminal && _selectionPressState &&
-            _selectionPressState->pixelMove && _selectionPressState->closed &&
+        if (event == SelectionOutlineGestureState::Event::Terminal && _selectionPressState && _selectionPressState->pixelMove && _selectionPressState->closed &&
             _selectionPressState->outcome.status == JobStatus::Finished)
             DocumentChanged(); // Pixel closure changed the committed raster, including its first display.
         else
@@ -155,64 +152,59 @@ void Application::SelectionPressEventOwner(SelectionOutlineGestureState::Event e
 }
 HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
 {
-    const auto* arrival = _selectionPressInput.CapturedContext(opening);
+    const auto* arrival  = _selectionPressInput.CapturedContext(opening);
     const auto authority = _session.CaptureDocumentReadAuthority();
-    if (!_selectionPressTestEnabled || !_activeHostRequest || !arrival || !authority ||
-        arrival->document.documentSerial != authority->documentSerial ||
-        arrival->document.sessionIdentity != authority->sessionIdentity ||
-        arrival->ordinal != _activeHostRequest->ordinal || arrival->active != _session.ActiveLayerID() ||
-        arrival->crop != _session.CropFrame() || arrival->mask != _session.IsMaskSelected() ||
-        !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()) ||
-        (_selectionPressState && _selectionPressState->controller))
+    if (! _selectionPressTestEnabled || ! _activeHostRequest || ! arrival || ! authority || arrival->document.documentSerial != authority->documentSerial ||
+        arrival->document.sessionIdentity != authority->sessionIdentity || arrival->ordinal != _activeHostRequest->ordinal ||
+        arrival->active != _session.ActiveLayerID() || arrival->crop != _session.CropFrame() || arrival->mask != _session.IsMaskSelected() ||
+        ! _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()) || (_selectionPressState && _selectionPressState->controller))
         return E_ABORT;
     const auto down = _selectionPressInput.Peek(opening);
-    if (!down || down->action != HostSelectionPressInput::Action::Down || down->sample.ordinal != arrival->ordinal)
+    if (! down || down->action != HostSelectionPressInput::Action::Down || down->sample.ordinal != arrival->ordinal)
         return E_ABORT;
-    const bool pixels = down->sample.modifiers.control;
-    auto memory = pixels ? DescribeSelectionPixelGestureMemory(_session, arrival->kind, arrival->mode)
-                         : DescribeSelectionOutlineGestureMemory(_session, arrival->kind, arrival->mode);
+    const bool pixels             = down->sample.modifiers.control;
+    auto memory                   = pixels ? DescribeSelectionPixelGestureMemory(_session, arrival->kind, arrival->mode)
+                                           : DescribeSelectionOutlineGestureMemory(_session, arrival->kind, arrival->mode);
     std::uint64_t finalDisplayCpu = 0, finalDisplayGpu = 0;
-    if (!memory || (pixels && _selectionPixelFinalPublicationEnabled &&
-                    !AddPixelFinalAdmissionOwner(*memory, finalDisplayCpu, finalDisplayGpu)))
+    if (! memory || (pixels && _selectionPixelFinalPublicationEnabled && ! AddPixelFinalAdmissionOwner(*memory, finalDisplayCpu, finalDisplayGpu)))
         return E_OUTOFMEMORY;
-    _selectionPressStamp =
-        _historyWork.Begin(_session.DocumentSerial(), _activeHostRequest->ordinal, HistoryWorkKind::Selection);
-    if (!_selectionPressStamp)
+    _selectionPressStamp = _historyWork.Begin(_session.DocumentSerial(), _activeHostRequest->ordinal, HistoryWorkKind::Selection);
+    if (! _selectionPressStamp)
         return E_UNEXPECTED;
-    const auto limits = memory->limits;
+    const auto limits                = memory->limits;
     _selectionPressMovePresentations = 0;
     _selectionPressState.emplace(_jobs, _session, _selectionPressInput, opening, limits);
-    _selectionPressState->admissionSource = memory->source;
-    _selectionPressState->drawingPlan = memory->drawing;
-    _selectionPressState->allowNewRectangle = arrival->kind == LassoKind::Rectangle;
-    _selectionPressState->allowNewEllipse = arrival->kind == LassoKind::Ellipse;
+    _selectionPressState->admissionSource        = memory->source;
+    _selectionPressState->drawingPlan            = memory->drawing;
+    _selectionPressState->allowNewRectangle      = arrival->kind == LassoKind::Rectangle;
+    _selectionPressState->allowNewEllipse        = arrival->kind == LassoKind::Ellipse;
     _selectionPressState->allowPreservingMarquee = arrival->mode != SelectionMode::New;
-    _selectionPressState->requireCapturedTarget = true;
-    _selectionPressState->allowInitialPixelMove = pixels;
+    _selectionPressState->requireCapturedTarget  = true;
+    _selectionPressState->allowInitialPixelMove  = pixels;
     if (pixels && _selectionPixelFinalPublicationEnabled)
     {
-        _selectionPressState->pixelFinalCpuBytes = finalDisplayCpu;
-        _selectionPressState->pixelFinalGpuBytes = finalDisplayGpu;
-        _selectionPressState->pixelFinalFactory = MakePixelFinalForWork;
-        _selectionPressState->pixelFinalHost = this;
+        _selectionPressState->pixelFinalCpuBytes    = finalDisplayCpu;
+        _selectionPressState->pixelFinalGpuBytes    = finalDisplayGpu;
+        _selectionPressState->pixelFinalFactory     = MakePixelFinalForWork;
+        _selectionPressState->pixelFinalHost        = this;
         _selectionPressState->pixelFinalOwnerThread = GetCurrentThreadId();
     }
     _selectionPressState->observer = this;
-    _selectionPressState->notify = [](void* raw, SelectionOutlineGestureState::Event event) noexcept
+    _selectionPressState->notify   = [](void* raw, SelectionOutlineGestureState::Event event) noexcept
     { static_cast<Application*>(raw)->SelectionPressEventOwner(event); };
     HRESULT result;
     try
     {
         std::unique_ptr<Job> job = std::make_unique<SelectionOutlineGestureJob>(*_selectionPressState);
-        result = _jobs.Submit(job,
-                              {.kind = JobClass::Selection,
-                               .serialKey = _session.DocumentSerial(),
-                               .memoryBytes = limits.totalBytes,
-                               .deferredRetirement = true,
-                               .allowMemoryWaiting = false,
-                               .reserveRetainedMemory = true,
-                               .continuingOutputLimit = limits.continuingOutputBytes},
-                              _selectionPressState->original);
+        result                   = _jobs.Submit(job,
+                                                {.kind                  = JobClass::Selection,
+                                                 .serialKey             = _session.DocumentSerial(),
+                                                 .memoryBytes           = limits.totalBytes,
+                                                 .deferredRetirement    = true,
+                                                 .allowMemoryWaiting    = false,
+                                                 .reserveRetainedMemory = true,
+                                                 .continuingOutputLimit = limits.continuingOutputBytes},
+                                                _selectionPressState->original);
     }
     catch (const std::bad_alloc&)
     {
@@ -226,7 +218,7 @@ HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
         _selectionPressStamp.reset();
         return result;
     }
-    _hostCommitStamp = _selectionPressStamp;
+    _hostCommitStamp       = _selectionPressStamp;
     _hostAfterPrerequisite = HostStage::Complete;
     return S_OK;
 }

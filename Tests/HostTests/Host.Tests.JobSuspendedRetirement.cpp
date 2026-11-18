@@ -19,11 +19,11 @@
 
 namespace
 {
-constexpr std::uint64_t kMiB = 1024ull * 1024;
-constexpr std::uint64_t kPayloadBytes = 16 * kMiB;
+constexpr std::uint64_t kMiB              = 1024ull * 1024;
+constexpr std::uint64_t kPayloadBytes     = 16 * kMiB;
 constexpr std::uint64_t kReservationBytes = 32 * kMiB;
-constexpr std::uint8_t kPayloadPattern = 0xA7;
-int gFailures = 0;
+constexpr std::uint8_t kPayloadPattern    = 0xA7;
+int gFailures                             = 0;
 
 void Expect(bool condition, const char* name) noexcept
 {
@@ -34,7 +34,7 @@ void Expect(bool condition, const char* name) noexcept
 wil::unique_handle Event(const char* name)
 {
     wil::unique_handle event{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    if (!event)
+    if (! event)
     {
         std::printf("FAIL job-suspended-retirement.create-event name=%s\n", name);
         std::fflush(stdout);
@@ -57,7 +57,7 @@ void Wait(HANDLE event, const char* name) noexcept
 bool SampleMemory(void*, MemorySnapshot& snapshot) noexcept
 {
     constexpr std::uint64_t available = 2ull * 1024 * 1024 * 1024;
-    snapshot = {available, available};
+    snapshot                          = {available, available};
     return true;
 }
 
@@ -105,30 +105,26 @@ struct CpuPayload final : DeferredReleaseNode
     Probe& probe;
     std::vector<std::uint8_t> bytesOwned;
 
-    explicit CpuPayload(Probe& value)
-        : probe(value), bytesOwned(static_cast<std::size_t>(kPayloadBytes), kPayloadPattern)
+    explicit CpuPayload(Probe& value) : probe(value), bytesOwned(static_cast<std::size_t>(kPayloadBytes), kPayloadPattern)
     {
-        bytes = kPayloadBytes;
-        destroy = [](DeferredReleaseNode* node) noexcept
-        { const std::unique_ptr<CpuPayload> owned(static_cast<CpuPayload*>(node)); };
+        bytes   = kPayloadBytes;
+        destroy = [](DeferredReleaseNode* node) noexcept { const std::unique_ptr<CpuPayload> owned(static_cast<CpuPayload*>(node)); };
     }
 
     ~CpuPayload()
     {
         probe.payloadBytes.store(bytesOwned.size(), std::memory_order_relaxed);
-        probe.payloadIntact.store(bytes == kPayloadBytes && bytesOwned.size() == kPayloadBytes &&
-                                      bytesOwned.front() == kPayloadPattern && bytesOwned.back() == kPayloadPattern,
+        probe.payloadIntact.store(bytes == kPayloadBytes && bytesOwned.size() == kPayloadBytes && bytesOwned.front() == kPayloadPattern &&
+                                      bytesOwned.back() == kPayloadPattern,
                                   std::memory_order_relaxed);
         const HANDLE wake = static_cast<HANDLE>(probe.scheduler->WakeHandle());
-        probe.payloadSawWake.store(wake != nullptr && WaitForSingleObject(wake, 0) != WAIT_FAILED,
-                                   std::memory_order_relaxed);
+        probe.payloadSawWake.store(wake != nullptr && WaitForSingleObject(wake, 0) != WAIT_FAILED, std::memory_order_relaxed);
         // ReservedMemoryBytes is owner-only. Snapshot it at joined owner cleanup, then observe the final
         // retirement boundary here; Close must acknowledge this destruction before releasing that reservation.
         probe.reservationAtPayload.store(probe.reservationAtOwnerCleanup.load(), std::memory_order_relaxed);
         APTTYPE apartment{};
         APTTYPEQUALIFIER qualifier{};
-        probe.payloadMta.store(SUCCEEDED(CoGetApartmentType(&apartment, &qualifier)) && apartment == APTTYPE_MTA,
-                               std::memory_order_relaxed);
+        probe.payloadMta.store(SUCCEEDED(CoGetApartmentType(&apartment, &qualifier)) && apartment == APTTYPE_MTA, std::memory_order_relaxed);
         probe.payloadThread.store(GetCurrentThreadId(), std::memory_order_relaxed);
         probe.payloadInFinalWorker.store(probe.finalWorkerEntered.load(), std::memory_order_relaxed);
         probe.payloadsDestroyed.fetch_add(1, std::memory_order_relaxed);
@@ -142,7 +138,7 @@ struct RetirePayload final
 {
     void operator()(CpuPayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload))
+        if (payload && ! TryDeferRelease(*payload))
         {
             const std::unique_ptr<CpuPayload> owned(payload);
         }
@@ -156,8 +152,8 @@ struct RetirePayload final
 struct SuspendedState final
 {
     Probe& probe;
-    HANDLE entered = nullptr;
-    HANDLE release = nullptr;
+    HANDLE entered  = nullptr;
+    HANDLE release  = nullptr;
     HANDLE deferred = nullptr;
 };
 #pragma warning(pop)
@@ -168,9 +164,8 @@ struct SuspendedState final
 #pragma warning(disable : 4625 4626)
 class SuspendedPayloadJob final : public Job
 {
-  public:
-    explicit SuspendedPayloadJob(SuspendedState& state)
-        : _state(state), _payload(std::make_unique<CpuPayload>(state.probe).release())
+public:
+    explicit SuspendedPayloadJob(SuspendedState& state) : _state(state), _payload(std::make_unique<CpuPayload>(state.probe).release())
     {
     }
 
@@ -179,12 +174,10 @@ class SuspendedPayloadJob final : public Job
         Probe& probe = _state.probe;
         probe.wrapperThread.store(GetCurrentThreadId(), std::memory_order_relaxed);
         const HANDLE wake = static_cast<HANDLE>(probe.scheduler->WakeHandle());
-        probe.wrapperSawWake.store(wake != nullptr && WaitForSingleObject(wake, 0) != WAIT_FAILED,
-                                   std::memory_order_relaxed);
+        probe.wrapperSawWake.store(wake != nullptr && WaitForSingleObject(wake, 0) != WAIT_FAILED, std::memory_order_relaxed);
         probe.reservationAtWrapper.store(probe.scheduler->ReservedMemoryBytes(), std::memory_order_relaxed);
-        probe.wrapperSawCloseGateJoined.store(probe.closeGateRuns.load(std::memory_order_relaxed) == 1 &&
-                                                  probe.closeGateEnds.load(std::memory_order_relaxed) == 1,
-                                              std::memory_order_relaxed);
+        probe.wrapperSawCloseGateJoined.store(
+            probe.closeGateRuns.load(std::memory_order_relaxed) == 1 && probe.closeGateEnds.load(std::memory_order_relaxed) == 1, std::memory_order_relaxed);
         probe.wrappersDestroyed.fetch_add(1, std::memory_order_relaxed);
     }
 
@@ -213,7 +206,7 @@ class SuspendedPayloadJob final : public Job
         _state.probe.completions.fetch_add(1, std::memory_order_relaxed);
     }
 
-  private:
+private:
     SuspendedState& _state;
     std::unique_ptr<CpuPayload, RetirePayload> _payload;
 };
@@ -225,8 +218,10 @@ class SuspendedPayloadJob final : public Job
 #pragma warning(disable : 4626 5027)
 class CloseGateJob final : public Job
 {
-  public:
-    CloseGateJob(Probe& probe, HANDLE entered) noexcept : _probe(probe), _entered(entered) {}
+public:
+    CloseGateJob(Probe& probe, HANDLE entered) noexcept : _probe(probe), _entered(entered)
+    {
+    }
 
     JobResult Run(JobContext& context) override
     {
@@ -242,7 +237,7 @@ class CloseGateJob final : public Job
         _probe.completions.fetch_add(1, std::memory_order_relaxed);
     }
 
-  private:
+private:
     Probe& _probe;
     HANDLE _entered;
 };
@@ -256,7 +251,7 @@ void WaitForSuspension(JobScheduler& scheduler, HANDLE deferred) noexcept
         (void)DrainCompletions(scheduler);
         if (WaitForSingleObject(deferred, 0) == WAIT_OBJECT_0)
         {
-            Expect(!scheduler.HasUiWork() && !scheduler.IsIdle(), "suspended-record-retained-after-defer-hook");
+            Expect(! scheduler.HasUiWork() && ! scheduler.IsIdle(), "suspended-record-retained-after-defer-hook");
             return;
         }
 
@@ -267,7 +262,7 @@ void WaitForSuspension(JobScheduler& scheduler, HANDLE deferred) noexcept
             std::fflush(stdout);
             std::_Exit(1);
         }
-        const HANDLE wake = static_cast<HANDLE>(scheduler.WakeHandle());
+        const HANDLE wake  = static_cast<HANDLE>(scheduler.WakeHandle());
         const DWORD waitMs = static_cast<DWORD>(deadline - now);
         const DWORD result = wake ? WaitForSingleObject(wake, waitMs) : WAIT_FAILED;
         if (result != WAIT_OBJECT_0)
@@ -281,23 +276,21 @@ void WaitForSuspension(JobScheduler& scheduler, HANDLE deferred) noexcept
 
 void TestSuspendedPayloadRetiresDuringClose()
 {
-    Expect(!DeferredReleaseDetail::sink.enqueue, "suspended.no-surrogate-outer-sink");
+    Expect(! DeferredReleaseDetail::sink.enqueue, "suspended.no-surrogate-outer-sink");
     JobScheduler scheduler;
-    const bool initialized =
-        scheduler.Initialize(1, {}, {&SampleMemory, nullptr}) == S_OK && scheduler.EnableDeferredRelease();
+    const bool initialized = scheduler.Initialize(1, {}, {&SampleMemory, nullptr}) == S_OK && scheduler.EnableDeferredRelease();
     Expect(initialized, "suspended.initialize-and-own-tls-sink");
-    if (!initialized)
+    if (! initialized)
         return;
     Probe probe;
     probe.scheduler = &scheduler;
-    auto entered = Event("suspended-entered");
-    auto release = Event("suspended-release");
-    auto deferred = Event("suspended-deferred");
+    auto entered    = Event("suspended-entered");
+    auto release    = Event("suspended-release");
+    auto deferred   = Event("suspended-deferred");
     SuspendedState state{probe, entered.get(), release.get(), deferred.get()};
     std::unique_ptr<Job> job = std::make_unique<SuspendedPayloadJob>(state);
     JobTicket ticket;
-    Expect(scheduler.Submit(job, {JobClass::Commit, 0, kReservationBytes}, ticket) == S_OK && !job,
-           "suspended-job-submitted-with-payload-and-reservation");
+    Expect(scheduler.Submit(job, {JobClass::Commit, 0, kReservationBytes}, ticket) == S_OK && ! job, "suspended-job-submitted-with-payload-and-reservation");
     Wait(entered.get(), "suspended-worker-entered");
     Expect(scheduler.ReservedMemoryBytes() == kReservationBytes, "suspended-reservation-acquired");
     Expect(SetEvent(release.get()) != FALSE, "suspended-worker-gate-released");
@@ -307,46 +300,38 @@ void TestSuspendedPayloadRetiresDuringClose()
            "suspended-successful-stage-deferred-once-before-close");
     Expect(scheduler.ReservedMemoryBytes() == kReservationBytes, "suspended-reservation-retained-until-close");
 
-    auto closeGateEntered = Event("suspended-close-gate-entered");
+    auto closeGateEntered          = Event("suspended-close-gate-entered");
     std::unique_ptr<Job> closeGate = std::make_unique<CloseGateJob>(probe, closeGateEntered.get());
     JobTicket closeGateTicket;
-    Expect(scheduler.Submit(closeGate, {JobClass::Background}, closeGateTicket) == S_OK && !closeGate,
-           "suspended-close-join-gate-submitted");
+    Expect(scheduler.Submit(closeGate, {JobClass::Background}, closeGateTicket) == S_OK && ! closeGate, "suspended-close-join-gate-submitted");
     Wait(closeGateEntered.get(), "suspended-close-gate-entered");
 
     scheduler.Close({[](void* opaque) noexcept
-                     {
-                         auto& state = *static_cast<Probe*>(opaque);
-                         state.reservationAtOwnerCleanup.store(state.scheduler->ReservedMemoryBytes());
-                     },
+    {
+        auto& state = *static_cast<Probe*>(opaque);
+        state.reservationAtOwnerCleanup.store(state.scheduler->ReservedMemoryBytes());
+    },
                      [](void* opaque) noexcept { static_cast<Probe*>(opaque)->finalWorkerEntered.store(true); },
                      &probe});
 
-    Expect(probe.wrappersDestroyed.load(std::memory_order_relaxed) == 1 &&
-               probe.wrapperThread.load(std::memory_order_relaxed) == probe.ownerThread &&
-               probe.wrapperSawWake.load(std::memory_order_relaxed) &&
-               probe.reservationAtWrapper.load(std::memory_order_relaxed) == kReservationBytes &&
+    Expect(probe.wrappersDestroyed.load(std::memory_order_relaxed) == 1 && probe.wrapperThread.load(std::memory_order_relaxed) == probe.ownerThread &&
+               probe.wrapperSawWake.load(std::memory_order_relaxed) && probe.reservationAtWrapper.load(std::memory_order_relaxed) == kReservationBytes &&
                probe.wrapperSawCloseGateJoined.load(std::memory_order_relaxed),
            "suspended-close-joins-worker-before-owner-wrapper-destruction");
     Expect(probe.completions.load(std::memory_order_relaxed) == 0, "suspended-close-suppresses-completion");
-    Expect(probe.payloadsDestroyed.load(std::memory_order_relaxed) == 1 &&
-               probe.payloadThread.load(std::memory_order_relaxed) != probe.ownerThread &&
+    Expect(probe.payloadsDestroyed.load(std::memory_order_relaxed) == 1 && probe.payloadThread.load(std::memory_order_relaxed) != probe.ownerThread &&
                probe.payloadMta.load(std::memory_order_relaxed),
            "suspended-cpu-payload-retired-once-off-owner-on-mta");
     Expect(probe.payloadInFinalWorker.load(), "suspended-payload-destroyed-in-final-retirement-stage");
-    Expect(probe.payloadBytes.load(std::memory_order_relaxed) == kPayloadBytes &&
-               probe.payloadIntact.load(std::memory_order_relaxed),
+    Expect(probe.payloadBytes.load(std::memory_order_relaxed) == kPayloadBytes && probe.payloadIntact.load(std::memory_order_relaxed),
            "suspended-payload-exact-bytes-and-content");
-    Expect(probe.payloadSawWake.load(std::memory_order_relaxed) &&
-               probe.reservationAtPayload.load(std::memory_order_relaxed) == kReservationBytes,
+    Expect(probe.payloadSawWake.load(std::memory_order_relaxed) && probe.reservationAtPayload.load(std::memory_order_relaxed) == kReservationBytes,
            "suspended-payload-retirement-precedes-wake-and-reservation-teardown");
-    Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.ReleasingMemoryBytes() == 0 &&
-               scheduler.WakeHandle() == nullptr && scheduler.WorkerCount() == 0,
+    Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.ReleasingMemoryBytes() == 0 && scheduler.WakeHandle() == nullptr && scheduler.WorkerCount() == 0,
            "suspended-close-acknowledges-retirement-before-teardown");
-    Expect(!DeferredReleaseDetail::sink.enqueue, "suspended.close-clears-owned-sink");
+    Expect(! DeferredReleaseDetail::sink.enqueue, "suspended.close-clears-owned-sink");
     scheduler.Close();
-    Expect(probe.payloadsDestroyed.load(std::memory_order_relaxed) == 1 &&
-               probe.wrappersDestroyed.load(std::memory_order_relaxed) == 1,
+    Expect(probe.payloadsDestroyed.load(std::memory_order_relaxed) == 1 && probe.wrappersDestroyed.load(std::memory_order_relaxed) == 1,
            "suspended-repeated-close-does-not-retire-again");
 }
 
@@ -356,9 +341,8 @@ void TestSuspendedPayloadRetiresDuringClose()
 #pragma warning(disable : 4626)
 class CancelledAtStopJob final : public Job
 {
-  public:
-    CancelledAtStopJob(Probe& probe, HANDLE entered, HANDLE release) noexcept
-        : _probe(probe), _entered(entered), _release(release)
+public:
+    CancelledAtStopJob(Probe& probe, HANDLE entered, HANDLE release) noexcept : _probe(probe), _entered(entered), _release(release)
     {
     }
 
@@ -386,7 +370,7 @@ class CancelledAtStopJob final : public Job
         _probe.completions.fetch_add(1, std::memory_order_relaxed);
     }
 
-  private:
+private:
     Probe& _probe;
     HANDLE _entered;
     HANDLE _release;
@@ -395,21 +379,19 @@ class CancelledAtStopJob final : public Job
 
 void TestPrequeuedReleaseDrainsAfterStopAndCancellation()
 {
-    Expect(!DeferredReleaseDetail::sink.enqueue, "prequeued.no-surrogate-outer-sink");
+    Expect(! DeferredReleaseDetail::sink.enqueue, "prequeued.no-surrogate-outer-sink");
     JobScheduler scheduler;
-    const bool initialized =
-        scheduler.Initialize(1, {}, {&SampleMemory, nullptr}) == S_OK && scheduler.EnableDeferredRelease();
+    const bool initialized = scheduler.Initialize(1, {}, {&SampleMemory, nullptr}) == S_OK && scheduler.EnableDeferredRelease();
     Expect(initialized, "prequeued.initialize-and-own-tls-sink");
-    if (!initialized)
+    if (! initialized)
         return;
     Probe probe;
-    probe.scheduler = &scheduler;
-    auto entered = Event("cancelled-entered");
-    auto release = Event("cancelled-return");
+    probe.scheduler          = &scheduler;
+    auto entered             = Event("cancelled-entered");
+    auto release             = Event("cancelled-return");
     std::unique_ptr<Job> job = std::make_unique<CancelledAtStopJob>(probe, entered.get(), release.get());
     JobTicket ticket;
-    Expect(scheduler.Submit(job, {JobClass::InteractivePreview, 0, kReservationBytes}, ticket) == S_OK && !job,
-           "prequeued-cancellable-job-submitted");
+    Expect(scheduler.Submit(job, {JobClass::InteractivePreview, 0, kReservationBytes}, ticket) == S_OK && ! job, "prequeued-cancellable-job-submitted");
     Wait(entered.get(), "cancelled-worker-entered");
 
     std::unique_ptr<CpuPayload, RetirePayload> payload{std::make_unique<CpuPayload>(probe).release()};
@@ -422,35 +404,29 @@ void TestPrequeuedReleaseDrainsAfterStopAndCancellation()
 
     Expect(SetEvent(release.get()) != FALSE, "prequeued-joined-worker-return-permitted-after-stop-observation");
     scheduler.Close({[](void* opaque) noexcept
-                     {
-                         auto& state = *static_cast<Probe*>(opaque);
-                         state.reservationAtOwnerCleanup.store(state.scheduler->ReservedMemoryBytes());
-                     },
+    {
+        auto& state = *static_cast<Probe*>(opaque);
+        state.reservationAtOwnerCleanup.store(state.scheduler->ReservedMemoryBytes());
+    },
                      [](void* opaque) noexcept { static_cast<Probe*>(opaque)->finalWorkerEntered.store(true); },
                      &probe});
 
     Expect(probe.runs.load(std::memory_order_relaxed) == 1 && probe.runEnds.load(std::memory_order_relaxed) == 1 &&
-               probe.cancelledAtRunEnd.load(std::memory_order_relaxed) &&
-               probe.completions.load(std::memory_order_relaxed) == 0,
+               probe.cancelledAtRunEnd.load(std::memory_order_relaxed) && probe.completions.load(std::memory_order_relaxed) == 0,
            "prequeued-cancelled-work-joins-without-completion");
-    Expect(probe.wrappersDestroyed.load(std::memory_order_relaxed) == 1 &&
-               probe.wrapperThread.load(std::memory_order_relaxed) == probe.ownerThread,
+    Expect(probe.wrappersDestroyed.load(std::memory_order_relaxed) == 1 && probe.wrapperThread.load(std::memory_order_relaxed) == probe.ownerThread,
            "prequeued-cancelled-wrapper-destroyed-on-owner");
-    Expect(probe.payloadsDestroyed.load(std::memory_order_relaxed) == 1 &&
-               probe.payloadThread.load(std::memory_order_relaxed) != probe.ownerThread &&
+    Expect(probe.payloadsDestroyed.load(std::memory_order_relaxed) == 1 && probe.payloadThread.load(std::memory_order_relaxed) != probe.ownerThread &&
                probe.payloadMta.load(std::memory_order_relaxed),
            "prequeued-release-drained-once-off-owner-on-mta");
     Expect(probe.payloadInFinalWorker.load(), "prequeued-payload-destroyed-in-final-retirement-stage");
-    Expect(probe.payloadBytes.load(std::memory_order_relaxed) == kPayloadBytes &&
-               probe.payloadIntact.load(std::memory_order_relaxed),
+    Expect(probe.payloadBytes.load(std::memory_order_relaxed) == kPayloadBytes && probe.payloadIntact.load(std::memory_order_relaxed),
            "prequeued-payload-exact-bytes-and-content");
-    Expect(probe.payloadSawWake.load(std::memory_order_relaxed) &&
-               probe.reservationAtPayload.load(std::memory_order_relaxed) == kReservationBytes,
+    Expect(probe.payloadSawWake.load(std::memory_order_relaxed) && probe.reservationAtPayload.load(std::memory_order_relaxed) == kReservationBytes,
            "prequeued-final-drain-precedes-wake-and-reservation-teardown");
-    Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.ReleasingMemoryBytes() == 0 &&
-               scheduler.WakeHandle() == nullptr && scheduler.WorkerCount() == 0,
+    Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.ReleasingMemoryBytes() == 0 && scheduler.WakeHandle() == nullptr && scheduler.WorkerCount() == 0,
            "prequeued-close-acknowledges-release-before-teardown");
-    Expect(!DeferredReleaseDetail::sink.enqueue, "prequeued.close-clears-owned-sink");
+    Expect(! DeferredReleaseDetail::sink.enqueue, "prequeued.close-clears-owned-sink");
 }
 } // namespace
 

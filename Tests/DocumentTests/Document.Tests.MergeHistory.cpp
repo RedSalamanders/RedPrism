@@ -16,7 +16,7 @@
 
 namespace
 {
-int gFailures = 0;
+int gFailures   = 0;
 int gAssertions = 0;
 
 void Expect(bool condition, const char* name)
@@ -39,11 +39,10 @@ Raster Bgra(int width, int height, std::span<const std::uint8_t> bytes)
 
 ImageLayer PixelLayer(const char* id, const wchar_t* name, const Raster& pixels, int canvasWidth, int canvasHeight)
 {
-    ImageLayer layer =
-        ImageLayer::Blank(name, Vec2{static_cast<double>(canvasWidth), static_cast<double>(canvasHeight)});
-    layer.id = Id(id);
+    ImageLayer layer     = ImageLayer::Blank(name, Vec2{static_cast<double>(canvasWidth), static_cast<double>(canvasHeight)});
+    layer.id             = Id(id);
     layer.transform.size = Vec2{static_cast<double>(pixels.Width()), static_cast<double>(pixels.Height())};
-    layer.asset = RasterAsset{pixels, Raster::MakeThumbnail(pixels), name};
+    layer.asset          = RasterAsset{pixels, Raster::MakeThumbnail(pixels), name};
     return layer;
 }
 
@@ -52,29 +51,29 @@ CanvasDocument MergeDocument(bool grouped)
     constexpr std::array<std::uint8_t, 4> pixel{19, 31, 47, 255};
     const Raster raster = Bgra(1, 1, pixel);
     DocumentFixture document;
-    document.id = Id("10000000-0000-4000-8000-000000000001");
-    document.width = 3;
-    document.height = 2;
+    document.id       = Id("10000000-0000-4000-8000-000000000001");
+    document.width    = 3;
+    document.height   = 2;
     const Guid parent = Id("20000000-0000-4000-8000-000000000001");
-    const Guid upper = Id("20000000-0000-4000-8000-000000000003");
+    const Guid upper  = Id("20000000-0000-4000-8000-000000000003");
     if (grouped)
     {
         ImageLayer group = ImageLayer::Blank(L"Parent", Vec2{3, 2});
-        group.id = parent;
-        group.isGroup = true;
+        group.id         = parent;
+        group.isGroup    = true;
         document.layers.push_back(std::move(group));
     }
-    ImageLayer bottom = PixelLayer("20000000-0000-4000-8000-000000000002", L"Lower", raster, 3, 2);
-    ImageLayer top = PixelLayer("20000000-0000-4000-8000-000000000003", L"Upper", raster, 3, 2);
+    ImageLayer bottom  = PixelLayer("20000000-0000-4000-8000-000000000002", L"Lower", raster, 3, 2);
+    ImageLayer top     = PixelLayer("20000000-0000-4000-8000-000000000003", L"Upper", raster, 3, 2);
     ImageLayer clipped = PixelLayer("20000000-0000-4000-8000-000000000004", L"Survivor", raster, 3, 2);
     constexpr std::array<std::uint8_t, 1> maskPixel{255};
     const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, maskPixel.data(), maskPixel.size());
-    top.mask = LayerMask{RasterAsset{mask, mask, L"Mask"}, true, std::nullopt, true};
+    top.mask          = LayerMask{RasterAsset{mask, mask, L"Mask"}, true, std::nullopt, true};
     if (grouped)
     {
         clipped.parentID = parent;
-        bottom.parentID = parent;
-        top.parentID = parent;
+        bottom.parentID  = parent;
+        top.parentID     = parent;
     }
     clipped.maskSourceID = upper;
     document.layers.push_back(std::move(bottom));
@@ -82,19 +81,17 @@ CanvasDocument MergeDocument(bool grouped)
     document.layers.push_back(std::move(clipped));
     DocumentSelection selection;
     selection.antialiased = false;
-    selection.loops = SelectionLoops{{Vec2{0, 0}, Vec2{2, 0}, Vec2{2, 1}, Vec2{0, 1}}};
-    document.selection = std::move(selection);
+    selection.loops       = SelectionLoops{{Vec2{0, 0}, Vec2{2, 0}, Vec2{2, 1}, Vec2{0, 1}}};
+    document.selection    = std::move(selection);
     return std::move(document).Seal();
 }
 
-constexpr std::array<std::uint8_t, 24> kCompositePixels{0, 0, 0, 0, 11, 22, 33, 255, 44,  55,  66,  128,
-                                                        0, 0, 0, 0, 17, 28, 39, 64,  111, 122, 133, 255};
-constexpr std::array<std::uint8_t, 16> kTrimmedPixels{11, 22, 33, 255, 44,  55,  66,  128,
-                                                      17, 28, 39, 64,  111, 122, 133, 255};
+constexpr std::array<std::uint8_t, 24> kCompositePixels{0, 0, 0, 0, 11, 22, 33, 255, 44, 55, 66, 128, 0, 0, 0, 0, 17, 28, 39, 64, 111, 122, 133, 255};
+constexpr std::array<std::uint8_t, 16> kTrimmedPixels{11, 22, 33, 255, 44, 55, 66, 128, 17, 28, 39, 64, 111, 122, 133, 255};
 
 bool PixelsEqual(const Raster& raster, std::span<const std::uint8_t> expected)
 {
-    if (!raster.HasStorage() || raster.Format() != RasterFormat::Bgra8888 ||
+    if (! raster.HasStorage() || raster.Format() != RasterFormat::Bgra8888 ||
         expected.size() != static_cast<std::size_t>(raster.Width()) * static_cast<std::size_t>(raster.Height()) * 4u)
         return false;
     std::vector<std::uint8_t> actual(expected.size());
@@ -106,72 +103,65 @@ std::optional<DocumentSession::PreparedMergePublication> Prepare(DocumentSession
                                                                  const DocumentSession::MergePlan& plan,
                                                                  const Raster& composite,
                                                                  DocumentSession::MergePublicationStatus& status,
-                                                                 CancelToken cancellation = {},
+                                                                 CancelToken cancellation                  = {},
                                                                  DocumentHistory::PrepareObserver observer = {})
 {
     const auto token = session.CaptureJobToken(std::nullopt, 73);
-    if (!token)
+    if (! token)
         return std::nullopt;
-    return DocumentSession::PrepareMergePublication(session.Document(), session.ActiveLayerID(), token.value(),
-                                                    session.history.CaptureState(), plan, composite, status,
-                                                    cancellation, observer);
+    return DocumentSession::PrepareMergePublication(
+        session.Document(), session.ActiveLayerID(), token.value(), session.history.CaptureState(), plan, composite, status, cancellation, observer);
 }
 
 void LiteralCompositeAndSingleHistoryEntry()
 {
     DocumentSession session;
     const CanvasDocument source = MergeDocument(true);
-    const Guid upper = Id("20000000-0000-4000-8000-000000000003");
+    const Guid upper            = Id("20000000-0000-4000-8000-000000000003");
     session.ReplaceDocument(source, upper);
     session.SelectLayerTarget(upper, true);
-    const auto plan = session.PlanMerge();
-    const Raster composite = Bgra(3, 2, kCompositePixels);
+    const auto plan             = session.PlanMerge();
+    const Raster composite      = Bgra(3, 2, kCompositePixels);
     const CanvasDocument before = session.Document().value();
-    Expect(plan && plan->action == L"Merge Down" && plan->name == L"Lower" &&
-               plan->parent == std::optional<Guid>{Id("20000000-0000-4000-8000-000000000001")} && plan->anchor == upper,
+    Expect(plan && plan->action == L"Merge Down" && plan->name == L"Lower" && plan->parent == std::optional<Guid>{Id("20000000-0000-4000-8000-000000000001")} &&
+               plan->anchor == upper,
            "literal.plan-stacking-anchor-parent-name");
-    Expect(composite.HasStorage() && ValidateDocument(source) == DocumentStatus::Ok,
-           "literal.fixture-and-document-valid");
-    if (!plan || !composite.HasStorage())
+    Expect(composite.HasStorage() && ValidateDocument(source) == DocumentStatus::Ok, "literal.fixture-and-document-valid");
+    if (! plan || ! composite.HasStorage())
         return;
 
-    const auto token = session.CaptureJobToken(std::nullopt, 73);
-    const auto state = session.history.CaptureState();
-    const auto active = session.ActiveLayerID();
-    const auto generation = session.Generation();
+    const auto token                               = session.CaptureJobToken(std::nullopt, 73);
+    const auto state                               = session.history.CaptureState();
+    const auto active                              = session.ActiveLayerID();
+    const auto generation                          = session.Generation();
     DocumentSession::MergePublicationStatus status = DocumentSession::MergePublicationStatus::Invalid;
-    auto prepared = token ? DocumentSession::PrepareMergePublication(session.Document(), active, token.value(), state,
-                                                                     plan.value(), composite, status)
-                          : std::nullopt;
-    Expect(prepared && status == DocumentSession::MergePublicationStatus::Ready,
-           "literal.worker-prepares-ready-publication");
-    Expect(session.Document() == std::optional<CanvasDocument>{before} && session.ActiveLayerID() == active &&
-               session.Generation() == generation && session.history.IsCurrent(state),
+    auto prepared =
+        token ? DocumentSession::PrepareMergePublication(session.Document(), active, token.value(), state, plan.value(), composite, status) : std::nullopt;
+    Expect(prepared && status == DocumentSession::MergePublicationStatus::Ready, "literal.worker-prepares-ready-publication");
+    Expect(session.Document() == std::optional<CanvasDocument>{before} && session.ActiveLayerID() == active && session.Generation() == generation &&
+               session.history.IsCurrent(state),
            "literal.worker-prepare-does-not-mutate-owner");
-    if (!prepared)
+    if (! prepared)
         return;
 
     const int undoBefore = session.history.UndoCount();
     Expect(session.ApplyPreparedMergeIfCurrent(prepared.value()), "literal.owner-publishes-once");
     const CanvasDocument after = session.Document().value();
-    const ImageLayer* merged = session.ActiveLayer();
-    Expect(merged && merged->name == L"Lower" && merged->parentID == plan->parent &&
-               merged->transform.origin == Vec2{1, 0} && merged->transform.size == Vec2{2, 2} && merged->asset &&
-               merged->asset->image.Width() == 2 && merged->asset->image.Height() == 2 &&
+    const ImageLayer* merged   = session.ActiveLayer();
+    Expect(merged && merged->name == L"Lower" && merged->parentID == plan->parent && merged->transform.origin == Vec2{1, 0} &&
+               merged->transform.size == Vec2{2, 2} && merged->asset && merged->asset->image.Width() == 2 && merged->asset->image.Height() == 2 &&
                PixelsEqual(merged->asset->image, kTrimmedPixels),
            "literal-trim-origin-and-exact-bgra");
     const ImageLayer* survivor = nullptr;
     for (const auto& layer : after.layers)
         if (layer.name == L"Survivor")
             survivor = &layer;
-    Expect(after.layers.size() == 3 && survivor && merged && after.layers[1].id == merged->id &&
-               survivor->maskSourceID == merged->id &&
-               merged->parentID == std::optional<Guid>{Id("20000000-0000-4000-8000-000000000001")} &&
-               session.history.UndoCount() == undoBefore + 1 && session.history.UndoName() == L"Merge Down",
+    Expect(after.layers.size() == 3 && survivor && merged && after.layers[1].id == merged->id && survivor->maskSourceID == merged->id &&
+               merged->parentID == std::optional<Guid>{Id("20000000-0000-4000-8000-000000000001")} && session.history.UndoCount() == undoBefore + 1 &&
+               session.history.UndoName() == L"Merge Down",
            "literal-survivor-clip-parent-and-one-merge-down-entry");
-    Expect(after.selection == before.selection && !session.IsMaskSelected(),
-           "literal-selection-preserved-and-mask-target-cleared");
-    Expect(!session.ApplyPreparedMergeIfCurrent(prepared.value()), "literal-publication-is-single-use");
+    Expect(after.selection == before.selection && ! session.IsMaskSelected(), "literal-selection-preserved-and-mask-target-cleared");
+    Expect(! session.ApplyPreparedMergeIfCurrent(prepared.value()), "literal-publication-is-single-use");
     session.Undo();
     Expect(session.Document() == std::optional<CanvasDocument>{before}, "literal-one-undo-restores-exact-source");
     session.Redo();
@@ -184,55 +174,49 @@ void SeedRedo(DocumentSession& session)
     session.Undo();
 }
 
-bool SeededRedoUnchanged(const DocumentSession& session, const CanvasDocument& before, const Guid& revision,
-                         int undoCount, const std::optional<JobToken>& sourceToken)
+bool SeededRedoUnchanged(
+    const DocumentSession& session, const CanvasDocument& before, const Guid& revision, int undoCount, const std::optional<JobToken>& sourceToken)
 {
-    return sourceToken && session.Document() == std::optional<CanvasDocument>{before} &&
-           session.history.CurrentRevision() == revision && session.history.UndoCount() == undoCount &&
-           undoCount == 0 && session.history.UndoName().empty() && session.history.CanRedo() &&
+    return sourceToken && session.Document() == std::optional<CanvasDocument>{before} && session.history.CurrentRevision() == revision &&
+           session.history.UndoCount() == undoCount && undoCount == 0 && session.history.UndoName().empty() && session.history.CanRedo() &&
            session.history.RedoName() == L"Layer Opacity" && session.history.CaptureState().FutureCount() == 1 &&
            session.CanApplyJobResult(sourceToken.value(), 73);
 }
 
 void MergeGroupHasLiteralPixelsAndRestoresParent()
 {
-    const Guid parent = Id("20000000-0000-4000-8000-000000000001");
+    const Guid parent           = Id("20000000-0000-4000-8000-000000000001");
     const CanvasDocument before = MergeDocument(true);
     DocumentSession session;
     session.ReplaceDocument(before, parent);
     const Guid revision = session.history.CurrentRevision();
-    const auto state = session.history.CaptureState();
-    const auto plan = session.PlanMerge();
-    Expect(plan && plan->action == L"Merge Group" && plan->name == L"Parent" && !plan->parent &&
-               plan->anchor == parent && plan->removed.size() == 4 &&
-               plan->ids == std::vector<Guid>{parent, Id("20000000-0000-4000-8000-000000000002"),
+    const auto state    = session.history.CaptureState();
+    const auto plan     = session.PlanMerge();
+    Expect(plan && plan->action == L"Merge Group" && plan->name == L"Parent" && ! plan->parent && plan->anchor == parent && plan->removed.size() == 4 &&
+               plan->ids == std::vector<Guid>{parent,
+                                              Id("20000000-0000-4000-8000-000000000002"),
                                               Id("20000000-0000-4000-8000-000000000003"),
                                               Id("20000000-0000-4000-8000-000000000004")},
            "group.plan-removes-parent-and-all-three-children");
     DocumentSession::MergePublicationStatus status = DocumentSession::MergePublicationStatus::Invalid;
-    auto prepared = plan ? Prepare(session, plan.value(), Bgra(3, 2, kCompositePixels), status) : std::nullopt;
-    Expect(prepared && status == DocumentSession::MergePublicationStatus::Ready &&
-               session.Document() == std::optional<CanvasDocument>{before} && session.ActiveLayerID() == parent &&
-               session.history.IsCurrent(state),
+    auto prepared                                  = plan ? Prepare(session, plan.value(), Bgra(3, 2, kCompositePixels), status) : std::nullopt;
+    Expect(prepared && status == DocumentSession::MergePublicationStatus::Ready && session.Document() == std::optional<CanvasDocument>{before} &&
+               session.ActiveLayerID() == parent && session.history.IsCurrent(state),
            "group.preparation-keeps-original-records-and-active-parent");
-    if (!prepared)
+    if (! prepared)
         return;
     Expect(session.ApplyPreparedMergeIfCurrent(prepared.value()), "group.owner-publishes");
     const ImageLayer* merged = session.ActiveLayer();
-    Expect(session.Document()->layers.size() == 1 && merged && merged->id != parent && merged->name == L"Parent" &&
-               !merged->isGroup && !merged->parentID && !merged->maskSourceID && !merged->mask && merged->asset &&
-               merged->transform.origin == Vec2{1, 0} && merged->transform.size == Vec2{2, 2} &&
-               merged->asset->image.Width() == 2 && merged->asset->image.Height() == 2 &&
-               PixelsEqual(merged->asset->image, kTrimmedPixels) && session.Document()->width == 3 &&
-               session.Document()->height == 2 && session.Document()->selection == before.selection,
+    Expect(session.Document()->layers.size() == 1 && merged && merged->id != parent && merged->name == L"Parent" && ! merged->isGroup && ! merged->parentID &&
+               ! merged->maskSourceID && ! merged->mask && merged->asset && merged->transform.origin == Vec2{1, 0} && merged->transform.size == Vec2{2, 2} &&
+               merged->asset->image.Width() == 2 && merged->asset->image.Height() == 2 && PixelsEqual(merged->asset->image, kTrimmedPixels) &&
+               session.Document()->width == 3 && session.Document()->height == 2 && session.Document()->selection == before.selection,
            "group.only-merged-parent-remains-with-literal-canvas-trim");
-    Expect(session.history.UndoCount() == 1 && session.history.UndoName() == L"Merge Group" &&
-               session.history.CurrentRevision() != revision,
+    Expect(session.history.UndoCount() == 1 && session.history.UndoName() == L"Merge Group" && session.history.CurrentRevision() != revision,
            "group.one-merge-group-entry");
     session.Undo();
-    Expect(session.Document() == std::optional<CanvasDocument>{before} && session.ActiveLayerID() == parent &&
-               session.history.CurrentRevision() == revision && session.history.UndoCount() == 0 &&
-               session.history.UndoName().empty() && session.history.RedoName() == L"Merge Group",
+    Expect(session.Document() == std::optional<CanvasDocument>{before} && session.ActiveLayerID() == parent && session.history.CurrentRevision() == revision &&
+               session.history.UndoCount() == 0 && session.history.UndoName().empty() && session.history.RedoName() == L"Merge Group",
            "group.undo-restores-active-parent-and-all-original-records");
 }
 
@@ -241,24 +225,22 @@ void TransparentCompositePreservesExistingExtent()
     // Existing native Adjust::TrimmedToAlpha and legacy PixelFilter.trimmed keep an all-transparent input's extent.
     constexpr std::array<std::uint8_t, 24> transparentCanvas{};
     const CanvasDocument before = MergeDocument(false);
-    const Guid upper = Id("20000000-0000-4000-8000-000000000003");
+    const Guid upper            = Id("20000000-0000-4000-8000-000000000003");
     DocumentSession session;
     session.ReplaceDocument(before, upper);
-    const auto plan = session.PlanMerge();
+    const auto plan                                = session.PlanMerge();
     DocumentSession::MergePublicationStatus status = DocumentSession::MergePublicationStatus::Invalid;
-    auto prepared = plan ? Prepare(session, plan.value(), Bgra(3, 2, transparentCanvas), status) : std::nullopt;
+    auto prepared                                  = plan ? Prepare(session, plan.value(), Bgra(3, 2, transparentCanvas), status) : std::nullopt;
     Expect(prepared && status == DocumentSession::MergePublicationStatus::Ready, "transparent.canvas-prepares-ready");
-    if (!prepared)
+    if (! prepared)
         return;
     Expect(session.ApplyPreparedMergeIfCurrent(prepared.value()), "transparent.owner-publishes");
     const ImageLayer* merged = session.ActiveLayer();
-    Expect(merged && merged->asset && merged->transform.origin == Vec2{0, 0} && merged->transform.size == Vec2{3, 2} &&
-               merged->asset->image.Width() == 3 && merged->asset->image.Height() == 2 &&
-               PixelsEqual(merged->asset->image, transparentCanvas),
+    Expect(merged && merged->asset && merged->transform.origin == Vec2{0, 0} && merged->transform.size == Vec2{3, 2} && merged->asset->image.Width() == 3 &&
+               merged->asset->image.Height() == 2 && PixelsEqual(merged->asset->image, transparentCanvas),
            "transparent.existing-trim-preserves-three-by-two-zero-bgra");
     session.Undo();
-    Expect(session.Document() == std::optional<CanvasDocument>{before} && session.ActiveLayerID() == upper,
-           "transparent.undo-restores-exact-source");
+    Expect(session.Document() == std::optional<CanvasDocument>{before} && session.ActiveLayerID() == upper, "transparent.undo-restores-exact-source");
 }
 
 void MalformedPlansKeepSeededRedo()
@@ -266,13 +248,13 @@ void MalformedPlansKeepSeededRedo()
     DocumentSession session;
     session.ReplaceDocument(MergeDocument(false), Id("20000000-0000-4000-8000-000000000003"));
     SeedRedo(session);
-    const auto plan = session.PlanMerge();
+    const auto plan             = session.PlanMerge();
     const CanvasDocument before = session.Document().value();
-    const Guid revision = session.history.CurrentRevision();
-    const int undoCount = session.history.UndoCount();
-    const auto sourceToken = session.CaptureJobToken(std::nullopt, 73);
-    const auto state = session.history.CaptureState();
-    if (!plan)
+    const Guid revision         = session.history.CurrentRevision();
+    const int undoCount         = session.history.UndoCount();
+    const auto sourceToken      = session.CaptureJobToken(std::nullopt, 73);
+    const auto state            = session.history.CaptureState();
+    if (! plan)
     {
         Expect(false, "malformed.fixture-has-merge-down-plan");
         return;
@@ -284,14 +266,11 @@ void MalformedPlansKeepSeededRedo()
     for (std::size_t index = 0; index < malformed.size(); ++index)
     {
         DocumentSession::MergePublicationStatus status = DocumentSession::MergePublicationStatus::Ready;
-        auto prepared = sourceToken
-                            ? DocumentSession::PrepareMergePublication(session.Document(), session.ActiveLayerID(),
-                                                                       sourceToken.value(), state, malformed[index],
-                                                                       composite, status)
-                            : std::nullopt;
-        Expect(!prepared && status == DocumentSession::MergePublicationStatus::Invalid &&
-                   SeededRedoUnchanged(session, before, revision, undoCount, sourceToken) &&
-                   session.history.IsCurrent(state),
+        auto prepared                                  = sourceToken ? DocumentSession::PrepareMergePublication(
+                                                                           session.Document(), session.ActiveLayerID(), sourceToken.value(), state, malformed[index], composite, status)
+                                                                     : std::nullopt;
+        Expect(! prepared && status == DocumentSession::MergePublicationStatus::Invalid &&
+                   SeededRedoUnchanged(session, before, revision, undoCount, sourceToken) && session.history.IsCurrent(state),
                index == 0 ? "malformed.duplicate-plan-ids-refused" : "malformed.extra-removed-id-refused");
     }
 }
@@ -300,29 +279,26 @@ void SparseSurvivorMakesMergeExceedD7Budget()
 {
     const Raster huge = Raster::MakeSparse(9999, 10000, RasterFormat::Bgra8888, {}, 0, 0, {}, 0);
     constexpr std::array<std::uint8_t, 4> thumbnailPixel{0, 0, 0, 0};
-    const Raster thumbnail = Bgra(1, 1, thumbnailPixel);
+    const Raster thumbnail        = Bgra(1, 1, thumbnailPixel);
     const CanvasDocument baseline = MergeDocument(false);
-    DocumentFixture document = DocumentFixture::Copy(baseline);
-    document.width = 30000;
+    DocumentFixture document      = DocumentFixture::Copy(baseline);
+    document.width                = 30000;
     // Assign the huge survivor's thumbnail directly; never sample or materialize its 99,990,000-pixel image.
-    document.layers[2].asset = RasterAsset{huge, thumbnail, L"Survivor"};
+    document.layers[2].asset          = RasterAsset{huge, thumbnail, L"Survivor"};
     document.layers[2].transform.size = Vec2{9999, 10000};
-    const CanvasDocument published = std::move(document).Seal();
+    const CanvasDocument published    = std::move(document).Seal();
     DocumentSession session;
     session.ReplaceDocument(published, Id("20000000-0000-4000-8000-000000000003"));
-    Expect(ValidateDocument(published) == DocumentStatus::Ok && session.Document() && huge.IsSparse() &&
-               huge.PixelCount() == 99'990'000 && !huge.IsMaterialized() && huge.ByteSize() == 0 &&
-               published.layers[0].asset->image.PixelCount() + published.layers[1].asset->image.PixelCount() +
-                       published.layers[2].asset->image.PixelCount() ==
+    Expect(ValidateDocument(published) == DocumentStatus::Ok && session.Document() && huge.IsSparse() && huge.PixelCount() == 99'990'000 &&
+               ! huge.IsMaterialized() && huge.ByteSize() == 0 &&
+               published.layers[0].asset->image.PixelCount() + published.layers[1].asset->image.PixelCount() + published.layers[2].asset->image.PixelCount() ==
                    99'990'002,
            "budget.valid-source-has-99990002-pixels-with-no-huge-pixel-buffer");
-    if (!session.Document())
+    if (! session.Document())
         return;
     SeedRedo(session);
     const auto plan = session.PlanMerge();
-    Expect(plan &&
-               plan->ids == std::vector<Guid>{Id("20000000-0000-4000-8000-000000000002"),
-                                              Id("20000000-0000-4000-8000-000000000003")} &&
+    Expect(plan && plan->ids == std::vector<Guid>{Id("20000000-0000-4000-8000-000000000002"), Id("20000000-0000-4000-8000-000000000003")} &&
                plan->removed.size() == 2 && session.PixelBudgetLeft(false, plan->removed) == 10'000,
            "budget.excluding-two-source-pixels-leaves-literal-10000-pixels");
     // Opposite opaque corners force a 30,000 x 2 trim (60,000 pixels), using only this 240,000-byte composite.
@@ -334,24 +310,22 @@ void SparseSurvivorMakesMergeExceedD7Budget()
     const Raster composite = Bgra(30000, 2, canvasBytes);
     Expect(composite.HasStorage() && composite.PixelCount() == 60'000 && composite.ByteSize() == 240'000,
            "budget.literal-opposite-corners-force-60000-pixel-trim");
-    const CanvasDocument before = session.Document().value();
-    const Guid revision = session.history.CurrentRevision();
-    const int undoCount = session.history.UndoCount();
-    const auto sourceToken = session.CaptureJobToken(std::nullopt, 73);
-    const auto state = session.history.CaptureState();
+    const CanvasDocument before                    = session.Document().value();
+    const Guid revision                            = session.history.CurrentRevision();
+    const int undoCount                            = session.history.UndoCount();
+    const auto sourceToken                         = session.CaptureJobToken(std::nullopt, 73);
+    const auto state                               = session.history.CaptureState();
     DocumentSession::MergePublicationStatus status = DocumentSession::MergePublicationStatus::Invalid;
     auto prepared =
         plan && sourceToken
-            ? DocumentSession::PrepareMergePublication(session.Document(), session.ActiveLayerID(), sourceToken.value(),
-                                                       state, plan.value(), composite, status)
+            ? DocumentSession::PrepareMergePublication(session.Document(), session.ActiveLayerID(), sourceToken.value(), state, plan.value(), composite, status)
             : std::nullopt;
-    Expect(!prepared && status == DocumentSession::MergePublicationStatus::TooLarge &&
-               SeededRedoUnchanged(session, before, revision, undoCount, sourceToken) &&
-               session.history.IsCurrent(state),
+    Expect(! prepared && status == DocumentSession::MergePublicationStatus::TooLarge &&
+               SeededRedoUnchanged(session, before, revision, undoCount, sourceToken) && session.history.IsCurrent(state),
            "budget.too-large-refusal-keeps-source-revision-history-redo-and-token");
     const Raster& survivor = session.Document()->layers[2].asset->image;
-    Expect(survivor == huge && !survivor.IsMaterialized() && survivor.ByteSize() == 0 && !huge.IsMaterialized() &&
-               !huge.Base().HasStorage() && huge.Tiles().empty(),
+    Expect(survivor == huge && ! survivor.IsMaterialized() && survivor.ByteSize() == 0 && ! huge.IsMaterialized() && ! huge.Base().HasStorage() &&
+               huge.Tiles().empty(),
            "budget.refusal-keeps-huge-survivor-unmaterialized");
 }
 
@@ -380,35 +354,41 @@ struct FailAtStage final
 void CancellationAndAllocationFailuresKeepRedo()
 {
     constexpr std::array stages{DocumentHistory::PrepareStage::BeforeSnapshot,
-                                DocumentHistory::PrepareStage::AfterSnapshot, DocumentHistory::PrepareStage::Entry,
-                                DocumentHistory::PrepareStage::StackGrowth, DocumentHistory::PrepareStage::TrimIndex};
+                                DocumentHistory::PrepareStage::AfterSnapshot,
+                                DocumentHistory::PrepareStage::Entry,
+                                DocumentHistory::PrepareStage::StackGrowth,
+                                DocumentHistory::PrepareStage::TrimIndex};
     const Raster composite = Bgra(3, 2, kCompositePixels);
     for (std::size_t index = 0; index < stages.size(); ++index)
     {
         DocumentSession session;
         session.ReplaceDocument(MergeDocument(false), Id("20000000-0000-4000-8000-000000000003"));
         SeedRedo(session);
-        const auto plan = session.PlanMerge();
+        const auto plan             = session.PlanMerge();
         const CanvasDocument before = session.Document().value();
-        const Guid revision = session.history.CurrentRevision();
-        const int undoCount = session.history.UndoCount();
-        const auto sourceToken = session.CaptureJobToken(std::nullopt, 73);
+        const Guid revision         = session.history.CurrentRevision();
+        const int undoCount         = session.history.UndoCount();
+        const auto sourceToken      = session.CaptureJobToken(std::nullopt, 73);
         CancelSource cancel;
         CancelAtStage callback{&cancel, stages[index]};
         DocumentHistory::PrepareObserver observer{&CancelAtStage::Checkpoint, &callback};
         DocumentSession::MergePublicationStatus status = DocumentSession::MergePublicationStatus::Invalid;
-        auto prepared =
-            plan && sourceToken
-                ? DocumentSession::PrepareMergePublication(session.Document(), session.ActiveLayerID(),
-                                                           sourceToken.value(), session.history.CaptureState(),
-                                                           plan.value(), composite, status, cancel.Token(), observer)
-                : std::nullopt;
-        const char* label = index == 0   ? "cancel-before-snapshot"
-                            : index == 1 ? "cancel-after-snapshot"
-                            : index == 2 ? "cancel-entry"
-                            : index == 3 ? "cancel-stack-growth"
-                                         : "cancel-trim-index";
-        Expect(!prepared && status == DocumentSession::MergePublicationStatus::Cancelled &&
+        auto prepared                                  = plan && sourceToken ? DocumentSession::PrepareMergePublication(session.Document(),
+                                                                                                                        session.ActiveLayerID(),
+                                                                                                                        sourceToken.value(),
+                                                                                                                        session.history.CaptureState(),
+                                                                                                                        plan.value(),
+                                                                                                                        composite,
+                                                                                                                        status,
+                                                                                                                        cancel.Token(),
+                                                                                                                        observer)
+                                                                             : std::nullopt;
+        const char* label                              = index == 0   ? "cancel-before-snapshot"
+                                                         : index == 1 ? "cancel-after-snapshot"
+                                                         : index == 2 ? "cancel-entry"
+                                                         : index == 3 ? "cancel-stack-growth"
+                                                                      : "cancel-trim-index";
+        Expect(! prepared && status == DocumentSession::MergePublicationStatus::Cancelled &&
                    SeededRedoUnchanged(session, before, revision, undoCount, sourceToken),
                label);
     }
@@ -417,22 +397,27 @@ void CancellationAndAllocationFailuresKeepRedo()
         DocumentSession session;
         session.ReplaceDocument(MergeDocument(false), Id("20000000-0000-4000-8000-000000000003"));
         SeedRedo(session);
-        const auto plan = session.PlanMerge();
+        const auto plan             = session.PlanMerge();
         const CanvasDocument before = session.Document().value();
-        const Guid revision = session.history.CurrentRevision();
-        const int undoCount = session.history.UndoCount();
-        const auto sourceToken = session.CaptureJobToken(std::nullopt, 73);
+        const Guid revision         = session.history.CurrentRevision();
+        const int undoCount         = session.history.UndoCount();
+        const auto sourceToken      = session.CaptureJobToken(std::nullopt, 73);
         FailAtStage callback{stages[index]};
         DocumentHistory::PrepareObserver observer{&FailAtStage::Checkpoint, &callback};
         DocumentSession::MergePublicationStatus status = DocumentSession::MergePublicationStatus::Invalid;
-        bool threw = false;
+        bool threw                                     = false;
         try
         {
-            auto prepared = plan && sourceToken
-                                ? DocumentSession::PrepareMergePublication(
-                                      session.Document(), session.ActiveLayerID(), sourceToken.value(),
-                                      session.history.CaptureState(), plan.value(), composite, status, {}, observer)
-                                : std::nullopt;
+            auto prepared = plan && sourceToken ? DocumentSession::PrepareMergePublication(session.Document(),
+                                                                                           session.ActiveLayerID(),
+                                                                                           sourceToken.value(),
+                                                                                           session.history.CaptureState(),
+                                                                                           plan.value(),
+                                                                                           composite,
+                                                                                           status,
+                                                                                           {},
+                                                                                           observer)
+                                                : std::nullopt;
             (void)prepared;
         }
         catch (const std::bad_alloc&)
@@ -454,15 +439,13 @@ void StaleAndUnauthorizedPublicationIsRefused()
     {
         DocumentSession session;
         session.ReplaceDocument(MergeDocument(false), Id("20000000-0000-4000-8000-000000000003"));
-        const auto plan = session.PlanMerge();
+        const auto plan  = session.PlanMerge();
         const auto token = session.CaptureJobToken(std::nullopt, 73);
         DocumentSession::MergePublicationStatus status{};
-        auto absent = token ? DocumentSession::PrepareMergePublication(std::nullopt, session.ActiveLayerID(),
-                                                                       token.value(), session.history.CaptureState(),
-                                                                       plan.value(), composite, status)
+        auto absent = token ? DocumentSession::PrepareMergePublication(
+                                  std::nullopt, session.ActiveLayerID(), token.value(), session.history.CaptureState(), plan.value(), composite, status)
                             : std::nullopt;
-        Expect(!absent && status == DocumentSession::MergePublicationStatus::Invalid &&
-                   session.Document().has_value() && session.history.UndoCount() == 0,
+        Expect(! absent && status == DocumentSession::MergePublicationStatus::Invalid && session.Document().has_value() && session.history.UndoCount() == 0,
                "stale-null-document-rejected");
     }
     {
@@ -475,7 +458,7 @@ void StaleAndUnauthorizedPublicationIsRefused()
         if (prepared)
         {
             session.EditForTest([](CanvasDocument& document) { document.resolution = 144; });
-            Expect(!session.ApplyPreparedMergeIfCurrent(prepared.value()), "stale-document-token-rejected");
+            Expect(! session.ApplyPreparedMergeIfCurrent(prepared.value()), "stale-document-token-rejected");
         }
     }
     {
@@ -485,10 +468,10 @@ void StaleAndUnauthorizedPublicationIsRefused()
         DocumentSession::MergePublicationStatus status{};
         auto prepared = plan ? Prepare(session, plan.value(), composite, status) : std::nullopt;
         Expect(prepared.has_value(), "active-only-candidate-ready");
-        if (!prepared)
+        if (! prepared)
             return;
         session.SelectLayer(Id("20000000-0000-4000-8000-000000000004"));
-        Expect(!session.ApplyPreparedMergeIfCurrent(prepared.value()), "active-only-change-rejected");
+        Expect(! session.ApplyPreparedMergeIfCurrent(prepared.value()), "active-only-change-rejected");
     }
     {
         DocumentSession session;
@@ -497,30 +480,28 @@ void StaleAndUnauthorizedPublicationIsRefused()
         DocumentSession::MergePublicationStatus status{};
         auto prepared = plan ? Prepare(session, plan.value(), composite, status) : std::nullopt;
         Expect(prepared.has_value(), "epoch-only-candidate-ready");
-        if (!prepared)
+        if (! prepared)
             return;
-        const auto document = session.Document();
-        const auto active = session.ActiveLayerID();
+        const auto document            = session.Document();
+        const auto active              = session.ActiveLayerID();
         const std::uint64_t generation = session.Generation();
         session.history.Begin(L"Open/close epoch", document, active);
         session.history.End(document, active);
-        Expect(session.Generation() == generation && !session.ApplyPreparedMergeIfCurrent(prepared.value()),
-               "epoch-only-begin-end-invalidates-publication");
+        Expect(session.Generation() == generation && ! session.ApplyPreparedMergeIfCurrent(prepared.value()), "epoch-only-begin-end-invalidates-publication");
     }
     {
         DocumentSession session;
         DocumentSession foreign;
         session.ReplaceDocument(MergeDocument(false), Id("20000000-0000-4000-8000-000000000003"));
         foreign.ReplaceDocument(MergeDocument(false), Id("20000000-0000-4000-8000-000000000003"));
-        const auto plan = session.PlanMerge();
+        const auto plan  = session.PlanMerge();
         const auto token = session.CaptureJobToken(std::nullopt, 73);
         DocumentSession::MergePublicationStatus status{};
         auto candidate = token && plan
-                             ? DocumentSession::PrepareMergePublication(session.Document(), session.ActiveLayerID(),
-                                                                        token.value(), foreign.history.CaptureState(),
-                                                                        plan.value(), composite, status)
+                             ? DocumentSession::PrepareMergePublication(
+                                   session.Document(), session.ActiveLayerID(), token.value(), foreign.history.CaptureState(), plan.value(), composite, status)
                              : std::nullopt;
-        Expect(candidate && !session.ApplyPreparedMergeIfCurrent(candidate.value()), "foreign-history-owner-rejected");
+        Expect(candidate && ! session.ApplyPreparedMergeIfCurrent(candidate.value()), "foreign-history-owner-rejected");
     }
     {
         DocumentSession session;
@@ -529,10 +510,10 @@ void StaleAndUnauthorizedPublicationIsRefused()
         DocumentSession::MergePublicationStatus status{};
         auto source = plan ? Prepare(session, plan.value(), composite, status) : std::nullopt;
         Expect(source.has_value(), "moved-candidate-ready");
-        if (!source)
+        if (! source)
             return;
         DocumentSession::PreparedMergePublication moved(std::move(source.value()));
-        Expect(!session.ApplyPreparedMergeIfCurrent(source.value()) && session.ApplyPreparedMergeIfCurrent(moved),
+        Expect(! session.ApplyPreparedMergeIfCurrent(source.value()) && session.ApplyPreparedMergeIfCurrent(moved),
                "moved-from-refused-and-moved-owner-publishes");
     }
 }
@@ -540,7 +521,7 @@ void StaleAndUnauthorizedPublicationIsRefused()
 
 int RunMergeHistoryTests()
 {
-    gFailures = 0;
+    gFailures   = 0;
     gAssertions = 0;
     LiteralCompositeAndSingleHistoryEntry();
     MergeGroupHasLiteralPixelsAndRestoresParent();

@@ -25,14 +25,14 @@
 
 namespace
 {
-constexpr int kThumbnailMaxSide = 96;
+constexpr int kThumbnailMaxSide          = 96;
 constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
 
 [[nodiscard]] std::wstring_view ExtensionOf(std::wstring_view path) noexcept
 {
-    const std::size_t slash = path.find_last_of(L"\\/");
+    const std::size_t slash      = path.find_last_of(L"\\/");
     const std::wstring_view name = slash == std::wstring_view::npos ? path : path.substr(slash + 1);
-    const std::size_t dot = name.find_last_of(L'.');
+    const std::size_t dot        = name.find_last_of(L'.');
     if (dot == std::wstring_view::npos || dot + 1 >= name.size())
     {
         return {};
@@ -68,8 +68,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
 
 [[nodiscard]] ImageCodecStatus MapDecodeError(HRESULT result, bool heifRequested) noexcept
 {
-    if (result == WINCODEC_ERR_COMPONENTNOTFOUND || result == WINCODEC_ERR_COMPONENTINITIALIZEFAILURE ||
-        result == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+    if (result == WINCODEC_ERR_COMPONENTNOTFOUND || result == WINCODEC_ERR_COMPONENTINITIALIZEFAILURE || result == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
     {
         return heifRequested ? ImageCodecStatus::HeifUnavailable : ImageCodecStatus::Unsupported;
     }
@@ -80,7 +79,8 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     return ImageCodecStatus::Ok;
 }
 
-[[nodiscard]] ImageCodecStatus OpenImportDecoder(const wchar_t* path, std::uint64_t maximumEncodedBytes,
+[[nodiscard]] ImageCodecStatus OpenImportDecoder(const wchar_t* path,
+                                                 std::uint64_t maximumEncodedBytes,
                                                  CancelToken cancellation,
                                                  wil::com_ptr_nothrow<IWICImagingFactory>& factory,
                                                  wil::com_ptr_nothrow<CodecFileStream>& input,
@@ -89,11 +89,10 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
 {
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    if (!path)
+    if (! path)
         return ImageCodecStatus::Unreadable;
     // Open once, deny mutation for the decoder lifetime and check the actual handle before WIC reads it.
-    HRESULT result =
-        CodecFileStream::CreateRead(path, (std::min)(maximumEncodedBytes, kMaxEncodedBytes), cancellation, input.put());
+    HRESULT result = CodecFileStream::CreateRead(path, (std::min)(maximumEncodedBytes, kMaxEncodedBytes), cancellation, input.put());
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
     if (result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
@@ -104,7 +103,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     if (FAILED(input->Stat(&stats, STATFLAG_NONAME)) || stats.cbSize.QuadPart == 0)
         return ImageCodecStatus::Unreadable;
     encodedBytes = stats.cbSize.QuadPart;
-    result = MakeFactory(factory);
+    result       = MakeFactory(factory);
     if (FAILED(result))
         return ImageCodecStatus::Unreadable;
     if (cancellation.IsCancelled())
@@ -118,9 +117,8 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
 [[nodiscard]] bool FrameFits(UINT width, UINT height, std::int64_t remainingPixels) noexcept
 {
     const std::uint64_t pixels = static_cast<std::uint64_t>(width) * height;
-    return remainingPixels >= 0 && width <= static_cast<UINT>(kMaxCanvasSide) &&
-           height <= static_cast<UINT>(kMaxCanvasSide) && pixels <= static_cast<std::uint64_t>(kMaxLayerPixels) &&
-           pixels <= static_cast<std::uint64_t>(remainingPixels);
+    return remainingPixels >= 0 && width <= static_cast<UINT>(kMaxCanvasSide) && height <= static_cast<UINT>(kMaxCanvasSide) &&
+           pixels <= static_cast<std::uint64_t>(kMaxLayerPixels) && pixels <= static_cast<std::uint64_t>(remainingPixels);
 }
 
 // The EXIF/TIFF Orientation tag (274), read from whichever metadata path this container exposes it under, else 1
@@ -128,12 +126,11 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
 [[nodiscard]] int ReadOrientation(IWICBitmapFrameDecode* frame) noexcept
 {
     wil::com_ptr_nothrow<IWICMetadataQueryReader> reader;
-    if (FAILED(frame->GetMetadataQueryReader(reader.put())) || !reader)
+    if (FAILED(frame->GetMetadataQueryReader(reader.put())) || ! reader)
     {
         return 1;
     }
-    static constexpr const wchar_t* kQueries[] = {L"/app1/ifd/{ushort=274}", L"/ifd/{ushort=274}",
-                                                  L"System.Photo.Orientation"};
+    static constexpr const wchar_t* kQueries[] = {L"/app1/ifd/{ushort=274}", L"/ifd/{ushort=274}", L"System.Photo.Orientation"};
     for (const wchar_t* query : kQueries)
     {
         PROPVARIANT value;
@@ -143,20 +140,11 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
             int orientation = 0;
             switch (value.vt)
             {
-            case VT_UI1:
-                orientation = value.bVal;
-                break;
-            case VT_UI2:
-                orientation = value.uiVal;
-                break;
-            case VT_UI4:
-                orientation = static_cast<int>(value.ulVal);
-                break;
-            case VT_I4:
-                orientation = value.lVal;
-                break;
-            default:
-                break;
+                case VT_UI1: orientation = value.bVal; break;
+                case VT_UI2: orientation = value.uiVal; break;
+                case VT_UI4: orientation = static_cast<int>(value.ulVal); break;
+                case VT_I4: orientation = value.lVal; break;
+                default: break;
             }
             PropVariantClear(&value);
             if (orientation >= 1 && orientation <= 8)
@@ -179,22 +167,14 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
 {
     switch (orientation)
     {
-    case 2:
-        return WICBitmapTransformFlipHorizontal;
-    case 3:
-        return WICBitmapTransformRotate180;
-    case 4:
-        return WICBitmapTransformFlipVertical;
-    case 5:
-        return static_cast<WICBitmapTransformOptions>(WICBitmapTransformFlipHorizontal | WICBitmapTransformRotate270);
-    case 6:
-        return WICBitmapTransformRotate90;
-    case 7:
-        return static_cast<WICBitmapTransformOptions>(WICBitmapTransformFlipHorizontal | WICBitmapTransformRotate90);
-    case 8:
-        return WICBitmapTransformRotate270;
-    default:
-        return WICBitmapTransformRotate0;
+        case 2: return WICBitmapTransformFlipHorizontal;
+        case 3: return WICBitmapTransformRotate180;
+        case 4: return WICBitmapTransformFlipVertical;
+        case 5: return static_cast<WICBitmapTransformOptions>(WICBitmapTransformFlipHorizontal | WICBitmapTransformRotate270);
+        case 6: return WICBitmapTransformRotate90;
+        case 7: return static_cast<WICBitmapTransformOptions>(WICBitmapTransformFlipHorizontal | WICBitmapTransformRotate90);
+        case 8: return WICBitmapTransformRotate270;
+        default: return WICBitmapTransformRotate0;
     }
 }
 
@@ -203,7 +183,8 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
 // "uncalibrated") carries no profile data to transform from either way, so it is left alone rather than risking an
 // IWICColorTransform call with nothing meaningful to source from; a source with no embedded profile is assumed
 // sRGB, the industry-standard fallback.
-[[nodiscard]] bool FindColorContextNeedingTransform(IWICImagingFactory* factory, IWICBitmapFrameDecode* frame,
+[[nodiscard]] bool FindColorContextNeedingTransform(IWICImagingFactory* factory,
+                                                    IWICBitmapFrameDecode* frame,
                                                     wil::com_ptr_nothrow<IWICColorContext>& sourceContext)
 {
     UINT count = 0;
@@ -238,8 +219,12 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     return false;
 }
 
-[[nodiscard]] ImageCodecStatus CopyFrame(IWICImagingFactory* factory, IWICBitmapFrameDecode* frame, bool mask,
-                                         bool applyImportTransforms, int remainingPixels, DecodedImage& decoded,
+[[nodiscard]] ImageCodecStatus CopyFrame(IWICImagingFactory* factory,
+                                         IWICBitmapFrameDecode* frame,
+                                         bool mask,
+                                         bool applyImportTransforms,
+                                         int remainingPixels,
+                                         DecodedImage& decoded,
                                          CancelToken cancellation)
 {
     if (cancellation.IsCancelled())
@@ -251,7 +236,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
         // IO_ProjectFormat.md / legacy LayerMask.isValid: a mask must already be monochrome 8-bit with no alpha.
         // Converting a color source would silently desaturate it into a mask nobody asked for.
         WICPixelFormatGUID nativeFormat{};
-        if (FAILED(frame->GetPixelFormat(&nativeFormat)) || !SameGuid(nativeFormat, GUID_WICPixelFormat8bppGray))
+        if (FAILED(frame->GetPixelFormat(&nativeFormat)) || ! SameGuid(nativeFormat, GUID_WICPixelFormat8bppGray))
         {
             return ImageCodecStatus::Unreadable;
         }
@@ -271,24 +256,21 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
         const WICBitmapTransformOptions orientation = TransformForOrientation(ReadOrientation(frame));
         if (orientation != WICBitmapTransformRotate0)
         {
-            if (FAILED(factory->CreateBitmapFlipRotator(rotator.put())) ||
-                FAILED(rotator->Initialize(source, orientation)))
+            if (FAILED(factory->CreateBitmapFlipRotator(rotator.put())) || FAILED(rotator->Initialize(source, orientation)))
             {
                 return ImageCodecStatus::Unreadable;
             }
             source = rotator.get();
         }
-        if (!mask && FindColorContextNeedingTransform(factory, frame, sourceContext))
+        if (! mask && FindColorContextNeedingTransform(factory, frame, sourceContext))
         {
             // Color-manage in straight alpha, then let the converter below premultiply once, at the end.
             if (FAILED(factory->CreateFormatConverter(straightConverter.put())) ||
-                FAILED(straightConverter->Initialize(source, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone,
-                                                     nullptr, 0.0, WICBitmapPaletteTypeCustom)) ||
-                FAILED(factory->CreateColorContext(destContext.put())) ||
-                FAILED(destContext->InitializeFromExifColorSpace(1)) || // 1 = sRGB.
+                FAILED(
+                    straightConverter->Initialize(source, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom)) ||
+                FAILED(factory->CreateColorContext(destContext.put())) || FAILED(destContext->InitializeFromExifColorSpace(1)) || // 1 = sRGB.
                 FAILED(factory->CreateColorTransformer(colorTransform.put())) ||
-                FAILED(colorTransform->Initialize(straightConverter.get(), sourceContext.get(), destContext.get(),
-                                                  GUID_WICPixelFormat32bppBGRA)))
+                FAILED(colorTransform->Initialize(straightConverter.get(), sourceContext.get(), destContext.get(), GUID_WICPixelFormat32bppBGRA)))
             {
                 return ImageCodecStatus::Unreadable;
             }
@@ -296,37 +278,36 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
         }
     }
 
-    UINT width = 0;
-    UINT height = 0;
+    UINT width     = 0;
+    UINT height    = 0;
     HRESULT result = source->GetSize(&width, &height);
     if (FAILED(result) || width == 0 || height == 0)
     {
         return ImageCodecStatus::Unreadable;
     }
-    if (!FrameFits(width, height, remainingPixels))
+    if (! FrameFits(width, height, remainingPixels))
     {
         return ImageCodecStatus::TooLarge;
     }
 
     const RasterFormat format = mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888;
-    const GUID pixelFormat = mask ? GUID_WICPixelFormat8bppGray : GUID_WICPixelFormat32bppPBGRA;
+    const GUID pixelFormat    = mask ? GUID_WICPixelFormat8bppGray : GUID_WICPixelFormat32bppPBGRA;
     wil::com_ptr_nothrow<IWICFormatConverter> converter;
     result = factory->CreateFormatConverter(converter.put());
     if (FAILED(result))
     {
         return ImageCodecStatus::Unreadable;
     }
-    result =
-        converter->Initialize(source, pixelFormat, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom);
+    result = converter->Initialize(source, pixelFormat, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom);
     if (FAILED(result))
     {
         return ImageCodecStatus::Unreadable;
     }
 
-    const UINT stride = mask ? width : width * 4;
+    const UINT stride       = mask ? width : width * 4;
     const std::size_t bytes = static_cast<std::size_t>(stride) * static_cast<std::size_t>(height);
-    PixelBuffer pixels = PixelBuffer::TryAllocate(bytes);
-    if (!pixels)
+    PixelBuffer pixels      = PixelBuffer::TryAllocate(bytes);
+    if (! pixels)
     {
         return ImageCodecStatus::Unreadable;
     }
@@ -337,7 +318,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
         {
             return ImageCodecStatus::Cancelled;
         }
-        const UINT rows = (std::min)(bandRows, height - y);
+        const UINT rows      = (std::min)(bandRows, height - y);
         const UINT bandBytes = stride * rows;
         WICRect rect{0, static_cast<INT>(y), static_cast<INT>(width), static_cast<INT>(rows)};
         result = converter->CopyPixels(&rect, stride, bandBytes, pixels.Data() + static_cast<std::size_t>(y) * stride);
@@ -353,11 +334,11 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
         return ImageCodecStatus::Cancelled;
     }
     Raster image = Raster::Adopt(static_cast<int>(width), static_cast<int>(height), format, std::move(pixels));
-    if (!image.HasStorage())
+    if (! image.HasStorage())
     {
         return ImageCodecStatus::Unreadable;
     }
-    if (mask && !LayerMask::IsValid(image))
+    if (mask && ! LayerMask::IsValid(image))
     {
         return ImageCodecStatus::Unreadable;
     }
@@ -365,7 +346,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     if (mask)
     {
         thumbnail = ThumbnailRasterForWork(image, kThumbnailMaxSide, cancellation);
-        if (cancellation.IsCancelled() || !thumbnail.HasStorage())
+        if (cancellation.IsCancelled() || ! thumbnail.HasStorage())
         {
             return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Unreadable;
         }
@@ -374,14 +355,19 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     {
         return ImageCodecStatus::Cancelled;
     }
-    decoded.image = std::move(image);
+    decoded.image     = std::move(image);
     decoded.thumbnail = std::move(thumbnail);
     return ImageCodecStatus::Ok;
 }
 
-[[nodiscard]] ImageCodecStatus DecodeFromDecoder(IWICImagingFactory* factory, IWICBitmapDecoder* decoder, bool mask,
-                                                 bool requirePng, bool allowHeif, int remainingPixels,
-                                                 DecodedImage& decoded, CancelToken cancellation)
+[[nodiscard]] ImageCodecStatus DecodeFromDecoder(IWICImagingFactory* factory,
+                                                 IWICBitmapDecoder* decoder,
+                                                 bool mask,
+                                                 bool requirePng,
+                                                 bool allowHeif,
+                                                 int remainingPixels,
+                                                 DecodedImage& decoded,
+                                                 CancelToken cancellation)
 {
     GUID container{};
     HRESULT result = decoder->GetContainerFormat(&container);
@@ -389,25 +375,25 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     {
         return ImageCodecStatus::Unreadable;
     }
-    const bool png = SameGuid(container, GUID_ContainerFormatPng);
+    const bool png  = SameGuid(container, GUID_ContainerFormatPng);
     const bool jpeg = SameGuid(container, GUID_ContainerFormatJpeg);
     const bool tiff = SameGuid(container, GUID_ContainerFormatTiff);
     const bool heif = SameGuid(container, GUID_ContainerFormatHeif);
-    if (requirePng && !png)
+    if (requirePng && ! png)
     {
         return ImageCodecStatus::Unreadable;
     }
-    if (!requirePng && !png && !jpeg && !tiff && !heif)
+    if (! requirePng && ! png && ! jpeg && ! tiff && ! heif)
     {
         return ImageCodecStatus::Unsupported;
     }
-    if (heif && !allowHeif)
+    if (heif && ! allowHeif)
     {
         return ImageCodecStatus::Unsupported;
     }
 
     UINT frames = 0;
-    result = decoder->GetFrameCount(&frames);
+    result      = decoder->GetFrameCount(&frames);
     if (FAILED(result) || frames < 1)
     {
         return ImageCodecStatus::Unreadable;
@@ -420,12 +406,16 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     }
     // `requirePng` is true only for RedPrism's own project assets (DecodeProjectPng/File); orientation and color
     // management apply to arbitrary imports (ImportImageFile), never to what RedPrism wrote itself.
-    return CopyFrame(factory, frame.get(), mask, !requirePng, remainingPixels, decoded, cancellation);
+    return CopyFrame(factory, frame.get(), mask, ! requirePng, remainingPixels, decoded, cancellation);
 }
 
-[[nodiscard]] ImageCodecStatus EncodeToFormat(const Raster& image, const GUID& container, double quality,
-                                              double resolution, std::vector<std::uint8_t>& bytes,
-                                              CancelToken cancellation, IStream* destination = nullptr,
+[[nodiscard]] ImageCodecStatus EncodeToFormat(const Raster& image,
+                                              const GUID& container,
+                                              double quality,
+                                              double resolution,
+                                              std::vector<std::uint8_t>& bytes,
+                                              CancelToken cancellation,
+                                              IStream* destination              = nullptr,
                                               std::uint64_t maximumEncodedBytes = kMaxImageEncodedBytes)
 {
     bytes.clear();
@@ -433,7 +423,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     {
         return ImageCodecStatus::Cancelled;
     }
-    if (!image.HasStorage())
+    if (! image.HasStorage())
     {
         return ImageCodecStatus::Encode;
     }
@@ -445,7 +435,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
                                                    : ImageCodecStatus::Encode;
     };
     HRESULT result = S_OK;
-    if (!destination)
+    if (! destination)
     {
         const auto capacity = (std::min)(maximumEncodedBytes, EncodeMemoryCapacity(image));
         if (capacity == 0)
@@ -486,7 +476,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
         option.pstrName = const_cast<LPOLESTR>(L"ImageQuality");
         VARIANT value;
         VariantInit(&value);
-        value.vt = VT_R4;
+        value.vt     = VT_R4;
         value.fltVal = static_cast<FLOAT>(std::min(1.0, std::max(0.1, quality)));
         (void)bag->Write(1, &option, &value);
         VariantClear(&value);
@@ -495,16 +485,15 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     {
         return failure();
     }
-    const UINT width = static_cast<UINT>(image.Width());
+    const UINT width  = static_cast<UINT>(image.Width());
     const UINT height = static_cast<UINT>(image.Height());
     if (width == 0 || height == 0 || FAILED(frame->SetSize(width, height)))
     {
         return failure();
     }
 
-    const bool jpegColor = SameGuid(container, GUID_ContainerFormatJpeg) && image.Format() == RasterFormat::Bgra8888;
-    WICPixelFormatGUID pixelFormat =
-        image.Format() == RasterFormat::Gray8 ? GUID_WICPixelFormat8bppGray : GUID_WICPixelFormat32bppPBGRA;
+    const bool jpegColor           = SameGuid(container, GUID_ContainerFormatJpeg) && image.Format() == RasterFormat::Bgra8888;
+    WICPixelFormatGUID pixelFormat = image.Format() == RasterFormat::Gray8 ? GUID_WICPixelFormat8bppGray : GUID_WICPixelFormat32bppPBGRA;
     if (jpegColor)
     {
         pixelFormat = GUID_WICPixelFormat24bppBGR;
@@ -513,23 +502,22 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     {
         return failure();
     }
-    if (jpegColor && !SameGuid(pixelFormat, GUID_WICPixelFormat24bppBGR))
+    if (jpegColor && ! SameGuid(pixelFormat, GUID_WICPixelFormat24bppBGR))
         return failure();
-    const bool unpremultiply =
-        !jpegColor && image.Format() == RasterFormat::Bgra8888 && !SameGuid(pixelFormat, GUID_WICPixelFormat32bppPBGRA);
-    if (unpremultiply && !SameGuid(pixelFormat, GUID_WICPixelFormat32bppBGRA))
+    const bool unpremultiply = ! jpegColor && image.Format() == RasterFormat::Bgra8888 && ! SameGuid(pixelFormat, GUID_WICPixelFormat32bppPBGRA);
+    if (unpremultiply && ! SameGuid(pixelFormat, GUID_WICPixelFormat32bppBGRA))
     {
         return failure();
     }
-    if (image.Format() == RasterFormat::Gray8 && !SameGuid(pixelFormat, GUID_WICPixelFormat8bppGray))
+    if (image.Format() == RasterFormat::Gray8 && ! SameGuid(pixelFormat, GUID_WICPixelFormat8bppGray))
     {
         return failure();
     }
 
     const UINT sourceStride = static_cast<UINT>(image.Stride());
-    const UINT channels = jpegColor ? 3u : (image.Format() == RasterFormat::Gray8 ? 1u : 4u);
-    const UINT stride = width * channels;
-    const UINT bandRows = (std::max)(1u, 64u * 1024u / sourceStride);
+    const UINT channels     = jpegColor ? 3u : (image.Format() == RasterFormat::Gray8 ? 1u : 4u);
+    const UINT stride       = width * channels;
+    const UINT bandRows     = (std::max)(1u, 64u * 1024u / sourceStride);
     std::vector<std::uint8_t> band(static_cast<std::size_t>(sourceStride) * (std::min)(bandRows, height));
     if (resolution > 0)
     {
@@ -543,8 +531,8 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
         }
         const UINT rows = (std::min)(bandRows, height - y);
         std::span<std::uint8_t> sourceRows{band.data(), static_cast<std::size_t>(sourceStride) * rows};
-        if (!ReadRasterRegionForWork(image, {0, static_cast<int>(y), static_cast<int>(width), static_cast<int>(rows)},
-                                     sourceRows, sourceStride, 0, cancellation))
+        if (! ReadRasterRegionForWork(
+                image, {0, static_cast<int>(y), static_cast<int>(width), static_cast<int>(rows)}, sourceRows, sourceStride, 0, cancellation))
         {
             return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Encode;
         }
@@ -556,14 +544,14 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
                 std::uint8_t* pixel = band.data() + index * 4u;
                 if (jpegColor)
                 {
-                    const int white = 255 - pixel[3];
+                    const int white      = 255 - pixel[3];
                     const std::uint8_t b = static_cast<std::uint8_t>(std::min(255, pixel[0] + white));
                     const std::uint8_t g = static_cast<std::uint8_t>(std::min(255, pixel[1] + white));
                     const std::uint8_t r = static_cast<std::uint8_t>(std::min(255, pixel[2] + white));
                     std::uint8_t* output = band.data() + index * channels;
-                    output[0] = b;
-                    output[1] = g;
-                    output[2] = r;
+                    output[0]            = b;
+                    output[1]            = g;
+                    output[2]            = r;
                 }
                 else
                 {
@@ -571,10 +559,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
                     for (int channel = 0; channel < 3; ++channel)
                     {
                         const int premultiplied = pixel[channel];
-                        pixel[channel] =
-                            alpha == 0
-                                ? std::uint8_t{0}
-                                : static_cast<std::uint8_t>(std::min(255, (premultiplied * 255 + alpha / 2) / alpha));
+                        pixel[channel] = alpha == 0 ? std::uint8_t{0} : static_cast<std::uint8_t>(std::min(255, (premultiplied * 255 + alpha / 2) / alpha));
                     }
                 }
             }
@@ -584,7 +569,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
             return ImageCodecStatus::Cancelled;
         }
         const UINT bandBytes = stride * rows;
-        result = frame->WritePixels(rows, stride, bandBytes, band.data());
+        result               = frame->WritePixels(rows, stride, bandBytes, band.data());
         if (FAILED(result))
         {
             return failure();
@@ -603,7 +588,7 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     {
         return ImageCodecStatus::Cancelled;
     }
-    if (!memory)
+    if (! memory)
         return ImageCodecStatus::Ok; // Caller owns checked durability/close and destination publication.
     if (memory->LimitExceeded())
         return ImageCodecStatus::TooLarge; // A codec may not ignore a refused sink operation.
@@ -625,12 +610,12 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     bytes = std::move(encoded);
     return ImageCodecStatus::Ok;
 }
-[[nodiscard]] ImageCodecStatus EncodeToFile(const Raster& image, const GUID& container, double quality,
-                                            double resolution, const wchar_t* path, CancelToken cancellation)
+[[nodiscard]] ImageCodecStatus EncodeToFile(
+    const Raster& image, const GUID& container, double quality, double resolution, const wchar_t* path, CancelToken cancellation)
 {
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    if (path == nullptr || !image.HasStorage())
+    if (path == nullptr || ! image.HasStorage())
     {
         return ImageCodecStatus::Encode;
     }
@@ -640,10 +625,9 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
         return ImageCodecStatus::Cancelled;
     const std::wstring suffix = L".~" + Guid::Generate().ToString();
     std::wstring apiTarget;
-    const bool resolveTarget =
-        std::wstring_view{path}.size() < MAX_PATH && std::wstring_view{path}.size() + suffix.size() >= MAX_PATH;
-    const HRESULT targetResult = resolveTarget ? Win32FilePath::Resolve(path, Win32FilePath::Use::File, apiTarget)
-                                               : Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiTarget);
+    const bool resolveTarget = std::wstring_view{path}.size() < MAX_PATH && std::wstring_view{path}.size() + suffix.size() >= MAX_PATH;
+    const HRESULT targetResult =
+        resolveTarget ? Win32FilePath::Resolve(path, Win32FilePath::Use::File, apiTarget) : Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiTarget);
     if (FAILED(targetResult))
         return ImageCodecStatus::Encode;
     std::wstring temp;
@@ -657,35 +641,32 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     const HRESULT created = CodecFileStream::Create(apiTemp.c_str(), kMaxEncodedBytes, cancellation, file.put());
     if (FAILED(created))
         return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Encode;
-    auto cleanup = wil::scope_exit(
-        [&]
-        {
-            file.reset();
-            (void)DeleteFileW(apiTemp.c_str());
-        });
+    auto cleanup = wil::scope_exit([&]
+    {
+        file.reset();
+        (void)DeleteFileW(apiTemp.c_str());
+    });
     std::vector<std::uint8_t> unused;
     const auto encoded = EncodeToFormat(image, container, quality, resolution, unused, cancellation, file.get());
     if (encoded != ImageCodecStatus::Ok)
         return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : encoded;
     STATSTG stats{};
-    if (FAILED(file->Stat(&stats, STATFLAG_NONAME)) || stats.cbSize.QuadPart == 0 ||
-        stats.cbSize.QuadPart > kMaxEncodedBytes || FAILED(file->CloseChecked()))
+    if (FAILED(file->Stat(&stats, STATFLAG_NONAME)) || stats.cbSize.QuadPart == 0 || stats.cbSize.QuadPart > kMaxEncodedBytes || FAILED(file->CloseChecked()))
         return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Encode;
     file.reset();
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
     const DWORD existing = GetFileAttributesW(apiTarget.c_str());
-    bool replaced = false;
+    bool replaced        = false;
     if (existing != INVALID_FILE_ATTRIBUTES && (existing & FILE_ATTRIBUTE_DIRECTORY) == 0)
     {
-        replaced = ReplaceFileW(apiTarget.c_str(), apiTemp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr,
-                                nullptr) != 0;
+        replaced = ReplaceFileW(apiTarget.c_str(), apiTemp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr) != 0;
     }
-    if (!replaced)
+    if (! replaced)
     {
         replaced = MoveFileExW(apiTemp.c_str(), apiTarget.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
     }
-    if (!replaced)
+    if (! replaced)
     {
         return ImageCodecStatus::Encode;
     }
@@ -704,15 +685,14 @@ bool WriteFileBytesToDisk(const wchar_t* path, const std::uint8_t* bytes, std::s
     const HRESULT pathResult = Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiPath);
     if (FAILED(pathResult))
         return false;
-    const HANDLE file =
-        CreateFileW(apiPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    const HANDLE file = CreateFileW(apiPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE)
     {
         return false;
     }
     wil::unique_hfile owned{file};
     DWORD written = 0;
-    if (size > 0 && (!WriteFile(owned.get(), bytes, static_cast<DWORD>(size), &written, nullptr) || written != size))
+    if (size > 0 && (! WriteFile(owned.get(), bytes, static_cast<DWORD>(size), &written, nullptr) || written != size))
     {
         return false;
     }
@@ -726,15 +706,15 @@ bool IsHeifContainer(std::wstring_view path) noexcept
     return EqualsExtension(ext, L".heic") || EqualsExtension(ext, L".heif") || EqualsExtension(ext, L".hif");
 }
 
-ImageCodecStatus ProbeProjectPng(const std::uint8_t* bytes, std::size_t byteCount, std::int64_t remainingPixels,
-                                 ImageImportMetadata& metadata, CancelToken cancellation)
+ImageCodecStatus ProbeProjectPng(
+    const std::uint8_t* bytes, std::size_t byteCount, std::int64_t remainingPixels, ImageImportMetadata& metadata, CancelToken cancellation)
 {
     metadata = {};
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
     if (remainingPixels < 0 || byteCount > kMaxEncodedBytes)
         return ImageCodecStatus::TooLarge;
-    if (!bytes || byteCount == 0)
+    if (! bytes || byteCount == 0)
         return ImageCodecStatus::Unreadable;
     wil::com_ptr_nothrow<IWICImagingFactory> factory;
     if (FAILED(MakeFactory(factory)))
@@ -742,14 +722,12 @@ ImageCodecStatus ProbeProjectPng(const std::uint8_t* bytes, std::size_t byteCoun
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
     wil::com_ptr_nothrow<IWICStream> stream;
-    if (FAILED(factory->CreateStream(stream.put())) ||
-        FAILED(stream->InitializeFromMemory(const_cast<BYTE*>(bytes), static_cast<DWORD>(byteCount))))
+    if (FAILED(factory->CreateStream(stream.put())) || FAILED(stream->InitializeFromMemory(const_cast<BYTE*>(bytes), static_cast<DWORD>(byteCount))))
         return ImageCodecStatus::Unreadable;
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
     wil::com_ptr_nothrow<IWICBitmapDecoder> decoder;
-    const HRESULT opened =
-        factory->CreateDecoderFromStream(stream.get(), nullptr, WICDecodeMetadataCacheOnDemand, decoder.put());
+    const HRESULT opened = factory->CreateDecoderFromStream(stream.get(), nullptr, WICDecodeMetadataCacheOnDemand, decoder.put());
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
     if (FAILED(opened))
@@ -758,9 +736,9 @@ ImageCodecStatus ProbeProjectPng(const std::uint8_t* bytes, std::size_t byteCoun
     const HRESULT identified = decoder->GetContainerFormat(&container);
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    if (FAILED(identified) || !SameGuid(container, GUID_ContainerFormatPng))
+    if (FAILED(identified) || ! SameGuid(container, GUID_ContainerFormatPng))
         return ImageCodecStatus::Unreadable;
-    UINT frameCount = 0;
+    UINT frameCount       = 0;
     const HRESULT counted = decoder->GetFrameCount(&frameCount);
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
@@ -772,22 +750,21 @@ ImageCodecStatus ProbeProjectPng(const std::uint8_t* bytes, std::size_t byteCoun
         return ImageCodecStatus::Cancelled;
     if (FAILED(framed))
         return ImageCodecStatus::Unreadable;
-    UINT width = 0;
-    UINT height = 0;
+    UINT width          = 0;
+    UINT height         = 0;
     const HRESULT sized = frame->GetSize(&width, &height);
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
     if (FAILED(sized) || width == 0 || height == 0)
         return ImageCodecStatus::Unreadable;
-    if (!FrameFits(width, height, remainingPixels))
+    if (! FrameFits(width, height, remainingPixels))
         return ImageCodecStatus::TooLarge;
-    metadata = {static_cast<int>(width), static_cast<int>(height), static_cast<std::uint64_t>(width) * height,
-                static_cast<std::uint64_t>(byteCount)};
+    metadata = {static_cast<int>(width), static_cast<int>(height), static_cast<std::uint64_t>(width) * height, static_cast<std::uint64_t>(byteCount)};
     return ImageCodecStatus::Ok;
 }
 
-ImageCodecStatus DecodeProjectPng(const std::uint8_t* bytes, std::size_t byteCount, bool mask, int remainingPixels,
-                                  DecodedImage& decoded, CancelToken cancellation)
+ImageCodecStatus DecodeProjectPng(
+    const std::uint8_t* bytes, std::size_t byteCount, bool mask, int remainingPixels, DecodedImage& decoded, CancelToken cancellation)
 {
     decoded = {};
     if (cancellation.IsCancelled())
@@ -818,8 +795,7 @@ ImageCodecStatus DecodeProjectPng(const std::uint8_t* bytes, std::size_t byteCou
     {
         return ImageCodecStatus::Unreadable;
     }
-    const ImageCodecStatus status =
-        DecodeFromDecoder(factory.get(), decoder.get(), mask, true, false, remainingPixels, decoded, cancellation);
+    const ImageCodecStatus status = DecodeFromDecoder(factory.get(), decoder.get(), mask, true, false, remainingPixels, decoded, cancellation);
     if (cancellation.IsCancelled())
     {
         decoded = {};
@@ -828,8 +804,8 @@ ImageCodecStatus DecodeProjectPng(const std::uint8_t* bytes, std::size_t byteCou
     return status;
 }
 
-ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remainingPixels, DecodedImage& decoded,
-                                      CancelToken cancellation, std::size_t maximumEncodedBytes)
+ImageCodecStatus DecodeProjectPngFile(
+    const wchar_t* path, bool mask, int remainingPixels, DecodedImage& decoded, CancelToken cancellation, std::size_t maximumEncodedBytes)
 {
     decoded = {};
     if (cancellation.IsCancelled())
@@ -843,7 +819,7 @@ ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remain
     if (remainingPixels < 0)
         return ImageCodecStatus::TooLarge;
     WIN32_FILE_ATTRIBUTE_DATA info{};
-    if (!GetFileAttributesExW(path, GetFileExInfoStandard, &info))
+    if (! GetFileAttributesExW(path, GetFileExInfoStandard, &info))
     {
         return ImageCodecStatus::Unreadable;
     }
@@ -853,7 +829,7 @@ ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remain
     }
     ULARGE_INTEGER size{};
     size.HighPart = info.nFileSizeHigh;
-    size.LowPart = info.nFileSizeLow;
+    size.LowPart  = info.nFileSizeLow;
     if (size.QuadPart > (std::min)(static_cast<std::uint64_t>(maximumEncodedBytes), kMaxEncodedBytes))
     {
         return ImageCodecStatus::TooLarge;
@@ -862,16 +838,12 @@ ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remain
     wil::com_ptr_nothrow<CodecFileStream> input;
     wil::com_ptr_nothrow<IWICBitmapDecoder> decoder;
     std::uint64_t encodedBytes = 0;
-    const auto opened =
-        OpenImportDecoder(path, maximumEncodedBytes, cancellation, factory, input, decoder, encodedBytes);
+    const auto opened          = OpenImportDecoder(path, maximumEncodedBytes, cancellation, factory, input, decoder, encodedBytes);
     if (opened != ImageCodecStatus::Ok)
     {
-        return opened == ImageCodecStatus::TooLarge || opened == ImageCodecStatus::Cancelled
-                   ? opened
-                   : ImageCodecStatus::Unreadable;
+        return opened == ImageCodecStatus::TooLarge || opened == ImageCodecStatus::Cancelled ? opened : ImageCodecStatus::Unreadable;
     }
-    const ImageCodecStatus status =
-        DecodeFromDecoder(factory.get(), decoder.get(), mask, true, false, remainingPixels, decoded, cancellation);
+    const ImageCodecStatus status = DecodeFromDecoder(factory.get(), decoder.get(), mask, true, false, remainingPixels, decoded, cancellation);
     if (cancellation.IsCancelled())
     {
         decoded = {};
@@ -880,8 +852,7 @@ ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remain
     return status;
 }
 
-ImageCodecStatus ProbeImportImageFile(const wchar_t* path, std::int64_t remainingPixels, ImageImportMetadata& metadata,
-                                      CancelToken cancellation)
+ImageCodecStatus ProbeImportImageFile(const wchar_t* path, std::int64_t remainingPixels, ImageImportMetadata& metadata, CancelToken cancellation)
 {
     metadata = {};
     if (cancellation.IsCancelled())
@@ -892,7 +863,7 @@ ImageCodecStatus ProbeImportImageFile(const wchar_t* path, std::int64_t remainin
     wil::com_ptr_nothrow<CodecFileStream> input;
     wil::com_ptr_nothrow<IWICBitmapDecoder> decoder;
     std::uint64_t encodedBytes = 0;
-    const auto opened = OpenImportDecoder(path, kMaxEncodedBytes, cancellation, factory, input, decoder, encodedBytes);
+    const auto opened          = OpenImportDecoder(path, kMaxEncodedBytes, cancellation, factory, input, decoder, encodedBytes);
     if (opened != ImageCodecStatus::Ok)
         return opened;
     GUID container{};
@@ -900,8 +871,8 @@ ImageCodecStatus ProbeImportImageFile(const wchar_t* path, std::int64_t remainin
         return ImageCodecStatus::Unreadable;
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    if (!SameGuid(container, GUID_ContainerFormatPng) && !SameGuid(container, GUID_ContainerFormatJpeg) &&
-        !SameGuid(container, GUID_ContainerFormatTiff) && !SameGuid(container, GUID_ContainerFormatHeif))
+    if (! SameGuid(container, GUID_ContainerFormatPng) && ! SameGuid(container, GUID_ContainerFormatJpeg) && ! SameGuid(container, GUID_ContainerFormatTiff) &&
+        ! SameGuid(container, GUID_ContainerFormatHeif))
         return ImageCodecStatus::Unsupported;
     UINT frames = 0;
     if (FAILED(decoder->GetFrameCount(&frames)) || frames == 0)
@@ -913,21 +884,19 @@ ImageCodecStatus ProbeImportImageFile(const wchar_t* path, std::int64_t remainin
         return ImageCodecStatus::Unreadable;
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    UINT width = 0;
+    UINT width  = 0;
     UINT height = 0;
     if (FAILED(frame->GetSize(&width, &height)) || width == 0 || height == 0)
         return ImageCodecStatus::Unreadable;
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    if (!FrameFits(width, height, remainingPixels))
+    if (! FrameFits(width, height, remainingPixels))
         return ImageCodecStatus::TooLarge;
-    metadata = {static_cast<int>(width), static_cast<int>(height), static_cast<std::uint64_t>(width) * height,
-                encodedBytes};
+    metadata = {static_cast<int>(width), static_cast<int>(height), static_cast<std::uint64_t>(width) * height, encodedBytes};
     return ImageCodecStatus::Ok;
 }
 
-ImageCodecStatus ImportImageFile(const wchar_t* path, int remainingPixels, DecodedImage& decoded,
-                                 CancelToken cancellation, std::uint64_t maximumEncodedBytes)
+ImageCodecStatus ImportImageFile(const wchar_t* path, int remainingPixels, DecodedImage& decoded, CancelToken cancellation, std::uint64_t maximumEncodedBytes)
 {
     decoded = {};
     if (cancellation.IsCancelled())
@@ -940,12 +909,10 @@ ImageCodecStatus ImportImageFile(const wchar_t* path, int remainingPixels, Decod
     wil::com_ptr_nothrow<CodecFileStream> input;
     wil::com_ptr_nothrow<IWICBitmapDecoder> decoder;
     std::uint64_t encodedBytes = 0;
-    const auto opened =
-        OpenImportDecoder(path, maximumEncodedBytes, cancellation, factory, input, decoder, encodedBytes);
+    const auto opened          = OpenImportDecoder(path, maximumEncodedBytes, cancellation, factory, input, decoder, encodedBytes);
     if (opened != ImageCodecStatus::Ok)
         return opened;
-    const ImageCodecStatus status =
-        DecodeFromDecoder(factory.get(), decoder.get(), false, false, true, remainingPixels, decoded, cancellation);
+    const ImageCodecStatus status = DecodeFromDecoder(factory.get(), decoder.get(), false, false, true, remainingPixels, decoded, cancellation);
     if (status != ImageCodecStatus::Ok)
     {
         return status;
@@ -957,8 +924,8 @@ ImageCodecStatus ImportImageFile(const wchar_t* path, int remainingPixels, Decod
     }
     std::wstring wide(path);
     const std::size_t slash = wide.find_last_of(L"\\/");
-    std::wstring name = slash == std::wstring::npos ? wide : wide.substr(slash + 1);
-    const std::size_t dot = name.find_last_of(L'.');
+    std::wstring name       = slash == std::wstring::npos ? wide : wide.substr(slash + 1);
+    const std::size_t dot   = name.find_last_of(L'.');
     if (dot != std::wstring::npos)
     {
         name.resize(dot);
@@ -974,19 +941,18 @@ ImageCodecStatus ImportImageFile(const wchar_t* path, int remainingPixels, Decod
 
 std::uint64_t EncodeMemoryCapacity(const Raster& image) noexcept
 {
-    if (!image.HasStorage())
+    if (! image.HasStorage())
         return 0;
-    const auto rawBytes = static_cast<std::uint64_t>(image.Width()) * static_cast<std::uint64_t>(image.Height()) *
-                          (image.Format() == RasterFormat::Gray8 ? 1u : 4u);
+    const auto rawBytes =
+        static_cast<std::uint64_t>(image.Width()) * static_cast<std::uint64_t>(image.Height()) * (image.Format() == RasterFormat::Gray8 ? 1u : 4u);
     constexpr std::uint64_t overhead = 4ull * 1024 * 1024;
     return rawBytes > (kMaxImageEncodedBytes - overhead) / 2 ? kMaxImageEncodedBytes : overhead + 2 * rawBytes;
 }
-ImageCodecStatus EncodePng(const Raster& image, double resolution, std::vector<std::uint8_t>& bytes,
-                           CancelToken cancellation, std::uint64_t maximumEncodedBytes)
+ImageCodecStatus EncodePng(
+    const Raster& image, double resolution, std::vector<std::uint8_t>& bytes, CancelToken cancellation, std::uint64_t maximumEncodedBytes)
 {
     bytes.clear();
-    return EncodeToFormat(image, GUID_ContainerFormatPng, 1.0, resolution, bytes, cancellation, nullptr,
-                          maximumEncodedBytes);
+    return EncodeToFormat(image, GUID_ContainerFormatPng, 1.0, resolution, bytes, cancellation, nullptr, maximumEncodedBytes);
 }
 
 ImageCodecStatus EncodePngFile(const Raster& image, double resolution, const wchar_t* path, CancelToken cancellation)
@@ -994,16 +960,14 @@ ImageCodecStatus EncodePngFile(const Raster& image, double resolution, const wch
     return EncodeToFile(image, GUID_ContainerFormatPng, 1.0, resolution, path, cancellation);
 }
 
-ImageCodecStatus EncodeJpeg(const Raster& image, const JpegExportOptions& options, std::vector<std::uint8_t>& bytes,
-                            CancelToken cancellation, std::uint64_t maximumEncodedBytes)
+ImageCodecStatus EncodeJpeg(
+    const Raster& image, const JpegExportOptions& options, std::vector<std::uint8_t>& bytes, CancelToken cancellation, std::uint64_t maximumEncodedBytes)
 {
     bytes.clear();
-    return EncodeToFormat(image, GUID_ContainerFormatJpeg, options.quality, options.resolution, bytes, cancellation,
-                          nullptr, maximumEncodedBytes);
+    return EncodeToFormat(image, GUID_ContainerFormatJpeg, options.quality, options.resolution, bytes, cancellation, nullptr, maximumEncodedBytes);
 }
 
-ImageCodecStatus EncodeJpegFile(const Raster& image, const JpegExportOptions& options, const wchar_t* path,
-                                CancelToken cancellation)
+ImageCodecStatus EncodeJpegFile(const Raster& image, const JpegExportOptions& options, const wchar_t* path, CancelToken cancellation)
 {
     return EncodeToFile(image, GUID_ContainerFormatJpeg, options.quality, options.resolution, path, cancellation);
 }

@@ -15,9 +15,9 @@
 namespace
 {
 int gAssertions = 0;
-int gFailures = 0;
+int gFailures   = 0;
 
-constexpr int kWidth = 300;
+constexpr int kWidth  = 300;
 constexpr int kHeight = 300;
 constexpr std::array<std::uint8_t, 4> kPremultipliedBgra{12, 24, 48, 96};
 
@@ -49,13 +49,12 @@ Raster SparseSolidSource()
 
 bool IsLiteralRaster(const Raster& image, int width, int height) noexcept
 {
-    if (!image.HasStorage() || image.Width() != width || image.Height() != height ||
-        image.Format() != RasterFormat::Bgra8888 || !image.Data())
+    if (! image.HasStorage() || image.Width() != width || image.Height() != height || image.Format() != RasterFormat::Bgra8888 || ! image.Data())
         return false;
     const std::size_t byteCount = static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u;
     for (std::size_t offset = 0; offset < byteCount; offset += kPremultipliedBgra.size())
     {
-        if (!std::equal(kPremultipliedBgra.begin(), kPremultipliedBgra.end(), image.Data() + offset))
+        if (! std::equal(kPremultipliedBgra.begin(), kPremultipliedBgra.end(), image.Data() + offset))
             return false;
     }
     return true;
@@ -69,8 +68,7 @@ struct ExpectedTile final
     int height;
 };
 
-constexpr std::array<ExpectedTile, 4> kCrossingTiles{
-    {{0, 0, 256, 256}, {256, 0, 44, 256}, {0, 256, 256, 44}, {256, 256, 44, 44}}};
+constexpr std::array<ExpectedTile, 4> kCrossingTiles{{{0, 0, 256, 256}, {256, 0, 44, 256}, {0, 256, 256, 44}, {256, 256, 44, 44}}};
 
 bool HasExpectedTiles(const std::vector<RasterTile>& tiles) noexcept
 {
@@ -79,9 +77,8 @@ bool HasExpectedTiles(const std::vector<RasterTile>& tiles) noexcept
     for (std::size_t i = 0; i < kCrossingTiles.size(); ++i)
     {
         const ExpectedTile& expected = kCrossingTiles[i];
-        const RasterTile& actual = tiles[i];
-        if (actual.x != expected.x || actual.y != expected.y ||
-            !IsLiteralRaster(actual.pixels, expected.width, expected.height))
+        const RasterTile& actual     = tiles[i];
+        if (actual.x != expected.x || actual.y != expected.y || ! IsLiteralRaster(actual.pixels, expected.width, expected.height))
             return false;
     }
     return true;
@@ -91,7 +88,7 @@ struct StopAtStage final
 {
     std::stop_source* source = nullptr;
     WarpStroke::WorkStage target{};
-    std::size_t hits = 0;
+    std::size_t hits   = 0;
     std::size_t stopAt = 1;
 };
 
@@ -123,25 +120,23 @@ bool SeedBoundaryCrossing(WarpStroke& stroke)
 
 void SnapshotDimensionsAndLiteralImage()
 {
-    const Raster sourcePixels = Solid(kWidth, kHeight, kPremultipliedBgra);
-    const Raster source = SparseSource(sourcePixels);
+    const Raster sourcePixels        = Solid(kWidth, kHeight, kPremultipliedBgra);
+    const Raster source              = SparseSource(sourcePixels);
     const void* const sourceIdentity = source.Identity();
-    WarpStroke stroke = NewStroke(source);
-    Expect(source.HasStorage() && source.IsSparse() && !source.IsMaterialized() && stroke.IsValid(),
-           "image.sparse-source-admitted-without-materialization");
+    WarpStroke stroke                = NewStroke(source);
+    Expect(source.HasStorage() && source.IsSparse() && ! source.IsMaterialized() && stroke.IsValid(), "image.sparse-source-admitted-without-materialization");
     Expect(SeedBoundaryCrossing(stroke), "image.boundary-crossing-dabs-complete");
 
     const Raster image = stroke.ImageForWork({});
     Expect(IsLiteralRaster(image, 300, 300), "image.snapshot-has-literal-300x300-premultiplied-bytes");
-    Expect(stroke.IsValid() && source.Identity() == sourceIdentity && source.IsSparse() && !source.IsMaterialized() &&
-               IsLiteralRaster(sourcePixels, 300, 300),
+    Expect(stroke.IsValid() && source.Identity() == sourceIdentity && source.IsSparse() && ! source.IsMaterialized() && IsLiteralRaster(sourcePixels, 300, 300),
            "image.published-copy-keeps-stroke-valid-and-literal-source-sparse");
 }
 
 void ChangedTileExtentsAndReset()
 {
     const Raster source = SparseSolidSource();
-    WarpStroke stroke = NewStroke(source);
+    WarpStroke stroke   = NewStroke(source);
     Expect(SeedBoundaryCrossing(stroke), "tiles.boundary-crossing-dabs-complete");
 
     const std::vector<RasterTile> first = stroke.TakeChangedTilesForWork({});
@@ -159,7 +154,7 @@ void ChangedTileExtentsAndReset()
 void CancelImageSnapshot(WarpStroke::WorkStage stage, std::size_t stopAt, const char* prefix)
 {
     const Raster source = SparseSolidSource();
-    WarpStroke stroke = NewStroke(source);
+    WarpStroke stroke   = NewStroke(source);
     char label[128]{};
     std::snprintf(label, sizeof(label), "%s.setup-dabs-complete", prefix);
     Expect(SeedBoundaryCrossing(stroke), label);
@@ -173,16 +168,16 @@ void CancelImageSnapshot(WarpStroke::WorkStage stage, std::size_t stopAt, const 
     std::snprintf(label, sizeof(label), "%s.stop-observed-before-publication", prefix);
     Expect(observer.hits == stopAt && stop.stop_requested(), label);
     std::snprintf(label, sizeof(label), "%s.partial-and-stale-image-are-unpublished", prefix);
-    Expect(!cancelled.HasStorage() && !stroke.IsValid() && !stroke.Image().HasStorage(), label);
+    Expect(! cancelled.HasStorage() && ! stroke.IsValid() && ! stroke.Image().HasStorage(), label);
     std::snprintf(label, sizeof(label), "%s.earlier-published-raster-remains-literal", prefix);
     Expect(IsLiteralRaster(retained, 300, 300), label);
 }
 
 void CancelTileSnapshot(WarpStroke::WorkStage stage, std::size_t stopAt, const char* prefix)
 {
-    const Raster source = SparseSolidSource();
-    WarpStroke stroke = NewStroke(source);
-    const bool seeded = SeedBoundaryCrossing(stroke);
+    const Raster source                    = SparseSolidSource();
+    WarpStroke stroke                      = NewStroke(source);
+    const bool seeded                      = SeedBoundaryCrossing(stroke);
     const std::vector<RasterTile> retained = stroke.TakeChangedTilesForWork({});
     char label[128]{};
     std::snprintf(label, sizeof(label), "%s.setup-retains-four-literal-published-tiles", prefix);
@@ -191,13 +186,12 @@ void CancelTileSnapshot(WarpStroke::WorkStage stage, std::size_t stopAt, const c
     const bool appended = stroke.AppendForWork({258, 256}, {});
     std::stop_source stop;
     StopAtStage observer{&stop, stage, 0, stopAt};
-    const std::vector<RasterTile> cancelled =
-        stroke.TakeChangedTilesForWork(CancelToken({}, stop.get_token()), Observer(observer));
+    const std::vector<RasterTile> cancelled = stroke.TakeChangedTilesForWork(CancelToken({}, stop.get_token()), Observer(observer));
 
     std::snprintf(label, sizeof(label), "%s.stop-observed-before-publication", prefix);
     Expect(appended && observer.hits == stopAt && stop.stop_requested(), label);
     std::snprintf(label, sizeof(label), "%s.partial-tiles-hidden-and-draft-invalidated", prefix);
-    Expect(cancelled.empty() && !stroke.IsValid() && !stroke.Image().HasStorage(), label);
+    Expect(cancelled.empty() && ! stroke.IsValid() && ! stroke.Image().HasStorage(), label);
     std::snprintf(label, sizeof(label), "%s.earlier-published-tiles-remain-literal", prefix);
     Expect(HasExpectedTiles(retained), label);
 }
@@ -212,23 +206,22 @@ void PreCancelledSnapshotRefusal()
         std::stop_source shutdownStop;
         std::stop_source& selected = shutdown ? shutdownStop : localStop;
         static_cast<void>(selected.request_stop());
-        const CancelToken token =
-            shutdown ? CancelToken({}, shutdownStop.get_token()) : CancelToken(localStop.get_token(), {});
-        const char* kind = shutdown ? "shutdown" : "local";
+        const CancelToken token = shutdown ? CancelToken({}, shutdownStop.get_token()) : CancelToken(localStop.get_token(), {});
+        const char* kind        = shutdown ? "shutdown" : "local";
 
         WarpStroke imageStroke = NewStroke(source);
         std::snprintf(label, sizeof(label), "precancel-image.%s.setup-dabs-complete", kind);
         Expect(SeedBoundaryCrossing(imageStroke), label);
         const Raster image = imageStroke.ImageForWork(token);
         std::snprintf(label, sizeof(label), "precancel-image.%s-token-refuses-and-invalidates", kind);
-        Expect(!image.HasStorage() && !imageStroke.IsValid() && !imageStroke.Image().HasStorage(), label);
+        Expect(! image.HasStorage() && ! imageStroke.IsValid() && ! imageStroke.Image().HasStorage(), label);
 
         WarpStroke tileStroke = NewStroke(source);
         std::snprintf(label, sizeof(label), "precancel-tiles.%s.setup-dabs-complete", kind);
         Expect(SeedBoundaryCrossing(tileStroke), label);
         const std::vector<RasterTile> tiles = tileStroke.TakeChangedTilesForWork(token);
         std::snprintf(label, sizeof(label), "precancel-tiles.%s-token-refuses-and-invalidates", kind);
-        Expect(tiles.empty() && !tileStroke.IsValid() && !tileStroke.Image().HasStorage(), label);
+        Expect(tiles.empty() && ! tileStroke.IsValid() && ! tileStroke.Image().HasStorage(), label);
     }
 }
 } // namespace
@@ -236,7 +229,7 @@ void PreCancelledSnapshotRefusal()
 int RunWarpWorkerSnapshotsTests()
 {
     gAssertions = 0;
-    gFailures = 0;
+    gFailures   = 0;
     SnapshotDimensionsAndLiteralImage();
     ChangedTileExtentsAndReset();
     CancelImageSnapshot(WarpStroke::WorkStage::ImageRow, 17, "cancel-image.row");

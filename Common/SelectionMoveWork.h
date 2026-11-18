@@ -9,45 +9,65 @@
 // Capture after admission. The exact original outline is retained, never expanded on the owner.
 class SelectionMoveClosureInput final
 {
-  public:
-    SelectionMoveClosureInput(const SelectionMoveClosureInput&) = delete;
+public:
+    SelectionMoveClosureInput(const SelectionMoveClosureInput&)            = delete;
     SelectionMoveClosureInput& operator=(const SelectionMoveClosureInput&) = delete;
     SelectionMoveClosureInput(SelectionMoveClosureInput&& source) noexcept
-        : _token(std::move(source._token)), _history(std::move(source._history)),
-          _document(std::move(source._document)), _origin(std::move(source._origin)), _active(source._active),
-          _crop(source._crop), _offset(source._offset), _opening(source._opening), _maskSelected(source._maskSelected),
-          _cancel(source._cancel), _valid(std::exchange(source._valid, false))
+        : _token(std::move(source._token)),
+          _history(std::move(source._history)),
+          _document(std::move(source._document)),
+          _origin(std::move(source._origin)),
+          _active(source._active),
+          _crop(source._crop),
+          _offset(source._offset),
+          _opening(source._opening),
+          _maskSelected(source._maskSelected),
+          _cancel(source._cancel),
+          _valid(std::exchange(source._valid, false))
     {
     }
     SelectionMoveClosureInput& operator=(SelectionMoveClosureInput&& source) noexcept
     {
         if (this != &source)
         {
-            _token = std::move(source._token);
-            _history = std::move(source._history);
-            _document = std::move(source._document);
-            _origin = std::move(source._origin);
-            _active = source._active;
-            _crop = source._crop;
-            _offset = source._offset;
-            _opening = source._opening;
+            _token        = std::move(source._token);
+            _history      = std::move(source._history);
+            _document     = std::move(source._document);
+            _origin       = std::move(source._origin);
+            _active       = source._active;
+            _crop         = source._crop;
+            _offset       = source._offset;
+            _opening      = source._opening;
             _maskSelected = source._maskSelected;
-            _cancel = source._cancel;
-            _valid = std::exchange(source._valid, false);
+            _cancel       = source._cancel;
+            _valid        = std::exchange(source._valid, false);
         }
         return *this;
     }
 
-  private:
+private:
     friend class DocumentSession;
     friend class PreparedSelectionMoveClosure;
-    SelectionMoveClosureInput(JobToken token, DocumentHistory::StateView history, CanvasDocument document,
-                              DocumentSelection origin, std::optional<Guid> active, std::optional<CropRect> crop,
-                              std::optional<Vec2> offset, std::uint64_t opening, bool maskSelected,
+    SelectionMoveClosureInput(JobToken token,
+                              DocumentHistory::StateView history,
+                              CanvasDocument document,
+                              DocumentSelection origin,
+                              std::optional<Guid> active,
+                              std::optional<CropRect> crop,
+                              std::optional<Vec2> offset,
+                              std::uint64_t opening,
+                              bool maskSelected,
                               bool cancel) noexcept
-        : _token(std::move(token)), _history(std::move(history)), _document(std::move(document)),
-          _origin(std::move(origin)), _active(active), _crop(crop), _offset(offset), _opening(opening),
-          _maskSelected(maskSelected), _cancel(cancel)
+        : _token(std::move(token)),
+          _history(std::move(history)),
+          _document(std::move(document)),
+          _origin(std::move(origin)),
+          _active(active),
+          _crop(crop),
+          _offset(offset),
+          _opening(opening),
+          _maskSelected(maskSelected),
+          _cancel(cancel)
     {
     }
     JobToken _token;
@@ -63,19 +83,19 @@ class SelectionMoveClosureInput final
 
 class PreparedSelectionMoveClosure final
 {
-  public:
-    PreparedSelectionMoveClosure(const PreparedSelectionMoveClosure&) = delete;
-    PreparedSelectionMoveClosure& operator=(const PreparedSelectionMoveClosure&) = delete;
-    PreparedSelectionMoveClosure(PreparedSelectionMoveClosure&&) noexcept = default;
+public:
+    PreparedSelectionMoveClosure(const PreparedSelectionMoveClosure&)                = delete;
+    PreparedSelectionMoveClosure& operator=(const PreparedSelectionMoveClosure&)     = delete;
+    PreparedSelectionMoveClosure(PreparedSelectionMoveClosure&&) noexcept            = default;
     PreparedSelectionMoveClosure& operator=(PreparedSelectionMoveClosure&&) noexcept = default;
-    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
-        DocumentHistory::ResidencyPermit& permit) noexcept;
-    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
-                                               DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(DocumentHistory::ResidencyPermit& permit) noexcept;
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
 
-  private:
+private:
     friend class DocumentSession;
-    explicit PreparedSelectionMoveClosure(SelectionMoveClosureInput input) noexcept : _input(std::move(input)) {}
+    explicit PreparedSelectionMoveClosure(SelectionMoveClosureInput input) noexcept : _input(std::move(input))
+    {
+    }
     SelectionMoveClosureInput _input;
     std::optional<DocumentHistory::Publication> _history;
     std::shared_ptr<const SharedPublicationMemory> _historyMemory;

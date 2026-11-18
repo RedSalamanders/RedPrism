@@ -34,9 +34,9 @@ struct SelectionOffsetTestGate final
     std::weak_ptr<SharedPublicationMemory> offsetMemoryOwner;
     std::atomic<const void*> offsetPointBuffer{nullptr};
     std::atomic<bool> offsetOutlinePreparedOffOwner{false};
-    std::uint64_t offsetPublishedBytes = 0;
+    std::uint64_t offsetPublishedBytes  = 0;
     unsigned int offsetPublishedOutputs = 0;
-    bool offsetOutputBoundToOriginal = true;
+    bool offsetOutputBoundToOriginal    = true;
     std::atomic<bool> reservationHeld{false}, refreshReservationHeld{false}, retired{false}, retiredOffOwner{false};
     std::atomic<unsigned int> visits{0}, captures{0}, historyFaultHits{0}, residentGrowths{0}, residencyRefreshes{0};
 };

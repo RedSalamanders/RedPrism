@@ -23,19 +23,19 @@ class SharedPublicationMemory final
     {
     };
 
-  public:
+public:
     explicit SharedPublicationMemory(ConstructionTag, PublicationMemoryNode* node, std::uint64_t localLimit) noexcept
-        : _node(node), _localAllocationLimit(localLimit)
+        : _node(node),
+          _localAllocationLimit(localLimit)
     {
     }
-    SharedPublicationMemory(const SharedPublicationMemory&) = delete;
+    SharedPublicationMemory(const SharedPublicationMemory&)            = delete;
     SharedPublicationMemory& operator=(const SharedPublicationMemory&) = delete;
-    SharedPublicationMemory(SharedPublicationMemory&&) = delete;
-    SharedPublicationMemory& operator=(SharedPublicationMemory&&) = delete;
+    SharedPublicationMemory(SharedPublicationMemory&&)                 = delete;
+    SharedPublicationMemory& operator=(SharedPublicationMemory&&)      = delete;
     [[nodiscard]] static std::uint64_t OwnershipAllowance() noexcept;
     // Worker only, under the original complete admission. Allocation failure reaches the Job runner.
-    [[nodiscard]] static std::shared_ptr<SharedPublicationMemory> CreateForWork(
-        std::uint64_t localLimit = (std::numeric_limits<std::uint64_t>::max)());
+    [[nodiscard]] static std::shared_ptr<SharedPublicationMemory> CreateForWork(std::uint64_t localLimit = (std::numeric_limits<std::uint64_t>::max)());
     [[nodiscard]] std::int32_t BindForPublication(JobScheduler& scheduler, JobTicket original) noexcept;
     // Exact successful Completed callback, after this original job's useful producers have joined. Transfers
     // the entire descriptor-reserved admission before exposing immutable preview metadata. No fresh admission,
@@ -44,28 +44,33 @@ class SharedPublicationMemory final
     // Destruction accounting only: exact terminal callback or original joined Close hook. Failure/cancel
     // never becomes a successful publication. Last weak control owner continues to carry the whole charge.
     [[nodiscard]] std::int32_t BindForRetirement(JobScheduler& scheduler, JobTicket original) noexcept;
-    [[nodiscard]] std::int32_t BindPartitionedAfterCompletedWork(JobScheduler& scheduler, JobTicket original,
+    [[nodiscard]] std::int32_t BindPartitionedAfterCompletedWork(JobScheduler& scheduler,
+                                                                 JobTicket original,
                                                                  std::uint64_t outputBytes,
                                                                  SharedPublicationMemory& temporary) noexcept;
-    [[nodiscard]] std::int32_t BindPartitionedForPublication(JobScheduler& scheduler, JobTicket original,
+    [[nodiscard]] std::int32_t BindPartitionedForPublication(JobScheduler& scheduler,
+                                                             JobTicket original,
                                                              std::uint64_t outputBytes,
                                                              SharedPublicationMemory& temporary) noexcept;
-    [[nodiscard]] std::int32_t BindPartitionedForRetirement(JobScheduler& scheduler, JobTicket original,
+    [[nodiscard]] std::int32_t BindPartitionedForRetirement(JobScheduler& scheduler,
+                                                            JobTicket original,
                                                             std::uint64_t outputBytes,
                                                             SharedPublicationMemory& temporary) noexcept;
-    [[nodiscard]] std::int32_t BindPersistentOutputAfterCompletedWork(JobScheduler& scheduler, JobTicket original,
+    [[nodiscard]] std::int32_t BindPersistentOutputAfterCompletedWork(JobScheduler& scheduler,
+                                                                      JobTicket original,
                                                                       std::uint64_t outputBytes,
                                                                       SharedPublicationMemory& temporary) noexcept;
-    [[nodiscard]] std::int32_t BindPersistentOutputForPublication(JobScheduler& scheduler, JobTicket original,
+    [[nodiscard]] std::int32_t BindPersistentOutputForPublication(JobScheduler& scheduler,
+                                                                  JobTicket original,
                                                                   std::uint64_t outputBytes,
                                                                   SharedPublicationMemory& temporary) noexcept;
-    [[nodiscard]] std::int32_t BindPersistentOutputForRetirement(JobScheduler& scheduler, JobTicket original,
+    [[nodiscard]] std::int32_t BindPersistentOutputForRetirement(JobScheduler& scheduler,
+                                                                 JobTicket original,
                                                                  std::uint64_t outputBytes,
                                                                  SharedPublicationMemory& temporary) noexcept;
     // Explicit descriptor-opted intermediate publication. Seal this output only; its original job keeps
     // the remaining admission and terminal slot for future useful stages and later retirement accounting.
-    [[nodiscard]] std::int32_t BindContinuingOutputForPublication(JobScheduler& scheduler, JobTicket original,
-                                                                  std::uint64_t outputBytes) noexcept;
+    [[nodiscard]] std::int32_t BindContinuingOutputForPublication(JobScheduler& scheduler, JobTicket original, std::uint64_t outputBytes) noexcept;
     [[nodiscard]] bool IsBound() const noexcept;
     // Owner-only provenance against the live scheduler endpoint and original ticket. Closed/reconstructed
     // schedulers refuse; this grants no callback, document or mutation authority.
@@ -81,7 +86,7 @@ class SharedPublicationMemory final
     [[nodiscard]] bool TryAccountLocalAllocation(std::uint64_t bytes) const noexcept;
     void ReleaseLocalAllocation(std::uint64_t bytes) const noexcept;
 
-  private:
+private:
     // The allocator releases this accounting node after the shared control block itself is freed.
     // A surviving weak reference still owns charged control-block memory after all graph data dies.
     PublicationMemoryNode* _node;

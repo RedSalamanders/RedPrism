@@ -14,24 +14,22 @@ class FinalEditSource final
     using Storage = std::variant<PreparedPixelMoveClosure, PreparedDocumentSize>;
     Storage _source;
 
-  public:
+public:
     enum class Kind
     {
         PixelMove,
         Size
     };
-    explicit FinalEditSource(PreparedPixelMoveClosure&& source) noexcept
-        : _source(std::in_place_type<PreparedPixelMoveClosure>, std::move(source))
+    explicit FinalEditSource(PreparedPixelMoveClosure&& source) noexcept : _source(std::in_place_type<PreparedPixelMoveClosure>, std::move(source))
     {
     }
-    explicit FinalEditSource(PreparedDocumentSize&& source) noexcept
-        : _source(std::in_place_type<PreparedDocumentSize>, std::move(source))
+    explicit FinalEditSource(PreparedDocumentSize&& source) noexcept : _source(std::in_place_type<PreparedDocumentSize>, std::move(source))
     {
     }
-    FinalEditSource(const FinalEditSource&) = delete;
+    FinalEditSource(const FinalEditSource&)            = delete;
     FinalEditSource& operator=(const FinalEditSource&) = delete;
-    FinalEditSource(FinalEditSource&&) noexcept = default;
-    FinalEditSource& operator=(FinalEditSource&&) = delete;
+    FinalEditSource(FinalEditSource&&) noexcept        = default;
+    FinalEditSource& operator=(FinalEditSource&&)      = delete;
     [[nodiscard]] Kind SourceKind() const noexcept
     {
         return _source.index() == 0 ? Kind::PixelMove : Kind::Size;
@@ -44,16 +42,15 @@ class FinalEditSource final
     {
         return std::visit(
             [&](const auto& source) noexcept
-            {
-                if constexpr (std::is_same_v<std::remove_cvref_t<decltype(source)>, PreparedPixelMoveClosure>)
-                    return session.IsPreparedDeferredPixelMoveClosureCurrent(source);
-                else
-                    return session.IsPreparedDocumentSizeCurrent(source);
-            },
+        {
+            if constexpr (std::is_same_v<std::remove_cvref_t<decltype(source)>, PreparedPixelMoveClosure>)
+                return session.IsPreparedDeferredPixelMoveClosureCurrent(source);
+            else
+                return session.IsPreparedDocumentSizeCurrent(source);
+        },
             _source);
     }
-    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
-        DocumentHistory::ResidencyPermit& permit) noexcept
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(DocumentHistory::ResidencyPermit& permit) noexcept
     {
         return std::visit([&](auto& source) noexcept { return source.TryAcquireHistoryResidency(permit); }, _source);
     }
@@ -65,12 +62,12 @@ class FinalEditSource final
     {
         return std::visit(
             [&](auto& source) noexcept
-            {
-                if constexpr (std::is_same_v<std::remove_cvref_t<decltype(source)>, PreparedPixelMoveClosure>)
-                    return session.ApplyPreparedDeferredPixelMoveClosureIfCurrent(source);
-                else
-                    return session.ApplyPreparedDocumentSizeIfCurrent(source);
-            },
+        {
+            if constexpr (std::is_same_v<std::remove_cvref_t<decltype(source)>, PreparedPixelMoveClosure>)
+                return session.ApplyPreparedDeferredPixelMoveClosureIfCurrent(source);
+            else
+                return session.ApplyPreparedDocumentSizeIfCurrent(source);
+        },
             _source);
     }
 };

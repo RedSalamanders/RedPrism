@@ -42,7 +42,7 @@ struct LassoWorkTestGate final
         if (holdAt != stage)
             return {};
         visits.fetch_add(1, std::memory_order_release);
-        if (!PostThreadMessageW(ownerThread, kMessage, static_cast<WPARAM>(stage), 0))
+        if (! PostThreadMessageW(ownerThread, kMessage, static_cast<WPARAM>(stage), 0))
             return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
         const HANDLE waits[]{release.get(), context.shutdownEvent};
         const auto waited = WaitForMultipleObjects(2, waits, FALSE, 10000);

@@ -20,8 +20,8 @@ namespace RedPrism::CompositionTests
 namespace
 {
 constexpr std::uint64_t kOriginalReservation = 65536;
-constexpr std::uint64_t kProbeReservation = 1024;
-constexpr DWORD kWaitFailureBoundMs = 10000;
+constexpr std::uint64_t kProbeReservation    = 1024;
+constexpr DWORD kWaitFailureBoundMs          = 10000;
 
 unsigned int gRestartControlFailures = 0;
 
@@ -42,7 +42,7 @@ class State;
 
 class StateRoute final : public OwnerWorkPump
 {
-  public:
+public:
     State* state = nullptr;
     [[nodiscard]] bool HasPending() const noexcept override;
     [[nodiscard]] bool HasReady() const noexcept override;
@@ -54,17 +54,17 @@ struct Observation final
     JobTicket original;
     JobResult terminal;
     GpuCommandLease firstAcknowledged;
-    unsigned int acknowledgements = 0;
-    unsigned int failures = 0;
-    std::uint64_t originalGeneration = 0;
+    unsigned int acknowledgements       = 0;
+    unsigned int failures               = 0;
+    std::uint64_t originalGeneration    = 0;
     std::uint64_t replacementGeneration = 0;
-    bool finished = false;
-    bool replacementAccepted = false;
-    bool originalChargeObserved = false;
-    bool refusalStatePreserved = false;
-    bool outsideAttemptDone = false;
-    bool wrongSourceAttemptDone = false;
-    bool probeComplete = false;
+    bool finished                       = false;
+    bool replacementAccepted            = false;
+    bool originalChargeObserved         = false;
+    bool refusalStatePreserved          = false;
+    bool outsideAttemptDone             = false;
+    bool wrongSourceAttemptDone         = false;
+    bool probeComplete                  = false;
 };
 
 // External root: the scheduler-owned OriginalJob below only borrows this state. The queue receiver,
@@ -75,7 +75,7 @@ struct Observation final
 #pragma warning(disable : 4625 4626 5026 5027)
 class State final : public GpuCommandSourceReceiver
 {
-  public:
+public:
     enum class Stage : unsigned char
     {
         Open,
@@ -86,12 +86,26 @@ class State final : public GpuCommandSourceReceiver
         Finish
     };
 
-    State(JobScheduler& scheduler, GpuWorkQueue& queue, GpuWorkQueue& foreignQueue, GpuCommandPump& commands,
-          StateRoute& route, ID3D11Device& initialDevice, ID3D11Device& replacementDevice,
-          ID3D11DeviceContext& replacementImmediate, Observation& observation, bool validReplacement) noexcept
-        : jobs(scheduler), queue(queue), foreignQueue(foreignQueue), commands(commands), route(route),
-          initialDevice(initialDevice), replacementDevice(replacementDevice),
-          replacementImmediate(replacementImmediate), observation(observation), validReplacement(validReplacement)
+    State(JobScheduler& scheduler,
+          GpuWorkQueue& queue,
+          GpuWorkQueue& foreignQueue,
+          GpuCommandPump& commands,
+          StateRoute& route,
+          ID3D11Device& initialDevice,
+          ID3D11Device& replacementDevice,
+          ID3D11DeviceContext& replacementImmediate,
+          Observation& observation,
+          bool validReplacement) noexcept
+        : jobs(scheduler),
+          queue(queue),
+          foreignQueue(foreignQueue),
+          commands(commands),
+          route(route),
+          initialDevice(initialDevice),
+          replacementDevice(replacementDevice),
+          replacementImmediate(replacementImmediate),
+          observation(observation),
+          validReplacement(validReplacement)
     {
     }
 
@@ -116,24 +130,24 @@ class State final : public GpuCommandSourceReceiver
     JobTicket probeTicket;
     Stage stage = Stage::Open;
     std::atomic<bool> retired{false};
-    unsigned int round = 0;
-    unsigned int acknowledgements = 0;
-    unsigned int failures = 0;
-    bool attached = false;
-    bool streamInitialized = false;
-    bool retirementAuthorized = false;
-    bool producerFinished = false;
-    bool outsideAttemptDone = false;
-    bool wrongSourceAttemptDone = false;
-    bool probeComplete = false;
-    bool replacementAccepted = false;
-    bool originalChargeObserved = false;
-    bool refusalStatePreserved = false;
-    bool joinedRootRetained = false;
-    bool wrapperDestroyed = false;
-    std::uint64_t originalGeneration = 0;
-    std::uint64_t replacementGeneration = 0;
-    std::uint64_t firstProducerEpoch = 0;
+    unsigned int round                     = 0;
+    unsigned int acknowledgements          = 0;
+    unsigned int failures                  = 0;
+    bool attached                          = false;
+    bool streamInitialized                 = false;
+    bool retirementAuthorized              = false;
+    bool producerFinished                  = false;
+    bool outsideAttemptDone                = false;
+    bool wrongSourceAttemptDone            = false;
+    bool probeComplete                     = false;
+    bool replacementAccepted               = false;
+    bool originalChargeObserved            = false;
+    bool refusalStatePreserved             = false;
+    bool joinedRootRetained                = false;
+    bool wrapperDestroyed                  = false;
+    std::uint64_t originalGeneration       = 0;
+    std::uint64_t replacementGeneration    = 0;
+    std::uint64_t firstProducerEpoch       = 0;
     std::uint64_t replacementProducerEpoch = 0;
     GpuCommandLease firstAcknowledged;
 
@@ -142,14 +156,13 @@ class State final : public GpuCommandSourceReceiver
         if (stage != Stage::Record)
             return {};
 
-        producerFinished = false;
-        HRESULT result = S_OK;
-        const auto finish = wil::scope_exit(
-            [&]() noexcept
-            {
-                stream.FinishProducerForWork(result);
-                producerFinished = true;
-            });
+        producerFinished  = false;
+        HRESULT result    = S_OK;
+        const auto finish = wil::scope_exit([&]() noexcept
+        {
+            stream.FinishProducerForWork(result);
+            producerFinished = true;
+        });
 
         if (round == 0)
             firstProducerEpoch = stream.ProductionEpochForWork();
@@ -158,7 +171,7 @@ class State final : public GpuCommandSourceReceiver
 
         wil::com_ptr_nothrow<ID3D11DeviceContext> deferred;
         ID3D11Device& recordingDevice = round == 0 ? initialDevice : replacementDevice;
-        result = recordingDevice.CreateDeferredContext(0, deferred.put());
+        result                        = recordingDevice.CreateDeferredContext(0, deferred.put());
         wil::com_ptr_nothrow<ID3D11CommandList> command;
         if (SUCCEEDED(result))
             result = deferred->FinishCommandList(FALSE, command.put());
@@ -171,25 +184,25 @@ class State final : public GpuCommandSourceReceiver
 
     void RetireWorkerStage(JobContext&, JobResult result) noexcept
     {
-        if (stage == Stage::Record && !producerFinished)
+        if (stage == Stage::Record && ! producerFinished)
         {
             stream.FinishProducerForWork(result.status == JobStatus::Finished ? S_OK : E_FAIL);
             producerFinished = true;
         }
         if (stage == Stage::Retire)
         {
-            if (!stream.RetireForWork())
+            if (! stream.RetireForWork())
                 std::terminate();
             retired.store(true, std::memory_order_release);
             retirementAuthorized = true;
-            detachedContext = {};
+            detachedContext      = {};
         }
         if (stage == Stage::Finish)
         {
             // Test-held captures are released off-owner like the production parent retires its captured graph.
-            initialContext = {};
-            foreignContext = {};
-            currentContext = {};
+            initialContext  = {};
+            foreignContext  = {};
+            currentContext  = {};
             detachedContext = {};
         }
     }
@@ -198,92 +211,85 @@ class State final : public GpuCommandSourceReceiver
     {
         if (ticket != original && original.generation != 0)
             std::terminate();
-        if (!original.generation)
+        if (! original.generation)
             original = ticket;
         if (ticket != original || result.status != JobStatus::Finished)
             return false;
 
         switch (stage)
         {
-        case Stage::Open:
-        {
-            Expect(jobs.InAcknowledgedJobCallback(original), "opening-uses-exact-original-ack-callback");
-            HRESULT status = queue.CaptureCompletionContext(initialContext);
-            if (SUCCEEDED(status))
-                status = foreignQueue.CaptureCompletionContext(foreignContext);
-            Expect(SUCCEEDED(status), "capture-real-original-and-foreign-queue-contexts");
-            if (FAILED(status))
-                return false;
-            originalGeneration = initialContext.DeviceGeneration();
-            Expect(originalGeneration == foreignContext.DeviceGeneration() &&
-                       queue.DeviceGeneration() == foreignQueue.DeviceGeneration(),
-                   "foreign-queue-starts-at-same-real-device-generation");
-            ID3D11Device* originalBorrowedDevice = nullptr;
-            ID3D11DeviceContext* originalBorrowedContext = nullptr;
-            ID3D11Device* foreignBorrowedDevice = nullptr;
-            ID3D11DeviceContext* foreignBorrowedContext = nullptr;
-            const HRESULT originalBorrow =
-                queue.BorrowCurrentContextOwner(initialContext, originalBorrowedDevice, originalBorrowedContext);
-            const HRESULT foreignBorrow =
-                foreignQueue.BorrowCurrentContextOwner(foreignContext, foreignBorrowedDevice, foreignBorrowedContext);
-            Expect(originalBorrow == S_OK && foreignBorrow == S_OK && originalBorrowedDevice == foreignBorrowedDevice &&
-                       originalBorrowedContext == foreignBorrowedContext,
-                   "foreign-origin-witness-borrows-same-actual-device-and-immediate-context");
-            status = stream.InitializeOwner(jobs, ticket, queue, initialContext);
-            streamInitialized = SUCCEEDED(status);
-            if (SUCCEEDED(status))
-                status = commands.AttachOwner(stream, ticket, *this, source,
-                                              GpuCommandFailureDisposition::RetainOriginalForRecovery);
-            attached = SUCCEEDED(status);
-            Expect(attached, "attach-real-original-ticket-and-stream");
-            if (!attached)
-                return false;
-            stage = Stage::Record;
-            Expect(jobs.Resume(original, JobExecutionLane::GpuRecording), "resume-original-recording-ticket");
-            return true;
-        }
-        case Stage::Record:
-            stage = Stage::AwaitCommand;
-            jobs.NotifyOwnerWork();
-            return true;
-        case Stage::Retire:
-            return RetiredStageAcknowledged();
-        case Stage::WaitForControls:
-            stage = Stage::Finish;
-            Expect(jobs.Resume(original), "resume-original-after-refusal-controls");
-            return true;
-        case Stage::Finish:
-            return false;
-        case Stage::AwaitCommand:
-            std::terminate();
+            case Stage::Open:
+            {
+                Expect(jobs.InAcknowledgedJobCallback(original), "opening-uses-exact-original-ack-callback");
+                HRESULT status = queue.CaptureCompletionContext(initialContext);
+                if (SUCCEEDED(status))
+                    status = foreignQueue.CaptureCompletionContext(foreignContext);
+                Expect(SUCCEEDED(status), "capture-real-original-and-foreign-queue-contexts");
+                if (FAILED(status))
+                    return false;
+                originalGeneration = initialContext.DeviceGeneration();
+                Expect(originalGeneration == foreignContext.DeviceGeneration() && queue.DeviceGeneration() == foreignQueue.DeviceGeneration(),
+                       "foreign-queue-starts-at-same-real-device-generation");
+                ID3D11Device* originalBorrowedDevice         = nullptr;
+                ID3D11DeviceContext* originalBorrowedContext = nullptr;
+                ID3D11Device* foreignBorrowedDevice          = nullptr;
+                ID3D11DeviceContext* foreignBorrowedContext  = nullptr;
+                const HRESULT originalBorrow                 = queue.BorrowCurrentContextOwner(initialContext, originalBorrowedDevice, originalBorrowedContext);
+                const HRESULT foreignBorrow = foreignQueue.BorrowCurrentContextOwner(foreignContext, foreignBorrowedDevice, foreignBorrowedContext);
+                Expect(originalBorrow == S_OK && foreignBorrow == S_OK && originalBorrowedDevice == foreignBorrowedDevice &&
+                           originalBorrowedContext == foreignBorrowedContext,
+                       "foreign-origin-witness-borrows-same-actual-device-and-immediate-context");
+                status            = stream.InitializeOwner(jobs, ticket, queue, initialContext);
+                streamInitialized = SUCCEEDED(status);
+                if (SUCCEEDED(status))
+                    status = commands.AttachOwner(stream, ticket, *this, source, GpuCommandFailureDisposition::RetainOriginalForRecovery);
+                attached = SUCCEEDED(status);
+                Expect(attached, "attach-real-original-ticket-and-stream");
+                if (! attached)
+                    return false;
+                stage = Stage::Record;
+                Expect(jobs.Resume(original, JobExecutionLane::GpuRecording), "resume-original-recording-ticket");
+                return true;
+            }
+            case Stage::Record:
+                stage = Stage::AwaitCommand;
+                jobs.NotifyOwnerWork();
+                return true;
+            case Stage::Retire: return RetiredStageAcknowledged();
+            case Stage::WaitForControls:
+                stage = Stage::Finish;
+                Expect(jobs.Resume(original), "resume-original-after-refusal-controls");
+                return true;
+            case Stage::Finish: return false;
+            case Stage::AwaitCommand: std::terminate();
         }
         std::terminate();
     }
 
     void Completed(JobResult result) noexcept
     {
-        route.state = nullptr;
-        observation.original = original;
-        observation.terminal = result;
-        observation.firstAcknowledged = firstAcknowledged;
-        observation.acknowledgements = acknowledgements;
-        observation.failures = failures;
-        observation.originalGeneration = originalGeneration;
-        observation.replacementGeneration = replacementGeneration;
-        observation.finished = true;
-        observation.replacementAccepted = replacementAccepted;
+        route.state                        = nullptr;
+        observation.original               = original;
+        observation.terminal               = result;
+        observation.firstAcknowledged      = firstAcknowledged;
+        observation.acknowledgements       = acknowledgements;
+        observation.failures               = failures;
+        observation.originalGeneration     = originalGeneration;
+        observation.replacementGeneration  = replacementGeneration;
+        observation.finished               = true;
+        observation.replacementAccepted    = replacementAccepted;
         observation.originalChargeObserved = originalChargeObserved;
-        observation.refusalStatePreserved = refusalStatePreserved;
-        observation.outsideAttemptDone = outsideAttemptDone;
+        observation.refusalStatePreserved  = refusalStatePreserved;
+        observation.outsideAttemptDone     = outsideAttemptDone;
         observation.wrongSourceAttemptDone = wrongSourceAttemptDone;
-        observation.probeComplete = probeComplete;
+        observation.probeComplete          = probeComplete;
         Expect(result.status == JobStatus::Finished, "original-job-finishes-after-controls");
     }
 
     void RetainJoinedRetirement(JobScheduler& scheduler, JobTicket ticket) noexcept
     {
-        const bool exact = &scheduler == &jobs && ticket == original && scheduler.InJoinedRetirementCallback(ticket) &&
-                           !scheduler.InAcknowledgedJobCallback(ticket);
+        const bool exact =
+            &scheduler == &jobs && ticket == original && scheduler.InJoinedRetirementCallback(ticket) && ! scheduler.InAcknowledgedJobCallback(ticket);
         Expect(exact, "joined-close-validates-preexisting-external-root");
         joinedRootRetained = exact;
     }
@@ -291,16 +297,14 @@ class State final : public GpuCommandSourceReceiver
     void CommandAcknowledgedOwner(JobTicket ticket, GpuCommandLease command, HRESULT status) noexcept override
     {
         const std::uint64_t expectedGeneration = round == 0 ? originalGeneration : replacementGeneration;
-        Expect(ticket == original && command.source == original && SUCCEEDED(status),
-               "only-real-original-queue-callback-acknowledges-command");
-        Expect(command.deviceGeneration == expectedGeneration,
-               "real-command-callback-reports-the-actual-current-stream-generation");
+        Expect(ticket == original && command.source == original && SUCCEEDED(status), "only-real-original-queue-callback-acknowledges-command");
+        Expect(command.deviceGeneration == expectedGeneration, "real-command-callback-reports-the-actual-current-stream-generation");
         Expect(command.ordinal == acknowledgements + 1, "original-command-ordinals-remain-monotonic");
         if (acknowledgements == 0)
             firstAcknowledged = command;
         ++acknowledgements;
-        observation.original = original;
-        observation.acknowledgements = acknowledgements;
+        observation.original          = original;
+        observation.acknowledgements  = acknowledgements;
         observation.firstAcknowledged = firstAcknowledged;
         jobs.NotifyOwnerWork();
     }
@@ -317,7 +321,7 @@ class State final : public GpuCommandSourceReceiver
         if (stage == Stage::AwaitCommand)
             return stream.CanRetireOwner();
         if (stage == Stage::WaitForControls)
-            return !outsideAttemptDone || probeComplete;
+            return ! outsideAttemptDone || probeComplete;
         return false;
     }
 
@@ -325,16 +329,15 @@ class State final : public GpuCommandSourceReceiver
     {
         if (stage == Stage::AwaitCommand && stream.CanRetireOwner())
         {
-            const bool detached = commands.DetachOwner(source, detachedContext);
-            attached = !detached;
+            const bool detached   = commands.DetachOwner(source, detachedContext);
+            attached              = ! detached;
             const bool authorized = detached && stream.AuthorizeRetirementOwner();
-            Expect(detached && detachedContext && authorized,
-                   "actual-queue-ack-and-joined-producer-authorize-retirement");
-            if (!detached || !authorized)
+            Expect(detached && detachedContext && authorized, "actual-queue-ack-and-joined-producer-authorize-retirement");
+            if (! detached || ! authorized)
                 std::terminate();
-            source = {};
+            source               = {};
             retirementAuthorized = true;
-            if (round == 0 && !validReplacement)
+            if (round == 0 && ! validReplacement)
                 refusalStatePreserved = true;
             stage = Stage::Retire;
             retired.store(false, std::memory_order_release);
@@ -342,15 +345,13 @@ class State final : public GpuCommandSourceReceiver
             return;
         }
 
-        if (stage == Stage::WaitForControls && !outsideAttemptDone)
+        if (stage == Stage::WaitForControls && ! outsideAttemptDone)
         {
             const HRESULT outside = stream.RestartDeviceOwner(queue, currentContext);
-            Expect(outside == E_INVALIDARG && !jobs.InAcknowledgedJobCallback(original),
-                   "owner-pump-outside-source-callback-cannot-restart");
-            Expect(jobs.ReservedMemoryBytes() >= kOriginalReservation && stream.NextOwner().command == nullptr &&
-                       acknowledgements == 1,
+            Expect(outside == E_INVALIDARG && ! jobs.InAcknowledgedJobCallback(original), "owner-pump-outside-source-callback-cannot-restart");
+            Expect(jobs.ReservedMemoryBytes() >= kOriginalReservation && stream.NextOwner().command == nullptr && acknowledgements == 1,
                    "outside-callback-refusal-retains-original-charge-and-has-no-replay");
-            outsideAttemptDone = true;
+            outsideAttemptDone             = true;
             observation.outsideAttemptDone = true;
             if (probeComplete)
                 jobs.NotifyOwnerWork();
@@ -364,7 +365,7 @@ class State final : public GpuCommandSourceReceiver
         }
     }
 
-  private:
+private:
     [[nodiscard]] bool RetiredStageAcknowledged() noexcept;
 
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -373,8 +374,10 @@ class State final : public GpuCommandSourceReceiver
 #pragma warning(disable : 4626 5027)
     class WrongSourceProbe final : public Job
     {
-      public:
-        explicit WrongSourceProbe(State& source) noexcept : _source(source) {}
+    public:
+        explicit WrongSourceProbe(State& source) noexcept : _source(source)
+        {
+        }
 
         JobResult Run(JobContext&) override
         {
@@ -384,15 +387,13 @@ class State final : public GpuCommandSourceReceiver
         [[nodiscard]] bool DeferRetirement(JobResult result, JobTicket ticket) noexcept override
         {
             const bool authorityIsDifferent = result.status == JobStatus::Finished && ticket == _source.probeTicket &&
-                                              _source.jobs.InAcknowledgedJobCallback(ticket) &&
-                                              !_source.jobs.InAcknowledgedJobCallback(_source.original);
-            const HRESULT status = _source.stream.RestartDeviceOwner(_source.queue, _source.currentContext);
-            Expect(authorityIsDifferent && status == E_INVALIDARG,
-                   "another-real-job-callback-cannot-restart-original-stream");
-            Expect(_source.jobs.ReservedMemoryBytes() >= kOriginalReservation + kProbeReservation &&
-                       _source.stream.NextOwner().command == nullptr && _source.acknowledgements == 1,
+                                              _source.jobs.InAcknowledgedJobCallback(ticket) && ! _source.jobs.InAcknowledgedJobCallback(_source.original);
+            const HRESULT status            = _source.stream.RestartDeviceOwner(_source.queue, _source.currentContext);
+            Expect(authorityIsDifferent && status == E_INVALIDARG, "another-real-job-callback-cannot-restart-original-stream");
+            Expect(_source.jobs.ReservedMemoryBytes() >= kOriginalReservation + kProbeReservation && _source.stream.NextOwner().command == nullptr &&
+                       _source.acknowledgements == 1,
                    "wrong-source-refusal-retains-original-charge-and-has-no-replay");
-            _source.wrongSourceAttemptDone = true;
+            _source.wrongSourceAttemptDone             = true;
             _source.observation.wrongSourceAttemptDone = true;
             return false;
         }
@@ -402,12 +403,12 @@ class State final : public GpuCommandSourceReceiver
             Expect(result.status == JobStatus::Finished, "wrong-source-probe-completes-normally");
             // DrainCompletions has already run this drain's owner route before reaching this callback.
             // Publish readiness now; the original ticket can resume only on a later event-driven drain.
-            _source.probeComplete = true;
+            _source.probeComplete             = true;
             _source.observation.probeComplete = true;
             _source.jobs.NotifyOwnerWork();
         }
 
-      private:
+    private:
         State& _source;
     };
 #pragma warning(pop)
@@ -420,8 +421,10 @@ class State final : public GpuCommandSourceReceiver
 #pragma warning(disable : 4626)
 class OriginalJob final : public Job
 {
-  public:
-    explicit OriginalJob(State& root) noexcept : _root(root) {}
+public:
+    explicit OriginalJob(State& root) noexcept : _root(root)
+    {
+    }
     ~OriginalJob() override
     {
         _root.wrapperDestroyed = true;
@@ -448,15 +451,15 @@ class OriginalJob final : public Job
         _root.Completed(result);
     }
 
-  private:
+private:
     State& _root;
 };
 #pragma warning(pop)
 
 bool State::RetiredStageAcknowledged() noexcept
 {
-    Expect(jobs.InAcknowledgedJobCallback(original) && retired.load(std::memory_order_acquire) &&
-               stream.CanRetireOwner() && acknowledgements == round + 1 && !failures,
+    Expect(jobs.InAcknowledgedJobCallback(original) && retired.load(std::memory_order_acquire) && stream.CanRetireOwner() && acknowledgements == round + 1 &&
+               ! failures,
            "restart-controls-run-in-exact-original-callback-after-real-retirement");
     originalChargeObserved = jobs.ReservedMemoryBytes() >= kOriginalReservation;
     Expect(originalChargeObserved && jobs.InAcknowledgedJobCallback(original) && stream.NextOwner().command == nullptr,
@@ -465,25 +468,23 @@ bool State::RetiredStageAcknowledged() noexcept
     if (validReplacement && round == 0)
     {
         const HRESULT rebound = queue.Bind(&replacementDevice, &replacementImmediate);
-        Expect(SUCCEEDED(rebound) && queue.DeviceGeneration() > originalGeneration,
-               "same-queue-rebind-uses-real-new-warp-device-and-generation");
+        Expect(SUCCEEDED(rebound) && queue.DeviceGeneration() > originalGeneration, "same-queue-rebind-uses-real-new-warp-device-and-generation");
         const HRESULT captured = SUCCEEDED(rebound) ? queue.CaptureCompletionContext(currentContext) : rebound;
         Expect(SUCCEEDED(captured), "capture-real-current-replacement-context");
         const HRESULT restarted = SUCCEEDED(captured) ? stream.RestartDeviceOwner(queue, currentContext) : captured;
-        replacementAccepted = restarted == S_OK;
-        replacementGeneration = currentContext.DeviceGeneration();
+        replacementAccepted     = restarted == S_OK;
+        replacementGeneration   = currentContext.DeviceGeneration();
         retired.store(false, std::memory_order_release);
         retirementAuthorized = false;
-        Expect(replacementAccepted && replacementGeneration > originalGeneration &&
-                   stream.BelongsToOwner(jobs, original, replacementGeneration) && firstProducerEpoch != 0,
+        Expect(replacementAccepted && replacementGeneration > originalGeneration && stream.BelongsToOwner(jobs, original, replacementGeneration) &&
+                   firstProducerEpoch != 0,
                "valid-current-context-restarts-same-original-source");
-        if (!replacementAccepted)
+        if (! replacementAccepted)
             return false;
 
-        attached = SUCCEEDED(commands.AttachOwner(stream, original, *this, source,
-                                                  GpuCommandFailureDisposition::RetainOriginalForRecovery));
+        attached = SUCCEEDED(commands.AttachOwner(stream, original, *this, source, GpuCommandFailureDisposition::RetainOriginalForRecovery));
         Expect(attached, "re-attach-restarted-stream-to-original-ticket");
-        if (!attached)
+        if (! attached)
             return false;
         round = 1;
         stage = Stage::Record;
@@ -494,8 +495,7 @@ bool State::RetiredStageAcknowledged() noexcept
     if (validReplacement)
     {
         Expect(acknowledgements == 2 && firstAcknowledged.ordinal == 1 && firstAcknowledged.source == original &&
-                   firstAcknowledged.deviceGeneration == originalGeneration &&
-                   replacementProducerEpoch == firstProducerEpoch + 1,
+                   firstAcknowledged.deviceGeneration == originalGeneration && replacementProducerEpoch == firstProducerEpoch + 1,
                "replacement-executes-only-new-monotonic-command-on-original-source");
         stage = Stage::Finish;
         return false;
@@ -506,29 +506,26 @@ bool State::RetiredStageAcknowledged() noexcept
     // owner-created identity token differs. This call must fail before borrowing its context.
     const HRESULT foreign = stream.RestartDeviceOwner(foreignQueue, foreignContext);
     Expect(foreign == E_INVALIDARG, "foreign-queue-origin-refused-with-same-device-and-generation");
-    Expect(queue.Bind(&replacementDevice, &replacementImmediate) == S_OK &&
-               queue.DeviceGeneration() > originalGeneration,
+    Expect(queue.Bind(&replacementDevice, &replacementImmediate) == S_OK && queue.DeviceGeneration() > originalGeneration,
            "rebind-original-queue-to-create-real-stale-context-witness");
     const HRESULT freshCapture = queue.CaptureCompletionContext(currentContext);
     Expect(freshCapture == S_OK, "capture-current-context-after-rebind");
     const HRESULT stale = stream.RestartDeviceOwner(queue, initialContext);
     Expect(stale == E_ABORT, "same-origin-old-generation-context-refused-as-stale");
 
-    const bool unchanged = stream.NextOwner().command == nullptr && acknowledgements == 1 && failures == 0 &&
-                           commands.AttachedSourceCountOwnerForTest() == attachedBefore &&
-                           jobs.InAcknowledgedJobCallback(original) &&
-                           jobs.ReservedMemoryBytes() >= kOriginalReservation;
+    const bool unchanged  = stream.NextOwner().command == nullptr && acknowledgements == 1 && failures == 0 &&
+                            commands.AttachedSourceCountOwnerForTest() == attachedBefore && jobs.InAcknowledgedJobCallback(original) &&
+                            jobs.ReservedMemoryBytes() >= kOriginalReservation;
     refusalStatePreserved = unchanged;
     Expect(unchanged, "foreign-and-stale-refusals-preserve-source-charge-and-do-not-replay");
 
     // The owner pump exercises the outside-callback refusal. A second admitted job then calls
     // the same API in its own successful scheduler callback to prove wrong-source rejection.
-    stage = Stage::WaitForControls;
+    stage                      = Stage::WaitForControls;
     std::unique_ptr<Job> probe = std::make_unique<WrongSourceProbe>(*this);
-    const HRESULT submitted = static_cast<HRESULT>(
-        jobs.Submit(probe, {.kind = JobClass::Background, .memoryBytes = kProbeReservation, .deferredRetirement = true},
-                    probeTicket));
-    Expect(submitted == S_OK && !probe, "submit-real-wrong-source-callback-probe");
+    const HRESULT submitted =
+        static_cast<HRESULT>(jobs.Submit(probe, {.kind = JobClass::Background, .memoryBytes = kProbeReservation, .deferredRetirement = true}, probeTicket));
+    Expect(submitted == S_OK && ! probe, "submit-real-wrong-source-callback-probe");
     if (submitted != S_OK)
         return false;
     jobs.NotifyOwnerWork();
@@ -563,7 +560,7 @@ template <typename Predicate> bool Until(JobScheduler& scheduler, Predicate read
         if (elapsed >= kWaitFailureBoundMs)
             return false;
         const DWORD remaining = kWaitFailureBoundMs - static_cast<DWORD>(elapsed);
-        const DWORD wait = WaitForSingleObject(static_cast<HANDLE>(scheduler.WakeHandle()), remaining);
+        const DWORD wait      = WaitForSingleObject(static_cast<HANDLE>(scheduler.WakeHandle()), remaining);
         if (wait != WAIT_OBJECT_0)
             return false;
     }
@@ -576,17 +573,30 @@ int RunOne(bool validReplacement)
     wil::com_ptr_nothrow<ID3D11Device> replacementDevice;
     wil::com_ptr_nothrow<ID3D11DeviceContext> replacementImmediate;
     constexpr D3D_FEATURE_LEVEL kFeatureLevel = D3D_FEATURE_LEVEL_11_0;
-    const HRESULT initialStatus =
-        D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &kFeatureLevel, 1,
-                          D3D11_SDK_VERSION, initialDevice.put(), nullptr, initialImmediate.put());
+    const HRESULT initialStatus               = D3D11CreateDevice(nullptr,
+                                                                  D3D_DRIVER_TYPE_WARP,
+                                                                  nullptr,
+                                                                  D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                                                                  &kFeatureLevel,
+                                                                  1,
+                                                                  D3D11_SDK_VERSION,
+                                                                  initialDevice.put(),
+                                                                  nullptr,
+                                                                  initialImmediate.put());
     Expect(SUCCEEDED(initialStatus), "initial-real-warp-device-created");
     if (FAILED(initialStatus))
         return 1;
-    const HRESULT replacementStatus =
-        D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &kFeatureLevel, 1,
-                          D3D11_SDK_VERSION, replacementDevice.put(), nullptr, replacementImmediate.put());
-    Expect(SUCCEEDED(replacementStatus) && replacementDevice.get() != initialDevice.get(),
-           "replacement-is-distinct-real-warp-device");
+    const HRESULT replacementStatus = D3D11CreateDevice(nullptr,
+                                                        D3D_DRIVER_TYPE_WARP,
+                                                        nullptr,
+                                                        D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                                                        &kFeatureLevel,
+                                                        1,
+                                                        D3D11_SDK_VERSION,
+                                                        replacementDevice.put(),
+                                                        nullptr,
+                                                        replacementImmediate.put());
+    Expect(SUCCEEDED(replacementStatus) && replacementDevice.get() != initialDevice.get(), "replacement-is-distinct-real-warp-device");
     if (FAILED(replacementStatus) || replacementDevice.get() == initialDevice.get())
         return 1;
 
@@ -607,12 +617,12 @@ int RunOne(bool validReplacement)
                *replacementImmediate.get(),
                observation,
                validReplacement};
-    bool schedulerInitialized = false;
-    bool queueInitialized = false;
+    bool schedulerInitialized    = false;
+    bool queueInitialized        = false;
     bool foreignQueueInitialized = false;
-    bool commandsInitialized = false;
-    bool routeAttached = false;
-    bool parentSubmitted = false;
+    bool commandsInitialized     = false;
+    bool routeAttached           = false;
+    bool parentSubmitted         = false;
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
 #pragma warning(push)
@@ -631,89 +641,77 @@ int RunOne(bool validReplacement)
         bool& routeAttached;
     }
 #pragma warning(pop)
-    cleanup{scheduler,
-            queue,
-            foreignQueue,
-            commands,
-            root,
-            schedulerInitialized,
-            queueInitialized,
-            foreignQueueInitialized,
-            commandsInitialized,
-            routeAttached};
+    cleanup{
+        scheduler, queue, foreignQueue, commands, root, schedulerInitialized, queueInitialized, foreignQueueInitialized, commandsInitialized, routeAttached};
 
-    const auto cleanupScope = wil::scope_exit(
-        [&]() noexcept
+    const auto cleanupScope = wil::scope_exit([&]() noexcept
+    {
+        if (commandsInitialized)
+            commands.StopOwner();
+        if (queueInitialized)
+            queue.StopNotifications();
+        if (foreignQueueInitialized)
+            foreignQueue.StopNotifications();
+        if (schedulerInitialized)
         {
-            if (commandsInitialized)
-                commands.StopOwner();
-            if (queueInitialized)
-                queue.StopNotifications();
-            if (foreignQueueInitialized)
-                foreignQueue.StopNotifications();
-            if (schedulerInitialized)
+            scheduler.Close({[](void* opaque) noexcept
             {
-                scheduler.Close(
-                    {[](void* opaque) noexcept
-                     {
-                         auto& state = *static_cast<Cleanup*>(opaque);
-                         if (state.commandsInitialized)
-                         {
-                             state.commands.AcknowledgeJoinedShutdownOwner();
-                             if (state.root.joinedRootRetained)
-                                 Expect(state.root.wrapperDestroyed,
-                                        "joined-wrapper-is-destroyed-before-external-root-owner-cleanup");
-                             if (state.root.attached)
-                             {
-                                 const bool detached =
-                                     state.commands.DetachOwner(state.root.source, state.root.detachedContext);
-                                 Expect(detached, "startup-or-close-detaches-only-after-joined-producers");
-                                 state.root.attached = !detached;
-                                 if (detached)
-                                 {
-                                     const bool authorized = state.root.stream.AuthorizeRetirementOwner();
-                                     state.root.retirementAuthorized = authorized;
-                                     Expect(authorized, "joined-close-authorizes-destruction-only-retirement");
-                                 }
-                             }
-                         }
-                     },
-                     [](void* opaque) noexcept
-                     {
-                         auto& state = *static_cast<Cleanup*>(opaque);
-                         if (state.root.streamInitialized)
-                         {
-                             if (state.root.retirementAuthorized && !state.root.retired.load(std::memory_order_acquire))
-                             {
-                                 const bool retired = state.root.stream.RetireForWork();
-                                 state.root.retired.store(retired, std::memory_order_release);
-                                 Expect(retired, "final-worker-retires-authorized-stream-after-join");
-                             }
-                         }
-                         state.root.initialContext = {};
-                         state.root.foreignContext = {};
-                         state.root.currentContext = {};
-                         state.root.detachedContext = {};
-                     },
-                     &cleanup});
-            }
-            if (queueInitialized)
-                queue.CloseAfterWorkers();
-            if (foreignQueueInitialized)
-                foreignQueue.CloseAfterWorkers();
-            if (commandsInitialized)
-                Expect(commands.CloseOwner(), "close-gpu-command-pump");
-            route.state = nullptr;
-            if (routeAttached)
-                Expect(routes.Detach(route), "detach-test-owner-route");
-            if (schedulerInitialized)
-                Expect(scheduler.ReservedMemoryBytes() == 0, "all-original-and-probe-reservations-refunded-at-close");
-        });
+                auto& state = *static_cast<Cleanup*>(opaque);
+                if (state.commandsInitialized)
+                {
+                    state.commands.AcknowledgeJoinedShutdownOwner();
+                    if (state.root.joinedRootRetained)
+                        Expect(state.root.wrapperDestroyed, "joined-wrapper-is-destroyed-before-external-root-owner-cleanup");
+                    if (state.root.attached)
+                    {
+                        const bool detached = state.commands.DetachOwner(state.root.source, state.root.detachedContext);
+                        Expect(detached, "startup-or-close-detaches-only-after-joined-producers");
+                        state.root.attached = ! detached;
+                        if (detached)
+                        {
+                            const bool authorized           = state.root.stream.AuthorizeRetirementOwner();
+                            state.root.retirementAuthorized = authorized;
+                            Expect(authorized, "joined-close-authorizes-destruction-only-retirement");
+                        }
+                    }
+                }
+            },
+                             [](void* opaque) noexcept
+            {
+                auto& state = *static_cast<Cleanup*>(opaque);
+                if (state.root.streamInitialized)
+                {
+                    if (state.root.retirementAuthorized && ! state.root.retired.load(std::memory_order_acquire))
+                    {
+                        const bool retired = state.root.stream.RetireForWork();
+                        state.root.retired.store(retired, std::memory_order_release);
+                        Expect(retired, "final-worker-retires-authorized-stream-after-join");
+                    }
+                }
+                state.root.initialContext  = {};
+                state.root.foreignContext  = {};
+                state.root.currentContext  = {};
+                state.root.detachedContext = {};
+            },
+                             &cleanup});
+        }
+        if (queueInitialized)
+            queue.CloseAfterWorkers();
+        if (foreignQueueInitialized)
+            foreignQueue.CloseAfterWorkers();
+        if (commandsInitialized)
+            Expect(commands.CloseOwner(), "close-gpu-command-pump");
+        route.state = nullptr;
+        if (routeAttached)
+            Expect(routes.Detach(route), "detach-test-owner-route");
+        if (schedulerInitialized)
+            Expect(scheduler.ReservedMemoryBytes() == 0, "all-original-and-probe-reservations-refunded-at-close");
+    });
 
     const HRESULT initialized = scheduler.Initialize(1, {}, {Memory, nullptr});
-    schedulerInitialized = SUCCEEDED(initialized);
+    schedulerInitialized      = SUCCEEDED(initialized);
     Expect(schedulerInitialized, "one-worker-original-job-scheduler-initialized");
-    if (!schedulerInitialized)
+    if (! schedulerInitialized)
         return 1;
     const HRESULT lane = scheduler.EnableGpuRecordingLane();
     Expect(SUCCEEDED(lane), "private-gpu-recording-lane-enabled");
@@ -721,11 +719,11 @@ int RunOne(bool validReplacement)
         return 1;
     const bool ownerRegistered = scheduler.RegisterOwnerWork(routes);
     Expect(ownerRegistered, "register-owner-work-multiplexer");
-    if (!ownerRegistered)
+    if (! ownerRegistered)
         return 1;
 
     queueInitialized = true; // Cleanup also handles a partially completed Initialize call.
-    HRESULT status = queue.Initialize(scheduler, &routes);
+    HRESULT status   = queue.Initialize(scheduler, &routes);
     if (SUCCEEDED(status))
         status = queue.Bind(initialDevice.get(), initialImmediate.get());
     Expect(SUCCEEDED(status), "bind-original-warp-queue");
@@ -733,34 +731,32 @@ int RunOne(bool validReplacement)
         return 1;
 
     foreignQueueInitialized = true; // Cleanup also handles a partially completed Initialize call.
-    status = foreignQueue.Initialize(scheduler, &routes);
+    status                  = foreignQueue.Initialize(scheduler, &routes);
     if (SUCCEEDED(status))
         status = foreignQueue.Bind(initialDevice.get(), initialImmediate.get());
     Expect(SUCCEEDED(status), "bind-foreign-origin-to-same-real-device-and-context");
     if (FAILED(status))
         return 1;
 
-    status = commands.InitializeOwner(scheduler, queue, routes);
+    status              = commands.InitializeOwner(scheduler, queue, routes);
     commandsInitialized = SUCCEEDED(status);
     Expect(SUCCEEDED(status), "initialize-existing-gpu-command-pump");
     if (FAILED(status))
         return 1;
     routeAttached = routes.Attach(route);
     Expect(routeAttached, "register-restart-control-owner-route");
-    if (!routeAttached)
+    if (! routeAttached)
         return 1;
 
-    route.state = &root;
+    route.state                 = &root;
     std::unique_ptr<Job> parent = std::make_unique<OriginalJob>(root);
     JobTicket ticket{};
-    status = static_cast<HRESULT>(scheduler.Submit(parent,
-                                                   {.kind = JobClass::Background,
-                                                    .memoryBytes = kOriginalReservation,
-                                                    .deferredRetirement = true,
-                                                    .executionLane = JobExecutionLane::Compute},
-                                                   ticket));
+    status          = static_cast<HRESULT>(scheduler.Submit(
+        parent,
+        {.kind = JobClass::Background, .memoryBytes = kOriginalReservation, .deferredRetirement = true, .executionLane = JobExecutionLane::Compute},
+        ticket));
     parentSubmitted = SUCCEEDED(status);
-    Expect(parentSubmitted && !parent, "admit-one-original-retained-source-job");
+    Expect(parentSubmitted && ! parent, "admit-one-original-retained-source-job");
     if (status != S_OK)
     {
         route.state = nullptr;
@@ -772,17 +768,13 @@ int RunOne(bool validReplacement)
     Expect(completed, "bounded-event-wait-reaches-terminal-original-callback");
     if (completed)
     {
-        Expect(observation.original == ticket && observation.acknowledgements == (validReplacement ? 2u : 1u) &&
-                   observation.failures == 0,
+        Expect(observation.original == ticket && observation.acknowledgements == (validReplacement ? 2u : 1u) && observation.failures == 0,
                "original-ticket-has-only-real-expected-queue-acknowledgements");
         if (validReplacement)
-            Expect(observation.replacementAccepted &&
-                       observation.replacementGeneration > observation.originalGeneration,
-                   "valid-replacement-control-accepted");
+            Expect(observation.replacementAccepted && observation.replacementGeneration > observation.originalGeneration, "valid-replacement-control-accepted");
         else
-            Expect(observation.originalChargeObserved && observation.refusalStatePreserved &&
-                       observation.outsideAttemptDone && observation.wrongSourceAttemptDone &&
-                       observation.probeComplete,
+            Expect(observation.originalChargeObserved && observation.refusalStatePreserved && observation.outsideAttemptDone &&
+                       observation.wrongSourceAttemptDone && observation.probeComplete,
                    "all-supported-refusal-controls-completed-with-original-charge-held");
     }
     return gRestartControlFailures ? 1 : 0;

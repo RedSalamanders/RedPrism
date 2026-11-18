@@ -13,11 +13,10 @@
 #pragma warning(disable : 4626)
 class ModalProbePrompts final : public Prompts
 {
-  public:
+public:
     using Callback = void (*)(void*) noexcept;
 
-    ModalProbePrompts(const Prompts& delegate, void* context, Callback callback) noexcept
-        : _delegate(delegate), _context(context), _callback(callback)
+    ModalProbePrompts(const Prompts& delegate, void* context, Callback callback) noexcept : _delegate(delegate), _context(context), _callback(callback)
     {
     }
 
@@ -48,8 +47,12 @@ class ModalProbePrompts final : public Prompts
         _delegate.ShowInfo(window, text, caption);
     }
 
-    [[nodiscard]] Answer AskThreeWay(HWND window, const std::wstring& title, const std::wstring& text,
-                                     const std::wstring& first, const std::wstring& second, bool warning,
+    [[nodiscard]] Answer AskThreeWay(HWND window,
+                                     const std::wstring& title,
+                                     const std::wstring& text,
+                                     const std::wstring& first,
+                                     const std::wstring& second,
+                                     bool warning,
                                      Answer forced) const noexcept override
     {
         if (_callback != nullptr)
@@ -59,7 +62,7 @@ class ModalProbePrompts final : public Prompts
         return _delegate.AskThreeWay(window, title, text, first, second, warning, forced);
     }
 
-  private:
+private:
     const Prompts& _delegate;
     void* _context;
     Callback _callback;

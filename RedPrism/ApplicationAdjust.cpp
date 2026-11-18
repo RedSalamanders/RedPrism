@@ -38,8 +38,7 @@ namespace
 
 [[nodiscard]] uint32_t ArgbOf(const AdjustmentColor& color) noexcept
 {
-    const auto byte = [](double value)
-    { return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0, 1.0) * 255)); };
+    const auto byte = [](double value) { return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0, 1.0) * 255)); };
     return 0xFF000000u | (byte(color.red) << 16) | (byte(color.green) << 8) | byte(color.blue);
 }
 
@@ -57,12 +56,12 @@ namespace
     {
         VARIANT value;
         VariantInit(&value);
-        const bool named = SUCCEEDED(simple->GetPropertyValue(UIA_NamePropertyId, &value)) && value.vt == VT_BSTR &&
-                           value.bstrVal != nullptr && name == value.bstrVal;
+        const bool named =
+            SUCCEEDED(simple->GetPropertyValue(UIA_NamePropertyId, &value)) && value.vt == VT_BSTR && value.bstrVal != nullptr && name == value.bstrVal;
         (void)VariantClear(&value);
         VariantInit(&value);
-        const bool button = SUCCEEDED(simple->GetPropertyValue(UIA_ControlTypePropertyId, &value)) &&
-                            value.vt == VT_I4 && value.lVal == UIA_ButtonControlTypeId;
+        const bool button =
+            SUCCEEDED(simple->GetPropertyValue(UIA_ControlTypePropertyId, &value)) && value.vt == VT_I4 && value.lVal == UIA_ButtonControlTypeId;
         (void)VariantClear(&value);
         if (named && button)
         {
@@ -94,20 +93,13 @@ namespace
 {
     switch (command)
     {
-    case ChromeHost::kCommandNewLevelsAdjustment:
-        return AdjustmentKind::Levels;
-    case ChromeHost::kCommandNewCurvesAdjustment:
-        return AdjustmentKind::Curves;
-    case ChromeHost::kCommandNewHueSaturationAdjustment:
-        return AdjustmentKind::Hsv;
-    case ChromeHost::kCommandNewExposureAdjustment:
-        return AdjustmentKind::Exposure;
-    case ChromeHost::kCommandNewGradientMapAdjustment:
-        return AdjustmentKind::GradientMap;
-    case ChromeHost::kCommandNewGrainAdjustment:
-        return AdjustmentKind::Grain;
-    default:
-        return std::nullopt;
+        case ChromeHost::kCommandNewLevelsAdjustment: return AdjustmentKind::Levels;
+        case ChromeHost::kCommandNewCurvesAdjustment: return AdjustmentKind::Curves;
+        case ChromeHost::kCommandNewHueSaturationAdjustment: return AdjustmentKind::Hsv;
+        case ChromeHost::kCommandNewExposureAdjustment: return AdjustmentKind::Exposure;
+        case ChromeHost::kCommandNewGradientMapAdjustment: return AdjustmentKind::GradientMap;
+        case ChromeHost::kCommandNewGrainAdjustment: return AdjustmentKind::Grain;
+        default: return std::nullopt;
     }
 }
 
@@ -116,30 +108,18 @@ namespace
 {
     switch (command)
     {
-    case ChromeHost::kCommandLevels:
-        return FilterKind::Levels;
-    case ChromeHost::kCommandHueSaturation:
-        return FilterKind::HueSaturation;
-    case ChromeHost::kCommandCurves:
-        return FilterKind::Curves;
-    case ChromeHost::kCommandExposure:
-        return FilterKind::Exposure;
-    case ChromeHost::kCommandGradientMap:
-        return FilterKind::GradientMap;
-    case ChromeHost::kCommandGrain:
-        return FilterKind::Grain;
-    case ChromeHost::kCommandGaussianBlur:
-        return FilterKind::GaussianBlur;
-    case ChromeHost::kCommandMotionBlur:
-        return FilterKind::MotionBlur;
-    case ChromeHost::kCommandAddNoise:
-        return FilterKind::AddNoise;
-    case ChromeHost::kCommandLensCorrection:
-        return FilterKind::LensCorrection;
-    case ChromeHost::kCommandContentAwareFill:
-        return FilterKind::ContentAwareFill;
-    default:
-        return std::nullopt;
+        case ChromeHost::kCommandLevels: return FilterKind::Levels;
+        case ChromeHost::kCommandHueSaturation: return FilterKind::HueSaturation;
+        case ChromeHost::kCommandCurves: return FilterKind::Curves;
+        case ChromeHost::kCommandExposure: return FilterKind::Exposure;
+        case ChromeHost::kCommandGradientMap: return FilterKind::GradientMap;
+        case ChromeHost::kCommandGrain: return FilterKind::Grain;
+        case ChromeHost::kCommandGaussianBlur: return FilterKind::GaussianBlur;
+        case ChromeHost::kCommandMotionBlur: return FilterKind::MotionBlur;
+        case ChromeHost::kCommandAddNoise: return FilterKind::AddNoise;
+        case ChromeHost::kCommandLensCorrection: return FilterKind::LensCorrection;
+        case ChromeHost::kCommandContentAwareFill: return FilterKind::ContentAwareFill;
+        default: return std::nullopt;
     }
 }
 } // namespace
@@ -147,12 +127,12 @@ namespace
 bool Application::BeginColorEdit(int command) noexcept
 {
     const std::optional<FilterKind> kind = ColorEditKindForCommand(command);
-    if (!kind.has_value())
+    if (! kind.has_value())
     {
         return false;
     }
     _session.BeginColorEdit(kind.value(), true);
-    if (!_session.HasColorEdit())
+    if (! _session.HasColorEdit())
     {
         if (_session.TakeBudgetRefusal())
         {
@@ -183,7 +163,7 @@ bool Application::BeginColorEdit(int command) noexcept
 void Application::AddAdjustmentLayer(int command) noexcept
 {
     const std::optional<AdjustmentKind> kind = AdjustmentKindForCommand(command);
-    if (!kind.has_value())
+    if (! kind.has_value())
     {
         return;
     }
@@ -195,7 +175,7 @@ void Application::AddAdjustmentLayer(int command) noexcept
 void Application::EditActiveAdjustment() noexcept
 {
     const ImageLayer* layer = _session.ActiveLayer();
-    if (layer == nullptr || !layer->adjustment.has_value() || _session.HasColorEdit())
+    if (layer == nullptr || ! layer->adjustment.has_value() || _session.HasColorEdit())
     {
         return;
     }
@@ -206,12 +186,12 @@ void Application::EditActiveAdjustment() noexcept
 void Application::OpenAdjustmentEditor() noexcept
 {
     const std::optional<Guid> id = _session.AdjustmentEditingID();
-    if (!id.has_value())
+    if (! id.has_value())
     {
         DocumentChanged();
         return;
     }
-    if (!_session.Document())
+    if (! _session.Document())
     {
         _session.SetAdjustmentEditingID(std::nullopt);
         DocumentChanged();
@@ -228,7 +208,7 @@ void Application::OpenAdjustmentEditor() noexcept
 
 void Application::ApplyColorEdit() noexcept
 {
-    if (ColorControlsFrozen() || !_session.HasColorEdit())
+    if (ColorControlsFrozen() || ! _session.HasColorEdit())
     {
         return;
     }
@@ -238,7 +218,7 @@ void Application::ApplyColorEdit() noexcept
 
 void Application::CancelColorEdit(bool cancelQueued) noexcept
 {
-    if (!cancelQueued)
+    if (! cancelQueued)
     {
         // DocumentGoes transfers this panel with its replacement/reset owner. Preserve queued inputs so their
         // document lifetime can retire them Stale after replacement; explicit Cancel alone clears that queue.
@@ -269,169 +249,111 @@ void Application::OnAdjustAction(AdjustAction action, double value) noexcept
         return;
     }
     const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
-    if (!std::isfinite(value) || !edit.has_value())
+    if (! std::isfinite(value) || ! edit.has_value())
     {
         return;
     }
     // Every panel's controls report here; each changes its own kind's settings.
-    const bool levels = edit->kind == FilterKind::Levels;
-    FilterSettings settings = edit->settings;
-    bool preview = edit->preview;
-    LevelRange range = Adjust::LevelsCurrent(settings.levels);
-    HueSaturationSettings& hsv = settings.hsv;
+    const bool levels               = edit->kind == FilterKind::Levels;
+    FilterSettings settings         = edit->settings;
+    bool preview                    = edit->preview;
+    LevelRange range                = Adjust::LevelsCurrent(settings.levels);
+    HueSaturationSettings& hsv      = settings.hsv;
     std::vector<CurvePoint>& points = settings.curves.channels[static_cast<std::size_t>(settings.curves.channel)];
     switch (action)
     {
-    case AdjustAction::Cancel:
-        CancelColorEdit();
-        return;
-    case AdjustAction::Apply:
-        ApplyColorEdit();
-        return;
-    case AdjustAction::OpenShadows:
-    case AdjustAction::OpenHighlights:
-        if (edit->kind == FilterKind::GradientMap && _chrome)
-        {
-            _adjustColorOriginal = settings.gradientMap;
-            const bool highlights = action == AdjustAction::OpenHighlights;
-            _chrome->OpenColorPicker(
-                highlights ? PickerTarget::GradientHighlights : PickerTarget::GradientShadows,
-                ArgbOf(highlights ? settings.gradientMap.highlights : settings.gradientMap.shadows));
-        }
-        return;
-    case AdjustAction::SetPreview:
-        preview = value != 0.0;
-        break;
-    case AdjustAction::SetChannel:
-        (levels ? settings.levels.channel : settings.curves.channel) =
-            static_cast<LevelsChannel>(std::clamp(static_cast<int>(value), 0, 3));
-        break;
-    case AdjustAction::Reset:
-        if (levels)
-        {
-            settings.levels = LevelsSettings{};
-            range = LevelRange{};
-            _session.SetLevelsSampleMode(std::nullopt);
-        }
-        else if (edit->kind == FilterKind::HueSaturation)
-        {
-            hsv = hsv.colorize ? Adjust::ColorizeStart() : HueSaturationSettings{};
-        }
-        else
-        {
-            points = {CurvePoint{0, 0}, CurvePoint{255, 255}};
-        }
-        break;
-    // Levels.
-    case AdjustAction::SetInputBlack:
-        range.black = std::min(range.white - 1, std::max(0.0, value));
-        break;
-    case AdjustAction::SetInputGamma:
-        range.gamma = std::clamp(value, 0.1, 9.99);
-        break;
-    case AdjustAction::SetInputWhite:
-        range.white = std::max(range.black + 1, std::min(255.0, value));
-        break;
-    case AdjustAction::SetOutputBlack:
-        range.outputBlack = std::clamp(value, 0.0, 255.0);
-        break;
-    case AdjustAction::SetOutputWhite:
-        range.outputWhite = std::clamp(value, 0.0, 255.0);
-        break;
-    case AdjustAction::SetLevelsSample:
-        _session.SetLevelsSampleMode(value <= 0.0 ? std::nullopt
-                                                  : std::optional<LevelsSample>(static_cast<LevelsSample>(
-                                                        std::clamp(static_cast<int>(value) - 1, 0, 2))));
-        SyncChrome();
-        return;
-    case AdjustAction::AutoLevels:
-        _session.AutoLevels(static_cast<LevelsAuto>(std::clamp(static_cast<int>(value), 0, 2)));
-        DocumentChanged();
-        return;
-    // Hue/Saturation.
-    case AdjustAction::SetRange:
-        hsv.range = static_cast<ColorRange>(std::clamp(static_cast<int>(value), 0, 6));
-        break;
-    case AdjustAction::SetHue:
-        Adjust::RangeOf(hsv).hue = std::clamp(value, hsv.colorize ? 0.0 : -180.0, hsv.colorize ? 360.0 : 180.0);
-        break;
-    case AdjustAction::SetSaturation:
-        Adjust::RangeOf(hsv).saturation = std::clamp(value, hsv.colorize ? 0.0 : -100.0, 100.0);
-        break;
-    case AdjustAction::SetLightness:
-        Adjust::RangeOf(hsv).lightness = std::clamp(value, -100.0, 100.0);
-        break;
-    case AdjustAction::SetColorize:
-        // Photoshop starts colorizing at hue 0, saturation 25.
-        hsv = value != 0.0 ? Adjust::ColorizeStart() : HueSaturationSettings{};
-        break;
-    case AdjustAction::SetInvertRange:
-        hsv.invertRange = value != 0.0;
-        break;
-    case AdjustAction::SetHueSample:
-        _session.SetHueSampleMode(value <= 0.0 ? std::nullopt
-                                               : std::optional<HueSampleMode>(static_cast<HueSampleMode>(
-                                                     std::clamp(static_cast<int>(value) - 1, 0, 2))));
-        SyncChrome();
-        return;
-    case AdjustAction::SetTargeting:
-        _session.SetHueTargeting(value != 0.0);
-        DropDrag<HueTargetDrag>();
-        SyncChrome();
-        return;
-    // Curves and the filters.
-    case AdjustAction::RemovePoint:
-    {
-        const std::size_t index = static_cast<std::size_t>(std::max(0.0, value));
-        if (index == 0 || index + 1 >= points.size())
-        {
+        case AdjustAction::Cancel: CancelColorEdit(); return;
+        case AdjustAction::Apply: ApplyColorEdit(); return;
+        case AdjustAction::OpenShadows:
+        case AdjustAction::OpenHighlights:
+            if (edit->kind == FilterKind::GradientMap && _chrome)
+            {
+                _adjustColorOriginal  = settings.gradientMap;
+                const bool highlights = action == AdjustAction::OpenHighlights;
+                _chrome->OpenColorPicker(highlights ? PickerTarget::GradientHighlights : PickerTarget::GradientShadows,
+                                         ArgbOf(highlights ? settings.gradientMap.highlights : settings.gradientMap.shadows));
+            }
             return;
+        case AdjustAction::SetPreview: preview = value != 0.0; break;
+        case AdjustAction::SetChannel:
+            (levels ? settings.levels.channel : settings.curves.channel) = static_cast<LevelsChannel>(std::clamp(static_cast<int>(value), 0, 3));
+            break;
+        case AdjustAction::Reset:
+            if (levels)
+            {
+                settings.levels = LevelsSettings{};
+                range           = LevelRange{};
+                _session.SetLevelsSampleMode(std::nullopt);
+            }
+            else if (edit->kind == FilterKind::HueSaturation)
+            {
+                hsv = hsv.colorize ? Adjust::ColorizeStart() : HueSaturationSettings{};
+            }
+            else
+            {
+                points = {CurvePoint{0, 0}, CurvePoint{255, 255}};
+            }
+            break;
+        // Levels.
+        case AdjustAction::SetInputBlack: range.black = std::min(range.white - 1, std::max(0.0, value)); break;
+        case AdjustAction::SetInputGamma: range.gamma = std::clamp(value, 0.1, 9.99); break;
+        case AdjustAction::SetInputWhite: range.white = std::max(range.black + 1, std::min(255.0, value)); break;
+        case AdjustAction::SetOutputBlack: range.outputBlack = std::clamp(value, 0.0, 255.0); break;
+        case AdjustAction::SetOutputWhite: range.outputWhite = std::clamp(value, 0.0, 255.0); break;
+        case AdjustAction::SetLevelsSample:
+            _session.SetLevelsSampleMode(value <= 0.0 ? std::nullopt
+                                                      : std::optional<LevelsSample>(static_cast<LevelsSample>(std::clamp(static_cast<int>(value) - 1, 0, 2))));
+            SyncChrome();
+            return;
+        case AdjustAction::AutoLevels:
+            _session.AutoLevels(static_cast<LevelsAuto>(std::clamp(static_cast<int>(value), 0, 2)));
+            DocumentChanged();
+            return;
+        // Hue/Saturation.
+        case AdjustAction::SetRange: hsv.range = static_cast<ColorRange>(std::clamp(static_cast<int>(value), 0, 6)); break;
+        case AdjustAction::SetHue: Adjust::RangeOf(hsv).hue = std::clamp(value, hsv.colorize ? 0.0 : -180.0, hsv.colorize ? 360.0 : 180.0); break;
+        case AdjustAction::SetSaturation: Adjust::RangeOf(hsv).saturation = std::clamp(value, hsv.colorize ? 0.0 : -100.0, 100.0); break;
+        case AdjustAction::SetLightness: Adjust::RangeOf(hsv).lightness = std::clamp(value, -100.0, 100.0); break;
+        case AdjustAction::SetColorize:
+            // Photoshop starts colorizing at hue 0, saturation 25.
+            hsv = value != 0.0 ? Adjust::ColorizeStart() : HueSaturationSettings{};
+            break;
+        case AdjustAction::SetInvertRange: hsv.invertRange = value != 0.0; break;
+        case AdjustAction::SetHueSample:
+            _session.SetHueSampleMode(value <= 0.0 ? std::nullopt
+                                                   : std::optional<HueSampleMode>(static_cast<HueSampleMode>(std::clamp(static_cast<int>(value) - 1, 0, 2))));
+            SyncChrome();
+            return;
+        case AdjustAction::SetTargeting:
+            _session.SetHueTargeting(value != 0.0);
+            DropDrag<HueTargetDrag>();
+            SyncChrome();
+            return;
+        // Curves and the filters.
+        case AdjustAction::RemovePoint:
+        {
+            const std::size_t index = static_cast<std::size_t>(std::max(0.0, value));
+            if (index == 0 || index + 1 >= points.size())
+            {
+                return;
+            }
+            points.erase(points.begin() + static_cast<std::ptrdiff_t>(index));
+            break;
         }
-        points.erase(points.begin() + static_cast<std::ptrdiff_t>(index));
-        break;
-    }
-    case AdjustAction::SetRadius:
-        settings.radius = value;
-        break;
-    case AdjustAction::SetAngle:
-        settings.angle = value;
-        break;
-    case AdjustAction::SetDistance:
-        settings.distance = value;
-        break;
-    case AdjustAction::SetAmount:
-        settings.amount = value;
-        break;
-    case AdjustAction::SetGaussian:
-        settings.gaussian = value != 0.0;
-        break;
-    case AdjustAction::SetMonochromatic:
-        settings.monochromatic = value != 0.0;
-        break;
-    case AdjustAction::SetDistortion:
-        settings.distortion = value;
-        break;
-    case AdjustAction::SetExposure:
-        settings.exposure.exposure = value;
-        break;
-    case AdjustAction::SetOffset:
-        settings.exposure.offset = value;
-        break;
-    case AdjustAction::SetGamma:
-        settings.exposure.gamma = value;
-        break;
-    case AdjustAction::SetGrainAmount:
-        settings.grain.amount = value;
-        break;
-    case AdjustAction::SetGrainSize:
-        settings.grain.size = value;
-        break;
-    case AdjustAction::SetGrainRoughness:
-        settings.grain.roughness = value;
-        break;
-    case AdjustAction::SetReversed:
-        settings.gradientMap.reversed = value != 0.0;
-        break;
+        case AdjustAction::SetRadius: settings.radius = value; break;
+        case AdjustAction::SetAngle: settings.angle = value; break;
+        case AdjustAction::SetDistance: settings.distance = value; break;
+        case AdjustAction::SetAmount: settings.amount = value; break;
+        case AdjustAction::SetGaussian: settings.gaussian = value != 0.0; break;
+        case AdjustAction::SetMonochromatic: settings.monochromatic = value != 0.0; break;
+        case AdjustAction::SetDistortion: settings.distortion = value; break;
+        case AdjustAction::SetExposure: settings.exposure.exposure = value; break;
+        case AdjustAction::SetOffset: settings.exposure.offset = value; break;
+        case AdjustAction::SetGamma: settings.exposure.gamma = value; break;
+        case AdjustAction::SetGrainAmount: settings.grain.amount = value; break;
+        case AdjustAction::SetGrainSize: settings.grain.size = value; break;
+        case AdjustAction::SetGrainRoughness: settings.grain.roughness = value; break;
+        case AdjustAction::SetReversed: settings.gradientMap.reversed = value != 0.0; break;
     }
     // A range edit lands on the channel it was made on; choosing another channel only switches to it (legacy).
     if (levels && action != AdjustAction::SetChannel)
@@ -449,13 +371,13 @@ void Application::OnCurveChanged(std::vector<CurvePoint> points) noexcept
         return;
     }
     const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
-    if (!edit.has_value() || edit->kind != FilterKind::Curves)
+    if (! edit.has_value() || edit->kind != FilterKind::Curves)
     {
         return;
     }
-    FilterSettings settings = edit->settings;
+    FilterSettings settings                                                     = edit->settings;
     settings.curves.channels[static_cast<std::size_t>(settings.curves.channel)] = std::move(points);
-    if (!settings.curves.IsValid())
+    if (! settings.curves.IsValid())
     {
         return;
     }
@@ -470,12 +392,12 @@ void Application::OnBandChanged(int index, double degrees) noexcept
         return;
     }
     const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
-    if (!edit.has_value() || edit->kind != FilterKind::HueSaturation || !std::isfinite(degrees))
+    if (! edit.has_value() || edit->kind != FilterKind::HueSaturation || ! std::isfinite(degrees))
     {
         return;
     }
     FilterSettings settings = edit->settings;
-    if (!Adjust::BandSetHandle(Adjust::BandOf(settings.hsv), index, degrees))
+    if (! Adjust::BandSetHandle(Adjust::BandOf(settings.hsv), index, degrees))
     {
         return;
     }
@@ -490,7 +412,7 @@ void Application::OnAdjustColor(ChromeEditPhase phase, uint32_t argb, bool highl
         return;
     }
     const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
-    if (!edit.has_value() || edit->kind != FilterKind::GradientMap)
+    if (! edit.has_value() || edit->kind != FilterKind::GradientMap)
     {
         return;
     }
@@ -514,31 +436,31 @@ void Application::OnAdjustColor(ChromeEditPhase phase, uint32_t argb, bool highl
 
 void Application::SyncAdjustPanel() noexcept
 {
-    if (!_chrome)
+    if (! _chrome)
     {
         return;
     }
     AdjustInspectorState state;
-    state.busy = ColorControlsFrozen();
+    state.busy            = ColorControlsFrozen();
     state.editsAdjustment = _session.AdjustmentEditingID().has_value() && _session.AdjustmentOriginal().has_value();
     // Visual cancellation is immediate; the session retains the original panel and its source until
     // acknowledgement. A refused or stale close re-exposes that unchanged panel at terminal publication.
-    if (const std::optional<ColorEdit>& edit = _session.PendingColorEdit(); edit.has_value() && !ColorCancelPending())
+    if (const std::optional<ColorEdit>& edit = _session.PendingColorEdit(); edit.has_value() && ! ColorCancelPending())
     {
-        const std::wstring name = FilterKindName(edit->kind);
-        state.title = state.editsAdjustment ? FormatStringResource(nullptr, IDS_ADJUST_EDIT_TITLE, name) : name;
-        state.filter = edit->kind;
-        state.settings = edit->settings;
-        state.levels = edit->settings.levels;
-        state.histogram = edit->histogram;
-        state.histogramReady = edit->histogramReady;
-        state.levelsSample = edit->levelsSample.has_value() ? static_cast<int>(edit->levelsSample.value()) + 1 : 0;
-        state.hsv = edit->settings.hsv;
-        state.hueSample = edit->hueSample.has_value() ? static_cast<int>(edit->hueSample.value()) + 1 : 0;
-        state.targeting = edit->targeting;
-        state.preview = edit->preview;
+        const std::wstring name  = FilterKindName(edit->kind);
+        state.title              = state.editsAdjustment ? FormatStringResource(nullptr, IDS_ADJUST_EDIT_TITLE, name) : name;
+        state.filter             = edit->kind;
+        state.settings           = edit->settings;
+        state.levels             = edit->settings.levels;
+        state.histogram          = edit->histogram;
+        state.histogramReady     = edit->histogramReady;
+        state.levelsSample       = edit->levelsSample.has_value() ? static_cast<int>(edit->levelsSample.value()) + 1 : 0;
+        state.hsv                = edit->settings.hsv;
+        state.hueSample          = edit->hueSample.has_value() ? static_cast<int>(edit->hueSample.value()) + 1 : 0;
+        state.targeting          = edit->targeting;
+        state.preview            = edit->preview;
         state.limitedToSelection = edit->selection.has_value();
-        state.previewFailed = edit->previewFailed;
+        state.previewFailed      = edit->previewFailed;
     }
     _chrome->SetAdjustInspector(state);
 }
@@ -552,14 +474,14 @@ bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool
         return false;
     }
     const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
-    if (!edit.has_value())
+    if (! edit.has_value())
     {
         return false;
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     if (edit->kind == FilterKind::Levels)
     {
-        if (!edit->levelsSample.has_value())
+        if (! edit->levelsSample.has_value())
         {
             return false;
         }
@@ -609,7 +531,7 @@ bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool
 #if defined(REDPRISM_ENABLE_TESTS)
 int Application::RunAdjustSelfTest() noexcept
 {
-    if (!_chrome || !_window)
+    if (! _chrome || ! _window)
     {
         SelfTestFailure(L"The adjust self-test needs the chrome and the window.\n");
         return 5;
@@ -632,10 +554,10 @@ int Application::RunAdjustSelfTest() noexcept
         (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
     };
     const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
-    const auto press = [&](float xDip, float yDip) noexcept
+    const auto press  = [&](float xDip, float yDip) noexcept
     {
         DxUi::PointerEvent pointer{};
-        pointer.action = DxUi::PointerAction::Down;
+        pointer.action  = DxUi::PointerAction::Down;
         pointer.xPixels = xDip * scale;
         pointer.yPixels = yDip * scale;
         (void)_chrome->DispatchPointer(pointer);
@@ -663,14 +585,14 @@ int Application::RunAdjustSelfTest() noexcept
         std::vector<std::uint8_t> bytes(static_cast<std::size_t>(64 * 64 * 4), 0);
         for (std::size_t index = 0; index + 3 < bytes.size(); index += 4)
         {
-            bytes[index] = 0x2E;
+            bytes[index]     = 0x2E;
             bytes[index + 1] = 0x8A;
             bytes[index + 2] = 0xE5;
             bytes[index + 3] = 0xFF;
         }
-        const Raster raster = Raster::Make(64, 64, RasterFormat::Bgra8888, bytes.data(), bytes.size());
-        ImageLayer layer = ImageLayer::Blank(L"Swatch", Vec2{64, 64});
-        layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
+        const Raster raster    = Raster::Make(64, 64, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        ImageLayer layer       = ImageLayer::Blank(L"Swatch", Vec2{64, 64});
+        layer.asset            = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         layer.transform.origin = Vec2{20, 20};
         _session.BeginEdit(L"Import Image");
         EditLayerRecordsForTest(_session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
@@ -684,12 +606,12 @@ int Application::RunAdjustSelfTest() noexcept
     // and "2.5", never a reformatted "2.0", and the preview follows it.
     {
         _session.filterSettings.radius = 1.0;
-        if (!BeginColorEdit(ChromeHost::kCommandGaussianBlur))
+        if (! BeginColorEdit(ChromeHost::kCommandGaussianBlur))
         {
             return fail(L"Gaussian Blur did not open for the typed-decimal check.\n");
         }
         settle();
-        if (!_chrome->FocusAdjustRadiusForTest())
+        if (! _chrome->FocusAdjustRadiusForTest())
         {
             CancelColorEditForTest();
             return fail(L"The Gaussian Blur radius field could not take the focus.\n");
@@ -703,22 +625,24 @@ int Application::RunAdjustSelfTest() noexcept
             settle();
             shown[index] = _chrome->AdjustRadiusTextForTest();
         }
-        const bool previewed = _session.PendingColorEdit().has_value() &&
-                               std::fabs(_session.PendingColorEdit()->settings.radius - 2.5) < 1e-9;
+        const bool previewed = _session.PendingColorEdit().has_value() && std::fabs(_session.PendingColorEdit()->settings.radius - 2.5) < 1e-9;
         CancelColorEditForTest();
         _chrome->SetCanvasFocused(true);
-        if (shown[0] != L"2" || shown[1] != L"2." || shown[2] != L"2.5" || !previewed)
+        if (shown[0] != L"2" || shown[1] != L"2." || shown[2] != L"2.5" || ! previewed)
         {
             return fail(std::format(L"Typing 2.5 into the Gaussian Blur radius was reformatted ('{}', '{}', '{}', "
                                     L"previewed {}).\n",
-                                    shown[0], shown[1], shown[2], previewed));
+                                    shown[0],
+                                    shown[1],
+                                    shown[2],
+                                    previewed));
         }
     }
 
     // The Gradient Map's color picker closes with its panel, and the next pick from a palette well reaches the
     // palette (RF-503).
     {
-        if (!BeginColorEdit(ChromeHost::kCommandGradientMap))
+        if (! BeginColorEdit(ChromeHost::kCommandGradientMap))
         {
             return fail(L"Gradient Map did not open for the picker check.\n");
         }
@@ -727,9 +651,9 @@ int Application::RunAdjustSelfTest() noexcept
         const bool pickerOpen = _chrome->ColorPickerOpen();
         CancelColorEditForTest();
         settle();
-        const bool closedWithPanel = !_chrome->ColorPickerOpen() && !_chrome->AdjustPanelOpen();
+        const bool closedWithPanel     = ! _chrome->ColorPickerOpen() && ! _chrome->AdjustPanelOpen();
         const std::uint32_t foreground = _session.ForegroundColor();
-        const D2D1_RECT_F well = _chrome->PaletteWellBoundsDip(false);
+        const D2D1_RECT_F well         = _chrome->PaletteWellBoundsDip(false);
         press((well.left + well.right) * 0.5f, (well.top + well.bottom) * 0.5f);
         const bool wellOpened = _chrome->ColorPickerOpen();
         _chrome->SampleColor(0xFF123456u);
@@ -739,41 +663,46 @@ int Application::RunAdjustSelfTest() noexcept
         _session.SetForegroundColor(foreground);
         _chrome->SetCanvasFocused(true);
         settle();
-        if (!pickerOpen || !closedWithPanel || !wellOpened || !reached)
+        if (! pickerOpen || ! closedWithPanel || ! wellOpened || ! reached)
         {
             return fail(std::format(L"The Gradient Map picker outlived its panel or took the next palette pick (open "
                                     L"{}, closed with the panel {}, well opened {}, palette reached {}).\n",
-                                    pickerOpen, closedWithPanel, wellOpened, reached));
+                                    pickerOpen,
+                                    closedWithPanel,
+                                    wellOpened,
+                                    reached));
         }
     }
 
     // The drawn controls are elements of the window's UI Automation tree (RF-507): the palette's zones always, the
     // curve editor, the levels bars and the hue spectrum while their panel shows them.
     {
-        const bool palette = reachable(IDS_PALETTE_FOREGROUND) && reachable(IDS_PALETTE_BACKGROUND) &&
-                             reachable(IDS_PALETTE_SWAP) && reachable(IDS_PALETTE_RESET);
+        const bool palette =
+            reachable(IDS_PALETTE_FOREGROUND) && reachable(IDS_PALETTE_BACKGROUND) && reachable(IDS_PALETTE_SWAP) && reachable(IDS_PALETTE_RESET);
         const bool curves = BeginColorEdit(ChromeHost::kCommandCurves) && reachable(IDS_A11Y_CURVE_EDITOR);
         CancelColorEditForTest();
-        const bool levels = BeginColorEdit(ChromeHost::kCommandLevels) && reachable(IDS_A11Y_LEVELS_INPUT) &&
-                            reachable(IDS_A11Y_LEVELS_OUTPUT);
+        const bool levels = BeginColorEdit(ChromeHost::kCommandLevels) && reachable(IDS_A11Y_LEVELS_INPUT) && reachable(IDS_A11Y_LEVELS_OUTPUT);
         CancelColorEditForTest();
         const bool opened = BeginColorEdit(ChromeHost::kCommandHueSaturation);
         OnAdjustAction(AdjustAction::SetRange, 1.0);
         const bool spectrum = opened && reachable(IDS_A11Y_HUE_SPECTRUM);
         CancelColorEditForTest();
         settle();
-        if (!palette || !curves || !levels || !spectrum)
+        if (! palette || ! curves || ! levels || ! spectrum)
         {
             return fail(std::format(L"A drawn control was not in the UI Automation tree (palette zones {}, curve "
                                     L"editor {}, levels bars {}, hue spectrum {}).\n",
-                                    palette, curves, levels, spectrum));
+                                    palette,
+                                    curves,
+                                    levels,
+                                    spectrum));
         }
     }
 
     // A press on the spectrum's hue bars moves no handle; a press in the handle strip between them drags the nearest
     // handle (RF-511, legacy HueSaturationSheet).
     {
-        if (!BeginColorEdit(ChromeHost::kCommandHueSaturation))
+        if (! BeginColorEdit(ChromeHost::kCommandHueSaturation))
         {
             return fail(L"Hue/Saturation did not open for the spectrum check.\n");
         }
@@ -786,39 +715,41 @@ int Application::RunAdjustSelfTest() noexcept
         {
             if (SpectrumEditor::HandleStripContainsDip(bounds, D2D1::Point2F(bounds.left + 1.0f, y)))
             {
-                stripTop = stripTop.value_or(y);
+                stripTop    = stripTop.value_or(y);
                 stripBottom = y;
             }
         }
         const auto hueSettings = [this]() -> std::optional<HueSaturationSettings>
         {
             const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
-            return edit.has_value() && edit->kind == FilterKind::HueSaturation
-                       ? std::optional<HueSaturationSettings>(edit->settings.hsv)
-                       : std::nullopt;
+            return edit.has_value() && edit->kind == FilterKind::HueSaturation ? std::optional<HueSaturationSettings>(edit->settings.hsv) : std::nullopt;
         };
         const HueSaturationSettings before = hueSettings().value_or(HueSaturationSettings{});
         // Just right of the band's range start: that handle is the nearest, and the place is a valid one for it.
         const double degrees = Adjust::BandOf(before).Handles()[1] + 3.0;
-        const float x = bounds.left + (bounds.right - bounds.left) * static_cast<float>(degrees / 360.0);
-        const float barY = bounds.top + 1.0f;
-        const bool onBar = !SpectrumEditor::HandleStripContainsDip(bounds, D2D1::Point2F(x, barY));
+        const float x        = bounds.left + (bounds.right - bounds.left) * static_cast<float>(degrees / 360.0);
+        const float barY     = bounds.top + 1.0f;
+        const bool onBar     = ! SpectrumEditor::HandleStripContainsDip(bounds, D2D1::Point2F(x, barY));
         press(x, barY);
         const bool barIgnored = hueSettings() == std::optional<HueSaturationSettings>(before);
-        bool stripMoved = false;
+        bool stripMoved       = false;
         if (stripTop.has_value() && stripBottom.has_value())
         {
             press(x, (stripTop.value() + stripBottom.value()) * 0.5f);
-            stripMoved = hueSettings().has_value() && !(hueSettings().value() == before);
+            stripMoved = hueSettings().has_value() && ! (hueSettings().value() == before);
         }
         CancelColorEditForTest();
         _chrome->SetCanvasFocused(true);
         settle();
-        if (bounds.right <= bounds.left || !stripTop.has_value() || !onBar || !barIgnored || !stripMoved)
+        if (bounds.right <= bounds.left || ! stripTop.has_value() || ! onBar || ! barIgnored || ! stripMoved)
         {
             return fail(std::format(L"The spectrum's press rules broke (bounds {:.1f}-{:.1f}, strip {}, a bar press "
                                     L"ignored {}, a strip press moved a handle {}).\n",
-                                    bounds.left, bounds.right, stripTop.has_value(), barIgnored, stripMoved));
+                                    bounds.left,
+                                    bounds.right,
+                                    stripTop.has_value(),
+                                    barIgnored,
+                                    stripMoved));
         }
     }
     OnTool(EditorTool::Move);
@@ -827,7 +758,7 @@ int Application::RunAdjustSelfTest() noexcept
 
 int Application::RunAdjustBusySelfTest() noexcept
 {
-    if (!_chrome || !_window)
+    if (! _chrome || ! _window)
     {
         SelfTestFailure(L"The adjustment busy self-test needs the chrome and the window.\n");
         return 5;
@@ -846,18 +777,17 @@ int Application::RunAdjustBusySelfTest() noexcept
     const auto prepare = [this]() noexcept
     {
         RECT client{};
-        if (!GetClientRect(_window.get(), &client))
+        if (! GetClientRect(_window.get(), &client))
         {
             return false;
         }
-        return SUCCEEDED(_chrome->Prepare(static_cast<UINT>(client.right - client.left),
-                                          static_cast<UINT>(client.bottom - client.top),
-                                          static_cast<float>(GetDpiForWindow(_window.get()))));
+        return SUCCEEDED(_chrome->Prepare(
+            static_cast<UINT>(client.right - client.left), static_cast<UINT>(client.bottom - client.top), static_cast<float>(GetDpiForWindow(_window.get()))));
     };
-    const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
+    const float scale        = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
     const auto cancelCapture = [&](int command, ChromeHost::AdjustControlForTest control) noexcept
     {
-        if (!BeginColorEdit(command))
+        if (! BeginColorEdit(command))
         {
             return false;
         }
@@ -867,14 +797,13 @@ int Application::RunAdjustBusySelfTest() noexcept
         }
         settle();
         const D2D1_RECT_F bounds = _chrome->AdjustControlBoundsForTest(control);
-        if (bounds.right <= bounds.left || bounds.bottom <= bounds.top ||
-            !_chrome->AdjustControlEnabledForTest(control))
+        if (bounds.right <= bounds.left || bounds.bottom <= bounds.top || ! _chrome->AdjustControlEnabledForTest(control))
         {
             CancelColorEditForTest();
             return false;
         }
         const float x = (bounds.left + bounds.right) * 0.5f;
-        float y = (bounds.top + bounds.bottom) * 0.5f;
+        float y       = (bounds.top + bounds.bottom) * 0.5f;
         if (control == ChromeHost::AdjustControlForTest::LevelsInput)
         {
             y = bounds.bottom - 7.0f;
@@ -893,7 +822,7 @@ int Application::RunAdjustBusySelfTest() noexcept
         const auto dispatch = [&](DxUi::PointerAction action, float px) noexcept
         {
             DxUi::PointerEvent event{};
-            event.action = action;
+            event.action  = action;
             event.xPixels = px * scale;
             event.yPixels = y * scale;
             (void)_chrome->DispatchPointer(event);
@@ -902,43 +831,55 @@ int Application::RunAdjustBusySelfTest() noexcept
         dispatch(DxUi::PointerAction::Down, x);
         dispatch(DxUi::PointerAction::Move, x + 12.0f);
         const std::uint64_t captured = _chrome->AdjustCallbackCountForTest();
-        AdjustInspectorState busy = _chrome->AdjustInspectorForTest();
-        busy.busy = true;
+        AdjustInspectorState busy    = _chrome->AdjustInspectorForTest();
+        busy.busy                    = true;
         _chrome->SetAdjustInspector(busy);
         const std::uint64_t transition = _chrome->AdjustCallbackCountForTest();
         dispatch(DxUi::PointerAction::Move, x + 24.0f);
         const std::uint64_t beforePrepare = _chrome->AdjustCallbackCountForTest();
-        const bool prepared = prepare();
+        const bool prepared               = prepare();
         dispatch(DxUi::PointerAction::Move, x + 32.0f);
         dispatch(DxUi::PointerAction::Up, x + 32.0f);
         const std::uint64_t afterPrepare = _chrome->AdjustCallbackCountForTest();
-        const bool silent = captured > before && transition == captured && beforePrepare == transition &&
-                            afterPrepare == transition && prepared && !_chrome->AdjustControlEnabledForTest(control) &&
-                            !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::Apply) &&
+        const bool silent = captured > before && transition == captured && beforePrepare == transition && afterPrepare == transition && prepared &&
+                            ! _chrome->AdjustControlEnabledForTest(control) &&
+                            ! _chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::Apply) &&
                             _chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::Cancel);
-        busy.busy = false;
+        busy.busy         = false;
         _chrome->SetAdjustInspector(busy);
-        const bool restored = _chrome->AdjustControlEnabledForTest(control) && prepare();
+        const bool restored             = _chrome->AdjustControlEnabledForTest(control) && prepare();
         const std::uint64_t freshBefore = _chrome->AdjustCallbackCountForTest();
-        float freshX = x;
+        float freshX                    = x;
         if (control == ChromeHost::AdjustControlForTest::LevelsInput)
         {
             // The first drag moved gamma away from the original press. Levels captures only near a handle.
             const LevelRange range = Adjust::LevelsCurrent(_chrome->AdjustInspectorForTest().levels);
-            const double position = range.black + (range.white - range.black) * std::pow(0.5, range.gamma);
-            freshX = bounds.left + (bounds.right - bounds.left) * static_cast<float>(position / 255.0);
+            const double position  = range.black + (range.white - range.black) * std::pow(0.5, range.gamma);
+            freshX                 = bounds.left + (bounds.right - bounds.left) * static_cast<float>(position / 255.0);
         }
         dispatch(DxUi::PointerAction::Down, freshX);
         dispatch(DxUi::PointerAction::Move, freshX + 18.0f);
         dispatch(DxUi::PointerAction::Up, freshX + 18.0f);
         const bool freshWorks = _chrome->AdjustCallbackCountForTest() > freshBefore;
-        if (!silent || !restored || !freshWorks)
+        if (! silent || ! restored || ! freshWorks)
         {
             SelfTestFailure(std::format(L"Busy control {}: callbacks {} -> {} -> {} -> {} -> {}, fresh {} -> {}, "
                                         L"prepared {}, silent {}, restored {}, bounds {:.1f},{:.1f},{:.1f},{:.1f}.\n",
-                                        static_cast<int>(control), before, captured, transition, beforePrepare,
-                                        afterPrepare, freshBefore, _chrome->AdjustCallbackCountForTest(), prepared,
-                                        silent, restored, bounds.left, bounds.top, bounds.right, bounds.bottom));
+                                        static_cast<int>(control),
+                                        before,
+                                        captured,
+                                        transition,
+                                        beforePrepare,
+                                        afterPrepare,
+                                        freshBefore,
+                                        _chrome->AdjustCallbackCountForTest(),
+                                        prepared,
+                                        silent,
+                                        restored,
+                                        bounds.left,
+                                        bounds.top,
+                                        bounds.right,
+                                        bounds.bottom));
         }
         CancelColorEditForTest();
         _chrome->SetCanvasFocused(true);
@@ -946,24 +887,26 @@ int Application::RunAdjustBusySelfTest() noexcept
         return silent && restored && freshWorks;
     };
 
-    const bool curves = cancelCapture(ChromeHost::kCommandCurves, ChromeHost::AdjustControlForTest::Curves);
-    const bool levels = cancelCapture(ChromeHost::kCommandLevels, ChromeHost::AdjustControlForTest::LevelsInput);
+    const bool curves   = cancelCapture(ChromeHost::kCommandCurves, ChromeHost::AdjustControlForTest::Curves);
+    const bool levels   = cancelCapture(ChromeHost::kCommandLevels, ChromeHost::AdjustControlForTest::LevelsInput);
     const bool spectrum = cancelCapture(ChromeHost::kCommandHueSaturation, ChromeHost::AdjustControlForTest::Spectrum);
-    if (!curves || !levels || !spectrum)
+    if (! curves || ! levels || ! spectrum)
     {
         return fail(std::format(L"Busy failed to cancel captured adjustment input before and after Prepare "
                                 L"(Curves {}, Levels {}, Spectrum {}).\n",
-                                curves, levels, spectrum));
+                                curves,
+                                levels,
+                                spectrum));
     }
 
     // Busy follows the stepper's existing focus-loss rule: a partial decimal commits its parsed value.
     // Completed decimals keep their exact display, and no late focus-loss callback may change frozen settings.
-    if (!BeginColorEdit(ChromeHost::kCommandGaussianBlur))
+    if (! BeginColorEdit(ChromeHost::kCommandGaussianBlur))
     {
         return fail(L"Gaussian Blur did not open for the busy decimal check.\n");
     }
     settle();
-    if (!_chrome->FocusAdjustRadiusForTest())
+    if (! _chrome->FocusAdjustRadiusForTest())
     {
         CancelColorEditForTest();
         return fail(L"Gaussian Blur could not focus Radius for the busy decimal check.\n");
@@ -971,103 +914,104 @@ int Application::RunAdjustBusySelfTest() noexcept
     (void)_chrome->DispatchCharacter(L'2', 0);
     (void)_chrome->DispatchCharacter(L'.', 0);
     AdjustInspectorState inspector = _chrome->AdjustInspectorForTest();
-    const bool partialBefore = _chrome->AdjustRadiusTextForTest() == L"2.";
+    const bool partialBefore       = _chrome->AdjustRadiusTextForTest() == L"2.";
     const auto callbacksBeforeBusy = _chrome->AdjustCallbackCountForTest();
-    inspector.busy = true;
+    inspector.busy                 = true;
     _chrome->SetAdjustInspector(inspector);
-    const bool preparedDecimal = prepare();
+    const bool preparedDecimal  = prepare();
     const std::wstring busyText = _chrome->AdjustRadiusTextForTest();
-    const bool partialBusy = preparedDecimal && busyText == L"2.0" &&
-                             _chrome->AdjustCallbackCountForTest() == callbacksBeforeBusy &&
-                             _session.PendingColorEdit()->settings.radius == 2;
-    inspector.busy = false;
+    const bool partialBusy      = preparedDecimal && busyText == L"2.0" && _chrome->AdjustCallbackCountForTest() == callbacksBeforeBusy &&
+                                  _session.PendingColorEdit()->settings.radius == 2;
+    inspector.busy              = false;
     _chrome->SetAdjustInspector(inspector);
     const bool partialAfter = _chrome->AdjustRadiusTextForTest() == L"2.0";
-    if (!partialBefore || !partialBusy || !partialAfter)
+    if (! partialBefore || ! partialBusy || ! partialAfter)
     {
-        return fail(std::format(
-            L"Busy violated the decimal/focus-loss contract (before {}, during {} '{}', restored {} '{}').\n",
-            partialBefore, partialBusy, busyText, partialAfter, _chrome->AdjustRadiusTextForTest()));
+        return fail(std::format(L"Busy violated the decimal/focus-loss contract (before {}, during {} '{}', restored {} '{}').\n",
+                                partialBefore,
+                                partialBusy,
+                                busyText,
+                                partialAfter,
+                                _chrome->AdjustRadiusTextForTest()));
     }
-    if (!prepare() || !_chrome->FocusAdjustRadiusForTest())
+    if (! prepare() || ! _chrome->FocusAdjustRadiusForTest())
     {
         return fail(L"The restored Radius field could not accept a fresh decimal.\n");
     }
     (void)_chrome->DispatchCharacter(L'2', 0);
     (void)_chrome->DispatchCharacter(L'.', 0);
     (void)_chrome->DispatchCharacter(L'5', 0);
-    inspector = _chrome->AdjustInspectorForTest();
+    inspector      = _chrome->AdjustInspectorForTest();
     inspector.busy = true;
     _chrome->SetAdjustInspector(inspector);
     const auto decimalCallbacks = _chrome->AdjustCallbackCountForTest();
-    const bool keptDecimal = prepare() && _chrome->AdjustRadiusTextForTest() == L"2.5" &&
-                             _chrome->AdjustCallbackCountForTest() == decimalCallbacks &&
-                             _session.PendingColorEdit()->settings.radius == 2.5;
-    inspector.busy = false;
+    const bool keptDecimal      = prepare() && _chrome->AdjustRadiusTextForTest() == L"2.5" && _chrome->AdjustCallbackCountForTest() == decimalCallbacks &&
+                                  _session.PendingColorEdit()->settings.radius == 2.5;
+    inspector.busy              = false;
     _chrome->SetAdjustInspector(inspector);
-    const bool restoredDecimal = _chrome->AdjustRadiusTextForTest() == L"2.5";
+    const bool restoredDecimal      = _chrome->AdjustRadiusTextForTest() == L"2.5";
     const std::wstring restoredText = _chrome->AdjustRadiusTextForTest();
-    const double restoredValue = _session.PendingColorEdit()->settings.radius;
+    const double restoredValue      = _session.PendingColorEdit()->settings.radius;
     CancelColorEditForTest();
-    if (!keptDecimal || !restoredDecimal)
+    if (! keptDecimal || ! restoredDecimal)
     {
         return fail(std::format(L"Busy changed a complete decimal or delivered a late callback (kept {}, restored {}, "
                                 L"text '{}', value {}).\n",
-                                keptDecimal, restoredDecimal, restoredText, restoredValue));
+                                keptDecimal,
+                                restoredDecimal,
+                                restoredText,
+                                restoredValue));
     }
 
-    if (!BeginColorEdit(ChromeHost::kCommandLevels))
+    if (! BeginColorEdit(ChromeHost::kCommandLevels))
     {
         return fail(L"Levels did not open for the histogram prerequisite check.\n");
     }
-    inspector = _chrome->AdjustInspectorForTest();
+    inspector                = _chrome->AdjustInspectorForTest();
     inspector.histogramReady = false;
-    inspector.busy = false;
+    inspector.busy           = false;
     _chrome->SetAdjustInspector(inspector);
-    const bool idlePrerequisite =
-        !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::LevelsAutoContrast);
-    inspector.busy = true;
+    const bool idlePrerequisite = ! _chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::LevelsAutoContrast);
+    inspector.busy              = true;
     _chrome->SetAdjustInspector(inspector);
-    const bool busyPrerequisite =
-        !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::LevelsAutoContrast);
-    inspector.busy = false;
+    const bool busyPrerequisite = ! _chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::LevelsAutoContrast);
+    inspector.busy              = false;
     _chrome->SetAdjustInspector(inspector);
-    const bool restoredPrerequisite =
-        !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::LevelsAutoContrast);
+    const bool restoredPrerequisite = ! _chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::LevelsAutoContrast);
     CancelColorEditForTest();
-    if (!idlePrerequisite || !busyPrerequisite || !restoredPrerequisite)
+    if (! idlePrerequisite || ! busyPrerequisite || ! restoredPrerequisite)
     {
-        return fail(std::format(L"Levels lost its histogram prerequisite (idle {}, busy {}, restored {}).\n",
-                                idlePrerequisite, busyPrerequisite, restoredPrerequisite));
+        return fail(std::format(
+            L"Levels lost its histogram prerequisite (idle {}, busy {}, restored {}).\n", idlePrerequisite, busyPrerequisite, restoredPrerequisite));
     }
-    if (!BeginColorEdit(ChromeHost::kCommandHueSaturation))
+    if (! BeginColorEdit(ChromeHost::kCommandHueSaturation))
     {
         return fail(L"Hue/Saturation did not open for the colorize prerequisite check.\n");
     }
     OnAdjustAction(AdjustAction::SetColorize, 1);
-    inspector = _chrome->AdjustInspectorForTest();
+    inspector      = _chrome->AdjustInspectorForTest();
     inspector.busy = true;
     _chrome->SetAdjustInspector(inspector);
     inspector.busy = false;
     _chrome->SetAdjustInspector(inspector);
-    const bool rangeDisabled = !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::HueRange);
+    const bool rangeDisabled = ! _chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::HueRange);
     CancelColorEditForTest();
-    if (!rangeDisabled)
+    if (! rangeDisabled)
     {
         return fail(L"Leaving busy enabled a Hue/Saturation range disabled by Colorize.\n");
     }
-    if (!BeginColorEdit(ChromeHost::kCommandCurves))
+    if (! BeginColorEdit(ChromeHost::kCommandCurves))
     {
         return fail(L"Curves did not open for the endpoint prerequisite check.\n");
     }
-    inspector = _chrome->AdjustInspectorForTest();
+    inspector      = _chrome->AdjustInspectorForTest();
     inspector.busy = true;
     _chrome->SetAdjustInspector(inspector);
     inspector.busy = false;
     _chrome->SetAdjustInspector(inspector);
-    const bool removeDisabled = !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::CurveRemove);
+    const bool removeDisabled = ! _chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::CurveRemove);
     CancelColorEditForTest();
-    if (!removeDisabled)
+    if (! removeDisabled)
     {
         return fail(L"Leaving busy enabled Curves removal without an interior selected point.\n");
     }

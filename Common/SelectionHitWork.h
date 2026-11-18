@@ -19,15 +19,16 @@ enum class SelectionHitStage : std::uint8_t
 };
 struct SelectionHitObserver final
 {
-    void* context = nullptr;
+    void* context                                                      = nullptr;
     void (*checkpoint)(void*, SelectionHitStage, std::size_t) noexcept = nullptr;
 };
 inline constexpr std::size_t kSelectionHitCheckpointQuantum = 1024;
 
 // Adds the display offset to each vertex, as Translated followed by Contains does. Subtracting the offset
 // from the query would change floating-point boundary rounding at large coordinates.
-[[nodiscard]] std::optional<bool> ContainsSelectionForWork(const SelectionDisplayValue& display, Vec2 query,
-                                                           CancelToken cancellation = {},
+[[nodiscard]] std::optional<bool> ContainsSelectionForWork(const SelectionDisplayValue& display,
+                                                           Vec2 query,
+                                                           CancelToken cancellation      = {},
                                                            SelectionHitObserver observer = {}) noexcept;
 
 // Cached metadata only. This owns no geometry/history root. The caller adds its fixed job/payload
@@ -37,6 +38,6 @@ struct SelectionCursorProbePlan final
     DocumentReadAuthority document;
     Vec2 translation{};
     SelectionBounds bounds;
-    std::uint64_t retainedBytes = 0;
+    std::uint64_t retainedBytes                                                   = 0;
     [[nodiscard]] bool operator==(const SelectionCursorProbePlan&) const noexcept = default;
 };

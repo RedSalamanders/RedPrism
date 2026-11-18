@@ -32,7 +32,7 @@ void Expect(bool value, const char* name)
 }
 bool Literal(const std::optional<DocumentSelection>& s, const std::array<Vec2, 4>& expected)
 {
-    if (!s || s->antialiased || s->loops.size() != 1 || s->loops.Get()[0].size() != 4)
+    if (! s || s->antialiased || s->loops.size() != 1 || s->loops.Get()[0].size() != 4)
         return false;
     for (std::size_t i = 0; i < 4; ++i)
         if (s->loops.Get()[0][i] != expected[i])
@@ -85,29 +85,30 @@ struct State final
 #pragma warning(disable : 4625 4626 5027)
 class ParentJob final : public Job
 {
-  public:
-    explicit ParentJob(State& state) : _state(state) {}
+public:
+    explicit ParentJob(State& state) : _state(state)
+    {
+    }
     JobResult Run(JobContext& context) override
     {
         auto& s = _state;
         ++s.runs;
         if (s.runs == 1)
         {
-            _openingMemory = SharedPublicationMemory::CreateForWork(kOpeningLimit);
-            _finalMemory = SharedPublicationMemory::CreateForWork(kTotal);
-            _temporary = SharedPublicationMemory::CreateForWork(kTotal);
-            s.openingOwner = _openingMemory;
+            _openingMemory  = SharedPublicationMemory::CreateForWork(kOpeningLimit);
+            _finalMemory    = SharedPublicationMemory::CreateForWork(kTotal);
+            _temporary      = SharedPublicationMemory::CreateForWork(kTotal);
+            s.openingOwner  = _openingMemory;
             s.terminalOwner = _temporary;
             return {};
         }
         if (s.runs == 2)
         {
-            if (!_input)
+            if (! _input)
                 return {JobStatus::Failed, E_UNEXPECTED};
-            auto value = DocumentSession::PrepareDeferredSelectionMoveOpening(
-                std::move(_input.value()), context.cancellation, {}, _openingMemory, true);
+            auto value = DocumentSession::PrepareDeferredSelectionMoveOpening(std::move(_input.value()), context.cancellation, {}, _openingMemory, true);
             _input.reset();
-            if (!value)
+            if (! value)
                 return {JobStatus::Failed, E_FAIL};
             _opening.emplace(std::move(value.value()));
             return {};
@@ -117,61 +118,56 @@ class ParentJob final : public Job
             return {JobStatus::Failed, E_ACCESSDENIED};
         if (s.runs == 3)
         {
-            if (!_closeInput)
+            if (! _closeInput)
                 return {JobStatus::Failed, E_UNEXPECTED};
             // Click's zero-offset End publishes no new graph and retains the original admission for useful follow-up.
-            auto memory =
-                s.mode == Mode::ClickDeselect ? std::shared_ptr<const SharedPublicationMemory>{} : _finalMemory;
-            auto value = DocumentSession::PrepareSelectionMoveClosurePublication(
-                std::move(_closeInput.value()), context.cancellation, {}, nullptr, {}, memory);
+            auto memory = s.mode == Mode::ClickDeselect ? std::shared_ptr<const SharedPublicationMemory>{} : _finalMemory;
+            auto value = DocumentSession::PrepareSelectionMoveClosurePublication(std::move(_closeInput.value()), context.cancellation, {}, nullptr, {}, memory);
             _closeInput.reset();
-            if (!value)
+            if (! value)
                 return {JobStatus::Failed, E_FAIL};
             _close.emplace(std::move(value.value()));
             return {};
         }
-        if (!_commandInput)
+        if (! _commandInput)
             return {JobStatus::Failed, E_UNEXPECTED};
-        auto command = DocumentSession::PrepareSelectionCommandPublication(std::move(_commandInput.value()),
-                                                                           context.cancellation, {}, _finalMemory);
+        auto command = DocumentSession::PrepareSelectionCommandPublication(std::move(_commandInput.value()), context.cancellation, {}, _finalMemory);
         _commandInput.reset();
-        if (!command)
+        if (! command)
             return {JobStatus::Failed, E_FAIL};
         _command.emplace(std::move(command.value()));
         return {};
     }
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        auto& s = _state;
+        auto& s      = _state;
         s.sameTicket = s.sameTicket && ticket == s.original;
         if (result.status != JobStatus::Finished)
             return false;
         if (s.runs == 1)
         {
             auto input = s.session.PrepareDeferredSelectionMoveOpeningInput();
-            if (!input)
+            if (! input)
                 return false;
             _input.emplace(std::move(input.value()));
             const auto& source = s.session.Selection().value().loops;
-            _geometryEnvelope = source.StorageBytes() + SelectionLoops::WorkOwnershipAllowance(source.size());
-            s.captured = true;
+            _geometryEnvelope  = source.StorageBytes() + SelectionLoops::WorkOwnershipAllowance(source.size());
+            s.captured         = true;
             return s.scheduler.Resume(ticket);
         }
         if (s.runs == 2)
         {
-            if (!_opening)
+            if (! _opening)
                 return false;
             s.openingBytes = _openingMemory->LocalAllocationBytes() + SharedPublicationMemory::OwnershipAllowance();
             if (_openingMemory->BindContinuingOutputForPublication(s.scheduler, ticket, s.openingBytes) != S_OK)
                 return false;
-            s.partition = s.scheduler.ReservedMemoryBytes() == kTotal + s.observerBytes &&
-                          _openingMemory->BoundTo(s.scheduler, ticket);
-            s.opened = s.session.ApplyPreparedDeferredSelectionMoveOpeningIfCurrent(_opening.value());
-            if (!s.opened)
+            s.partition = s.scheduler.ReservedMemoryBytes() == kTotal + s.observerBytes && _openingMemory->BoundTo(s.scheduler, ticket);
+            s.opened    = s.session.ApplyPreparedDeferredSelectionMoveOpeningIfCurrent(_opening.value());
+            if (! s.opened)
                 return false;
-            if (s.mode == Mode::Moved || s.mode == Mode::LostMoved || s.mode == Mode::Failed ||
-                s.mode == Mode::Cancelled || s.mode == Mode::JoinedClose)
-                if (!s.session.MovePreparedDeferredSelectionMoveIfCurrent(_opening.value(), -2.0, 3.0))
+            if (s.mode == Mode::Moved || s.mode == Mode::LostMoved || s.mode == Mode::Failed || s.mode == Mode::Cancelled || s.mode == Mode::JoinedClose)
+                if (! s.session.MovePreparedDeferredSelectionMoveIfCurrent(_opening.value(), -2.0, 3.0))
                     return false;
             if (s.mode == Mode::JoinedClose)
                 return true;
@@ -183,7 +179,7 @@ class ParentJob final : public Job
             if (s.mode != Mode::Failed)
             {
                 auto input = s.session.PrepareSelectionMoveClosureInput(false, s.session.SelectionMoveOpening());
-                if (!input)
+                if (! input)
                     return false;
                 _closeInput.emplace(std::move(input.value()));
             }
@@ -193,11 +189,11 @@ class ParentJob final : public Job
         if (s.runs == 3 && s.mode == Mode::ClickDeselect)
         {
             s.closed = _close && s.session.ApplyPreparedSelectionMoveClosureIfCurrent(_close.value());
-            if (!s.closed)
+            if (! s.closed)
                 return false;
             // Capture only after real End changed generation, while the same original admission is still held.
             auto input = s.session.PrepareSelectionCommandInput(SelectionCommandKind::Deselect);
-            if (!input)
+            if (! input)
                 return false;
             _commandInput.emplace(std::move(input.value()));
             return s.scheduler.Resume(ticket);
@@ -206,19 +202,15 @@ class ParentJob final : public Job
     }
     void Completed(JobResult result) noexcept override
     {
-        auto& s = _state;
+        auto& s     = _state;
         s.completed = true;
-        s.outcome = result;
+        s.outcome   = result;
         if (result.status == JobStatus::Finished && s.opened &&
-            (s.mode == Mode::Moved || s.mode == Mode::Lost || s.mode == Mode::LostMoved ||
-             s.mode == Mode::ClickDeselect))
+            (s.mode == Mode::Moved || s.mode == Mode::Lost || s.mode == Mode::LostMoved || s.mode == Mode::ClickDeselect))
         {
             const auto required = _command ? _command->OutputMemoryBytes()
-                                           : _finalMemory->LocalAllocationBytes() +
-                                                 SharedPublicationMemory::OwnershipAllowance() + _geometryEnvelope;
-            if (!required || required > kFinal ||
-                _finalMemory->BindPersistentOutputAfterCompletedWork(s.scheduler, s.original, kFinal, *_temporary) !=
-                    S_OK)
+                                           : _finalMemory->LocalAllocationBytes() + SharedPublicationMemory::OwnershipAllowance() + _geometryEnvelope;
+            if (! required || required > kFinal || _finalMemory->BindPersistentOutputAfterCompletedWork(s.scheduler, s.original, kFinal, *_temporary) != S_OK)
                 return;
             if (s.mode == Mode::ClickDeselect)
                 s.clicked = _command && s.session.ApplyPreparedSelectionCommandIfCurrent(_command.value());
@@ -236,9 +228,9 @@ class ParentJob final : public Job
     }
     void RetainJoinedRetirement(JobScheduler&, JobTicket ticket) noexcept override
     {
-        auto& s = _state;
+        auto& s      = _state;
         s.sameTicket = s.sameTicket && ticket == s.original;
-        s.joined = true;
+        s.joined     = true;
         if (s.opened && _opening)
             s.aborted = s.session.AbortPreparedDeferredSelectionMoveIfCurrent(_opening.value());
         if (_temporary->BindForRetirement(s.scheduler, ticket) == S_OK)
@@ -246,7 +238,7 @@ class ParentJob final : public Job
         s.joinedAccountingWitness = _openingMemory;
     }
 
-  private:
+private:
     State& _state;
     std::uint64_t _geometryEnvelope = 0;
     std::shared_ptr<SharedPublicationMemory> _openingMemory, _finalMemory, _temporary;
@@ -268,9 +260,8 @@ constexpr std::uint64_t kObserverBytes = 8192;
 #pragma warning(disable : 4626 5027)
 class EndpointObserverJob final : public Job
 {
-  public:
-    EndpointObserverJob(JobScheduler& scheduler, std::shared_ptr<SharedPublicationMemory>& output)
-        : _scheduler(scheduler), _output(output)
+public:
+    EndpointObserverJob(JobScheduler& scheduler, std::shared_ptr<SharedPublicationMemory>& output) : _scheduler(scheduler), _output(output)
     {
     }
     JobResult Run(JobContext&) override
@@ -285,12 +276,11 @@ class EndpointObserverJob final : public Job
     }
     void Completed(JobResult result) noexcept override
     {
-        if (result.status == JobStatus::Finished && _memory &&
-            _memory->BindAfterCompletedWork(_scheduler, _ticket) == S_OK)
+        if (result.status == JobStatus::Finished && _memory && _memory->BindAfterCompletedWork(_scheduler, _ticket) == S_OK)
             _output = std::move(_memory);
     }
 
-  private:
+private:
     JobScheduler& _scheduler;
     std::shared_ptr<SharedPublicationMemory>& _output;
     std::shared_ptr<SharedPublicationMemory> _memory;
@@ -301,7 +291,7 @@ class EndpointObserverJob final : public Job
 void WaitOpening(State& s)
 {
     const auto deadline = GetTickCount64() + 10000;
-    while (!s.opened)
+    while (! s.opened)
     {
         if (PumpMessages().quit)
             BadSetup("opening-quit");
@@ -312,59 +302,56 @@ void WaitOpening(State& s)
         if (now >= deadline)
             BadSetup("opening-deadline");
         HANDLE wake = s.scheduler.WakeHandle();
-        if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
-                                        MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+        if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
             BadSetup("opening-event");
     }
 }
 void RunCase(Mode mode, const char* name)
 {
-    caseName = name;
+    caseName     = name;
     auto session = std::make_unique<DocumentSession>();
     DocumentFixture document;
-    document.id = Guid::Generate();
-    document.width = 8;
-    document.height = 8;
-    document.selection =
-        DocumentSelection{false, SelectionLoops{SelectionLoop{kOrigin[0], kOrigin[1], kOrigin[2], kOrigin[3]}}};
-    auto layer = ImageLayer::Blank(L"Gesture parent", Vec2{8, 8});
-    const Guid active = layer.id;
+    document.id        = Guid::Generate();
+    document.width     = 8;
+    document.height    = 8;
+    document.selection = DocumentSelection{false, SelectionLoops{SelectionLoop{kOrigin[0], kOrigin[1], kOrigin[2], kOrigin[3]}}};
+    auto layer         = ImageLayer::Blank(L"Gesture parent", Vec2{8, 8});
+    const Guid active  = layer.id;
     document.layers.push_back(std::move(layer));
     session->ReplaceDocument(std::move(document).Seal(), active);
-    session->SetSelection(DocumentSelection{false, SelectionLoops{SelectionLoop{{0, 0}, {1, 0}, {1, 1}, {0, 1}}}},
-                          L"Seed redo");
+    session->SetSelection(DocumentSelection{false, SelectionLoops{SelectionLoop{{0, 0}, {1, 0}, {1, 1}, {0, 1}}}}, L"Seed redo");
     session->Undo();
-    const auto before = session->history.CaptureState();
+    const auto before     = session->history.CaptureState();
     const auto generation = session->Generation();
     JobScheduler scheduler;
-    if (scheduler.Initialize(2, {}, {Sample, nullptr}) != S_OK || !scheduler.EnableDeferredRelease())
+    if (scheduler.Initialize(2, {}, {Sample, nullptr}) != S_OK || ! scheduler.EnableDeferredRelease())
         BadSetup("scheduler");
     std::shared_ptr<SharedPublicationMemory> closedEndpointObserver;
     if (mode == Mode::JoinedClose)
     {
         JobOptions observerOptions;
-        observerOptions.memoryBytes = kObserverBytes;
-        observerOptions.deferredRetirement = true;
+        observerOptions.memoryBytes           = kObserverBytes;
+        observerOptions.deferredRetirement    = true;
         observerOptions.reserveRetainedMemory = true;
-        std::unique_ptr<Job> observer = std::make_unique<EndpointObserverJob>(scheduler, closedEndpointObserver);
+        std::unique_ptr<Job> observer         = std::make_unique<EndpointObserverJob>(scheduler, closedEndpointObserver);
         JobTicket observerTicket;
         if (scheduler.Submit(observer, observerOptions, observerTicket) != S_OK)
             BadSetup("closed-endpoint-observer-admission");
         Settle(scheduler);
-        if (!closedEndpointObserver || closedEndpointObserver->Bytes() != kObserverBytes)
+        if (! closedEndpointObserver || closedEndpointObserver->Bytes() != kObserverBytes)
             BadSetup("closed-endpoint-observer-publication");
     }
     State state{scheduler, *session, mode};
     state.observerBytes = closedEndpointObserver ? kObserverBytes : 0;
     JobOptions options;
-    options.kind = JobClass::Selection;
-    options.serialKey = 1;
-    options.memoryBytes = kTotal;
-    options.deferredRetirement = true;
+    options.kind                  = JobClass::Selection;
+    options.serialKey             = 1;
+    options.memoryBytes           = kTotal;
+    options.deferredRetirement    = true;
     options.reserveRetainedMemory = true;
-    options.allowMemoryWaiting = false;
+    options.allowMemoryWaiting    = false;
     options.continuingOutputLimit = kOpeningLimit;
-    std::unique_ptr<Job> parent = std::make_unique<ParentJob>(state);
+    std::unique_ptr<Job> parent   = std::make_unique<ParentJob>(state);
     if (scheduler.Submit(parent, options, state.original) != S_OK)
         BadSetup("original-admission");
     if (mode == Mode::JoinedClose)
@@ -374,40 +361,31 @@ void RunCase(Mode mode, const char* name)
     }
     else
         Settle(scheduler);
-    Expect(state.captured && state.opened && state.partition && state.sameTicket,
-           "opening-and-terminal-keep-original-ticket-and-complete-admission");
+    Expect(state.captured && state.opened && state.partition && state.sameTicket, "opening-and-terminal-keep-original-ticket-and-complete-admission");
     const bool abort = mode == Mode::Failed || mode == Mode::Cancelled || mode == Mode::JoinedClose;
     if (abort)
     {
-        const bool expected =
-            mode == Mode::Failed
-                ? state.completed && state.outcome.status == JobStatus::Failed && state.outcome.error == E_ACCESSDENIED
-            : mode == Mode::Cancelled ? state.completed && state.outcome.status == JobStatus::Cancelled
-                                      : state.joined && !state.completed;
-        Expect(expected && state.aborted && !session->IsMovingSelection() && Literal(session->Selection(), kOrigin),
+        const bool expected = mode == Mode::Failed      ? state.completed && state.outcome.status == JobStatus::Failed && state.outcome.error == E_ACCESSDENIED
+                              : mode == Mode::Cancelled ? state.completed && state.outcome.status == JobStatus::Cancelled
+                                                        : state.joined && ! state.completed;
+        Expect(expected && state.aborted && ! session->IsMovingSelection() && Literal(session->Selection(), kOrigin),
                "failed-cancelled-or-joined-close-cleans-exact-published-gesture");
-        Expect(session->history.CaptureState().Depth() == before.Depth() &&
-                   session->history.CurrentRevision() == before.Revision() && session->history.CanRedo() &&
-                   session->Generation() == generation + 3,
+        Expect(session->history.CaptureState().Depth() == before.Depth() && session->history.CurrentRevision() == before.Revision() &&
+                   session->history.CanRedo() && session->Generation() == generation + 3,
                "rollback-preserves-redo-and-reference-move-plus-two-cancel-invalidations");
     }
     else
     {
-        Expect(state.completed && state.outcome.status == JobStatus::Finished && state.closed &&
-                   (mode != Mode::ClickDeselect || state.clicked) && !session->IsMovingSelection(),
+        Expect(state.completed && state.outcome.status == JobStatus::Finished && state.closed && (mode != Mode::ClickDeselect || state.clicked) &&
+                   ! session->IsMovingSelection(),
                "successful-terminal-acknowledges-end-and-optional-click");
-        const bool literal =
-            mode == Mode::ClickDeselect
-                ? !session->Selection()
-                : Literal(session->Selection(), (mode == Mode::Moved || mode == Mode::LostMoved) ? kMoved : kOrigin);
+        const bool literal = mode == Mode::ClickDeselect ? ! session->Selection()
+                                                         : Literal(session->Selection(), (mode == Mode::Moved || mode == Mode::LostMoved) ? kMoved : kOrigin);
         Expect(literal && session->history.CaptureState().Depth() == before.Depth() &&
-                   (mode == Mode::Lost
-                        ? session->history.CanRedo() && session->history.CurrentRevision() == before.Revision()
-                        : !session->history.CanRedo() &&
-                              session->history.CaptureState().PastCount() == before.PastCount() + 1),
+                   (mode == Mode::Lost ? session->history.CanRedo() && session->history.CurrentRevision() == before.Revision()
+                                       : ! session->history.CanRedo() && session->history.CaptureState().PastCount() == before.PastCount() + 1),
                "moved-click-and-lost-use-literal-reference-history-semantics");
-        Expect(state.secondBudget == kTotal - state.openingBytes && state.terminalBytes > 0,
-               "useful-terminal-work-receives-only-original-prepaid-remainder");
+        Expect(state.secondBudget == kTotal - state.openingBytes && state.terminalBytes > 0, "useful-terminal-work-receives-only-original-prepaid-remainder");
     }
     session.reset();
     if (mode != Mode::JoinedClose)
@@ -416,9 +394,8 @@ void RunCase(Mode mode, const char* name)
     {
         // Close intentionally zeroes the scheduler's former admission counter. Foreign live controls retain
         // a separate endpoint, which is observable through ResidentBytes on this explicit outside witness.
-        Expect(state.joinedAccountingWitness &&
-                   state.joinedAccountingWitness->ResidentBytes() == kTotal + kObserverBytes &&
-                   state.terminalOwner.expired() && !state.openingOwner.expired(),
+        Expect(state.joinedAccountingWitness && state.joinedAccountingWitness->ResidentBytes() == kTotal + kObserverBytes && state.terminalOwner.expired() &&
+                   ! state.openingOwner.expired(),
                "joined-close-retains-complete-original-endpoint-charge-after-owner-teardown");
         state.joinedAccountingWitness.reset();
         Expect(state.openingOwner.expired() && state.terminalOwner.expired() && closedEndpointObserver &&
@@ -432,15 +409,13 @@ void RunCase(Mode mode, const char* name)
     state.terminalOwner.reset();
     if (mode == Mode::JoinedClose)
     {
-        Expect(closedEndpointObserver && closedEndpointObserver->Bytes() == kObserverBytes &&
-                   closedEndpointObserver->ResidentBytes() == kObserverBytes,
+        Expect(closedEndpointObserver && closedEndpointObserver->Bytes() == kObserverBytes && closedEndpointObserver->ResidentBytes() == kObserverBytes,
                "joined-close-last-original-weak-controls-refund-exact-parent-bytes");
         closedEndpointObserver.reset();
     }
     if (mode != Mode::JoinedClose)
         Settle(scheduler);
-    Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.ReleasingMemoryBytes() == 0,
-           "all-original-owners-retire-and-refund-after-final-reader");
+    Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.ReleasingMemoryBytes() == 0, "all-original-owners-retire-and-refund-after-final-reader");
     scheduler.Close();
 }
 } // namespace

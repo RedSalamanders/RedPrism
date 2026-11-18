@@ -25,7 +25,7 @@ enum class CopyPixelsStage : std::uint8_t
 
 struct CopyPixelsObserver final
 {
-    void* context = nullptr;
+    void* context                              = nullptr;
     void (*checkpoint)(void*, CopyPixelsStage) = nullptr;
 };
 
@@ -39,10 +39,10 @@ struct CopyPixelsInput final
     Raster source;
     LayerTransform placement;
     std::optional<DocumentSelection> selection;
-    int canvasWidth = 0;
-    int canvasHeight = 0;
-    bool mask = false;
-    bool composite = false;
+    int canvasWidth         = 0;
+    int canvasHeight        = 0;
+    bool mask               = false;
+    bool composite          = false;
     std::uint8_t background = 0;
 };
 
@@ -58,7 +58,5 @@ struct CopyPixelsResult final
 [[nodiscard]] std::uint64_t CopyPixelsMemoryBytes(const CopyPixelsInput& input) noexcept;
 // Metadata-only composite preparation admission, before allocating or reading back the complete image.
 // Covers cropped BGRA output, selection coverage and scan scratch; readback/metadata/encoding are separate.
-[[nodiscard]] std::uint64_t CopyMergedPixelsMemoryBytes(int width, int height,
-                                                        const std::optional<DocumentSelection>& selection) noexcept;
-[[nodiscard]] CopyPixelsResult RunCopyPixels(const CopyPixelsInput& input, CancelToken cancellation = {},
-                                             CopyPixelsObserver observer = {});
+[[nodiscard]] std::uint64_t CopyMergedPixelsMemoryBytes(int width, int height, const std::optional<DocumentSelection>& selection) noexcept;
+[[nodiscard]] CopyPixelsResult RunCopyPixels(const CopyPixelsInput& input, CancelToken cancellation = {}, CopyPixelsObserver observer = {});

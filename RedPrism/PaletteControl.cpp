@@ -20,9 +20,8 @@ namespace
 
 [[nodiscard]] D2D1_COLOR_F FromArgb(std::uint32_t argb) noexcept
 {
-    return D2D1::ColorF(static_cast<float>((argb >> 16) & 0xFFu) / 255.0f,
-                        static_cast<float>((argb >> 8) & 0xFFu) / 255.0f, static_cast<float>(argb & 0xFFu) / 255.0f,
-                        1.0f);
+    return D2D1::ColorF(
+        static_cast<float>((argb >> 16) & 0xFFu) / 255.0f, static_cast<float>((argb >> 8) & 0xFFu) / 255.0f, static_cast<float>(argb & 0xFFu) / 255.0f, 1.0f);
 }
 
 [[nodiscard]] wil::com_ptr_nothrow<ID2D1SolidColorBrush> MakeBrush(ID2D1DeviceContext* context, D2D1_COLOR_F color)
@@ -47,8 +46,7 @@ void FireClick(const std::function<void()>& onClick)
 }
 } // namespace
 
-PaletteZone::PaletteZone(Kind kind, std::function<void()> onClick)
-    : DxUi::Button(std::wstring{}), _kind(kind), _onClick(std::move(onClick))
+PaletteZone::PaletteZone(Kind kind, std::function<void()> onClick) : DxUi::Button(std::wstring{}), _kind(kind), _onClick(std::move(onClick))
 {
     SetFocusable(true);
     // UIA Invoke (AccessibilityProvider::ExecuteInvokeOnWindowThread, DxUi.Accessibility.cpp) calls
@@ -83,15 +81,15 @@ void PaletteZone::Paint(DxUi::ControlHost& host) const
     {
         return;
     }
-    const D2D1_RECT_F bounds = GetBounds();
+    const D2D1_RECT_F bounds        = GetBounds();
     const DxUi::ThemePalette& theme = host.GetTheme();
-    const bool hot = _kind == Kind::Swap || _kind == Kind::Reset;
+    const bool hot                  = _kind == Kind::Swap || _kind == Kind::Reset;
     if (hot)
     {
         if (IsHovered() || _pressed)
         {
             D2D1_COLOR_F wash = theme.text;
-            wash.a = _pressed ? 0.28f : 0.16f;
+            wash.a            = _pressed ? 0.28f : 0.16f;
             if (wil::com_ptr_nothrow<ID2D1SolidColorBrush> brush = MakeBrush(context, wash))
             {
                 const D2D1_ROUNDED_RECT plate{bounds, 3.0f, 3.0f};
@@ -99,14 +97,14 @@ void PaletteZone::Paint(DxUi::ControlHost& host) const
             }
         }
         const D2D1_COLOR_F ink = IsEnabled() ? theme.text : theme.disabledText;
-        const int resourceId = _kind == Kind::Swap ? IDR_LUCIDE_MOVE_DIAGONAL_2 : IDR_LUCIDE_ROTATE_CCW;
+        const int resourceId   = _kind == Kind::Swap ? IDR_LUCIDE_MOVE_DIAGONAL_2 : IDR_LUCIDE_ROTATE_CCW;
         DrawLucideSvg(context, resourceId, bounds, ink);
     }
     else
     {
-        wil::com_ptr_nothrow<ID2D1SolidColorBrush> fill = MakeBrush(context, FromArgb(_argb));
-        D2D1_COLOR_F border = theme.text;
-        border.a = (IsHovered() || _pressed) ? 1.0f : 0.8f;
+        wil::com_ptr_nothrow<ID2D1SolidColorBrush> fill   = MakeBrush(context, FromArgb(_argb));
+        D2D1_COLOR_F border                               = theme.text;
+        border.a                                          = (IsHovered() || _pressed) ? 1.0f : 0.8f;
         wil::com_ptr_nothrow<ID2D1SolidColorBrush> stroke = MakeBrush(context, border);
         const D2D1_RECT_F inset{bounds.left + 0.5f, bounds.top + 0.5f, bounds.right - 0.5f, bounds.bottom - 0.5f};
         const D2D1_ROUNDED_RECT plate{inset, 2.0f, 2.0f};
@@ -132,7 +130,7 @@ void PaletteZone::Paint(DxUi::ControlHost& host) const
 
 bool PaletteZone::OnMouseDown(DxUi::ControlHost& host, D2D1_POINT_2F point, bool rightButton, UINT /*modifiers*/)
 {
-    if (!IsEnabled() || rightButton || !Contains(GetHitBounds(), point))
+    if (! IsEnabled() || rightButton || ! Contains(GetHitBounds(), point))
     {
         return false;
     }
@@ -144,12 +142,12 @@ bool PaletteZone::OnMouseDown(DxUi::ControlHost& host, D2D1_POINT_2F point, bool
 
 bool PaletteZone::OnMouseUp(DxUi::ControlHost& host, D2D1_POINT_2F point, bool rightButton, UINT /*modifiers*/)
 {
-    if (!IsEnabled() || rightButton)
+    if (! IsEnabled() || rightButton)
     {
         return false;
     }
     const bool wasPressed = _pressed;
-    _pressed = false;
+    _pressed              = false;
     Invalidate(host);
     if (wasPressed && Contains(GetHitBounds(), point))
     {
@@ -160,7 +158,7 @@ bool PaletteZone::OnMouseUp(DxUi::ControlHost& host, D2D1_POINT_2F point, bool r
 
 bool PaletteZone::OnKeyDown(DxUi::ControlHost& host, UINT virtualKey, UINT /*modifiers*/)
 {
-    if (!IsEnabled() || (virtualKey != VK_SPACE && virtualKey != VK_RETURN))
+    if (! IsEnabled() || (virtualKey != VK_SPACE && virtualKey != VK_RETURN))
     {
         return false;
     }
@@ -178,14 +176,13 @@ void PaletteZone::OnCaptureLost(DxUi::ControlHost& host)
     }
 }
 
-PaletteControl::PaletteControl(std::wstring foregroundName, std::wstring backgroundName, std::wstring swapName,
-                               std::wstring resetName)
+PaletteControl::PaletteControl(std::wstring foregroundName, std::wstring backgroundName, std::wstring swapName, std::wstring resetName)
 {
     SetAccessibleName(FormatStringResource(nullptr, IDS_A11Y_PALETTE_NAME, foregroundName, backgroundName));
     _background = AddChild<PaletteZone>(PaletteZone::Kind::Background, nullptr);
     _foreground = AddChild<PaletteZone>(PaletteZone::Kind::Foreground, nullptr);
-    _reset = AddChild<PaletteZone>(PaletteZone::Kind::Reset, nullptr);
-    _swap = AddChild<PaletteZone>(PaletteZone::Kind::Swap, nullptr);
+    _reset      = AddChild<PaletteZone>(PaletteZone::Kind::Reset, nullptr);
+    _swap       = AddChild<PaletteZone>(PaletteZone::Kind::Swap, nullptr);
     _background->SetAccessibleName(backgroundName);
     _foreground->SetAccessibleName(foregroundName);
     _reset->SetAccessibleName(resetName);
@@ -198,8 +195,10 @@ PaletteControl::PaletteControl(std::wstring foregroundName, std::wstring backgro
     _foreground->SetSwatch(0xFF000000u);
 }
 
-void PaletteControl::SetHandlers(std::function<void()> onForeground, std::function<void()> onBackground,
-                                 std::function<void()> onSwap, std::function<void()> onReset)
+void PaletteControl::SetHandlers(std::function<void()> onForeground,
+                                 std::function<void()> onBackground,
+                                 std::function<void()> onSwap,
+                                 std::function<void()> onReset)
 {
     if (_foreground != nullptr)
     {
@@ -255,14 +254,12 @@ DxUi::Control* PaletteControl::ResetZone() const noexcept
     return _reset;
 }
 
-bool PaletteControl::OnMouseDown(DxUi::ControlHost& /*host*/, D2D1_POINT_2F /*point*/, bool rightButton,
-                                 UINT /*modifiers*/)
+bool PaletteControl::OnMouseDown(DxUi::ControlHost& /*host*/, D2D1_POINT_2F /*point*/, bool rightButton, UINT /*modifiers*/)
 {
-    return !rightButton;
+    return ! rightButton;
 }
 
-bool PaletteControl::OnMouseUp(DxUi::ControlHost& /*host*/, D2D1_POINT_2F /*point*/, bool rightButton,
-                               UINT /*modifiers*/)
+bool PaletteControl::OnMouseUp(DxUi::ControlHost& /*host*/, D2D1_POINT_2F /*point*/, bool rightButton, UINT /*modifiers*/)
 {
-    return !rightButton;
+    return ! rightButton;
 }

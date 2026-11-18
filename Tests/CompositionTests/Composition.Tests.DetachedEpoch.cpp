@@ -23,14 +23,14 @@
 
 namespace
 {
-constexpr DWORD kFailureTimeoutMs = 10000;
-constexpr int kWidth = 16;
-constexpr int kHeight = 16;
-constexpr std::size_t kPixelCount = static_cast<std::size_t>(kWidth) * kHeight;
-constexpr std::uint64_t kTileKey = 0xD37AC4E1u;
-constexpr std::uint8_t kPreviewSentinel = 0xA5;
-constexpr std::uint64_t kTilePayload = kPixelCount * 8 + 4 * 4096;
-constexpr std::uint64_t kSegmentPayload = 2 * 4096 + 64 * 4 * sizeof(float);
+constexpr DWORD kFailureTimeoutMs            = 10000;
+constexpr int kWidth                         = 16;
+constexpr int kHeight                        = 16;
+constexpr std::size_t kPixelCount            = static_cast<std::size_t>(kWidth) * kHeight;
+constexpr std::uint64_t kTileKey             = 0xD37AC4E1u;
+constexpr std::uint8_t kPreviewSentinel      = 0xA5;
+constexpr std::uint64_t kTilePayload         = kPixelCount * 8 + 4 * 4096;
+constexpr std::uint64_t kSegmentPayload      = 2 * 4096 + 64 * 4 * sizeof(float);
 constexpr std::uint64_t kReadbackReservation = kPixelCount * sizeof(std::uint32_t);
 
 constexpr BrushSegment kFirstChord{Vec2{2.0, 6.0}, Vec2{9.0, 6.0}};
@@ -47,7 +47,7 @@ void Expect(bool condition, const char* name) noexcept
 bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
 {
     constexpr std::uint64_t available = 8ULL * 1024 * 1024 * 1024;
-    snapshot = {available, available};
+    snapshot                          = {available, available};
     return true;
 }
 
@@ -59,8 +59,8 @@ struct Device final
     HRESULT Create() noexcept
     {
         const D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
-        return D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &level, 1,
-                                 D3D11_SDK_VERSION, device.put(), nullptr, context.put());
+        return D3D11CreateDevice(
+            nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &level, 1, D3D11_SDK_VERSION, device.put(), nullptr, context.put());
     }
 };
 
@@ -70,7 +70,7 @@ struct Device final
 #pragma warning(disable : 4625 4626)
 class Rig final
 {
-  public:
+public:
     ~Rig()
     {
         queue.StopNotifications();
@@ -145,33 +145,31 @@ struct EpochWorker final
         resetAcknowledged.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         finish.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         destroyed.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-        if (!ready || !retire || !resetAcknowledged || !finish || !destroyed)
+        if (! ready || ! retire || ! resetAcknowledged || ! finish || ! destroyed)
             return false;
 
         ownerThread = GetCurrentThreadId();
-        thread = std::thread(
-            [this]() noexcept
+        thread      = std::thread([this]() noexcept
+        {
             {
-                {
-                    GpuBrushCoverage::StrokeEpoch epoch;
-                    published.store(&epoch, std::memory_order_release);
-                    if (!SetEvent(ready.get()) || WaitForSingleObject(retire.get(), INFINITE) != WAIT_OBJECT_0)
-                        std::_Exit(1);
-
-                    epoch.ResetForWork();
-                    threadId.store(GetCurrentThreadId(), std::memory_order_release);
-                    resetCpuBytes.store(epoch.CpuBytes(), std::memory_order_release);
-                    resetGpuBytes.store(epoch.GpuBytes(), std::memory_order_release);
-                    resetTileCount.store(epoch.TileCount(), std::memory_order_release);
-                    resetHasResources.store(epoch.HasResources(), std::memory_order_release);
-                    if (!SetEvent(resetAcknowledged.get()) ||
-                        WaitForSingleObject(finish.get(), INFINITE) != WAIT_OBJECT_0)
-                        std::_Exit(1);
-                }
-                published.store(nullptr, std::memory_order_release);
-                if (!SetEvent(destroyed.get()))
+                GpuBrushCoverage::StrokeEpoch epoch;
+                published.store(&epoch, std::memory_order_release);
+                if (! SetEvent(ready.get()) || WaitForSingleObject(retire.get(), INFINITE) != WAIT_OBJECT_0)
                     std::_Exit(1);
-            });
+
+                epoch.ResetForWork();
+                threadId.store(GetCurrentThreadId(), std::memory_order_release);
+                resetCpuBytes.store(epoch.CpuBytes(), std::memory_order_release);
+                resetGpuBytes.store(epoch.GpuBytes(), std::memory_order_release);
+                resetTileCount.store(epoch.TileCount(), std::memory_order_release);
+                resetHasResources.store(epoch.HasResources(), std::memory_order_release);
+                if (! SetEvent(resetAcknowledged.get()) || WaitForSingleObject(finish.get(), INFINITE) != WAIT_OBJECT_0)
+                    std::_Exit(1);
+            }
+            published.store(nullptr, std::memory_order_release);
+            if (! SetEvent(destroyed.get()))
+                std::_Exit(1);
+        });
 
         if (WaitForSingleObject(ready.get(), kFailureTimeoutMs) != WAIT_OBJECT_0)
             std::_Exit(1);
@@ -180,18 +178,14 @@ struct EpochWorker final
 
     bool RetireAndJoinAfterGpuAcknowledgement(bool gpuAcknowledged) noexcept
     {
-        if (!gpuAcknowledged || !SetEvent(retire.get()) ||
-            WaitForSingleObject(resetAcknowledged.get(), kFailureTimeoutMs) != WAIT_OBJECT_0)
+        if (! gpuAcknowledged || ! SetEvent(retire.get()) || WaitForSingleObject(resetAcknowledged.get(), kFailureTimeoutMs) != WAIT_OBJECT_0)
             std::_Exit(1);
-        if (!SetEvent(finish.get()) || WaitForSingleObject(destroyed.get(), kFailureTimeoutMs) != WAIT_OBJECT_0)
+        if (! SetEvent(finish.get()) || WaitForSingleObject(destroyed.get(), kFailureTimeoutMs) != WAIT_OBJECT_0)
             std::_Exit(1);
         thread.join();
-        return threadId.load(std::memory_order_acquire) != 0 &&
-               threadId.load(std::memory_order_relaxed) != ownerThread &&
-               resetCpuBytes.load(std::memory_order_acquire) == 0 &&
-               resetGpuBytes.load(std::memory_order_acquire) == 0 &&
-               resetTileCount.load(std::memory_order_acquire) == 0 &&
-               !resetHasResources.load(std::memory_order_acquire) &&
+        return threadId.load(std::memory_order_acquire) != 0 && threadId.load(std::memory_order_relaxed) != ownerThread &&
+               resetCpuBytes.load(std::memory_order_acquire) == 0 && resetGpuBytes.load(std::memory_order_acquire) == 0 &&
+               resetTileCount.load(std::memory_order_acquire) == 0 && ! resetHasResources.load(std::memory_order_acquire) &&
                published.load(std::memory_order_acquire) == nullptr;
     }
 };
@@ -204,24 +198,24 @@ struct ReadbackState final
     GpuBufferReadbackValues values{};
     GpuReadbackLease lease{};
     JobTicket ticket{};
-    HRESULT enqueueResult = E_PENDING;
-    HRESULT deliveryResult = E_PENDING;
-    JobStatus status = JobStatus::Failed;
-    unsigned int deliveries = 0;
-    unsigned int callbacks = 0;
-    int maximumCpuDifference = 0;
-    int maximumFreshDifference = 0;
-    bool callbackDelivered = false;
-    bool resumeAccepted = false;
-    bool ticketMatches = false;
-    bool workerThread = false;
-    bool byteRange = false;
-    bool cpuWithinTolerance = false;
-    bool hasNonzero = false;
-    bool differsFromFresh = false;
-    bool leaseReleased = false;
+    HRESULT enqueueResult         = E_PENDING;
+    HRESULT deliveryResult        = E_PENDING;
+    JobStatus status              = JobStatus::Failed;
+    unsigned int deliveries       = 0;
+    unsigned int callbacks        = 0;
+    int maximumCpuDifference      = 0;
+    int maximumFreshDifference    = 0;
+    bool callbackDelivered        = false;
+    bool resumeAccepted           = false;
+    bool ticketMatches            = false;
+    bool workerThread             = false;
+    bool byteRange                = false;
+    bool cpuWithinTolerance       = false;
+    bool hasNonzero               = false;
+    bool differsFromFresh         = false;
+    bool leaseReleased            = false;
     bool duplicateReleaseRejected = false;
-    bool epochRetiredAfterAck = false;
+    bool epochRetiredAfterAck     = false;
 };
 
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -230,37 +224,44 @@ struct ReadbackState final
 #pragma warning(disable : 4626 5027)
 class EpochReadbackJob final : public Job, public GpuBufferReadbackReceiver
 {
-  public:
-    EpochReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, ID3D11Buffer* source, ReadbackState& state,
-                     DWORD ownerThread, EpochWorker* epochWorker = nullptr) noexcept
-        : _scheduler(scheduler), _queue(queue), _source(source), _state(state), _ownerThread(ownerThread),
+public:
+    EpochReadbackJob(JobScheduler& scheduler,
+                     GpuWorkQueue& queue,
+                     ID3D11Buffer* source,
+                     ReadbackState& state,
+                     DWORD ownerThread,
+                     EpochWorker* epochWorker = nullptr) noexcept
+        : _scheduler(scheduler),
+          _queue(queue),
+          _source(source),
+          _state(state),
+          _ownerThread(ownerThread),
           _epochWorker(epochWorker)
     {
     }
 
     JobResult Run(JobContext&) override
     {
-        if (!_submitted)
+        if (! _submitted)
             return {};
-        if (!_state.callbackDelivered)
+        if (! _state.callbackDelivered)
             std::_Exit(1); // Never retire resources after a failed admission without a GPU completion callback.
 
         _state.workerThread = GetCurrentThreadId() != _ownerThread;
         if (SUCCEEDED(_state.deliveryResult) && _state.values.data && _state.values.count == kPixelCount &&
-            _state.values.width == static_cast<unsigned int>(kWidth) &&
-            _state.values.height == static_cast<unsigned int>(kHeight))
+            _state.values.width == static_cast<unsigned int>(kWidth) && _state.values.height == static_cast<unsigned int>(kHeight))
         {
-            _state.byteRange = true;
+            _state.byteRange          = true;
             _state.cpuWithinTolerance = true;
             for (std::size_t i = 0; i < kPixelCount; ++i)
             {
-                const std::uint32_t value = _state.values.data[i];
-                _state.byteRange = _state.byteRange && value <= 255u;
-                _state.hasNonzero = _state.hasNonzero || value != 0;
-                const int difference = std::abs(static_cast<int>(value) - static_cast<int>(_state.expected[i]));
-                _state.maximumCpuDifference = (std::max)(_state.maximumCpuDifference, difference);
-                _state.cpuWithinTolerance = _state.cpuWithinTolerance && difference <= 2;
-                const int freshDifference = std::abs(static_cast<int>(value) - static_cast<int>(_state.fresh[i]));
+                const std::uint32_t value     = _state.values.data[i];
+                _state.byteRange              = _state.byteRange && value <= 255u;
+                _state.hasNonzero             = _state.hasNonzero || value != 0;
+                const int difference          = std::abs(static_cast<int>(value) - static_cast<int>(_state.expected[i]));
+                _state.maximumCpuDifference   = (std::max)(_state.maximumCpuDifference, difference);
+                _state.cpuWithinTolerance     = _state.cpuWithinTolerance && difference <= 2;
+                const int freshDifference     = std::abs(static_cast<int>(value) - static_cast<int>(_state.fresh[i]));
                 _state.maximumFreshDifference = (std::max)(_state.maximumFreshDifference, freshDifference);
             }
             _state.differsFromFresh = _state.maximumFreshDifference >= 3;
@@ -268,8 +269,7 @@ class EpochReadbackJob final : public Job, public GpuBufferReadbackReceiver
 
         if (_epochWorker != nullptr)
         {
-            const bool gpuAcknowledged =
-                _state.callbackDelivered && SUCCEEDED(_state.deliveryResult) && _state.values.data != nullptr;
+            const bool gpuAcknowledged  = _state.callbackDelivered && SUCCEEDED(_state.deliveryResult) && _state.values.data != nullptr;
             _state.epochRetiredAfterAck = _epochWorker->RetireAndJoinAfterGpuAcknowledgement(gpuAcknowledged);
         }
         return SUCCEEDED(_state.deliveryResult) && _state.values.data && _state.values.count == kPixelCount
@@ -281,9 +281,8 @@ class EpochReadbackJob final : public Job, public GpuBufferReadbackReceiver
     {
         if (_submitted)
             return false;
-        _submitted = true;
-        _state.enqueueResult = _queue.EnqueueBufferReadback(_source, static_cast<unsigned int>(kWidth),
-                                                            static_cast<unsigned int>(kHeight), ticket, *this);
+        _submitted           = true;
+        _state.enqueueResult = _queue.EnqueueBufferReadback(_source, static_cast<unsigned int>(kWidth), static_cast<unsigned int>(kHeight), ticket, *this);
         if (FAILED(_state.enqueueResult))
             _state.resumeAccepted = _scheduler.Resume(ticket);
         return true;
@@ -293,11 +292,11 @@ class EpochReadbackJob final : public Job, public GpuBufferReadbackReceiver
     {
         ++_state.deliveries;
         _state.callbackDelivered = true;
-        _state.ticketMatches = ticket == _state.ticket;
-        _state.values = values;
-        _state.lease = values.lease;
-        _state.deliveryResult = result;
-        _state.resumeAccepted = _scheduler.Resume(ticket);
+        _state.ticketMatches     = ticket == _state.ticket;
+        _state.values            = values;
+        _state.lease             = values.lease;
+        _state.deliveryResult    = result;
+        _state.resumeAccepted    = _scheduler.Resume(ticket);
     }
 
     void Completed(JobResult result) noexcept override
@@ -305,13 +304,13 @@ class EpochReadbackJob final : public Job, public GpuBufferReadbackReceiver
         ++_state.callbacks;
         if (_state.values.data)
         {
-            _state.leaseReleased = _queue.ReleaseMapped(_state.lease);
-            _state.duplicateReleaseRejected = !_queue.ReleaseMapped(_state.lease);
+            _state.leaseReleased            = _queue.ReleaseMapped(_state.lease);
+            _state.duplicateReleaseRejected = ! _queue.ReleaseMapped(_state.lease);
         }
         _state.status = result.status;
     }
 
-  private:
+private:
     JobScheduler& _scheduler;
     GpuWorkQueue& _queue;
     ID3D11Buffer* _source;
@@ -324,10 +323,8 @@ class EpochReadbackJob final : public Job, public GpuBufferReadbackReceiver
 
 void SubmitAndSettle(Rig& rig, ID3D11Buffer* source, ReadbackState& state, EpochWorker* epochWorker = nullptr)
 {
-    std::unique_ptr<Job> job =
-        std::make_unique<EpochReadbackJob>(rig.scheduler, rig.queue, source, state, GetCurrentThreadId(), epochWorker);
-    const std::int32_t submitted =
-        rig.scheduler.Submit(job, {JobClass::Commit, 1, kReadbackReservation, true}, state.ticket);
+    std::unique_ptr<Job> job     = std::make_unique<EpochReadbackJob>(rig.scheduler, rig.queue, source, state, GetCurrentThreadId(), epochWorker);
+    const std::int32_t submitted = rig.scheduler.Submit(job, {JobClass::Commit, 1, kReadbackReservation, true}, state.ticket);
     Expect(submitted == S_OK, epochWorker ? "job.final-submit" : "job.initial-submit");
     if (submitted != S_OK)
         std::_Exit(1); // A recorded dispatch may still reference the epoch; do not unwind its owner.
@@ -341,22 +338,24 @@ void SubmitAndSettle(Rig& rig, ID3D11Buffer* source, ReadbackState& state, Epoch
     }
 }
 
-void MakeCpuReferences(BrushKernelParams& params, std::array<std::uint8_t, kPixelCount>& initial,
-                       std::array<std::uint8_t, kPixelCount>& continued, std::array<std::uint8_t, kPixelCount>& fresh)
+void MakeCpuReferences(BrushKernelParams& params,
+                       std::array<std::uint8_t, kPixelCount>& initial,
+                       std::array<std::uint8_t, kPixelCount>& continued,
+                       std::array<std::uint8_t, kPixelCount>& fresh)
 {
-    params.radius = 2.5;
-    params.hardness = 0.0;
-    params.canvasWidth = kWidth;
-    params.canvasHeight = kHeight;
+    params.radius         = 2.5;
+    params.hardness       = 0.0;
+    params.canvasWidth    = kWidth;
+    params.canvasHeight   = kHeight;
     params.antialiasWidth = 1.0;
-    params.spacing = 1.0;
+    params.spacing        = 1.0;
 
     std::array<float, kPixelCount> density{};
     BrushKernelTile tile{kTileKey, 0, 0, kWidth, kHeight, density.data(), initial.data()};
     const std::array<BrushSegment, 1> first{kFirstChord};
     const std::array<BrushSegment, 1> final{kFinalChord};
     BrushKernel::RenderTile(tile, first, {}, params);
-    continued = initial;
+    continued    = initial;
     tile.preview = continued.data();
     BrushKernel::RenderTile(tile, final, {}, params);
 
@@ -368,14 +367,13 @@ void MakeCpuReferences(BrushKernelParams& params, std::array<std::uint8_t, kPixe
 bool RunDetachedEpochCase(Rig& rig)
 {
     EpochWorker worker;
-    if (!worker.Start())
+    if (! worker.Start())
     {
         Expect(false, "worker.preallocates-epoch-on-worker");
         return false;
     }
     auto* const epoch = worker.published.load(std::memory_order_acquire);
-    Expect(epoch != nullptr && epoch->TileCount() == 0 && !epoch->HasResources(),
-           "worker.preallocates-empty-epoch-directory-before-publication");
+    Expect(epoch != nullptr && epoch->TileCount() == 0 && ! epoch->HasResources(), "worker.preallocates-empty-epoch-directory-before-publication");
     if (epoch == nullptr)
         std::_Exit(1);
 
@@ -400,94 +398,83 @@ bool RunDetachedEpochCase(Rig& rig)
 
     engine.BeginStroke();
     const bool firstRecorded = engine.RecordCoverage(tiles, first, {}, params);
-    auto* const firstBuffer = engine.CoverageBuffer(kTileKey, kWidth, kHeight);
+    auto* const firstBuffer  = engine.CoverageBuffer(kTileKey, kWidth, kHeight);
     const auto firstGpuBytes = engine.StrokeGpuOwnershipBytes();
     Expect(firstRecorded && firstBuffer != nullptr &&
-               std::all_of(previewSentinel.begin(), previewSentinel.end(),
-                           [](std::uint8_t value) noexcept { return value == kPreviewSentinel; }),
+               std::all_of(previewSentinel.begin(), previewSentinel.end(), [](std::uint8_t value) noexcept { return value == kPreviewSentinel; }),
            "first.record-chord-does-not-write-cpu-preview");
     Expect(firstGpuBytes == kTilePayload + kSegmentPayload, "first.record-owns-no-staging-readback-buffer");
-    if (!firstRecorded || firstBuffer == nullptr)
+    if (! firstRecorded || firstBuffer == nullptr)
         std::_Exit(1);
 
     ReadbackState firstRead;
     firstRead.expected = cpuInitial;
     SubmitAndSettle(rig, firstBuffer, firstRead);
-    Expect(SUCCEEDED(firstRead.enqueueResult) && firstRead.callbackDelivered && firstRead.resumeAccepted &&
-               firstRead.ticketMatches && firstRead.deliveries == 1 && firstRead.callbacks == 1 &&
-               firstRead.workerThread && firstRead.cpuWithinTolerance && firstRead.byteRange && firstRead.hasNonzero &&
-               firstRead.maximumCpuDifference <= 2 && firstRead.status == JobStatus::Finished &&
-               firstRead.leaseReleased && firstRead.duplicateReleaseRejected && rig.queue.LentCount() == 0 &&
-               rig.queue.InFlightCount() == 0,
+    Expect(SUCCEEDED(firstRead.enqueueResult) && firstRead.callbackDelivered && firstRead.resumeAccepted && firstRead.ticketMatches &&
+               firstRead.deliveries == 1 && firstRead.callbacks == 1 && firstRead.workerThread && firstRead.cpuWithinTolerance && firstRead.byteRange &&
+               firstRead.hasNonzero && firstRead.maximumCpuDifference <= 2 && firstRead.status == JobStatus::Finished && firstRead.leaseReleased &&
+               firstRead.duplicateReleaseRejected && rig.queue.LentCount() == 0 && rig.queue.InFlightCount() == 0,
            "first.original-gpu-density-is-nonzero-and-matches-independent-sequential-cpu-within-2-of-255");
-    if (!firstRead.callbackDelivered)
+    if (! firstRead.callbackDelivered)
         std::_Exit(1);
 
     const auto ownerCpuBytes = engine.StrokeCpuOwnershipBytes();
     const auto ownerGpuBytes = engine.StrokeGpuOwnershipBytes();
-    const bool took = engine.TakeStrokeEpoch(*epoch);
+    const bool took          = engine.TakeStrokeEpoch(*epoch);
     Expect(took, "take.transfers-settled-density-after-first-gpu-ack");
-    Expect(took && engine.TileCount() == 0 && engine.StrokeGpuOwnershipBytes() == 0 &&
-               engine.CoverageBuffer(kTileKey, kWidth, kHeight) == nullptr,
+    Expect(took && engine.TileCount() == 0 && engine.StrokeGpuOwnershipBytes() == 0 && engine.CoverageBuffer(kTileKey, kWidth, kHeight) == nullptr,
            "take.leaves-owner-engine-empty");
-    Expect(took && epoch->TileCount() == 1 && epoch->HasResources() && epoch->CpuBytes() >= ownerCpuBytes &&
-               epoch->GpuBytes() == ownerGpuBytes && epoch->GpuBytes() == kTilePayload + kSegmentPayload,
+    Expect(took && epoch->TileCount() == 1 && epoch->HasResources() && epoch->CpuBytes() >= ownerCpuBytes && epoch->GpuBytes() == ownerGpuBytes &&
+               epoch->GpuBytes() == kTilePayload + kSegmentPayload,
            "take.epoch-retains-complete-cpu-and-gpu-ownership-without-staging");
-    if (!took)
+    if (! took)
         std::_Exit(1);
 
-    const auto emptyOwnerCpuBytes = engine.StrokeCpuOwnershipBytes();
+    const auto emptyOwnerCpuBytes    = engine.StrokeCpuOwnershipBytes();
     const auto cachedCpuBeforeRecord = epoch->CpuBytes();
     const auto cachedGpuBeforeRecord = epoch->GpuBytes();
-    const bool finalRecorded = engine.RecordEpochCoverage(*epoch, tiles, final, params);
-    auto* const epochBuffer = engine.EpochCoverageBuffer(*epoch, kTileKey, kWidth, kHeight);
+    const bool finalRecorded         = engine.RecordEpochCoverage(*epoch, tiles, final, params);
+    auto* const epochBuffer          = engine.EpochCoverageBuffer(*epoch, kTileKey, kWidth, kHeight);
     Expect(finalRecorded && epochBuffer != nullptr &&
-               std::all_of(previewSentinel.begin(), previewSentinel.end(),
-                           [](std::uint8_t value) noexcept { return value == kPreviewSentinel; }),
+               std::all_of(previewSentinel.begin(), previewSentinel.end(), [](std::uint8_t value) noexcept { return value == kPreviewSentinel; }),
            "epoch.records-exact-final-chord-without-cpu-preview-write-or-readback");
-    Expect(finalRecorded && engine.TileCount() == 0 && engine.StrokeGpuOwnershipBytes() == 0 &&
-               engine.StrokeCpuOwnershipBytes() == emptyOwnerCpuBytes &&
-               engine.CoverageBuffer(kTileKey, kWidth, kHeight) == nullptr && epoch->TileCount() == 1 &&
-               epoch->HasResources() && epoch->CpuBytes() == cachedCpuBeforeRecord &&
-               epoch->GpuBytes() == cachedGpuBeforeRecord,
+    Expect(finalRecorded && engine.TileCount() == 0 && engine.StrokeGpuOwnershipBytes() == 0 && engine.StrokeCpuOwnershipBytes() == emptyOwnerCpuBytes &&
+               engine.CoverageBuffer(kTileKey, kWidth, kHeight) == nullptr && epoch->TileCount() == 1 && epoch->HasResources() &&
+               epoch->CpuBytes() == cachedCpuBeforeRecord && epoch->GpuBytes() == cachedGpuBeforeRecord,
            "epoch.final-record-preserves-empty-owner-and-cached-complete-ownership");
-    if (!finalRecorded || epochBuffer == nullptr)
+    if (! finalRecorded || epochBuffer == nullptr)
         std::_Exit(1);
 
     bool freshIsDistinct = false;
     for (std::size_t i = 0; i < kPixelCount; ++i)
     {
-        freshIsDistinct =
-            freshIsDistinct || std::abs(static_cast<int>(cpuContinued[i]) - static_cast<int>(cpuFresh[i])) >= 3;
+        freshIsDistinct = freshIsDistinct || std::abs(static_cast<int>(cpuContinued[i]) - static_cast<int>(cpuFresh[i])) >= 3;
     }
     Expect(std::any_of(cpuInitial.begin(), cpuInitial.end(), [](std::uint8_t value) noexcept { return value != 0; }),
            "continuation.cpu-first-chord-has-nonzero-settled-density");
     Expect(freshIsDistinct, "continuation.final-chord-distinguishes-preserved-density-from-fresh-restart");
 
-    const bool validLookup = engine.EpochCoverageBuffer(*epoch, kTileKey, kWidth, kHeight) == epochBuffer;
+    const bool validLookup   = engine.EpochCoverageBuffer(*epoch, kTileKey, kWidth, kHeight) == epochBuffer;
     const bool invalidLookup = engine.EpochCoverageBuffer(*epoch, kTileKey + 1, kWidth, kHeight) == nullptr &&
                                engine.EpochCoverageBuffer(*epoch, kTileKey, kWidth - 1, kHeight) == nullptr &&
                                engine.EpochCoverageBuffer(*epoch, kTileKey, kWidth, kHeight + 1) == nullptr;
     Expect(validLookup, "lookup.exact-key-and-size-returns-epoch-uint-buffer");
     Expect(invalidLookup, "lookup.wrong-key-or-either-dimension-refuses");
 
-    const auto epochCpuBeforeRefusal = epoch->CpuBytes();
-    const auto epochGpuBeforeRefusal = epoch->GpuBytes();
-    const auto epochTilesBeforeRefusal = epoch->TileCount();
+    const auto epochCpuBeforeRefusal     = epoch->CpuBytes();
+    const auto epochGpuBeforeRefusal     = epoch->GpuBytes();
+    const auto epochTilesBeforeRefusal   = epoch->TileCount();
     constexpr std::uint64_t kRejectedKey = kTileKey + 9;
     const BrushKernelTile rejectedTile{kRejectedKey, 0, 0, kWidth, kHeight, nullptr, previewSentinel.data()};
     const std::array<BrushKernelTile, 1> rejectedTiles{rejectedTile};
-    const bool liveRecorded = engine.RecordCoverage(rejectedTiles, final, {}, params);
-    auto* const liveBuffer = engine.CoverageBuffer(kRejectedKey, kWidth, kHeight);
+    const bool liveRecorded         = engine.RecordCoverage(rejectedTiles, final, {}, params);
+    auto* const liveBuffer          = engine.CoverageBuffer(kRejectedKey, kWidth, kHeight);
     const auto liveCpuBeforeRefusal = engine.StrokeCpuOwnershipBytes();
     const auto liveGpuBeforeRefusal = engine.StrokeGpuOwnershipBytes();
-    const bool refused = !engine.RecordEpochCoverage(*epoch, rejectedTiles, final, params);
-    Expect(liveRecorded && refused && engine.TileCount() == 1 && liveBuffer != nullptr &&
-               engine.CoverageBuffer(kRejectedKey, kWidth, kHeight) == liveBuffer &&
-               engine.StrokeCpuOwnershipBytes() == liveCpuBeforeRefusal &&
-               engine.StrokeGpuOwnershipBytes() == liveGpuBeforeRefusal &&
-               epoch->TileCount() == epochTilesBeforeRefusal && epoch->CpuBytes() == epochCpuBeforeRefusal &&
-               epoch->GpuBytes() == epochGpuBeforeRefusal &&
+    const bool refused              = ! engine.RecordEpochCoverage(*epoch, rejectedTiles, final, params);
+    Expect(liveRecorded && refused && engine.TileCount() == 1 && liveBuffer != nullptr && engine.CoverageBuffer(kRejectedKey, kWidth, kHeight) == liveBuffer &&
+               engine.StrokeCpuOwnershipBytes() == liveCpuBeforeRefusal && engine.StrokeGpuOwnershipBytes() == liveGpuBeforeRefusal &&
+               epoch->TileCount() == epochTilesBeforeRefusal && epoch->CpuBytes() == epochCpuBeforeRefusal && epoch->GpuBytes() == epochGpuBeforeRefusal &&
                engine.EpochCoverageBuffer(*epoch, kTileKey, kWidth, kHeight) == epochBuffer,
            "refusal.nonempty-live-engine-preserves-both-complete-resource-graphs");
 
@@ -495,40 +482,34 @@ bool RunDetachedEpochCase(Rig& rig)
     engine.Release();
     Device replacement;
     const HRESULT replacementCreated = replacement.Create();
-    const HRESULT replacementBound = SUCCEEDED(replacementCreated)
-                                         ? engine.Initialize(replacement.device.get(), replacement.context.get())
-                                         : replacementCreated;
-    Expect(SUCCEEDED(replacementCreated) && SUCCEEDED(replacementBound),
-           "rebind.create-and-bind-replacement-warp-device");
-    const auto epochCpuBeforeRebindRefusal = epoch->CpuBytes();
-    const auto epochGpuBeforeRebindRefusal = epoch->GpuBytes();
+    const HRESULT replacementBound =
+        SUCCEEDED(replacementCreated) ? engine.Initialize(replacement.device.get(), replacement.context.get()) : replacementCreated;
+    Expect(SUCCEEDED(replacementCreated) && SUCCEEDED(replacementBound), "rebind.create-and-bind-replacement-warp-device");
+    const auto epochCpuBeforeRebindRefusal   = epoch->CpuBytes();
+    const auto epochGpuBeforeRebindRefusal   = epoch->GpuBytes();
     const auto epochTilesBeforeRebindRefusal = epoch->TileCount();
-    const bool replacementRefused = !engine.RecordEpochCoverage(*epoch, tiles, final, params);
+    const bool replacementRefused            = ! engine.RecordEpochCoverage(*epoch, tiles, final, params);
     Expect(replacementRefused && engine.TileCount() == 0 && epoch->TileCount() == epochTilesBeforeRebindRefusal &&
-               epoch->CpuBytes() == epochCpuBeforeRebindRefusal && epoch->GpuBytes() == epochGpuBeforeRebindRefusal &&
-               epoch->HasResources(),
+               epoch->CpuBytes() == epochCpuBeforeRebindRefusal && epoch->GpuBytes() == epochGpuBeforeRebindRefusal && epoch->HasResources(),
            "rebind.recording-refuses-replacement-device-and-preserves-old-epoch");
-    Expect(engine.EpochCoverageBuffer(*epoch, kTileKey, kWidth, kHeight) == nullptr,
-           "rebind.exact-buffer-lookup-refuses-replacement-device");
+    Expect(engine.EpochCoverageBuffer(*epoch, kTileKey, kWidth, kHeight) == nullptr, "rebind.exact-buffer-lookup-refuses-replacement-device");
     if (FAILED(replacementBound))
         std::_Exit(1);
 
     ReadbackState finalRead;
     finalRead.expected = cpuContinued;
-    finalRead.fresh = cpuFresh;
+    finalRead.fresh    = cpuFresh;
     SubmitAndSettle(rig, epochBuffer, finalRead, &worker);
-    Expect(SUCCEEDED(finalRead.enqueueResult) && finalRead.callbackDelivered && finalRead.resumeAccepted &&
-               finalRead.ticketMatches && finalRead.deliveries == 1 && finalRead.callbacks == 1 &&
-               finalRead.workerThread && finalRead.byteRange && finalRead.cpuWithinTolerance &&
+    Expect(SUCCEEDED(finalRead.enqueueResult) && finalRead.callbackDelivered && finalRead.resumeAccepted && finalRead.ticketMatches &&
+               finalRead.deliveries == 1 && finalRead.callbacks == 1 && finalRead.workerThread && finalRead.byteRange && finalRead.cpuWithinTolerance &&
                finalRead.maximumCpuDifference <= 2 && finalRead.status == JobStatus::Finished,
            "gpu.final-epoch-uint-buffer-after-real-event-matches-sequential-cpu-within-2-of-255");
-    Expect(finalRead.differsFromFresh && finalRead.maximumFreshDifference >= 3,
-           "gpu.final-buffer-proves-prior-density-survived-owner-take");
+    Expect(finalRead.differsFromFresh && finalRead.maximumFreshDifference >= 3, "gpu.final-buffer-proves-prior-density-survived-owner-take");
     Expect(finalRead.epochRetiredAfterAck && worker.threadId.load(std::memory_order_acquire) != worker.ownerThread &&
                worker.published.load(std::memory_order_acquire) == nullptr,
            "retirement.original-gpu-event-then-worker-reset-and-destruction");
-    Expect(finalRead.leaseReleased && finalRead.duplicateReleaseRejected && rig.queue.LentCount() == 0 &&
-               rig.queue.InFlightCount() == 0 && rig.scheduler.ReservedMemoryBytes() == 0,
+    Expect(finalRead.leaseReleased && finalRead.duplicateReleaseRejected && rig.queue.LentCount() == 0 && rig.queue.InFlightCount() == 0 &&
+               rig.scheduler.ReservedMemoryBytes() == 0,
            "retirement.owner-releases-readback-lease-after-worker-ack-with-no-job-reservation-left");
 
     engine.Release();
@@ -540,7 +521,7 @@ int RunDetachedEpochTests()
 {
     gFailures = 0;
     Rig rig;
-    if (!rig.Initialize())
+    if (! rig.Initialize())
         return gFailures;
     (void)RunDetachedEpochCase(rig);
     return gFailures;

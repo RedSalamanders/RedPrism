@@ -16,21 +16,22 @@ struct AdjustmentOpeningInput final
 
 class PreparedAdjustmentOpening final
 {
-  public:
-    PreparedAdjustmentOpening(const PreparedAdjustmentOpening&) = delete;
-    PreparedAdjustmentOpening& operator=(const PreparedAdjustmentOpening&) = delete;
-    PreparedAdjustmentOpening(PreparedAdjustmentOpening&&) noexcept = default;
+public:
+    PreparedAdjustmentOpening(const PreparedAdjustmentOpening&)                = delete;
+    PreparedAdjustmentOpening& operator=(const PreparedAdjustmentOpening&)     = delete;
+    PreparedAdjustmentOpening(PreparedAdjustmentOpening&&) noexcept            = default;
     PreparedAdjustmentOpening& operator=(PreparedAdjustmentOpening&&) noexcept = default;
     [[nodiscard]] const ColorEdit& Panel() const noexcept
     {
         return _panel.value();
     }
 
-  private:
+private:
     friend class DocumentSession;
-    PreparedAdjustmentOpening(AdjustmentOpeningInput input, ColorEdit panel, LayerAdjustment original,
-                              DocumentHistory::Publication history)
-        : _input(std::move(input)), _panel(std::move(panel)), _original(std::move(original)),
+    PreparedAdjustmentOpening(AdjustmentOpeningInput input, ColorEdit panel, LayerAdjustment original, DocumentHistory::Publication history)
+        : _input(std::move(input)),
+          _panel(std::move(panel)),
+          _original(std::move(original)),
           _history(std::move(history))
     {
     }

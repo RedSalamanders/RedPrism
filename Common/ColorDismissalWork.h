@@ -19,16 +19,15 @@ struct ColorDismissalInput final
 
 class PreparedColorDismissal final
 {
-  public:
-    PreparedColorDismissal(const PreparedColorDismissal&) = delete;
-    PreparedColorDismissal& operator=(const PreparedColorDismissal&) = delete;
-    PreparedColorDismissal(PreparedColorDismissal&&) noexcept = default;
+public:
+    PreparedColorDismissal(const PreparedColorDismissal&)                = delete;
+    PreparedColorDismissal& operator=(const PreparedColorDismissal&)     = delete;
+    PreparedColorDismissal(PreparedColorDismissal&&) noexcept            = default;
     PreparedColorDismissal& operator=(PreparedColorDismissal&&) noexcept = default;
 
-  private:
+private:
     friend class DocumentSession;
-    PreparedColorDismissal(ColorDismissalInput input, DocumentHistory::StateView history)
-        : _input(std::move(input)), _history(std::move(history))
+    PreparedColorDismissal(ColorDismissalInput input, DocumentHistory::StateView history) : _input(std::move(input)), _history(std::move(history))
     {
     }
     ColorDismissalInput _input;

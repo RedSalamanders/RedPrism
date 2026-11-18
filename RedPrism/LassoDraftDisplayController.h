@@ -16,15 +16,15 @@ struct LassoDraftDisplayKey final
     DocumentReadAuthority document;
     BoundedLassoGesture::Key draft;
     const void* arenaIdentity = nullptr; // The admitted cell retains the immutable point capture.
-    std::uint64_t pointCount = 0;
-    LassoKind kind = LassoKind::Freehand;
-    SelectionMode mode = SelectionMode::New;
-    bool antialiased = true;
+    std::uint64_t pointCount  = 0;
+    LassoKind kind            = LassoKind::Freehand;
+    SelectionMode mode        = SelectionMode::New;
+    bool antialiased          = true;
     std::optional<Vec2> cursor;
     std::optional<Vec2> anchor;
     PreparedLassoDraftRaster::GridKey grid;
     std::uint64_t deviceGeneration = 0;
-    std::uint64_t viewEpoch = 0; // Host-owned monotonic view authority; exhaustion must refuse before mutation.
+    std::uint64_t viewEpoch        = 0; // Host-owned monotonic view authority; exhaustion must refuse before mutation.
     [[nodiscard]] bool operator==(const LassoDraftDisplayKey&) const noexcept = default;
 };
 
@@ -32,18 +32,18 @@ struct LassoDraftDisplayDescriptor final
 {
     LassoDraftDisplayKey key;
     const BoundedLassoGesture::Display* source = nullptr; // Borrowed until complete original admission.
-    ID3D11Device* device = nullptr;
-    ID3D11DeviceContext* immediate = nullptr;
-    bool software = false;
+    ID3D11Device* device                       = nullptr;
+    ID3D11DeviceContext* immediate             = nullptr;
+    bool software                              = false;
 };
 
 class LassoDraftDisplayClient
 {
-  public:
-    virtual ~LassoDraftDisplayClient() = default;
+public:
+    virtual ~LassoDraftDisplayClient()                                                        = default;
     [[nodiscard]] virtual bool DescribeLassoDraftOwner(LassoDraftDisplayDescriptor&) noexcept = 0;
     // Nonreentrant bounded invalidation only. No ownership, callback authority or frame borrow is transferred.
-    virtual void LassoDraftChangedOwner() noexcept = 0;
+    virtual void LassoDraftChangedOwner() noexcept                             = 0;
     virtual void LassoDraftFailedOwner(LassoDraftDisplayKey, HRESULT) noexcept = 0;
 };
 
@@ -59,13 +59,12 @@ class LassoDraftDisplayClient
 #pragma warning(disable : 4324)
 class LassoDraftDisplayController final : public OwnerWorkPump
 {
-  public:
+public:
     LassoDraftDisplayController() noexcept;
     ~LassoDraftDisplayController();
-    LassoDraftDisplayController(const LassoDraftDisplayController&) = delete;
+    LassoDraftDisplayController(const LassoDraftDisplayController&)            = delete;
     LassoDraftDisplayController& operator=(const LassoDraftDisplayController&) = delete;
-    [[nodiscard]] HRESULT InitializeOwner(JobScheduler&, GpuWorkQueue&, GpuResidencyBudget&,
-                                          LassoDraftDisplayClient&) noexcept;
+    [[nodiscard]] HRESULT InitializeOwner(JobScheduler&, GpuWorkQueue&, GpuResidencyBudget&, LassoDraftDisplayClient&) noexcept;
     void RequestOwner() noexcept;
     void RetryOwner() noexcept;
     void SetSuspendedOwner(bool suspended) noexcept;
@@ -79,7 +78,7 @@ class LassoDraftDisplayController final : public OwnerWorkPump
     [[nodiscard]] bool HasReady() const noexcept override;
     void Pump() noexcept override;
 
-  private:
+private:
     class DraftJob;
     enum class Phase : std::uint8_t
     {
@@ -109,12 +108,12 @@ class LassoDraftDisplayController final : public OwnerWorkPump
         JobTicket ticket;
         DraftJob* job = nullptr;
         std::atomic<bool> workerRetired{false};
-        Phase phase = Phase::Empty;
-        HRESULT terminal = S_OK;
-        bool capturedGpu = false;
-        bool detached = false;
-        bool waiting = false;
-        bool recoveryArmed = false;
+        Phase phase         = Phase::Empty;
+        HRESULT terminal    = S_OK;
+        bool capturedGpu    = false;
+        bool detached       = false;
+        bool waiting        = false;
+        bool recoveryArmed  = false;
         bool deferredWorker = false;
         void GpuCompletionReady(JobTicket, std::uint64_t, HRESULT) noexcept override;
     };
@@ -132,17 +131,17 @@ class LassoDraftDisplayController final : public OwnerWorkPump
     static void RetireCellForWork(DeferredReleaseNode*) noexcept;
     void RetireForWork(Cell&) noexcept;
     std::array<Cell, 2> _cells;
-    JobScheduler* _jobs = nullptr;
-    GpuWorkQueue* _queue = nullptr;
-    GpuResidencyBudget* _budget = nullptr;
+    JobScheduler* _jobs              = nullptr;
+    GpuWorkQueue* _queue             = nullptr;
+    GpuResidencyBudget* _budget      = nullptr;
     LassoDraftDisplayClient* _client = nullptr;
-    Cell* _published = nullptr;
+    Cell* _published                 = nullptr;
     std::optional<LassoDraftDisplayKey> _failed;
     std::uint32_t _ownerThread = 0;
-    bool _ready = false;
-    bool _requested = false;
-    bool _suspended = false;
-    bool _stopped = false;
-    bool _joined = false;
+    bool _ready                = false;
+    bool _requested            = false;
+    bool _suspended            = false;
+    bool _stopped              = false;
+    bool _joined               = false;
 };
 #pragma warning(pop)

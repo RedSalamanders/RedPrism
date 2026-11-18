@@ -23,7 +23,7 @@ enum class DistortWorkStage : std::uint8_t
 
 struct DistortWorkObserver final
 {
-    void* context = nullptr;
+    void* context                               = nullptr;
     void (*checkpoint)(void*, DistortWorkStage) = nullptr;
 };
 
@@ -33,10 +33,10 @@ struct DistortWorkInput final
     Raster image;
     LayerTransform placement;
     std::array<Vec2, 4> corners;
-    bool mask = false;
-    double background = 0;
-    double previewLimit = 0; // zero means full resolution; positive caps the longest output side
-    bool trim = false;       // color-only visible-alpha trim, preserving the complete transparent grid
+    bool mask           = false;
+    double background   = 0;
+    double previewLimit = 0;     // zero means full resolution; positive caps the longest output side
+    bool trim           = false; // color-only visible-alpha trim, preserving the complete transparent grid
 };
 
 struct DistortWorkResult final
@@ -51,5 +51,7 @@ struct DistortWorkResult final
 // Zero refuses invalid geometry, format, limits or overflow. Includes private source assembly and the maximum
 // untrimmed/trimmed output overlap; shared published owners are retained by input, not allocated twice.
 [[nodiscard]] std::uint64_t DistortWorkMemoryBytes(const DistortWorkInput& input) noexcept;
-[[nodiscard]] DistortWorkResult RunDistortWork(const DistortWorkInput& input, Executor& executor,
-                                               CancelToken cancellation = {}, DistortWorkObserver observer = {});
+[[nodiscard]] DistortWorkResult RunDistortWork(const DistortWorkInput& input,
+                                               Executor& executor,
+                                               CancelToken cancellation     = {},
+                                               DistortWorkObserver observer = {});

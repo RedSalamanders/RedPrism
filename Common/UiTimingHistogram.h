@@ -10,20 +10,11 @@
 // the sample count remain consistent.
 class UiTimingHistogram final
 {
-  public:
+public:
     static constexpr std::size_t kBucketCount = 22;
     inline static constexpr std::array<std::uint64_t, kBucketCount> kUpperBounds{
-        0,       1,
-        2,       4,
-        8,       16,
-        32,      64,
-        125,     250,
-        500,     1000,
-        2000,    4000,
-        8000,    16000,
-        33000,   50000,
-        100000,  250000,
-        1000000, (std::numeric_limits<std::uint64_t>::max)()};
+        0,    1,    2,    4,    8,     16,    32,    64,     125,    250,     500,
+        1000, 2000, 4000, 8000, 16000, 33000, 50000, 100000, 250000, 1000000, (std::numeric_limits<std::uint64_t>::max)()};
 
     void Record(std::uint64_t durationMicroseconds) noexcept
     {
@@ -37,7 +28,7 @@ class UiTimingHistogram final
         if (durationMicroseconds > maximumCount - _totalMicroseconds)
         {
             _totalMicroseconds = maximumCount;
-            _totalOverflowed = true;
+            _totalOverflowed   = true;
         }
         else
         {
@@ -61,9 +52,9 @@ class UiTimingHistogram final
     void Reset() noexcept
     {
         _bucketCounts.fill(0);
-        _sampleCount = 0;
-        _totalMicroseconds = 0;
-        _totalOverflowed = false;
+        _sampleCount         = 0;
+        _totalMicroseconds   = 0;
+        _totalOverflowed     = false;
         _maximumMicroseconds = 0;
     }
 
@@ -112,10 +103,10 @@ class UiTimingHistogram final
         }
 
         // ceil(percentile * sampleCount / 100), split before multiplication to keep the rank calculation safe.
-        const std::uint64_t quotient = _sampleCount / 100;
-        const std::uint64_t remainder = _sampleCount % 100;
+        const std::uint64_t quotient         = _sampleCount / 100;
+        const std::uint64_t remainder        = _sampleCount % 100;
         const std::uint64_t remainderProduct = remainder * percentile;
-        const std::uint64_t rank = quotient * percentile + (remainderProduct + 99) / 100;
+        const std::uint64_t rank             = quotient * percentile + (remainderProduct + 99) / 100;
 
         std::uint64_t cumulativeCount = 0;
         for (std::size_t index = 0; index < _bucketCounts.size(); ++index)
@@ -130,10 +121,10 @@ class UiTimingHistogram final
         return _maximumMicroseconds;
     }
 
-  private:
+private:
     std::array<std::uint64_t, kBucketCount> _bucketCounts{};
-    std::uint64_t _sampleCount = 0;
-    std::uint64_t _totalMicroseconds = 0;
-    bool _totalOverflowed = false;
+    std::uint64_t _sampleCount         = 0;
+    std::uint64_t _totalMicroseconds   = 0;
+    bool _totalOverflowed              = false;
     std::uint64_t _maximumMicroseconds = 0;
 };

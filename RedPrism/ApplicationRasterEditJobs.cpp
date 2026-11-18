@@ -32,13 +32,12 @@ struct RasterEditPayload final : DeferredReleaseNode
     std::optional<PreparedRasterEdit> publication;
     std::wstring name;
     std::shared_ptr<RasterEditTestGate> gate;
-    DWORD ownerThread = 0;
+    DWORD ownerThread             = 0;
     std::uint64_t retirementBytes = 0;
     RasterEditPayload() noexcept
     {
-        bytes = kDeferredReleaseThreshold; // allocation failure before worker accounting still defers the graph
-        destroy = [](DeferredReleaseNode* node) noexcept
-        { const std::unique_ptr<RasterEditPayload> owned(static_cast<RasterEditPayload*>(node)); };
+        bytes   = kDeferredReleaseThreshold; // allocation failure before worker accounting still defers the graph
+        destroy = [](DeferredReleaseNode* node) noexcept { const std::unique_ptr<RasterEditPayload> owned(static_cast<RasterEditPayload*>(node)); };
     }
     ~RasterEditPayload()
     {
@@ -53,25 +52,19 @@ struct RasterEditPayload final : DeferredReleaseNode
     {
         std::unordered_set<const void*> seen;
         std::uint64_t retained = sizeof(RasterEditPayload);
-        const auto add = [&](std::uint64_t value) noexcept
-        {
-            retained = value > (std::numeric_limits<std::uint64_t>::max)() - retained
-                           ? (std::numeric_limits<std::uint64_t>::max)()
-                           : retained + value;
-        };
+        const auto add         = [&](std::uint64_t value) noexcept
+        { retained = value > (std::numeric_limits<std::uint64_t>::max)() - retained ? (std::numeric_limits<std::uint64_t>::max)() : retained + value; };
         const auto raster = [&](const Raster& image)
         {
-            image.ForEachStorage(
-                [&](const Raster& storage)
+            image.ForEachStorage([&](const Raster& storage)
+            {
+                if (seen.insert(storage.Identity()).second)
                 {
-                    if (seen.insert(storage.Identity()).second)
-                    {
-                        // ByteSize observes published contiguous bytes only; never assembles a sparse input. The
-                        // storage allowance covers its control block, mutex, buffers and allocation rounding.
-                        add(PixelBuffer::RequiredBytes(storage.ByteSize()) + 256ull +
-                            storage.Tiles().capacity() * sizeof(RasterTile));
-                    }
-                });
+                    // ByteSize observes published contiguous bytes only; never assembles a sparse input. The
+                    // storage allowance covers its control block, mutex, buffers and allocation rounding.
+                    add(PixelBuffer::RequiredBytes(storage.ByteSize()) + 256ull + storage.Tiles().capacity() * sizeof(RasterTile));
+                }
+            });
         };
         const auto layer = [&](const ImageLayer& value)
         {
@@ -112,7 +105,7 @@ struct RetireRasterEditPayload final
 {
     void operator()(RasterEditPayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload))
+        if (payload && ! TryDeferRelease(*payload))
         {
             const std::unique_ptr<RasterEditPayload> owned(payload);
         }
@@ -126,11 +119,26 @@ struct RetireRasterEditPayload final
 #pragma warning(disable : 4625 4626 5027)
 class Application::RasterEditJob final : public Job
 {
-  public:
-    RasterEditJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t generation, RasterEditKind kind,
-                  FillSource fill, Guid target, bool mask, std::int64_t pixelLimit, std::uint64_t retirementBytes)
-        : _owner(owner), _stamp(stamp), _generation(generation), _kind(kind), _fill(fill), _target(target), _mask(mask),
-          _pixelLimit(pixelLimit), _retirementBytes(retirementBytes), _gate(owner._rasterEditTestGate),
+public:
+    RasterEditJob(Application& owner,
+                  HistoryWorkStamp stamp,
+                  std::uint64_t generation,
+                  RasterEditKind kind,
+                  FillSource fill,
+                  Guid target,
+                  bool mask,
+                  std::int64_t pixelLimit,
+                  std::uint64_t retirementBytes)
+        : _owner(owner),
+          _stamp(stamp),
+          _generation(generation),
+          _kind(kind),
+          _fill(fill),
+          _target(target),
+          _mask(mask),
+          _pixelLimit(pixelLimit),
+          _retirementBytes(retirementBytes),
+          _gate(owner._rasterEditTestGate),
           _ownerThread(GetCurrentThreadId())
     {
     }
@@ -139,10 +147,10 @@ class Application::RasterEditJob final : public Job
     {
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
-        if (!_payload)
+        if (! _payload)
             return {}; // reach owner capture only after the complete reservation has been acquired
         _payload->AccountRetainedGraph();
-        if (_gate && !_gate->afterPreparation)
+        if (_gate && ! _gate->afterPreparation)
         {
             const auto result = PassGate(context);
             if (result.status != JobStatus::Finished)
@@ -155,16 +163,15 @@ class Application::RasterEditJob final : public Job
         _payload->bytes = (std::max)(_payload->bytes, kDeferredReleaseThreshold);
         if (_payload->workerTargetCapture)
         {
-            if (!_payload->source || !_payload->token)
+            if (! _payload->source || ! _payload->token)
                 return {JobStatus::Failed, E_UNEXPECTED};
             const auto* layer = _payload->source.value().layers.FindKey(_target);
-            if (!layer)
+            if (! layer)
                 return {JobStatus::Failed, E_ABORT};
             // Preserve assetless and mask-only targets; raster preparation validates their operation.
             _payload->input.layer = *layer;
-            _payload->token->target = TargetIdentity{layer->id,        layer->asset ? layer->asset->image : Raster{},
-                                                     layer->transform, layer->mask,
-                                                     layer->isGroup,   layer->adjustment};
+            _payload->token->target =
+                TargetIdentity{layer->id, layer->asset ? layer->asset->image : Raster{}, layer->transform, layer->mask, layer->isGroup, layer->adjustment};
             _payload->workerTargetCapture = false;
             if (_gate)
             {
@@ -176,37 +183,38 @@ class Application::RasterEditJob final : public Job
             }
         }
         _payload->input.progressContext = &context;
-        _payload->input.progress = [](void* value, std::size_t completed, std::size_t total) noexcept
+        _payload->input.progress        = [](void* value, std::size_t completed, std::size_t total) noexcept
+        { static_cast<JobContext*>(value)->ReportProgress(total ? static_cast<unsigned int>(completed * 100 / total) : 100); };
+        const auto clearProgressBorrow = wil::scope_exit([&]() noexcept
         {
-            static_cast<JobContext*>(value)->ReportProgress(total ? static_cast<unsigned int>(completed * 100 / total)
-                                                                  : 100);
-        };
-        const auto clearProgressBorrow = wil::scope_exit(
-            [&]() noexcept
-            {
-                _payload->input.progress = nullptr;
-                _payload->input.progressContext = nullptr;
-            });
-        _payload->prepared = RunRasterEdit(_payload->input, context.cancellation);
+            _payload->input.progress        = nullptr;
+            _payload->input.progressContext = nullptr;
+        });
+        _payload->prepared             = RunRasterEdit(_payload->input, context.cancellation);
         if (_payload->prepared.status == RasterEditStatus::Ready && _payload->token)
         {
             const DocumentHistory::PrepareObserver observer{[](void* context, DocumentHistory::PrepareStage stage)
-                                                            {
-                                                                auto* gate = static_cast<RasterEditTestGate*>(context);
-                                                                if (gate && gate->historyFailure == stage)
-                                                                {
-                                                                    gate->historyFaultHits.fetch_add(1);
-                                                                    throw std::bad_alloc{};
-                                                                }
-                                                            },
+            {
+                auto* gate = static_cast<RasterEditTestGate*>(context);
+                if (gate && gate->historyFailure == stage)
+                {
+                    gate->historyFaultHits.fetch_add(1);
+                    throw std::bad_alloc{};
+                }
+            },
                                                             _gate.get()};
-            _payload->publication = PrepareRasterEditPublication(
-                _kind, _mask, _payload->source, _target, *_payload->token, std::move(_payload->historyState),
-                std::move(_payload->prepared), std::move(_payload->name), context.cancellation,
-                _gate ? observer : DocumentHistory::PrepareObserver{});
-            if (!_payload->publication)
-                _payload->prepared.status =
-                    context.cancellation.IsCancelled() ? RasterEditStatus::Cancelled : RasterEditStatus::Invalid;
+            _payload->publication = PrepareRasterEditPublication(_kind,
+                                                                 _mask,
+                                                                 _payload->source,
+                                                                 _target,
+                                                                 *_payload->token,
+                                                                 std::move(_payload->historyState),
+                                                                 std::move(_payload->prepared),
+                                                                 std::move(_payload->name),
+                                                                 context.cancellation,
+                                                                 _gate ? observer : DocumentHistory::PrepareObserver{});
+            if (! _payload->publication)
+                _payload->prepared.status = context.cancellation.IsCancelled() ? RasterEditStatus::Cancelled : RasterEditStatus::Invalid;
         }
         _payload->AccountRetainedGraph();
         if (_gate && _gate->status)
@@ -217,61 +225,55 @@ class Application::RasterEditJob final : public Job
             if (result.status != JobStatus::Finished)
                 return result;
         }
-        return context.cancellation.IsCancelled() || _payload->prepared.status == RasterEditStatus::Cancelled
-                   ? JobResult{JobStatus::Cancelled}
-                   : JobResult{};
+        return context.cancellation.IsCancelled() || _payload->prepared.status == RasterEditStatus::Cancelled ? JobResult{JobStatus::Cancelled} : JobResult{};
     }
 
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (_payload || result.status != JobStatus::Finished || !Current() ||
-            _owner._historyWork.CancelRequested(_stamp))
+        if (_payload || result.status != JobStatus::Finished || ! Current() || _owner._historyWork.CancelRequested(_stamp))
             return false;
         try
         {
             if (_gate)
             {
-                _gate->captureReservationHeld =
-                    _owner._jobs.ReservedMemoryBytes() == _gate->reservationBytes && _gate->reservationBytes != 0;
+                _gate->captureReservationHeld = _owner._jobs.ReservedMemoryBytes() == _gate->reservationBytes && _gate->reservationBytes != 0;
                 if (_gate->throwCaptureFailure)
                     throw std::bad_alloc{};
             }
             const auto* layer = _owner._session.ActiveLayer();
-            if (!layer || layer->id != _target || _owner._session.IsMaskSelected() != _mask)
+            if (! layer || layer->id != _target || _owner._session.IsMaskSelected() != _mask)
             {
                 _captureError = E_ABORT;
                 return false;
             }
             _payload.reset(std::make_unique<RasterEditPayload>().release());
-            _payload->retirementBytes = _retirementBytes;
-            _payload->bytes = (std::max)(_retirementBytes, kDeferredReleaseThreshold);
-            _payload->gate = _gate;
-            _payload->ownerThread = _ownerThread;
-            auto& input = _payload->input;
+            _payload->retirementBytes     = _retirementBytes;
+            _payload->bytes               = (std::max)(_retirementBytes, kDeferredReleaseThreshold);
+            _payload->gate                = _gate;
+            _payload->ownerThread         = _ownerThread;
+            auto& input                   = _payload->input;
             _payload->workerTargetCapture = true;
             if (_gate)
                 _gate->rootOnlyCapturedOnOwner = GetCurrentThreadId() == _ownerThread;
-            input.selection = _owner._session.Selection();
-            input.canvasWidth = _owner._session.Document()->width;
+            input.selection    = _owner._session.Selection();
+            input.canvasWidth  = _owner._session.Document()->width;
             input.canvasHeight = _owner._session.Document()->height;
-            input.pixelLimit = _pixelLimit;
-            input.kind = _kind;
-            input.mask = _mask;
-            const auto argb =
-                _fill == FillSource::Background ? _owner._session.BackgroundColor() : _owner._session.ForegroundColor();
-            input.color = {static_cast<double>((argb >> 16) & 255) / 255, static_cast<double>((argb >> 8) & 255) / 255,
-                           static_cast<double>(argb & 255) / 255, 1};
+            input.pixelLimit   = _pixelLimit;
+            input.kind         = _kind;
+            input.mask         = _mask;
+            const auto argb    = _fill == FillSource::Background ? _owner._session.BackgroundColor() : _owner._session.ForegroundColor();
+            input.color        = {
+                static_cast<double>((argb >> 16) & 255) / 255, static_cast<double>((argb >> 8) & 255) / 255, static_cast<double>(argb & 255) / 255, 1};
             if (_mask)
             {
-                const bool white =
-                    _fill == FillSource::Background ? !_owner._session.maskPaintWhite : _owner._session.maskPaintWhite;
-                input.color = {white ? 1.0 : 0.0, white ? 1.0 : 0.0, white ? 1.0 : 0.0, 1};
+                const bool white = _fill == FillSource::Background ? ! _owner._session.maskPaintWhite : _owner._session.maskPaintWhite;
+                input.color      = {white ? 1.0 : 0.0, white ? 1.0 : 0.0, white ? 1.0 : 0.0, 1};
             }
-            _payload->token = _owner._session.CaptureJobToken();
-            _payload->name = _kind == RasterEditKind::Invert            ? (_mask ? L"Invert Mask" : L"Invert")
-                             : _kind == RasterEditKind::Clear && !_mask ? L"Clear"
-                                                                        : (_mask ? L"Fill Mask" : L"Fill");
-            _payload->source = _owner._session.Document();
+            _payload->token        = _owner._session.CaptureJobToken();
+            _payload->name         = _kind == RasterEditKind::Invert             ? (_mask ? L"Invert Mask" : L"Invert")
+                                     : _kind == RasterEditKind::Clear && ! _mask ? L"Clear"
+                                                                                 : (_mask ? L"Fill Mask" : L"Fill");
+            _payload->source       = _owner._session.Document();
             _payload->historyState = _owner._session.history.CaptureState();
             if (_payload->token && _owner._jobs.Resume(ticket))
                 return true;
@@ -286,52 +288,46 @@ class Application::RasterEditJob final : public Job
 
     void Completed(JobResult result) noexcept override
     {
-        const bool current =
-            Current() && (!_payload || !_payload->token || _owner._session.CanApplyJobResult(*_payload->token, 0));
-        HostOutcome outcome = !current || _captureError == E_ABORT ? HostOutcome::Stale
-                              : result.status == JobStatus::Cancelled || _owner._historyWork.CancelRequested(_stamp)
-                                  ? HostOutcome::Cancelled
-                              : result.status == JobStatus::Failed || FAILED(_captureError) ? HostOutcome::Failed
-                                                                                            : HostOutcome::Succeeded;
-        std::int32_t error = FAILED(_captureError) ? _captureError : result.error;
-        bool changed = false;
+        const bool current  = Current() && (! _payload || ! _payload->token || _owner._session.CanApplyJobResult(*_payload->token, 0));
+        HostOutcome outcome = ! current || _captureError == E_ABORT                                                  ? HostOutcome::Stale
+                              : result.status == JobStatus::Cancelled || _owner._historyWork.CancelRequested(_stamp) ? HostOutcome::Cancelled
+                              : result.status == JobStatus::Failed || FAILED(_captureError)                          ? HostOutcome::Failed
+                                                                                                                     : HostOutcome::Succeeded;
+        std::int32_t error  = FAILED(_captureError) ? _captureError : result.error;
+        bool changed        = false;
         if (outcome == HostOutcome::Succeeded)
         {
             const auto status = _payload ? _payload->prepared.status : RasterEditStatus::Invalid;
             switch (status)
             {
-            case RasterEditStatus::Ready:
-                changed =
-                    _payload->publication && _owner._session.ApplyPreparedRasterEditIfCurrent(*_payload->publication);
-                if (!changed)
-                {
-                    outcome = HostOutcome::Stale;
-                    error = E_ABORT;
-                }
-                break;
-            case RasterEditStatus::Unchanged:
-                break;
-            case RasterEditStatus::Cancelled:
-                outcome = HostOutcome::Cancelled;
-                error = E_ABORT;
-                break;
-            case ::RasterEditStatus::Invalid:
-            case ::RasterEditStatus::Memory:
-            case ::RasterEditStatus::TooLarge:
-            default:
-                outcome = HostOutcome::Failed;
-                error = status == RasterEditStatus::TooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
-                        : status == RasterEditStatus::Memory ? E_OUTOFMEMORY
-                                                             : E_INVALIDARG;
-                break;
+                case RasterEditStatus::Ready:
+                    changed = _payload->publication && _owner._session.ApplyPreparedRasterEditIfCurrent(*_payload->publication);
+                    if (! changed)
+                    {
+                        outcome = HostOutcome::Stale;
+                        error   = E_ABORT;
+                    }
+                    break;
+                case RasterEditStatus::Unchanged: break;
+                case RasterEditStatus::Cancelled:
+                    outcome = HostOutcome::Cancelled;
+                    error   = E_ABORT;
+                    break;
+                case ::RasterEditStatus::Invalid:
+                case ::RasterEditStatus::Memory:
+                case ::RasterEditStatus::TooLarge:
+                default:
+                    outcome = HostOutcome::Failed;
+                    error   = status == RasterEditStatus::TooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                              : status == RasterEditStatus::Memory ? E_OUTOFMEMORY
+                                                                   : E_INVALIDARG;
+                    break;
             }
         }
         if (outcome == HostOutcome::Failed)
         {
             ++_owner._errorsShown;
-            _owner._lastErrorId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
-                                      ? IDS_ERROR_TOO_LARGE
-                                      : IDS_ERROR_PIXEL_EDIT;
+            _owner._lastErrorId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_PIXEL_EDIT;
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, _owner._lastErrorId);
         }
         if (outcome == HostOutcome::Cancelled || outcome == HostOutcome::Stale)
@@ -349,25 +345,23 @@ class Application::RasterEditJob final : public Job
         _owner.ResumeHostHistory(_stamp, outcome, error);
     }
 
-  private:
+private:
     bool Current() const noexcept
     {
-        return _owner._rasterEditStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
-               _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _stamp.ordinal &&
-               _owner._activeHostRequest->documentSerial == _stamp.documentSerial &&
+        return _owner._rasterEditStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) && _owner._activeHostRequest &&
+               _owner._activeHostRequest->ordinal == _stamp.ordinal && _owner._activeHostRequest->documentSerial == _stamp.documentSerial &&
                _owner._session.DocumentSerial() == _stamp.documentSerial && _owner._session.Generation() == _generation;
     }
     JobResult PassGate(JobContext& context) noexcept
     {
         _gate->visits.fetch_add(1);
-        if (!PostThreadMessageW(_ownerThread, RasterEditTestGate::kMessage, 0, 0))
+        if (! PostThreadMessageW(_ownerThread, RasterEditTestGate::kMessage, 0, 0))
             return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
         const HANDLE handles[]{_gate->release.get(), context.shutdownEvent};
         const auto waited = WaitForMultipleObjects(2, handles, FALSE, 10000);
         if (context.cancellation.IsCancelled() || waited == WAIT_OBJECT_0 + 1)
             return {JobStatus::Cancelled};
-        return waited == WAIT_OBJECT_0 ? _gate->result
-                                       : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
+        return waited == WAIT_OBJECT_0 ? _gate->result : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
     }
     Application& _owner; // owner callbacks only; Run reads the detached payload and immutable gate
     const HistoryWorkStamp _stamp;
@@ -391,17 +385,16 @@ void Application::ExecuteRasterEditCommand(RasterEditKind kind, FillSource fill)
     if (FAILED(_hostExecutionError))
     {
         ++_errorsShown;
-        _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE
-                                                                                       : IDS_ERROR_PIXEL_EDIT;
+        _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_PIXEL_EDIT;
         _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
     }
 }
 
 HRESULT Application::StartRasterEdit(RasterEditKind kind, FillSource fill) noexcept
 {
-    if (!_activeHostRequest || _rasterEditTicket)
+    if (! _activeHostRequest || _rasterEditTicket)
         return E_UNEXPECTED;
-    if (!_session.Document())
+    if (! _session.Document())
         return S_FALSE;
     // The selected runner has acknowledged gradient settlement. Distortion still has its A6 prerequisite.
     if (const auto* pending = _session.PendingGradient(); pending && pending->deferred)
@@ -410,42 +403,36 @@ HRESULT Application::StartRasterEdit(RasterEditKind kind, FillSource fill) noexc
         (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
     CommitGradient();
     const auto* layer = _session.ActiveLayer();
-    if (!layer || (kind == RasterEditKind::Invert ? !_session.CanInvert() : !_session.CanPaint()) ||
-        (kind == RasterEditKind::Clear && (!_session.Selection() || (!_session.IsMaskSelected() && !layer->asset))))
+    if (! layer || (kind == RasterEditKind::Invert ? ! _session.CanInvert() : ! _session.CanPaint()) ||
+        (kind == RasterEditKind::Clear && (! _session.Selection() || (! _session.IsMaskSelected() && ! layer->asset))))
         return S_FALSE;
     const auto pixelLimit = _session.RasterEditPixelLimit(*layer, _session.IsMaskSelected());
-    const auto memory = RasterEditMemoryBytes(*layer, _session.Selection(), _session.Document()->width,
-                                              _session.Document()->height, pixelLimit, _session.IsMaskSelected());
+    const auto memory =
+        RasterEditMemoryBytes(*layer, _session.Selection(), _session.Document()->width, _session.Document()->height, pixelLimit, _session.IsMaskSelected());
     const auto historyMemory = _session.history.EditMemoryBytes(_session.Document());
-    if (memory == 0 || historyMemory == 0 ||
-        historyMemory >
-            (std::numeric_limits<std::uint64_t>::max)() - sizeof(RasterEditJob) - sizeof(RasterEditPayload) ||
-        memory > (std::numeric_limits<std::uint64_t>::max)() - historyMemory - sizeof(RasterEditJob) -
-                     sizeof(RasterEditPayload))
+    if (memory == 0 || historyMemory == 0 || historyMemory > (std::numeric_limits<std::uint64_t>::max)() - sizeof(RasterEditJob) - sizeof(RasterEditPayload) ||
+        memory > (std::numeric_limits<std::uint64_t>::max)() - historyMemory - sizeof(RasterEditJob) - sizeof(RasterEditPayload))
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     const auto wholeMemory = memory + historyMemory + sizeof(RasterEditJob) + sizeof(RasterEditPayload);
-    const auto held = _session.RasterEditRetirementMemoryBytes();
-    if (!held || wholeMemory > ((std::numeric_limits<std::uint64_t>::max)() - held) / 2)
+    const auto held        = _session.RasterEditRetirementMemoryBytes();
+    if (! held || wholeMemory > ((std::numeric_limits<std::uint64_t>::max)() - held) / 2)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     const auto retirement = held + wholeMemory * 2;
-    const auto ordinal = _activeHostRequest->ordinal;
-    _rasterEditStamp = _historyWork.Begin(_session.DocumentSerial(), ordinal, HistoryWorkKind::Commit);
-    if (!_rasterEditStamp && _hostFinishedStamp && _hostFinishedStamp->ordinal == ordinal)
-        _rasterEditStamp =
-            _historyWork.Continue(*_hostFinishedStamp, _session.DocumentSerial(), HistoryWorkKind::Commit);
-    if (!_rasterEditStamp)
+    const auto ordinal    = _activeHostRequest->ordinal;
+    _rasterEditStamp      = _historyWork.Begin(_session.DocumentSerial(), ordinal, HistoryWorkKind::Commit);
+    if (! _rasterEditStamp && _hostFinishedStamp && _hostFinishedStamp->ordinal == ordinal)
+        _rasterEditStamp = _historyWork.Continue(*_hostFinishedStamp, _session.DocumentSerial(), HistoryWorkKind::Commit);
+    if (! _rasterEditStamp)
         return E_UNEXPECTED;
     HRESULT result = E_OUTOFMEMORY;
     try
     {
         if (_rasterEditTestGate && _rasterEditTestGate->throwAdmissionFailure)
             throw std::bad_alloc{};
-        std::unique_ptr<Job> job =
-            std::make_unique<RasterEditJob>(*this, *_rasterEditStamp, _session.Generation(), kind, fill, layer->id,
-                                            _session.IsMaskSelected(), pixelLimit, retirement);
+        std::unique_ptr<Job> job = std::make_unique<RasterEditJob>(
+            *this, *_rasterEditStamp, _session.Generation(), kind, fill, layer->id, _session.IsMaskSelected(), pixelLimit, retirement);
         JobTicket ticket;
-        result =
-            static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Commit, _session.DocumentSerial(), wholeMemory}, ticket));
+        result = static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Commit, _session.DocumentSerial(), wholeMemory}, ticket));
         if (SUCCEEDED(result))
         {
             _rasterEditTicket = ticket;
@@ -464,7 +451,7 @@ HRESULT Application::StartRasterEdit(RasterEditKind kind, FillSource fill) noexc
         _rasterEditStamp.reset();
         return result;
     }
-    _hostCommitStamp = _rasterEditStamp;
+    _hostCommitStamp       = _rasterEditStamp;
     _hostAfterPrerequisite = HostStage::Complete;
     return S_OK;
 }

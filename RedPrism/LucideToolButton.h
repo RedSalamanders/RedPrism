@@ -9,18 +9,18 @@
 // A tool-rail button that strokes the pinned Lucide SVG. Segoe Fluent Icons remain the fallback glyph.
 class LucideToolButton final : public DxUi::Button
 {
-  public:
+public:
     LucideToolButton(std::wstring tooltip, EditorTool tool, bool fluentFallback);
-    LucideToolButton(const LucideToolButton&) = delete;
+    LucideToolButton(const LucideToolButton&)            = delete;
     LucideToolButton& operator=(const LucideToolButton&) = delete;
-    LucideToolButton(LucideToolButton&&) = delete;
-    LucideToolButton& operator=(LucideToolButton&&) = delete;
+    LucideToolButton(LucideToolButton&&)                 = delete;
+    LucideToolButton& operator=(LucideToolButton&&)      = delete;
 
     void Paint(DxUi::ControlHost& host) const override;
 
-  private:
-    EditorTool _tool = EditorTool::Move;
-    bool _fluentFallback = true;
+private:
+    EditorTool _tool        = EditorTool::Move;
+    bool _fluentFallback    = true;
     mutable bool _svgFailed = false;
 };
 
@@ -49,15 +49,15 @@ void ReleaseLucideIcons() noexcept;
 // An icon-only button that strokes one pinned SVG, for chrome that is not itself a tool (the rail's More button).
 class LucideIconButton final : public DxUi::Button
 {
-  public:
+public:
     LucideIconButton(std::wstring tooltip, int resourceId);
-    LucideIconButton(const LucideIconButton&) = delete;
+    LucideIconButton(const LucideIconButton&)            = delete;
     LucideIconButton& operator=(const LucideIconButton&) = delete;
-    LucideIconButton(LucideIconButton&&) = delete;
-    LucideIconButton& operator=(LucideIconButton&&) = delete;
+    LucideIconButton(LucideIconButton&&)                 = delete;
+    LucideIconButton& operator=(LucideIconButton&&)      = delete;
 
     void Paint(DxUi::ControlHost& host) const override;
 
-  private:
+private:
     int _resourceId = 0;
 };

@@ -46,7 +46,7 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
         PathClassificationRead read;
         Payload(std::uint64_t allowance, void* event, PathClassificationReadSource source)
         {
-            bytes = allowance;
+            bytes   = allowance;
             destroy = [](DeferredReleaseNode* node) noexcept { delete static_cast<Payload*>(node); };
             read.Initialize(event, source);
         }
@@ -57,16 +57,21 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
     {
         void operator()(Payload* value) const noexcept
         {
-            if (value && !TryDeferRelease(*value, DeferredReleasePolicy::AlwaysOnOwner))
+            if (value && ! TryDeferRelease(*value, DeferredReleasePolicy::AlwaysOnOwner))
                 delete value;
         }
     };
 
-  public:
-    PathClassificationJob(Application& owner, std::uint64_t ordinal, std::uint64_t serial, std::uint64_t memory,
-                          void* event)
-        : _owner(owner), _ordinal(ordinal), _serial(serial), _memory(memory), _event(event),
-          _source(owner._pathReadSource), _gate(owner._fileWorkTestGate), _ownerThread(GetCurrentThreadId())
+public:
+    PathClassificationJob(Application& owner, std::uint64_t ordinal, std::uint64_t serial, std::uint64_t memory, void* event)
+        : _owner(owner),
+          _ordinal(ordinal),
+          _serial(serial),
+          _memory(memory),
+          _event(event),
+          _source(owner._pathReadSource),
+          _gate(owner._fileWorkTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
     }
 
@@ -79,67 +84,65 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
         _cancellation = context.cancellation;
         switch (_phase)
         {
-        case Phase::Allocate:
-        {
-            if (_gate && !_gate->afterPreparation)
+            case Phase::Allocate:
             {
-                const auto gated = PassGate(context);
-                if (gated.status != JobStatus::Finished)
-                    return gated;
-            }
-            if (_gate && _gate->throwAllocationFailure)
-                throw std::bad_alloc{};
-            auto payload = std::make_unique<Payload>(_memory, _event, _source);
-            _payload.reset(payload.release()); // original worker allocates all private scratch
-            _result.classifications.fill(PathClassification::Image);
-            _phase = Phase::CapturePaths;
-            return {};
-        }
-        case Phase::Classify:
-            return ContinuePathsWorker(context);
-        case Phase::Issue:
-        {
-            const auto issued = _payload->read.Issue(context.cancellation);
-            if (issued == PathClassificationReadStep::InvalidInput)
-                return {JobStatus::Failed, E_UNEXPECTED};
-            _phase = Phase::Observe;
-            return {}; // original event cycle must acknowledge immediate, pending and failed native issue
-        }
-        case Phase::Observe:
-        {
-            const auto acknowledged = _payload->read.Acknowledge(context.cancellation);
-            if (acknowledged == PathClassificationReadStep::Pending)
-            {
-                _phase = Phase::NeedRearm;
+                if (_gate && ! _gate->afterPreparation)
+                {
+                    const auto gated = PassGate(context);
+                    if (gated.status != JobStatus::Finished)
+                        return gated;
+                }
+                if (_gate && _gate->throwAllocationFailure)
+                    throw std::bad_alloc{};
+                auto payload = std::make_unique<Payload>(_memory, _event, _source);
+                _payload.reset(payload.release()); // original worker allocates all private scratch
+                _result.classifications.fill(PathClassification::Image);
+                _phase = Phase::CapturePaths;
                 return {};
             }
-            if (acknowledged == PathClassificationReadStep::Cancelled)
-                return {JobStatus::Cancelled};
-            _result.classifications[_index++] = _payload->read.Classification();
-            _phase = Phase::Classify;
-            return ContinuePathsWorker(context);
-        }
-        case Phase::Retire:
-            _payload.reset();
-            _phase = Phase::Retired;
-            return _terminalResult;
-        case ::Application::PathClassificationJob::Phase::BatchComplete:
-        case ::Application::PathClassificationJob::Phase::CapturePaths:
-        case ::Application::PathClassificationJob::Phase::NeedIssue:
-        case ::Application::PathClassificationJob::Phase::NeedRearm:
-        case ::Application::PathClassificationJob::Phase::Retired:
-        default:
-            return {JobStatus::Failed, E_UNEXPECTED};
+            case Phase::Classify: return ContinuePathsWorker(context);
+            case Phase::Issue:
+            {
+                const auto issued = _payload->read.Issue(context.cancellation);
+                if (issued == PathClassificationReadStep::InvalidInput)
+                    return {JobStatus::Failed, E_UNEXPECTED};
+                _phase = Phase::Observe;
+                return {}; // original event cycle must acknowledge immediate, pending and failed native issue
+            }
+            case Phase::Observe:
+            {
+                const auto acknowledged = _payload->read.Acknowledge(context.cancellation);
+                if (acknowledged == PathClassificationReadStep::Pending)
+                {
+                    _phase = Phase::NeedRearm;
+                    return {};
+                }
+                if (acknowledged == PathClassificationReadStep::Cancelled)
+                    return {JobStatus::Cancelled};
+                _result.classifications[_index++] = _payload->read.Classification();
+                _phase                            = Phase::Classify;
+                return ContinuePathsWorker(context);
+            }
+            case Phase::Retire:
+                _payload.reset();
+                _phase = Phase::Retired;
+                return _terminalResult;
+            case ::Application::PathClassificationJob::Phase::BatchComplete:
+            case ::Application::PathClassificationJob::Phase::CapturePaths:
+            case ::Application::PathClassificationJob::Phase::NeedIssue:
+            case ::Application::PathClassificationJob::Phase::NeedRearm:
+            case ::Application::PathClassificationJob::Phase::Retired:
+            default: return {JobStatus::Failed, E_UNEXPECTED};
         }
     }
     void RetireWorkerStage(JobContext& context, JobResult result) noexcept override
     {
-        if (result.status != JobStatus::Finished && !_terminal)
+        if (result.status != JobStatus::Finished && ! _terminal)
         {
-            _terminal = true;
+            _terminal       = true;
             _terminalResult = result;
         }
-        if (!_terminal || !_payload)
+        if (! _terminal || ! _payload)
             return;
         if (_readCycle && _payload->read.ReadyToIssue())
             _payload->read.RetireUnissuedCycleWorker();
@@ -160,23 +163,23 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
     bool DeferRetirement(JobResult result, JobTicket ticket) noexcept override
     {
         _ticket = ticket;
-        if (result.status != JobStatus::Finished && !_terminal)
+        if (result.status != JobStatus::Finished && ! _terminal)
         {
-            _terminal = true;
+            _terminal       = true;
             _terminalResult = result;
         }
         if (_owner._pathClassificationCancelled)
         {
-            if (!_terminal)
+            if (! _terminal)
             {
-                _terminal = true;
+                _terminal       = true;
                 _terminalResult = {JobStatus::Cancelled};
             }
             (void)_owner._jobs.Cancel(ticket);
         }
         if (_readCycle)
         {
-            if (!_owner._pathReadWait.AwaitRead(ticket))
+            if (! _owner._pathReadWait.AwaitRead(ticket))
                 std::terminate();
             return true;
         }
@@ -188,7 +191,7 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
             if (FAILED(prepared))
                 std::terminate(); // no valid lifetime may discard a driver-owned operation
             _readCycle = true;
-            if (!_owner._pathReadWait.AwaitRead(ticket))
+            if (! _owner._pathReadWait.AwaitRead(ticket))
                 std::terminate();
             return true;
         }
@@ -204,22 +207,22 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
     {
         if (_phase == Phase::Retired)
             return false;
-        if (!Current() || _owner._pathClassificationCancelled)
+        if (! Current() || _owner._pathClassificationCancelled)
         {
-            _stale = !Current();
-            _terminal = true;
+            _stale          = ! Current();
+            _terminal       = true;
             _terminalResult = {_stale ? JobStatus::Failed : JobStatus::Cancelled, E_ABORT};
-            _phase = Phase::Retire;
+            _phase          = Phase::Retire;
             ResumeOriginal(ticket);
             return true;
         }
         if (_phase == Phase::CapturePaths)
         {
-            if (!_owner._activeHostRequest->input.TryTakePaths(_payload->paths))
+            if (! _owner._activeHostRequest->input.TryTakePaths(_payload->paths))
             {
-                _terminal = true;
+                _terminal       = true;
                 _terminalResult = {JobStatus::Failed, E_UNEXPECTED};
-                _phase = Phase::Retire;
+                _phase          = Phase::Retire;
             }
             else
                 _phase = Phase::Classify;
@@ -231,23 +234,23 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
             const auto prepared = _owner._pathReadWait.PrepareRead(ticket, _cancellation, *this, true);
             if (FAILED(prepared))
             {
-                _terminal = true;
+                _terminal       = true;
                 _terminalResult = {JobStatus::Failed, prepared};
-                _phase = Phase::Retire;
+                _phase          = Phase::Retire;
             }
             else
             {
                 _readCycle = true;
-                _phase = Phase::Issue;
+                _phase     = Phase::Issue;
             }
             ResumeOriginal(ticket);
             return true;
         }
         if (_phase == Phase::BatchComplete)
         {
-            if (!_owner._activeHostRequest->input.TryRestorePaths(_payload->paths))
+            if (! _owner._activeHostRequest->input.TryRestorePaths(_payload->paths))
             {
-                _terminal = true;
+                _terminal       = true;
                 _terminalResult = {JobStatus::Failed, E_UNEXPECTED};
             }
             _phase = Phase::Retire;
@@ -259,22 +262,20 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
     void PathReadReady(JobTicket ticket, bool cancellationOnly) noexcept override
     {
         assert(ticket == _ticket && _readCycle);
-        if (!cancellationOnly)
+        if (! cancellationOnly)
             _readCycle = false;
         _phase = Phase::Observe;
         ResumeOriginal(ticket);
     }
     void Completed(JobResult result) noexcept override
     {
-        assert(!_payload && !_readCycle);
+        assert(! _payload && ! _readCycle);
         if (_owner._pathClassificationTicket == std::optional(_ticket))
             _owner._pathClassificationTicket.reset();
-        const auto outcome = _stale || !Current() ? HostOutcome::Stale
-                             : _owner._pathClassificationCancelled || result.status == JobStatus::Cancelled
-                                 ? HostOutcome::Cancelled
-                             : result.status == JobStatus::Failed || _result.status != PathClassificationStatus::Ok
-                                 ? HostOutcome::Failed
-                                 : HostOutcome::Succeeded;
+        const auto outcome = _stale || ! Current()                                                                  ? HostOutcome::Stale
+                             : _owner._pathClassificationCancelled || result.status == JobStatus::Cancelled         ? HostOutcome::Cancelled
+                             : result.status == JobStatus::Failed || _result.status != PathClassificationStatus::Ok ? HostOutcome::Failed
+                                                                                                                    : HostOutcome::Succeeded;
         if (outcome == HostOutcome::Succeeded)
         {
             _owner._pathClassifications = _result;
@@ -284,21 +285,19 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
         {
             if (outcome == HostOutcome::Failed)
                 _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, IDS_ERROR_OPEN_PROJECT);
-            _owner.FinishHostContinuation({outcome, outcome == HostOutcome::Failed
-                                                        ? (result.error != 0 ? result.error : E_INVALIDARG)
-                                                        : E_ABORT});
+            _owner.FinishHostContinuation({outcome, outcome == HostOutcome::Failed ? (result.error != 0 ? result.error : E_INVALIDARG) : E_ABORT});
         }
     }
 
-  private:
+private:
     bool Current() const noexcept
     {
-        return _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _ordinal &&
-               _owner._activeHostRequest->documentSerial == _serial && _owner._session.DocumentSerial() == _serial;
+        return _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _ordinal && _owner._activeHostRequest->documentSerial == _serial &&
+               _owner._session.DocumentSerial() == _serial;
     }
     void ResumeOriginal(JobTicket ticket) noexcept
     {
-        if (!_owner._jobs.Resume(ticket))
+        if (! _owner._jobs.Resume(ticket))
             std::terminate();
     }
     JobResult ContinuePathsWorker(JobContext& context)
@@ -326,8 +325,8 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
             _result.classifications[_index++] = _payload->read.Classification();
         }
         _result.status = PathClassificationStatus::Ok;
-        _result.count = _payload->paths.size();
-        _phase = Phase::BatchComplete;
+        _result.count  = _payload->paths.size();
+        _phase         = Phase::BatchComplete;
         if (_gate && _gate->afterPreparation)
             return PassGate(context);
         return {};
@@ -335,14 +334,13 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
     JobResult PassGate(JobContext& context) noexcept
     {
         _gate->visits.fetch_add(1);
-        if (!PostThreadMessageW(_ownerThread, FileWorkTestGate::kMessage, 0, 0))
+        if (! PostThreadMessageW(_ownerThread, FileWorkTestGate::kMessage, 0, 0))
             return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
         const HANDLE handles[]{_gate->release.get(), context.shutdownEvent};
         const auto waited = WaitForMultipleObjects(2, handles, FALSE, 10000); // controlled test hold only
         if (context.cancellation.IsCancelled() || waited == WAIT_OBJECT_0 + 1)
             return {JobStatus::Cancelled};
-        return waited == WAIT_OBJECT_0 ? _gate->result
-                                       : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
+        return waited == WAIT_OBJECT_0 ? _gate->result : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
     }
     Application& _owner;
     const std::uint64_t _ordinal, _serial, _memory;
@@ -356,37 +354,37 @@ class Application::PathClassificationJob final : public Job, public PathReadWait
     PathClassificationBatch _result;
     JobResult _terminalResult;
     std::size_t _index = 0;
-    Phase _phase = Phase::Allocate;
+    Phase _phase       = Phase::Allocate;
     bool _readCycle = false, _terminal = false, _stale = false;
 };
 #pragma warning(pop)
 
 HRESULT Application::StartPathClassification(const HostPathsInput& input) noexcept
 {
-    if (!_activeHostRequest || _pathClassificationTicket || input.paths.size() > kMaxPathClassificationBatch)
+    if (! _activeHostRequest || _pathClassificationTicket || input.paths.size() > kMaxPathClassificationBatch)
         return E_UNEXPECTED;
     _pathClassificationCancelled = false;
-    _pathClassifications = {};
+    _pathClassifications         = {};
     if (input.action != HostPathAction::OpenPaths)
     {
         _pathClassifications.status = PathClassificationStatus::Ok;
-        _pathClassifications.count = input.paths.size();
+        _pathClassifications.count  = input.paths.size();
         _pathClassifications.classifications.fill(PathClassification::Image);
         return S_OK;
     }
     // Every production path factory admits the root before copying. Refuse an unbudgeted fabricated path
     // request rather than transfer an unknown-capacity root under a guessed 1 MiB allowance.
     const auto pathBytes = _activeHostRequest->input.ReservedInputBytes();
-    if (!pathBytes || pathBytes > HostInputBudget::kStorageLimit)
+    if (! pathBytes || pathBytes > HostInputBudget::kStorageLimit)
         return E_INVALIDARG;
     void* const event = _pathReadWait.EventForWorker();
-    if (!event)
+    if (! event)
         return E_UNEXPECTED;
     try
     {
         const std::uint64_t memory = PathClassificationJob::ScratchAndMetadataBytes() + pathBytes;
-        std::unique_ptr<Job> job = std::make_unique<PathClassificationJob>(
-            *this, _activeHostRequest->ordinal, _activeHostRequest->documentSerial, memory, event);
+        std::unique_ptr<Job> job =
+            std::make_unique<PathClassificationJob>(*this, _activeHostRequest->ordinal, _activeHostRequest->documentSerial, memory, event);
         JobOptions options{JobClass::Io, 0, memory};
         options.deferredRetirement = true;
         JobTicket ticket;
@@ -429,16 +427,16 @@ int Application::RunPathClassificationSelfTest() noexcept
         Mode mode;
         ContinuationReceipt receipt;
         Guid revision;
-        bool visited = false;
-        bool held = false;
+        bool visited             = false;
+        bool held                = false;
         bool cancellationPending = false;
     };
 #pragma warning(pop)
 
     const auto dispatch = [](void* context, void* native) noexcept
     {
-        auto& state = *static_cast<State*>(context);
-        auto& owner = state.owner;
+        auto& state   = *static_cast<State*>(context);
+        auto& owner   = state.owner;
         auto& message = *static_cast<MSG*>(native);
         if (message.message != FileWorkTestGate::kMessage)
         {
@@ -446,10 +444,10 @@ int Application::RunPathClassificationSelfTest() noexcept
             return;
         }
         state.visited = true;
-        state.held = owner._pathClassificationTicket && owner._activeHostRequest && !owner._historyWork.Busy() &&
-                     state.receipt.Read().outcome == HostOutcome::Pending && owner._jobs.ReservedMemoryBytes() != 0 &&
-                     owner._session.history.CurrentRevision() == state.revision &&
-                     owner._session.Document()->width == 8 && owner._session.Document()->height == 4;
+        state.held    = owner._pathClassificationTicket && owner._activeHostRequest && ! owner._historyWork.Busy() &&
+                        state.receipt.Read().outcome == HostOutcome::Pending && owner._jobs.ReservedMemoryBytes() != 0 &&
+                        owner._session.history.CurrentRevision() == state.revision && owner._session.Document()->width == 8 &&
+                        owner._session.Document()->height == 4;
         if (state.mode == Mode::CancelBefore)
             owner.CancelHostContinuations();
         else if (state.mode == Mode::CancelAfter)
@@ -457,58 +455,54 @@ int Application::RunPathClassificationSelfTest() noexcept
         else if (state.mode == Mode::Replace)
             owner._session.CreateDocument(3, 2);
         if (state.mode == Mode::CancelBefore || state.mode == Mode::CancelAfter)
-            state.cancellationPending = state.receipt.Read().outcome == HostOutcome::Pending &&
-                                        owner._activeHostRequest.has_value() &&
-                                        owner._pathClassificationTicket.has_value();
+            state.cancellationPending =
+                state.receipt.Read().outcome == HostOutcome::Pending && owner._activeHostRequest.has_value() && owner._pathClassificationTicket.has_value();
         owner._composition.ReleaseDocumentSurfaces();
         state.held = state.held && owner._composition.CanvasSurfaceBytes() == 0;
         (void)SetEvent(owner._fileWorkTestGate->release.get());
     };
     const auto forcedImage = _forcedImageOpen;
-    const auto restore = wil::scope_exit(
-        [&]
-        {
-            _forcedImageOpen = forcedImage;
-            _fileWorkTestGate.reset();
-        });
-    _forcedImageOpen = ImageOpenChoice::Cancel;
-    for (const auto mode : {Mode::Normal, Mode::Empty, Mode::CancelBefore, Mode::CancelAfter, Mode::Failure,
-                            Mode::Allocation, Mode::Replace})
+    const auto restore     = wil::scope_exit([&]
+    {
+        _forcedImageOpen = forcedImage;
+        _fileWorkTestGate.reset();
+    });
+    _forcedImageOpen       = ImageOpenChoice::Cancel;
+    for (const auto mode : {Mode::Normal, Mode::Empty, Mode::CancelBefore, Mode::CancelAfter, Mode::Failure, Mode::Allocation, Mode::Replace})
     {
         _session.CreateDocument(8, 4);
         (void)InsertPaintedLayer(_session, L"Classification source", 8, 4, {}, 0, 0xFF404040);
         _session.history.MarkSaved();
         DocumentChanged();
-        const auto revision = _session.history.CurrentRevision();
+        const auto revision     = _session.history.CurrentRevision();
         const auto historyCount = _session.history.UndoCount();
-        const auto presents = _renderer.PresentCount();
-        const auto errors = _errorsShown;
-        _fileWorkTestGate = std::make_shared<FileWorkTestGate>();
-        if (!_fileWorkTestGate->release)
+        const auto presents     = _renderer.PresentCount();
+        const auto errors       = _errorsShown;
+        _fileWorkTestGate       = std::make_shared<FileWorkTestGate>();
+        if (! _fileWorkTestGate->release)
             return 5;
-        _fileWorkTestGate->afterPreparation = mode != Mode::CancelBefore && mode != Mode::Allocation;
+        _fileWorkTestGate->afterPreparation       = mode != Mode::CancelBefore && mode != Mode::Allocation;
         _fileWorkTestGate->throwAllocationFailure = mode == Mode::Allocation;
         if (mode == Mode::Failure)
             _fileWorkTestGate->result = {JobStatus::Failed, E_ACCESSDENIED};
         std::wstring callerPath = mode == Mode::Empty ? L"" : L"RedPrism.classification.harness.missing.png";
         const std::array<std::wstring_view, 2> paths{L"", callerPath};
         const auto receipt = QueueHostPaths(paths, HostPathAction::OpenPaths);
-        callerPath = L"this-later-caller-value.prism";
+        callerPath         = L"this-later-caller-value.prism";
         const bool younger = mode == Mode::Normal || mode == Mode::Empty;
         std::optional<ContinuationReceipt> invert;
         if (younger)
             invert = QueueHostInput(HostCommandInput{ChromeHost::kCommandInvert});
         State state{*this, mode, receipt, revision};
-        const auto settled = SettleJobs(_jobs, 15000, dispatch, &state);
-        const auto actual = receipt.Read();
+        const auto settled  = SettleJobs(_jobs, 15000, dispatch, &state);
+        const auto actual   = receipt.Read();
         const auto expected = mode == Mode::Replace                               ? HostOutcome::Stale
                               : mode == Mode::Failure || mode == Mode::Allocation ? HostOutcome::Failed
                               : mode == Mode::Empty                               ? HostOutcome::Succeeded
                                                                                   : HostOutcome::Cancelled;
-        bool correct = settled == SettleResult::Settled && state.visited && state.held && actual.outcome == expected &&
-                       !_pathClassificationTicket && !_activeHostRequest && !_historyWork.Busy() &&
-                       _jobs.ReservedMemoryBytes() == 0 && _hostInputBudget.Used() == 0 &&
-                       _renderer.PresentCount() == presents && _errorsShown == errors;
+        bool correct        = settled == SettleResult::Settled && state.visited && state.held && actual.outcome == expected && ! _pathClassificationTicket &&
+                              ! _activeHostRequest && ! _historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 && _hostInputBudget.Used() == 0 &&
+                              _renderer.PresentCount() == presents && _errorsShown == errors;
         if (mode == Mode::CancelBefore || mode == Mode::CancelAfter)
             correct = correct && state.cancellationPending;
         if (mode == Mode::Failure)
@@ -518,14 +512,12 @@ int Application::RunPathClassificationSelfTest() noexcept
         if (mode == Mode::Replace)
             correct = correct && _session.Document()->width == 3 && _session.Document()->height == 2;
         else if (younger)
-            correct = correct && invert->Read().outcome == HostOutcome::Succeeded &&
-                      _session.history.UndoCount() == historyCount + 1 && _session.history.UndoName() == L"Invert";
+            correct = correct && invert->Read().outcome == HostOutcome::Succeeded && _session.history.UndoCount() == historyCount + 1 &&
+                      _session.history.UndoName() == L"Invert";
         else
-            correct = correct && _session.Document()->width == 8 && _session.Document()->height == 4 &&
-                      _session.history.CurrentRevision() == revision;
-        std::fprintf(stderr, "%s path-classification-host.case=%u\n", correct ? "PASS" : "FAIL",
-                     static_cast<unsigned int>(mode));
-        if (!correct)
+            correct = correct && _session.Document()->width == 8 && _session.Document()->height == 4 && _session.history.CurrentRevision() == revision;
+        std::fprintf(stderr, "%s path-classification-host.case=%u\n", correct ? "PASS" : "FAIL", static_cast<unsigned int>(mode));
+        if (! correct)
             return 5;
     }
     return 0;

@@ -11,48 +11,44 @@
 
 namespace
 {
-static_assert(static_cast<std::uint32_t>(WorkPriority::High) ==
-              static_cast<std::uint32_t>(WorkerResources::WakeLane::High));
-static_assert(static_cast<std::uint32_t>(WorkPriority::Normal) ==
-              static_cast<std::uint32_t>(WorkerResources::WakeLane::Normal));
-static_assert(static_cast<std::uint32_t>(WorkPriority::Background) ==
-              static_cast<std::uint32_t>(WorkerResources::WakeLane::Background));
-thread_local WorkerPool* g_currentPool = nullptr;
+static_assert(static_cast<std::uint32_t>(WorkPriority::High) == static_cast<std::uint32_t>(WorkerResources::WakeLane::High));
+static_assert(static_cast<std::uint32_t>(WorkPriority::Normal) == static_cast<std::uint32_t>(WorkerResources::WakeLane::Normal));
+static_assert(static_cast<std::uint32_t>(WorkPriority::Background) == static_cast<std::uint32_t>(WorkerResources::WakeLane::Background));
+thread_local WorkerPool* g_currentPool      = nullptr;
 thread_local WorkPriority g_currentPriority = WorkPriority::Normal;
-thread_local const wchar_t* g_threadName = nullptr;
+thread_local const wchar_t* g_threadName    = nullptr;
 
 // These are private pool threads. Restore system-managed QoS on callback exit; nested parallel calls inherit
 // the surrounding callback's priority and do not alter the caller's apartment or QoS.
 class CallbackScope final
 {
-  public:
-    CallbackScope(WorkerPool* pool, WorkPriority priority, const wchar_t* name) noexcept
-        : _previousPool(g_currentPool), _previousPriority(g_currentPriority)
+public:
+    CallbackScope(WorkerPool* pool, WorkPriority priority, const wchar_t* name) noexcept : _previousPool(g_currentPool), _previousPriority(g_currentPriority)
     {
         CrashDumps::InstallWorkerTerminateHandler();
-        g_currentPool = pool;
+        g_currentPool     = pool;
         g_currentPriority = priority;
         if (g_threadName != name)
         {
             (void)SetThreadDescription(GetCurrentThread(), name);
             g_threadName = name;
         }
-        THREAD_POWER_THROTTLING_STATE state{
-            THREAD_POWER_THROTTLING_CURRENT_VERSION, THREAD_POWER_THROTTLING_EXECUTION_SPEED,
-            priority == WorkPriority::Background ? THREAD_POWER_THROTTLING_EXECUTION_SPEED : 0u};
+        THREAD_POWER_THROTTLING_STATE state{THREAD_POWER_THROTTLING_CURRENT_VERSION,
+                                            THREAD_POWER_THROTTLING_EXECUTION_SPEED,
+                                            priority == WorkPriority::Background ? THREAD_POWER_THROTTLING_EXECUTION_SPEED : 0u};
         (void)SetThreadInformation(GetCurrentThread(), ThreadPowerThrottling, &state, sizeof(state));
     }
     ~CallbackScope()
     {
         THREAD_POWER_THROTTLING_STATE state{THREAD_POWER_THROTTLING_CURRENT_VERSION, 0, 0};
         (void)SetThreadInformation(GetCurrentThread(), ThreadPowerThrottling, &state, sizeof(state));
-        g_currentPool = _previousPool;
+        g_currentPool     = _previousPool;
         g_currentPriority = _previousPriority;
     }
-    CallbackScope(const CallbackScope&) = delete;
+    CallbackScope(const CallbackScope&)            = delete;
     CallbackScope& operator=(const CallbackScope&) = delete;
 
-  private:
+private:
     WorkerPool* _previousPool;
     WorkPriority _previousPriority;
 };
@@ -61,14 +57,11 @@ TP_CALLBACK_PRIORITY NativePriority(WorkPriority priority) noexcept
 {
     switch (priority)
     {
-    case WorkPriority::High:
-        return TP_CALLBACK_PRIORITY_HIGH;
-    case WorkPriority::Background:
-        return TP_CALLBACK_PRIORITY_LOW;
-    case ::WorkPriority::Count:
-    case ::WorkPriority::Normal:
-    default:
-        return TP_CALLBACK_PRIORITY_NORMAL;
+        case WorkPriority::High: return TP_CALLBACK_PRIORITY_HIGH;
+        case WorkPriority::Background: return TP_CALLBACK_PRIORITY_LOW;
+        case ::WorkPriority::Count:
+        case ::WorkPriority::Normal:
+        default: return TP_CALLBACK_PRIORITY_NORMAL;
     }
 }
 
@@ -81,8 +74,10 @@ struct ParallelCall final
     CancellationObservation::Binding cancellation;
 };
 
-HRESULT InitializePool(unsigned int threads, WorkerResources::UniquePool& pool,
-                       WorkerResources::UniqueCleanupGroup& cleanup, wil::unique_mta_usage_cookie& mta) noexcept
+HRESULT InitializePool(unsigned int threads,
+                       WorkerResources::UniquePool& pool,
+                       WorkerResources::UniqueCleanupGroup& cleanup,
+                       wil::unique_mta_usage_cookie& mta) noexcept
 {
     const HRESULT com = CoIncrementMTAUsage(mta.put());
     if (FAILED(com))
@@ -90,12 +85,12 @@ HRESULT InitializePool(unsigned int threads, WorkerResources::UniquePool& pool,
         return com;
     }
     pool.reset(CreateThreadpool(nullptr));
-    if (!pool)
+    if (! pool)
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
     SetThreadpoolThreadMaximum(pool.get(), threads);
-    if (!SetThreadpoolThreadMinimum(pool.get(), threads))
+    if (! SetThreadpoolThreadMinimum(pool.get(), threads))
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -123,30 +118,30 @@ HRESULT WorkerPool::Initialize(unsigned int threads, Dispatch dispatch, void* co
     {
         return E_INVALIDARG;
     }
-    if (ownerWake && !dispatch)
+    if (ownerWake && ! dispatch)
         return E_INVALIDARG;
-    _ownerWake = ownerWake;
-    _ownerThread = GetCurrentThreadId();
-    _threadCount = threads;
-    _dispatch = dispatch;
-    _context = context;
+    _ownerWake     = ownerWake;
+    _ownerThread   = GetCurrentThreadId();
+    _threadCount   = threads;
+    _dispatch      = dispatch;
+    _context       = context;
     HRESULT result = InitializePool(threads, _pool, _cleanup, _mta);
     if (SUCCEEDED(result))
     {
         for (std::size_t index = 0; index < _lanes.size(); ++index)
         {
-            auto& lane = _lanes[index];
-            lane.owner = this;
+            auto& lane    = _lanes[index];
+            lane.owner    = this;
             lane.priority = static_cast<WorkPriority>(index);
             TP_CALLBACK_ENVIRON environment;
             InitializeThreadpoolEnvironment(&environment);
             SetThreadpoolCallbackPool(&environment, _pool.get());
             SetThreadpoolCallbackCleanupGroup(&environment, _cleanup.get(), nullptr);
             SetThreadpoolCallbackPriority(&environment, NativePriority(lane.priority));
-            lane.work = CreateThreadpoolWork(DispatchCallback, &lane, &environment);
+            lane.work         = CreateThreadpoolWork(DispatchCallback, &lane, &environment);
             const DWORD error = lane.work ? ERROR_SUCCESS : GetLastError();
             DestroyThreadpoolEnvironment(&environment);
-            if (!lane.work)
+            if (! lane.work)
             {
                 result = HRESULT_FROM_WIN32(error);
                 break;
@@ -162,7 +157,7 @@ HRESULT WorkerPool::Initialize(unsigned int threads, Dispatch dispatch, void* co
         _closeCallback.reset(CreateThreadpoolWork(CloseCallback, this, &environment));
         const DWORD error = _closeCallback ? ERROR_SUCCESS : GetLastError();
         DestroyThreadpoolEnvironment(&environment);
-        if (!_closeCallback)
+        if (! _closeCallback)
             result = HRESULT_FROM_WIN32(error);
     }
     if (SUCCEEDED(result) && _ownerWake)
@@ -176,8 +171,7 @@ HRESULT WorkerPool::Initialize(unsigned int threads, Dispatch dispatch, void* co
 
 bool WorkerPool::Wake(WorkPriority priority) noexcept
 {
-    const ScopedUiTimingAttribution attribution{UiTimingKind::ResultApply, UiTimingAttributionPhase::WorkerWake,
-                                                static_cast<std::uint32_t>(priority)};
+    const ScopedUiTimingAttribution attribution{UiTimingKind::ResultApply, UiTimingAttributionPhase::WorkerWake, static_cast<std::uint32_t>(priority)};
     const auto index = static_cast<std::size_t>(priority);
     if (_ownerWake && _ownerThread == GetCurrentThreadId())
     {
@@ -193,7 +187,7 @@ bool WorkerPool::Wake(WorkPriority priority) noexcept
         return true;
     }
     WorkerResources::ExclusiveLock lock{_lock};
-    if (_closing || _stop.stop_requested() || !_pool || !_dispatch || index >= _lanes.size())
+    if (_closing || _stop.stop_requested() || ! _pool || ! _dispatch || index >= _lanes.size())
     {
         return false;
     }
@@ -220,13 +214,13 @@ void WorkerPool::OwnerWakeDispatch(void* context, WorkerResources::WakeLane chan
 void CALLBACK WorkerPool::DispatchCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WORK) noexcept
 {
     const auto& lane = *static_cast<Lane*>(context);
-    auto& pool = *lane.owner;
+    auto& pool       = *lane.owner;
     {
         WorkerResources::ExclusiveLock lock{pool._lock};
         --pool._pending[static_cast<std::size_t>(lane.priority)];
     }
     CallbackScope scope{&pool, lane.priority, L"RedPrism.Workers"};
-    if (!pool._stop.stop_requested())
+    if (! pool._stop.stop_requested())
     {
         pool._dispatch(pool._context, lane.priority, CancelToken{pool._stop.get_token()});
     }
@@ -315,21 +309,20 @@ void WorkerPool::RunParticipants(void* context, Participant run, unsigned int pa
 {
     {
         WorkerResources::ExclusiveLock lock{_lock};
-        if (_closing || !_pool || _stop.stop_requested())
+        if (_closing || ! _pool || _stop.stop_requested())
         {
             return;
         }
         ++_parallelCalls;
     }
     const auto finished = wil::scope_exit([this] { FinishParallel(); });
-    participants = (std::min)(participants, _threadCount);
+    participants        = (std::min)(participants, _threadCount);
     if (participants <= 1)
     {
         run(context);
         return;
     }
-    ParallelCall call{this, context, run, g_currentPool == this ? g_currentPriority : WorkPriority::Normal,
-                      CancellationObservation::Current()};
+    ParallelCall call{this, context, run, g_currentPool == this ? g_currentPriority : WorkPriority::Normal, CancellationObservation::Current()};
     TP_CALLBACK_ENVIRON environment;
     InitializeThreadpoolEnvironment(&environment);
     SetThreadpoolCallbackPool(&environment, _pool.get());
@@ -370,19 +363,18 @@ _Use_decl_annotations_ HRESULT WaitPool::Initialize() noexcept
 
 _Use_decl_annotations_ bool WaitPool::Matches(Ticket ticket) const noexcept
 {
-    return ticket.slot < _slots.size() && _slots[ticket.slot].wait && !_slots[ticket.slot].retiring &&
-           _slots[ticket.slot].generation == ticket.generation;
+    return ticket.slot < _slots.size() && _slots[ticket.slot].wait && ! _slots[ticket.slot].retiring && _slots[ticket.slot].generation == ticket.generation;
 }
 
 HRESULT WaitPool::Add(HANDLE event, Callback callback, void* context, Ticket& ticket) noexcept
 {
     ticket = {};
-    if (!event || event == INVALID_HANDLE_VALUE || !callback)
+    if (! event || event == INVALID_HANDLE_VALUE || ! callback)
     {
         return E_INVALIDARG;
     }
     WorkerResources::ExclusiveLock lock{_lock};
-    if (_closing || !_pool)
+    if (_closing || ! _pool)
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     }
@@ -397,15 +389,15 @@ HRESULT WaitPool::Add(HANDLE event, Callback callback, void* context, Ticket& ti
         InitializeThreadpoolEnvironment(&environment);
         SetThreadpoolCallbackPool(&environment, _pool.get());
         SetThreadpoolCallbackCleanupGroup(&environment, _cleanup.get(), nullptr);
-        slot.owner = this;
-        slot.event = event;
-        slot.callback = callback;
-        slot.context = context;
-        slot.retiring = false;
-        slot.wait = CreateThreadpoolWait(WaitCallback, &slot, &environment);
+        slot.owner        = this;
+        slot.event        = event;
+        slot.callback     = callback;
+        slot.context      = context;
+        slot.retiring     = false;
+        slot.wait         = CreateThreadpoolWait(WaitCallback, &slot, &environment);
         const DWORD error = slot.wait ? ERROR_SUCCESS : GetLastError();
         DestroyThreadpoolEnvironment(&environment);
-        if (!slot.wait)
+        if (! slot.wait)
         {
             return HRESULT_FROM_WIN32(error);
         }
@@ -419,7 +411,7 @@ HRESULT WaitPool::Add(HANDLE event, Callback callback, void* context, Ticket& ti
 bool WaitPool::Rearm(Ticket ticket, std::uint32_t timeoutMs) noexcept
 {
     WorkerResources::ExclusiveLock lock{_lock};
-    if (_closing || !Matches(ticket))
+    if (_closing || ! Matches(ticket))
     {
         return false;
     }
@@ -433,15 +425,15 @@ bool WaitPool::Rearm(Ticket ticket, std::uint32_t timeoutMs) noexcept
 
 void CALLBACK WaitPool::WaitCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WAIT, TP_WAIT_RESULT) noexcept
 {
-    auto& slot = *static_cast<Slot*>(context);
+    auto& slot        = *static_cast<Slot*>(context);
     Callback callback = nullptr;
-    void* target = nullptr;
+    void* target      = nullptr;
     {
         WorkerResources::ExclusiveLock lock{slot.owner->_lock};
-        if (!slot.retiring && !slot.owner->_closing)
+        if (! slot.retiring && ! slot.owner->_closing)
         {
             callback = slot.callback;
-            target = slot.context;
+            target   = slot.context;
         }
     }
     CallbackScope scope{nullptr, WorkPriority::Normal, L"RedPrism.Waits"};
@@ -456,24 +448,24 @@ void WaitPool::Remove(Ticket ticket) noexcept
     PTP_WAIT wait = nullptr;
     {
         WorkerResources::ExclusiveLock lock{_lock};
-        if (_closing || !Matches(ticket))
+        if (_closing || ! Matches(ticket))
         {
             return;
         }
-        auto& slot = _slots[ticket.slot];
+        auto& slot    = _slots[ticket.slot];
         slot.retiring = true;
-        wait = slot.wait;
+        wait          = slot.wait;
         SetThreadpoolWait(wait, nullptr, nullptr);
     }
     // Removes this member from the cleanup group too. Must finish before its borrowed handle/context is freed.
     wil::unique_threadpool_wait removed{wait};
     removed.reset();
     WorkerResources::ExclusiveLock lock{_lock};
-    auto& slot = _slots[ticket.slot];
-    slot.wait = nullptr;
-    slot.context = nullptr;
+    auto& slot    = _slots[ticket.slot];
+    slot.wait     = nullptr;
+    slot.context  = nullptr;
     slot.callback = nullptr;
-    slot.event = nullptr;
+    slot.event    = nullptr;
 }
 
 void WaitPool::Close() noexcept
@@ -496,7 +488,7 @@ void WaitPool::Close() noexcept
     WorkerResources::ExclusiveLock lock{_lock};
     for (auto& slot : _slots)
     {
-        slot.wait = nullptr;
+        slot.wait    = nullptr;
         slot.context = nullptr;
     }
     _cleanup.reset();

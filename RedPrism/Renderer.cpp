@@ -17,9 +17,9 @@
 
 namespace
 {
-constexpr UINT kSwapChainFlags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+constexpr UINT kSwapChainFlags              = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 constexpr size_t kMaximumEnumeratedAdapters = 8;
-constexpr size_t kMaximumEnumeratedOutputs = 32;
+constexpr size_t kMaximumEnumeratedOutputs  = 32;
 } // namespace
 
 Renderer::~Renderer()
@@ -29,22 +29,22 @@ Renderer::~Renderer()
 
 HRESULT Renderer::Initialize(HWND window, bool forceWarp) noexcept
 {
-    if (_window || !window)
+    if (_window || ! window)
     {
         return E_INVALIDARG;
     }
 
-    _window = window;
+    _window    = window;
     _forceWarp = forceWarp;
     return CreateDeviceResources();
 }
 
 void Renderer::Shutdown() noexcept
 {
-    _chrome = nullptr;
+    _chrome      = nullptr;
     _canvasDrawn = false;
     ReleaseDeviceResources();
-    _window = nullptr;
+    _window    = nullptr;
     _forceWarp = false;
 }
 
@@ -58,7 +58,7 @@ HRESULT Renderer::CreateDeviceResources() noexcept
     ReleaseDeviceResources();
 
     HRESULT result = CreateDevice(_forceWarp);
-    if (FAILED(result) && !_forceWarp)
+    if (FAILED(result) && ! _forceWarp)
     {
         OutputDebugStringW(L"Hardware Direct3D initialization failed; trying WARP.\n");
         result = CreateDevice(true);
@@ -88,12 +88,12 @@ HRESULT Renderer::CreateDeviceResources() noexcept
     ++_deviceGeneration;
 
     RECT client{};
-    if (!GetClientRect(_window, &client))
+    if (! GetClientRect(_window, &client))
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    const UINT width = static_cast<UINT>(client.right - client.left);
+    const UINT width  = static_cast<UINT>(client.right - client.left);
     const UINT height = static_cast<UINT>(client.bottom - client.top);
     if (width == 0 || height == 0)
     {
@@ -104,12 +104,11 @@ HRESULT Renderer::CreateDeviceResources() noexcept
     return CreateRenderTarget(width, height);
 }
 
-HRESULT Renderer::FindAdapterForMonitor(HMONITOR monitor, wil::com_ptr_nothrow<IDXGIAdapter1>& adapter,
-                                        LUID& adapterLuid) noexcept
+HRESULT Renderer::FindAdapterForMonitor(HMONITOR monitor, wil::com_ptr_nothrow<IDXGIAdapter1>& adapter, LUID& adapterLuid) noexcept
 {
     adapter.reset();
     adapterLuid = {};
-    if (!monitor)
+    if (! monitor)
     {
         return E_INVALIDARG;
     }
@@ -149,28 +148,27 @@ HRESULT Renderer::FindAdapterForMonitor(HMONITOR monitor, wil::com_ptr_nothrow<I
             {
                 continue;
             }
-            records[recordCount] = AdapterOutputRecord{description.AdapterLuid, outputDescription.Monitor, software};
+            records[recordCount]        = AdapterOutputRecord{description.AdapterLuid, outputDescription.Monitor, software};
             recordAdapters[recordCount] = adapterIndex;
             ++recordCount;
         }
         adapters[adapterIndex] = std::move(candidate);
     }
 
-    const size_t selected =
-        SelectAdapterRecordForMonitor(std::span<const AdapterOutputRecord>(records.data(), recordCount), monitor);
+    const size_t selected = SelectAdapterRecordForMonitor(std::span<const AdapterOutputRecord>(records.data(), recordCount), monitor);
     if (selected == SIZE_MAX)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
-    adapter = adapters[recordAdapters[selected]];
+    adapter     = adapters[recordAdapters[selected]];
     adapterLuid = records[selected].adapterLuid;
     return S_OK;
 }
 
 void Renderer::RecordDeviceIdentity(bool warp, bool adapterOwnsWindowMonitor) noexcept
 {
-    _deviceInfo = {};
-    _deviceInfo.warp = warp;
+    _deviceInfo                          = {};
+    _deviceInfo.warp                     = warp;
     _deviceInfo.adapterOwnsWindowMonitor = adapterOwnsWindowMonitor;
     wil::com_ptr_nothrow<IDXGIDevice> dxgiDevice;
     wil::com_ptr_nothrow<IDXGIAdapter> adapter;
@@ -185,14 +183,16 @@ void Renderer::RecordDeviceIdentity(bool warp, bool adapterOwnsWindowMonitor) no
     }
 
     std::array<wchar_t, 384> message{};
-    const auto written =
-        std::format_to_n(message.data(), static_cast<std::ptrdiff_t>(message.size() - 1),
-                         L"Direct3D device created on {} (LUID {:08X}-{:08X}, {}, adapter owns "
-                         L"window monitor: {}).\n",
-                         _deviceInfo.adapterName.data(), static_cast<unsigned long>(_deviceInfo.adapterLuid.HighPart),
-                         static_cast<unsigned long>(_deviceInfo.adapterLuid.LowPart), warp ? L"WARP" : L"hardware",
-                         adapterOwnsWindowMonitor ? L"yes" : L"no");
-    const auto n = static_cast<size_t>(written.size);
+    const auto written                                   = std::format_to_n(message.data(),
+                                                                            static_cast<std::ptrdiff_t>(message.size() - 1),
+                                                                            L"Direct3D device created on {} (LUID {:08X}-{:08X}, {}, adapter owns "
+                                                                            L"window monitor: {}).\n",
+                                                                            _deviceInfo.adapterName.data(),
+                                                                            static_cast<unsigned long>(_deviceInfo.adapterLuid.HighPart),
+                                                                            static_cast<unsigned long>(_deviceInfo.adapterLuid.LowPart),
+                                                                            warp ? L"WARP" : L"hardware",
+                                                                            adapterOwnsWindowMonitor ? L"yes" : L"no");
+    const auto n                                         = static_cast<size_t>(written.size);
     message[n < message.size() ? n : message.size() - 1] = L'\0';
     OutputDebugStringW(message.data());
 }
@@ -211,7 +211,7 @@ HRESULT Renderer::CreateDevice(bool useWarp) noexcept
 
     _deviceMonitor = nullptr;
     wil::com_ptr_nothrow<IDXGIAdapter1> adapter;
-    if (!useWarp)
+    if (! useWarp)
     {
         const HMONITOR monitor = MonitorFromWindow(_window, MONITOR_DEFAULTTONULL);
         LUID adapterLuid{};
@@ -224,17 +224,23 @@ HRESULT Renderer::CreateDevice(bool useWarp) noexcept
             adapter.reset();
         }
     }
-    const D3D_DRIVER_TYPE driverType =
-        useWarp ? D3D_DRIVER_TYPE_WARP : (adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE);
+    const D3D_DRIVER_TYPE driverType = useWarp ? D3D_DRIVER_TYPE_WARP : (adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE);
 
     auto create = [&](UINT requestedFlags) noexcept
     {
         _device.reset();
         _context.reset();
         _context1.reset();
-        return D3D11CreateDevice(adapter.get(), driverType, nullptr, requestedFlags, featureLevels.data(),
-                                 static_cast<UINT>(featureLevels.size()), D3D11_SDK_VERSION, _device.put(),
-                                 &_featureLevel, _context.put());
+        return D3D11CreateDevice(adapter.get(),
+                                 driverType,
+                                 nullptr,
+                                 requestedFlags,
+                                 featureLevels.data(),
+                                 static_cast<UINT>(featureLevels.size()),
+                                 D3D11_SDK_VERSION,
+                                 _device.put(),
+                                 &_featureLevel,
+                                 _context.put());
     };
 
     HRESULT result = create(flags);
@@ -264,12 +270,12 @@ HRESULT Renderer::CreateDevice(bool useWarp) noexcept
 
 HRESULT Renderer::EnsureDeviceForWindowMonitor() noexcept
 {
-    if (!_window || !_device || _forceWarp || _deviceInfo.warp)
+    if (! _window || ! _device || _forceWarp || _deviceInfo.warp)
     {
         return S_FALSE;
     }
     const HMONITOR monitor = MonitorFromWindow(_window, MONITOR_DEFAULTTONULL);
-    if (!monitor || monitor == _deviceMonitor)
+    if (! monitor || monitor == _deviceMonitor)
     {
         return S_FALSE;
     }
@@ -316,22 +322,21 @@ HRESULT Renderer::CreateSwapChain() noexcept
     }
 
     DXGI_SWAP_CHAIN_DESC1 description{};
-    description.Format = kTargetFormat;
+    description.Format           = kTargetFormat;
     description.SampleDesc.Count = 1;
-    description.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    description.BufferCount = 2;
-    description.Scaling = DXGI_SCALING_STRETCH;
-    description.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    description.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-    description.Flags = kSwapChainFlags;
+    description.BufferUsage      = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    description.BufferCount      = 2;
+    description.Scaling          = DXGI_SCALING_STRETCH;
+    description.SwapEffect       = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    description.AlphaMode        = DXGI_ALPHA_MODE_IGNORE;
+    description.Flags            = kSwapChainFlags;
 
     result = factory->CreateSwapChainForHwnd(_device.get(), _window, &description, nullptr, nullptr, _swapChain.put());
     if (result == E_ACCESSDENIED)
     {
         // The previous flip-model chain can stay bound to the HWND until the window processes a message.
         SendMessageW(_window, WM_NULL, 0, 0);
-        result =
-            factory->CreateSwapChainForHwnd(_device.get(), _window, &description, nullptr, nullptr, _swapChain.put());
+        result = factory->CreateSwapChainForHwnd(_device.get(), _window, &description, nullptr, nullptr, _swapChain.put());
     }
     if (FAILED(result))
     {
@@ -350,7 +355,7 @@ HRESULT Renderer::CreateSwapChain() noexcept
         return result;
     }
     _frameLatencyWaitable.reset(swapChain2->GetFrameLatencyWaitableObject());
-    if (!_frameLatencyWaitable)
+    if (! _frameLatencyWaitable)
     {
         return E_UNEXPECTED;
     }
@@ -361,8 +366,8 @@ HRESULT Renderer::CreateSwapChain() noexcept
         return result;
     }
 
-    _factory = std::move(factory);
-    _occlusionStatusCookie = 0;
+    _factory                   = std::move(factory);
+    _occlusionStatusCookie     = 0;
     _occlusionStatusRegistered = false;
     RegisterOcclusionStatus();
     return S_OK;
@@ -370,13 +375,12 @@ HRESULT Renderer::CreateSwapChain() noexcept
 
 void Renderer::RegisterOcclusionStatus() noexcept
 {
-    if (!_factory || !_window || _occlusionStatusRegistered)
+    if (! _factory || ! _window || _occlusionStatusRegistered)
     {
         return;
     }
     DWORD occlusionStatusCookie = 0;
-    const HRESULT result =
-        _factory->RegisterOcclusionStatusWindow(_window, kOcclusionStatusMessage, &occlusionStatusCookie);
+    const HRESULT result        = _factory->RegisterOcclusionStatusWindow(_window, kOcclusionStatusMessage, &occlusionStatusCookie);
     if (FAILED(result))
     {
         // A second registration on the same HWND (device recovery) can return E_ACCESSDENIED while the swap chain
@@ -385,7 +389,7 @@ void Renderer::RegisterOcclusionStatus() noexcept
         OutputDebugStringW(L"Occlusion status was not registered; an occluded window probes on each wake.\n");
         return;
     }
-    _occlusionStatusCookie = occlusionStatusCookie;
+    _occlusionStatusCookie     = occlusionStatusCookie;
     _occlusionStatusRegistered = true;
 }
 
@@ -404,33 +408,33 @@ HRESULT Renderer::CreateRenderTarget(UINT width, UINT height) noexcept
         return result;
     }
 
-    _width = width;
-    _height = height;
+    _width     = width;
+    _height    = height;
     _suspended = false;
-    _occluded = false;
+    _occluded  = false;
     return S_OK;
 }
 
 HRESULT Renderer::Resize(UINT width, UINT height) noexcept
 {
-    if (!_swapChain)
+    if (! _swapChain)
     {
         return E_UNEXPECTED;
     }
 
     if (width == 0 || height == 0)
     {
-        _width = 0;
-        _height = 0;
+        _width     = 0;
+        _height    = 0;
         _suspended = true;
-        _occluded = false;
+        _occluded  = false;
         return S_OK;
     }
 
     if (width == _width && height == _height && _renderTarget)
     {
         _suspended = false;
-        _occluded = false;
+        _occluded  = false;
         return S_OK;
     }
 
@@ -496,19 +500,22 @@ HRESULT Renderer::RecoverDeviceForUtility(HRESULT result) noexcept
     return DeviceLostAfter(result) ? RecoverDevice() : S_OK;
 }
 
-HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
-                         const CanvasDocument* document, RecordedDisplayGraph* acknowledgedDisplay,
+HRESULT Renderer::Render(ChromeHost* chrome,
+                         CanvasRenderer* composition,
+                         const CanvasViewport* viewport,
+                         const CanvasDocument* document,
+                         RecordedDisplayGraph* acknowledgedDisplay,
                          SelectionOutlineFrameSource* selectionOutline) noexcept
 {
-    _canvasFailure = S_OK;
+    _canvasFailure           = S_OK;
     _selectionOutlineFailure = S_OK;
-    _lassoDraftFailure = S_OK;
-    _canvasDrawn = false;
+    _lassoDraftFailure       = S_OK;
+    _canvasDrawn             = false;
     if (_suspended)
     {
         return S_OK;
     }
-    if (!_context || !_swapChain || !_renderTarget)
+    if (! _context || ! _swapChain || ! _renderTarget)
     {
         return E_UNEXPECTED;
     }
@@ -523,18 +530,16 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
     // Order: chrome layout (the hole), then the document into the hole, then the chrome surface over it. The DxUi
     // surface is transparent where no control paints, so tooltips and popups that overlap the canvas stay visible.
     D3D11_VIEWPORT viewportDx{};
-    viewportDx.Width = static_cast<float>(_width);
-    viewportDx.Height = static_cast<float>(_height);
+    viewportDx.Width    = static_cast<float>(_width);
+    viewportDx.Height   = static_cast<float>(_height);
     viewportDx.MaxDepth = 1.0f;
     if (chrome)
     {
         const HRESULT chromeResult = [&]() noexcept
         {
             const ScopedUiTimingAttribution phase{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 1001};
-            return StageResult(
-                Stage::ChromePrepare,
-                chrome->Prepare(_width, _height,
-                                _layoutDpi > 0.0f ? _layoutDpi : static_cast<float>(GetDpiForWindow(_window))));
+            return StageResult(Stage::ChromePrepare,
+                               chrome->Prepare(_width, _height, _layoutDpi > 0.0f ? _layoutDpi : static_cast<float>(GetDpiForWindow(_window))));
         }();
         if (FAILED(chromeResult))
         {
@@ -558,15 +563,15 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
     {
         // A sealed, originally acknowledged graph has no owner Compose/upload/create stage. Validate both
         // actual interfaces before any command: a recovered renderer cannot blit a retired device's graph.
-        const CanvasHole hole = chrome->HolePixels();
+        const CanvasHole hole      = chrome->HolePixels();
         const HRESULT canvasResult = [&]() noexcept
         {
             const ScopedUiTimingAttribution phase{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 1003};
-            return StageResult(Stage::Blit,
-                               acknowledgedDisplay->IsPublishedOnOwner(_device.get(), _context.get())
-                                   ? acknowledgedDisplay->BlitOwner(_renderTarget.get(), _width, _height, *viewport,
-                                                                    hole.left, hole.top, hole.width, hole.height)
-                                   : E_ABORT);
+            return StageResult(
+                Stage::Blit,
+                acknowledgedDisplay->IsPublishedOnOwner(_device.get(), _context.get())
+                    ? acknowledgedDisplay->BlitOwner(_renderTarget.get(), _width, _height, *viewport, hole.left, hole.top, hole.width, hole.height)
+                    : E_ABORT);
         }();
         _canvasDrawn = canvasResult == S_OK;
         if (FAILED(canvasResult))
@@ -587,12 +592,11 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
         if (SUCCEEDED(canvasResult))
         {
             const CanvasHole hole = chrome->HolePixels();
-            canvasResult = [&]() noexcept
+            canvasResult          = [&]() noexcept
             {
                 const ScopedUiTimingAttribution phase{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 1003};
                 return StageResult(Stage::Blit,
-                                   composition->BlitToTarget(_renderTarget.get(), _width, _height, *viewport, hole.left,
-                                                             hole.top, hole.width, hole.height));
+                                   composition->BlitToTarget(_renderTarget.get(), _width, _height, *viewport, hole.left, hole.top, hole.width, hole.height));
             }();
             _canvasDrawn = canvasResult == S_OK;
         }
@@ -609,20 +613,25 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
         _context->OMSetRenderTargets(1, renderTargets, nullptr);
     }
 
-    if (selectionOutline && chrome && !_suppressSelectionOutlineForTest)
+    if (selectionOutline && chrome && ! _suppressSelectionOutlineForTest)
     {
         // Preparation can publish UIA callbacks. Re-borrow exact source/view/device authority AFTER it.
-        const CanvasHole hole = chrome->HolePixels();
-        const SelectionOutlineFrame outline =
-            selectionOutline->BorrowSelectionOutlineFrameOwner(hole.left, hole.top, hole.width, hole.height);
+        const CanvasHole hole               = chrome->HolePixels();
+        const SelectionOutlineFrame outline = selectionOutline->BorrowSelectionOutlineFrameOwner(hole.left, hole.top, hole.width, hole.height);
         if (outline.composition && outline.solid && outline.dashes)
         {
-            const HRESULT drawn = outline.composition->Device() == _device.get()
-                                      ? outline.composition->DrawSelectionOutlineToTarget(
-                                            _renderTarget.get(), _width, _height, outline.solid, outline.dashes,
-                                            outline.width, outline.height, outline.pixelLeft, outline.pixelTop,
-                                            outline.clipped ? &outline.clip : nullptr)
-                                      : E_ABORT;
+            const HRESULT drawn      = outline.composition->Device() == _device.get()
+                                           ? outline.composition->DrawSelectionOutlineToTarget(_renderTarget.get(),
+                                                                                               _width,
+                                                                                               _height,
+                                                                                               outline.solid,
+                                                                                               outline.dashes,
+                                                                                               outline.width,
+                                                                                               outline.height,
+                                                                                               outline.pixelLeft,
+                                                                                               outline.pixelTop,
+                                                                                               outline.clipped ? &outline.clip : nullptr)
+                                           : E_ABORT;
             _selectionOutlineFailure = drawn;
             if (FAILED(drawn) && DeviceLostAfter(drawn))
                 return RecoverFromStage();
@@ -632,20 +641,24 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
         }
     }
 
-    if (selectionOutline && chrome && !_suppressSelectionOutlineForTest)
+    if (selectionOutline && chrome && ! _suppressSelectionOutlineForTest)
     {
-        const CanvasHole hole = chrome->HolePixels();
-        const LassoDraftFrame draft =
-            selectionOutline->BorrowLassoDraftFrameOwner(hole.left, hole.top, hole.width, hole.height);
+        const CanvasHole hole       = chrome->HolePixels();
+        const LassoDraftFrame draft = selectionOutline->BorrowLassoDraftFrameOwner(hole.left, hole.top, hole.width, hole.height);
         if (draft.composition && draft.color)
         {
-            const HRESULT drawn =
-                draft.composition->Device() == _device.get()
-                    ? draft.composition->DrawLassoDraftToTarget(_renderTarget.get(), _width, _height, draft.color,
-                                                                draft.width, draft.height, draft.pixelLeft,
-                                                                draft.pixelTop, draft.clipped ? &draft.clip : nullptr)
-                    : E_ABORT;
-            _lassoDraftFailure = drawn;
+            const HRESULT drawn = draft.composition->Device() == _device.get()
+                                      ? draft.composition->DrawLassoDraftToTarget(_renderTarget.get(),
+                                                                                  _width,
+                                                                                  _height,
+                                                                                  draft.color,
+                                                                                  draft.width,
+                                                                                  draft.height,
+                                                                                  draft.pixelLeft,
+                                                                                  draft.pixelTop,
+                                                                                  draft.clipped ? &draft.clip : nullptr)
+                                      : E_ABORT;
+            _lassoDraftFailure  = drawn;
             if (FAILED(drawn) && DeviceLostAfter(drawn))
                 return RecoverFromStage();
             if (drawn == S_OK)
@@ -670,8 +683,7 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
 
     if (_frameReadbackForTest)
     {
-        const HRESULT captured =
-            _frameReadbackForTest(_frameReadbackContextForTest, _device.get(), _context.get(), _renderTarget.get());
+        const HRESULT captured = _frameReadbackForTest(_frameReadbackContextForTest, _device.get(), _context.get(), _renderTarget.get());
         if (FAILED(captured))
             return captured;
     }
@@ -692,7 +704,7 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
         return presentResult;
     }
     _occluded = presentResult == DXGI_STATUS_OCCLUDED;
-    if (!_occluded)
+    if (! _occluded)
     {
         ++_presentCount;
     }
@@ -706,7 +718,7 @@ HRESULT Renderer::RecoverDeviceForTest() noexcept
 
 HRESULT Renderer::ProbeOcclusion() noexcept
 {
-    if (!_swapChain || !_occluded)
+    if (! _swapChain || ! _occluded)
     {
         return E_UNEXPECTED;
     }
@@ -764,7 +776,7 @@ void Renderer::ReleaseDeviceResources() noexcept
     if (_factory && _occlusionStatusRegistered)
     {
         _factory->UnregisterOcclusionStatus(_occlusionStatusCookie);
-        _occlusionStatusCookie = 0;
+        _occlusionStatusCookie     = 0;
         _occlusionStatusRegistered = false;
     }
     if (_context)
@@ -786,16 +798,15 @@ void Renderer::ReleaseDeviceResources() noexcept
     _context1.reset();
     _context.reset();
     _device.reset();
-    _deviceInfo = {};
+    _deviceInfo    = {};
     _deviceMonitor = nullptr;
-    _width = 0;
-    _height = 0;
-    _suspended = true;
-    _occluded = false;
+    _width         = 0;
+    _height        = 0;
+    _suspended     = true;
+    _occluded      = false;
 }
 
 bool Renderer::IsDeviceLost(HRESULT result) noexcept
 {
-    return result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET ||
-           result == DXGI_ERROR_DRIVER_INTERNAL_ERROR;
+    return result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET || result == DXGI_ERROR_DRIVER_INTERNAL_ERROR;
 }

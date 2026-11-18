@@ -10,7 +10,7 @@
 // receive the resulting scalar stamp, never a proposal or a pointer to the controller.
 class OpacityInputOrder final
 {
-  public:
+public:
     enum class Phase : std::uint8_t
     {
         Preview,
@@ -29,12 +29,16 @@ class OpacityInputOrder final
     };
     class Proposal final
     {
-      public:
-        Proposal(const Proposal&) = delete;
+    public:
+        Proposal(const Proposal&)            = delete;
         Proposal& operator=(const Proposal&) = delete;
         Proposal(Proposal&& source) noexcept
-            : _owner(source._owner), _epoch(source._epoch), _stamp(source._stamp), _phase(source._phase),
-              _minted(source._minted), _valid(std::exchange(source._valid, false))
+            : _owner(source._owner),
+              _epoch(source._epoch),
+              _stamp(source._stamp),
+              _phase(source._phase),
+              _minted(source._minted),
+              _valid(std::exchange(source._valid, false))
         {
         }
         Proposal& operator=(Proposal&&) = delete;
@@ -43,10 +47,14 @@ class OpacityInputOrder final
             return _stamp;
         }
 
-      private:
+    private:
         friend class OpacityInputOrder;
         Proposal(const OpacityInputOrder* owner, std::uint64_t epoch, Stamp stamp, Phase phase, bool minted) noexcept
-            : _owner(owner), _epoch(epoch), _stamp(stamp), _phase(phase), _minted(minted)
+            : _owner(owner),
+              _epoch(epoch),
+              _stamp(stamp),
+              _phase(phase),
+              _minted(minted)
         {
         }
         const OpacityInputOrder* _owner;
@@ -58,14 +66,13 @@ class OpacityInputOrder final
 
     // Production starts at zero. Explicit counters allow deterministic qualification of exhaustion.
     OpacityInputOrder() noexcept = default;
-    explicit OpacityInputOrder(Counters counters) noexcept
-        : _counters(counters), _validCounters(counters.currentStream <= counters.lastStream)
+    explicit OpacityInputOrder(Counters counters) noexcept : _counters(counters), _validCounters(counters.currentStream <= counters.lastStream)
     {
     }
-    OpacityInputOrder(const OpacityInputOrder&) = delete;
+    OpacityInputOrder(const OpacityInputOrder&)            = delete;
     OpacityInputOrder& operator=(const OpacityInputOrder&) = delete;
-    OpacityInputOrder(OpacityInputOrder&&) = delete;
-    OpacityInputOrder& operator=(OpacityInputOrder&&) = delete;
+    OpacityInputOrder(OpacityInputOrder&&)                 = delete;
+    OpacityInputOrder& operator=(OpacityInputOrder&&)      = delete;
 
     [[nodiscard]] Counters Read() const noexcept
     {
@@ -75,10 +82,10 @@ class OpacityInputOrder final
     [[nodiscard]] std::optional<Proposal> Propose(Phase phase, bool continues) const noexcept
     {
         constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
-        if (!_validCounters || phase > Phase::Cancel || _counters.lastSequence == maximum || _counters.epoch == maximum)
+        if (! _validCounters || phase > Phase::Cancel || _counters.lastSequence == maximum || _counters.epoch == maximum)
             return std::nullopt;
         std::uint64_t stream = continues ? _counters.currentStream : 0;
-        const bool minted = phase == Phase::Preview && stream == 0;
+        const bool minted    = phase == Phase::Preview && stream == 0;
         if (minted)
         {
             if (_counters.lastStream == maximum)
@@ -89,11 +96,11 @@ class OpacityInputOrder final
     }
     [[nodiscard]] bool Accept(Proposal& proposal) noexcept
     {
-        if (!proposal._valid || proposal._owner != this || proposal._epoch != _counters.epoch)
+        if (! proposal._valid || proposal._owner != this || proposal._epoch != _counters.epoch)
             return false;
         if (proposal._minted)
             _counters.lastStream = proposal._stamp.stream;
-        _counters.lastSequence = proposal._stamp.sequence;
+        _counters.lastSequence  = proposal._stamp.sequence;
         _counters.currentStream = proposal._phase == Phase::Preview ? proposal._stamp.stream : 0;
         ++_counters.epoch; // Propose checked exhaustion before any request was admitted.
         proposal._valid = false;
@@ -103,14 +110,14 @@ class OpacityInputOrder final
     // A barrier also expires an outstanding proposal, even when no stream was open.
     [[nodiscard]] bool Barrier() noexcept
     {
-        if (!_validCounters || _counters.epoch == (std::numeric_limits<std::uint64_t>::max)())
+        if (! _validCounters || _counters.epoch == (std::numeric_limits<std::uint64_t>::max)())
             return false;
         _counters.currentStream = 0;
         ++_counters.epoch;
         return true;
     }
 
-  private:
+private:
     Counters _counters{};
     bool _validCounters = true;
 };

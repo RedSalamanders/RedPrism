@@ -18,7 +18,7 @@
 #pragma warning(disable : 4625 4626 5026 5027)
 struct PathReadWait::Impl final
 {
-    JobScheduler* scheduler = nullptr;
+    JobScheduler* scheduler      = nullptr;
     OwnerWorkMultiplexer* routes = nullptr;
     wil::unique_event_nothrow event;
     JobEventTicket wait;
@@ -37,9 +37,9 @@ struct PathReadWait::Impl final
     }
     static void Signalled(void* opaque) noexcept
     {
-        auto& self = *static_cast<Impl*>(opaque);
-        auto* scheduler = self.scheduler;
-        const auto observer = self.observer;
+        auto& self           = *static_cast<Impl*>(opaque);
+        auto* scheduler      = self.scheduler;
+        const auto observer  = self.observer;
         const auto readCycle = self.readCycle.load(std::memory_order_relaxed);
         self.ready.store(true, std::memory_order_release);
         if (observer.signalled)
@@ -53,12 +53,11 @@ struct PathReadWait::Impl final
 PathReadWait::PathReadWait() noexcept = default;
 PathReadWait::~PathReadWait()
 {
-    assert(!_impl); // Application closes after final worker acknowledgement, including partial startup.
+    assert(! _impl); // Application closes after final worker acknowledgement, including partial startup.
 }
-std::int32_t PathReadWait::Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer& routes,
-                                      PathReadWaitObserver observer) noexcept
+std::int32_t PathReadWait::Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer& routes, PathReadWaitObserver observer) noexcept
 {
-    if (_impl || !scheduler.WakeHandle() || scheduler.InUiCallback())
+    if (_impl || ! scheduler.WakeHandle() || scheduler.InUiCallback())
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     try
     {
@@ -68,13 +67,12 @@ std::int32_t PathReadWait::Initialize(JobScheduler& scheduler, OwnerWorkMultiple
     {
         return E_OUTOFMEMORY;
     }
-    auto& self = *_impl;
+    auto& self     = *_impl;
     self.scheduler = &scheduler;
-    self.routes = &routes;
-    self.observer = observer;
+    self.routes    = &routes;
+    self.observer  = observer;
     self.readCycle.store(observer.initialReadCycleForTest, std::memory_order_relaxed);
-    const auto fault = [&](PathReadWaitFault point) noexcept -> std::int32_t
-    { return observer.fault ? observer.fault(observer.context, point) : S_OK; };
+    const auto fault      = [&](PathReadWaitFault point) noexcept -> std::int32_t { return observer.fault ? observer.fault(observer.context, point) : S_OK; };
     const auto eventFault = fault(PathReadWaitFault::EventCreation);
     if (FAILED(eventFault))
         return eventFault;
@@ -90,15 +88,14 @@ std::int32_t PathReadWait::Initialize(JobScheduler& scheduler, OwnerWorkMultiple
     const auto attachmentFault = fault(PathReadWaitFault::RouteAttachment);
     if (FAILED(attachmentFault))
         return attachmentFault;
-    if (!routes.Attach(*this))
+    if (! routes.Attach(*this))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     self.attached = true;
     return S_OK;
 }
-std::int32_t PathReadWait::PrepareRead(JobTicket ticket, CancelToken cancellation, PathReadWaitReceiver& receiver,
-                                       bool resetEvent) noexcept
+std::int32_t PathReadWait::PrepareRead(JobTicket ticket, CancelToken cancellation, PathReadWaitReceiver& receiver, bool resetEvent) noexcept
 {
-    if (!_impl || _impl->stopped || !_impl->attached || ticket.slot >= JobScheduler::kCapacity || !ticket.generation)
+    if (! _impl || _impl->stopped || ! _impl->attached || ticket.slot >= JobScheduler::kCapacity || ! ticket.generation)
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     auto& self = *_impl;
     self.CheckOwner();
@@ -107,21 +104,21 @@ std::int32_t PathReadWait::PrepareRead(JobTicket ticket, CancelToken cancellatio
     const auto cycle = self.readCycle.load(std::memory_order_relaxed);
     if (resetEvent && cycle == UINT64_MAX)
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-    if (!resetEvent && (!cycle || self.ticket != ticket))
+    if (! resetEvent && (! cycle || self.ticket != ticket))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
-    if (resetEvent && !ResetEvent(self.event.get()))
+    if (resetEvent && ! ResetEvent(self.event.get()))
         return HRESULT_FROM_WIN32(GetLastError());
     self.ready.store(false, std::memory_order_relaxed);
     if (resetEvent)
         self.readCycle.store(cycle + 1, std::memory_order_relaxed);
-    self.ticket = ticket;
-    self.cancellation = cancellation;
-    self.receiver = &receiver;
-    self.awaiting = false;
+    self.ticket                = ticket;
+    self.cancellation          = cancellation;
+    self.receiver              = &receiver;
+    self.awaiting              = false;
     self.cancellationDelivered = false;
-    if (!self.scheduler->RearmEventWait(self.wait))
+    if (! self.scheduler->RearmEventWait(self.wait))
     {
-        self.receiver = nullptr;
+        self.receiver     = nullptr;
         self.cancellation = {};
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     }
@@ -129,11 +126,11 @@ std::int32_t PathReadWait::PrepareRead(JobTicket ticket, CancelToken cancellatio
 }
 bool PathReadWait::AwaitRead(JobTicket ticket) noexcept
 {
-    if (!_impl || _impl->stopped)
+    if (! _impl || _impl->stopped)
         return false;
     auto& self = *_impl;
     self.CheckOwner();
-    if (!self.receiver || self.ticket != ticket)
+    if (! self.receiver || self.ticket != ticket)
         return false;
     self.awaiting = true;
     if (HasReady())
@@ -142,47 +139,46 @@ bool PathReadWait::AwaitRead(JobTicket ticket) noexcept
 }
 void* PathReadWait::EventForWorker() const noexcept
 {
-    if (!_impl || _impl->stopped)
+    if (! _impl || _impl->stopped)
         return nullptr;
     _impl->CheckOwner();
     return _impl->event.get();
 }
 std::uint64_t PathReadWait::ReadCycleForTest() const noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return 0;
     _impl->CheckOwner();
     return _impl->readCycle.load(std::memory_order_relaxed);
 }
 bool PathReadWait::HasPending() const noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return false;
     _impl->CheckOwner();
     return _impl->receiver != nullptr;
 }
 bool PathReadWait::HasReady() const noexcept
 {
-    if (!_impl || _impl->stopped)
+    if (! _impl || _impl->stopped)
         return false;
     _impl->CheckOwner();
     return _impl->receiver && _impl->awaiting &&
-           (_impl->ready.load(std::memory_order_acquire) ||
-            (!_impl->cancellationDelivered && _impl->cancellation.IsCancelled()));
+           (_impl->ready.load(std::memory_order_acquire) || (! _impl->cancellationDelivered && _impl->cancellation.IsCancelled()));
 }
 void PathReadWait::Pump() noexcept
 {
-    if (!HasReady() || _impl->pumping)
+    if (! HasReady() || _impl->pumping)
         return;
-    auto& self = *_impl;
-    self.pumping = true;
+    auto& self        = *_impl;
+    self.pumping      = true;
     const auto finish = wil::scope_exit([&]() noexcept { self.pumping = false; });
-    auto* receiver = self.receiver;
+    auto* receiver    = self.receiver;
     const auto ticket = self.ticket;
-    self.awaiting = false;
+    self.awaiting     = false;
     if (self.ready.load(std::memory_order_acquire))
     {
-        self.receiver = nullptr;
+        self.receiver     = nullptr;
         self.cancellation = {};
         self.ready.store(false, std::memory_order_relaxed);
         receiver->PathReadReady(ticket, false);
@@ -195,11 +191,11 @@ void PathReadWait::Pump() noexcept
 }
 void PathReadWait::StopNotifications() noexcept
 {
-    if (!_impl || _impl->stopped)
+    if (! _impl || _impl->stopped)
         return;
     auto& self = *_impl;
     self.CheckOwner();
-    assert(!self.pumping && !self.scheduler->InUiCallback());
+    assert(! self.pumping && ! self.scheduler->InUiCallback());
     if (self.pumping || self.scheduler->InUiCallback())
         return;
     self.stopped = true;
@@ -211,33 +207,33 @@ void PathReadWait::StopNotifications() noexcept
 }
 void PathReadWait::DetachJoinedOwner() noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return;
     auto& self = *_impl;
     self.CheckOwner();
-    assert(self.stopped && !self.pumping);
-    if (!self.stopped || self.pumping)
+    assert(self.stopped && ! self.pumping);
+    if (! self.stopped || self.pumping)
         return;
-    self.receiver = nullptr;
+    self.receiver     = nullptr;
     self.cancellation = {};
-    self.awaiting = false;
+    self.awaiting     = false;
     self.ready.store(false, std::memory_order_relaxed);
     if (self.attached)
     {
         const bool detached = self.routes->Detach(*this);
         assert(detached);
-        if (!detached)
+        if (! detached)
             std::terminate();
         self.attached = false;
     }
 }
 void PathReadWait::CloseAfterFinalWorkers() noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return;
     _impl->CheckOwner();
-    assert(_impl->stopped && !_impl->attached && !_impl->receiver && !_impl->pumping);
-    if (!_impl->stopped || _impl->attached || _impl->receiver || _impl->pumping)
+    assert(_impl->stopped && ! _impl->attached && ! _impl->receiver && ! _impl->pumping);
+    if (! _impl->stopped || _impl->attached || _impl->receiver || _impl->pumping)
         return;
     _impl.reset();
 }

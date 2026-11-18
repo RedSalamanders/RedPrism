@@ -4,7 +4,9 @@
 
 #pragma comment(lib, "uiautomationcore.lib")
 
-WindowAccessibilityRoot::WindowAccessibilityRoot(HWND window) noexcept : _window(window) {}
+WindowAccessibilityRoot::WindowAccessibilityRoot(HWND window) noexcept : _window(window)
+{
+}
 
 HRESULT WindowAccessibilityRoot::Create(HWND window, wil::com_ptr_nothrow<WindowAccessibilityRoot>& result) noexcept
 {
@@ -117,7 +119,7 @@ HRESULT WindowAccessibilityRoot::GetPropertyValue(PROPERTYID property, VARIANT* 
     }
     else if (property == UIA_IsKeyboardFocusablePropertyId)
     {
-        value->vt = VT_BOOL;
+        value->vt      = VT_BOOL;
         value->boolVal = VARIANT_TRUE;
     }
     return S_OK;
@@ -206,8 +208,7 @@ HRESULT WindowAccessibilityRoot::get_FragmentRoot(IRawElementProviderFragmentRoo
     return S_OK;
 }
 
-HRESULT WindowAccessibilityRoot::ElementProviderFromPoint(double x, double y,
-                                                          IRawElementProviderFragment** result) noexcept
+HRESULT WindowAccessibilityRoot::ElementProviderFromPoint(double x, double y, IRawElementProviderFragment** result) noexcept
 {
     if (result == nullptr)
     {

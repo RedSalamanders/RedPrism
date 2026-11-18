@@ -27,7 +27,7 @@ enum class ShapeWorkStage : std::uint8_t
 struct ShapeWorkObserver final
 {
     void (*checkpoint)(void*, ShapeWorkStage) = nullptr;
-    void* context = nullptr;
+    void* context                             = nullptr;
 };
 
 // Metadata-only, checked before conversion to integer dimensions. No document or pixel ownership.
@@ -35,29 +35,46 @@ struct ShapeWorkObserver final
 [[nodiscard]] std::uint64_t ShapeImageMemoryBytes(ShapeKind kind, int width, int height, double cornerRadius) noexcept;
 // Exact existing coverage/rounding; every published pixel is initialized. Curved coverage is serial in its
 // established float accumulation order; independent color rows use the supplied worker executor.
-[[nodiscard]] Raster ShapeImageForWork(ShapeKind kind, int width, int height, std::uint32_t foregroundArgb,
-                                       double cornerRadius, Executor& executor, CancelToken cancellation = {},
+[[nodiscard]] Raster ShapeImageForWork(ShapeKind kind,
+                                       int width,
+                                       int height,
+                                       std::uint32_t foregroundArgb,
+                                       double cornerRadius,
+                                       Executor& executor,
+                                       CancelToken cancellation   = {},
                                        ShapeWorkObserver observer = {});
 
 class ShapeEditInput final
 {
-  public:
-    ShapeEditInput(const ShapeEditInput&) = delete;
+public:
+    ShapeEditInput(const ShapeEditInput&)            = delete;
     ShapeEditInput& operator=(const ShapeEditInput&) = delete;
     ShapeEditInput(ShapeEditInput&& input) noexcept
-        : _authority(std::move(input._authority)), _source(std::move(input._source)), _active(input._active),
-          _history(std::move(input._history)), _draft(input._draft), _foreground(input._foreground),
+        : _authority(std::move(input._authority)),
+          _source(std::move(input._source)),
+          _active(input._active),
+          _history(std::move(input._history)),
+          _draft(input._draft),
+          _foreground(input._foreground),
           _valid(std::exchange(input._valid, false))
     {
     }
     ShapeEditInput& operator=(ShapeEditInput&&) = delete;
 
-  private:
+private:
     friend class DocumentSession;
-    ShapeEditInput(ImageImportAuthority authority, CanvasDocument source, std::optional<Guid> active,
-                   DocumentHistory::StateView history, ShapeDraft draft, std::uint32_t foreground) noexcept
-        : _authority(std::move(authority)), _source(std::move(source)), _active(active), _history(std::move(history)),
-          _draft(draft), _foreground(foreground)
+    ShapeEditInput(ImageImportAuthority authority,
+                   CanvasDocument source,
+                   std::optional<Guid> active,
+                   DocumentHistory::StateView history,
+                   ShapeDraft draft,
+                   std::uint32_t foreground) noexcept
+        : _authority(std::move(authority)),
+          _source(std::move(source)),
+          _active(active),
+          _history(std::move(history)),
+          _draft(draft),
+          _foreground(foreground)
     {
     }
     ImageImportAuthority _authority;
@@ -71,27 +88,24 @@ class ShapeEditInput final
 
 class PreparedShapeEdit final
 {
-  public:
-    PreparedShapeEdit(const PreparedShapeEdit&) = delete;
+public:
+    PreparedShapeEdit(const PreparedShapeEdit&)            = delete;
     PreparedShapeEdit& operator=(const PreparedShapeEdit&) = delete;
-    PreparedShapeEdit(PreparedShapeEdit&&) noexcept = default;
-    PreparedShapeEdit& operator=(PreparedShapeEdit&&) = delete;
+    PreparedShapeEdit(PreparedShapeEdit&&) noexcept        = default;
+    PreparedShapeEdit& operator=(PreparedShapeEdit&&)      = delete;
 
-    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
-        DocumentHistory::ResidencyPermit& permit) noexcept
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(DocumentHistory::ResidencyPermit& permit) noexcept
     {
         return _publication.TryAcquireHistoryResidency(permit);
     }
-    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
-                                               DocumentHistory::PrepareObserver observer = {})
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {})
     {
         return _publication.RefreshHistoryResidency(cancellation, observer);
     }
 
-  private:
+private:
     friend class DocumentSession;
-    PreparedShapeEdit(PreparedImageImport publication, std::optional<Guid> parent) noexcept
-        : _publication(std::move(publication)), _parent(parent)
+    PreparedShapeEdit(PreparedImageImport publication, std::optional<Guid> parent) noexcept : _publication(std::move(publication)), _parent(parent)
     {
     }
     PreparedImageImport _publication;

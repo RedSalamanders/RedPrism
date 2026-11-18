@@ -20,26 +20,26 @@
 
 namespace
 {
-constexpr std::size_t kWidth = 8192;
-constexpr std::size_t kHeight = 5464;
-constexpr std::size_t kBytesPerPixel = 4;
-constexpr std::size_t kBufferBytes = kWidth * kHeight * kBytesPerPixel;
-constexpr std::size_t kWarmupPairs = 2;
-constexpr std::size_t kSamplePairs = 10;
-constexpr std::uint8_t kFillValue = 0x5Au;
+constexpr std::size_t kWidth              = 8192;
+constexpr std::size_t kHeight             = 5464;
+constexpr std::size_t kBytesPerPixel      = 4;
+constexpr std::size_t kBufferBytes        = kWidth * kHeight * kBytesPerPixel;
+constexpr std::size_t kWarmupPairs        = 2;
+constexpr std::size_t kSamplePairs        = 10;
+constexpr std::uint8_t kFillValue         = 0x5Au;
 constexpr std::uint64_t kExpectedChecksum = static_cast<std::uint64_t>(kBufferBytes) * kFillValue;
 
 struct Distribution final
 {
-    double median = 0;
-    double p95 = 0;
+    double median  = 0;
+    double p95     = 0;
     double maximum = 0;
 };
 
 struct ProcessMemory final
 {
-    DWORD pageFaults = 0;
-    SIZE_T workingSet = 0;
+    DWORD pageFaults    = 0;
+    SIZE_T workingSet   = 0;
     SIZE_T privateUsage = 0;
 };
 
@@ -47,14 +47,13 @@ bool CaptureProcessMemory(ProcessMemory& memory) noexcept
 {
     PROCESS_MEMORY_COUNTERS_EX counters{};
     counters.cb = static_cast<DWORD>(sizeof(counters));
-    if (!GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PPROCESS_MEMORY_COUNTERS>(&counters),
-                              static_cast<DWORD>(sizeof(counters))))
+    if (! GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PPROCESS_MEMORY_COUNTERS>(&counters), static_cast<DWORD>(sizeof(counters))))
     {
         return false;
     }
 
-    memory.pageFaults = counters.PageFaultCount;
-    memory.workingSet = counters.WorkingSetSize;
+    memory.pageFaults   = counters.PageFaultCount;
+    memory.workingSet   = counters.WorkingSetSize;
     memory.privateUsage = counters.PrivateUsage;
     return true;
 }
@@ -64,11 +63,9 @@ bool ReadCounter(LARGE_INTEGER& counter) noexcept
     return QueryPerformanceCounter(&counter) != FALSE;
 }
 
-double ElapsedMicroseconds(const LARGE_INTEGER& start, const LARGE_INTEGER& finish,
-                           const LARGE_INTEGER& frequency) noexcept
+double ElapsedMicroseconds(const LARGE_INTEGER& start, const LARGE_INTEGER& finish, const LARGE_INTEGER& frequency) noexcept
 {
-    return static_cast<double>(finish.QuadPart - start.QuadPart) * 1'000'000.0 /
-           static_cast<double>(frequency.QuadPart);
+    return static_cast<double>(finish.QuadPart - start.QuadPart) * 1'000'000.0 / static_cast<double>(frequency.QuadPart);
 }
 
 std::uint64_t Checksum(const PixelBuffer& pixels) noexcept
@@ -89,46 +86,50 @@ Distribution Summarize(const std::array<double, kSamplePairs>& samples) noexcept
     return {(sorted[kSamplePairs / 2 - 1] + sorted[kSamplePairs / 2]) / 2.0, sorted[p95Index], sorted.back()};
 }
 
-bool MeasureFresh(const LARGE_INTEGER& frequency, double& allocateUs, double& touchUs, double& releaseUs,
-                  std::uint32_t& pageFaultDelta, ProcessMemory& afterTouchMemory) noexcept
+bool MeasureFresh(const LARGE_INTEGER& frequency,
+                  double& allocateUs,
+                  double& touchUs,
+                  double& releaseUs,
+                  std::uint32_t& pageFaultDelta,
+                  ProcessMemory& afterTouchMemory) noexcept
 {
     ProcessMemory before{};
-    if (!CaptureProcessMemory(before))
+    if (! CaptureProcessMemory(before))
     {
         return false;
     }
 
     LARGE_INTEGER allocateStart{};
     LARGE_INTEGER allocateFinish{};
-    if (!ReadCounter(allocateStart))
+    if (! ReadCounter(allocateStart))
     {
         return false;
     }
     PixelBuffer pixels = PixelBuffer::TryAllocate(kBufferBytes);
-    if (!pixels || pixels.Size() != kBufferBytes)
+    if (! pixels || pixels.Size() != kBufferBytes)
     {
         std::printf("MEMORY BENCH status=failed reason=allocation bytes=%zu\n", kBufferBytes);
         return false;
     }
-    if (!ReadCounter(allocateFinish))
+    if (! ReadCounter(allocateFinish))
     {
         return false;
     }
 
     LARGE_INTEGER touchStart{};
     LARGE_INTEGER touchFinish{};
-    if (!ReadCounter(touchStart))
+    if (! ReadCounter(touchStart))
     {
         return false;
     }
     std::memset(pixels.Data(), kFillValue, pixels.Size());
-    if (!ReadCounter(touchFinish))
+    if (! ReadCounter(touchFinish))
     {
         return false;
     }
 
     ProcessMemory afterTouch{};
-    if (!CaptureProcessMemory(afterTouch))
+    if (! CaptureProcessMemory(afterTouch))
     {
         return false;
     }
@@ -141,46 +142,45 @@ bool MeasureFresh(const LARGE_INTEGER& frequency, double& allocateUs, double& to
 
     LARGE_INTEGER releaseStart{};
     LARGE_INTEGER releaseFinish{};
-    if (!ReadCounter(releaseStart))
+    if (! ReadCounter(releaseStart))
     {
         return false;
     }
     pixels = PixelBuffer{};
-    if (!ReadCounter(releaseFinish))
+    if (! ReadCounter(releaseFinish))
     {
         return false;
     }
 
-    allocateUs = ElapsedMicroseconds(allocateStart, allocateFinish, frequency);
-    touchUs = ElapsedMicroseconds(touchStart, touchFinish, frequency);
-    releaseUs = ElapsedMicroseconds(releaseStart, releaseFinish, frequency);
+    allocateUs     = ElapsedMicroseconds(allocateStart, allocateFinish, frequency);
+    touchUs        = ElapsedMicroseconds(touchStart, touchFinish, frequency);
+    releaseUs      = ElapsedMicroseconds(releaseStart, releaseFinish, frequency);
     pageFaultDelta = static_cast<std::uint32_t>(afterTouch.pageFaults - before.pageFaults);
     return true;
 }
 
-bool MeasureReuse(PixelBuffer& pixels, const LARGE_INTEGER& frequency, double& touchUs, std::uint32_t& pageFaultDelta,
-                  ProcessMemory& afterTouchMemory) noexcept
+bool MeasureReuse(PixelBuffer& pixels, const LARGE_INTEGER& frequency, double& touchUs, std::uint32_t& pageFaultDelta, ProcessMemory& afterTouchMemory) noexcept
 {
     ProcessMemory before{};
-    if (!CaptureProcessMemory(before))
+    if (! CaptureProcessMemory(before))
     {
         return false;
     }
 
     LARGE_INTEGER touchStart{};
     LARGE_INTEGER touchFinish{};
-    if (!ReadCounter(touchStart))
+    if (! ReadCounter(touchStart))
     {
         return false;
     }
     std::memset(pixels.Data(), kFillValue, pixels.Size());
-    if (!ReadCounter(touchFinish))
+    if (! ReadCounter(touchFinish))
     {
         return false;
     }
 
     ProcessMemory afterTouch{};
-    if (!CaptureProcessMemory(afterTouch))
+    if (! CaptureProcessMemory(afterTouch))
     {
         return false;
     }
@@ -191,15 +191,18 @@ bool MeasureReuse(PixelBuffer& pixels, const LARGE_INTEGER& frequency, double& t
         return false;
     }
 
-    touchUs = ElapsedMicroseconds(touchStart, touchFinish, frequency);
+    touchUs        = ElapsedMicroseconds(touchStart, touchFinish, frequency);
     pageFaultDelta = static_cast<std::uint32_t>(afterTouch.pageFaults - before.pageFaults);
     return true;
 }
 
 void PrintMemory(const char* label, const ProcessMemory& memory) noexcept
 {
-    std::printf(" %s_ws_bytes=%llu %s_private_bytes=%llu", label, static_cast<unsigned long long>(memory.workingSet),
-                label, static_cast<unsigned long long>(memory.privateUsage));
+    std::printf(" %s_ws_bytes=%llu %s_private_bytes=%llu",
+                label,
+                static_cast<unsigned long long>(memory.workingSet),
+                label,
+                static_cast<unsigned long long>(memory.privateUsage));
 }
 
 bool RunRecycleBenchmark(const LARGE_INTEGER& frequency) noexcept
@@ -211,36 +214,34 @@ bool RunRecycleBenchmark(const LARGE_INTEGER& frequency) noexcept
         return false;
     }
 
-    bool recycleInitialized = false;
+    bool recycleInitialized   = false;
     bool schedulerInitialized = false;
     JobScheduler scheduler;
-    const auto closeResources = wil::scope_exit(
-        [&]() noexcept
+    const auto closeResources = wil::scope_exit([&]() noexcept
+    {
+        if (schedulerInitialized)
         {
-            if (schedulerInitialized)
-            {
-                scheduler.Close();
-            }
-            if (recycleInitialized)
-            {
-                ClosePixelBufferRecycle();
-            }
-        });
+            scheduler.Close();
+        }
+        if (recycleInitialized)
+        {
+            ClosePixelBufferRecycle();
+        }
+    });
 
     const HRESULT initialized = static_cast<HRESULT>(scheduler.Initialize(2));
     if (FAILED(initialized))
     {
-        std::printf("MEMORY RECYCLE BENCH status=failed reason=scheduler-initialize hr=0x%08lX\n",
-                    static_cast<unsigned long>(initialized));
+        std::printf("MEMORY RECYCLE BENCH status=failed reason=scheduler-initialize hr=0x%08lX\n", static_cast<unsigned long>(initialized));
         return false;
     }
     schedulerInitialized = true;
-    if (!scheduler.EnableDeferredRelease())
+    if (! scheduler.EnableDeferredRelease())
     {
         std::printf("MEMORY RECYCLE BENCH status=failed reason=deferred-release-enable\n");
         return false;
     }
-    if (!InitializePixelBufferRecycle(2u * requiredBytes))
+    if (! InitializePixelBufferRecycle(2u * requiredBytes))
     {
         std::printf("MEMORY RECYCLE BENCH status=failed reason=recycle-initialize\n");
         return false;
@@ -252,23 +253,24 @@ bool RunRecycleBenchmark(const LARGE_INTEGER& frequency) noexcept
     std::array<double, kSamplePairs> uiRetireSamples{};
     std::array<double, kSamplePairs> settleSamples{};
     std::uint64_t pageFaultTotal = 0;
-    std::uint64_t checksumTotal = 0;
+    std::uint64_t checksumTotal  = 0;
 
     for (std::size_t iteration = 0; iteration < kWarmupPairs + kSamplePairs; ++iteration)
     {
         const std::uint64_t expectedCacheBytes = iteration == 0 ? 0 : requiredBytes;
-        const std::uint64_t cacheBeforeReuse = PixelBufferRecycleBytes();
+        const std::uint64_t cacheBeforeReuse   = PixelBufferRecycleBytes();
         if (cacheBeforeReuse != expectedCacheBytes)
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=cache-before-reuse iteration=%zu expected=%llu "
                         "actual=%llu\n",
-                        iteration, static_cast<unsigned long long>(expectedCacheBytes),
+                        iteration,
+                        static_cast<unsigned long long>(expectedCacheBytes),
                         static_cast<unsigned long long>(cacheBeforeReuse));
             return false;
         }
 
         ProcessMemory before{};
-        if (!CaptureProcessMemory(before))
+        if (! CaptureProcessMemory(before))
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=process-memory-before iteration=%zu\n", iteration);
             return false;
@@ -276,19 +278,18 @@ bool RunRecycleBenchmark(const LARGE_INTEGER& frequency) noexcept
 
         LARGE_INTEGER allocateStart{};
         LARGE_INTEGER allocateFinish{};
-        if (!ReadCounter(allocateStart))
+        if (! ReadCounter(allocateStart))
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=qpc-allocate-start iteration=%zu\n", iteration);
             return false;
         }
         PixelBuffer pixels = PixelBuffer::TryAllocate(kBufferBytes);
-        if (!pixels || pixels.Size() != kBufferBytes || pixels.AllocationBytes() != requiredBytes)
+        if (! pixels || pixels.Size() != kBufferBytes || pixels.AllocationBytes() != requiredBytes)
         {
-            std::printf("MEMORY RECYCLE BENCH status=failed reason=allocation iteration=%zu bytes=%zu\n", iteration,
-                        kBufferBytes);
+            std::printf("MEMORY RECYCLE BENCH status=failed reason=allocation iteration=%zu bytes=%zu\n", iteration, kBufferBytes);
             return false;
         }
-        if (!ReadCounter(allocateFinish))
+        if (! ReadCounter(allocateFinish))
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=qpc-allocate-finish iteration=%zu\n", iteration);
             return false;
@@ -296,13 +297,13 @@ bool RunRecycleBenchmark(const LARGE_INTEGER& frequency) noexcept
 
         LARGE_INTEGER touchStart{};
         LARGE_INTEGER touchFinish{};
-        if (!ReadCounter(touchStart))
+        if (! ReadCounter(touchStart))
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=qpc-touch-start iteration=%zu\n", iteration);
             return false;
         }
         std::memset(pixels.Data(), kFillValue, pixels.Size());
-        if (!ReadCounter(touchFinish))
+        if (! ReadCounter(touchFinish))
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=qpc-touch-finish iteration=%zu\n", iteration);
             return false;
@@ -311,12 +312,11 @@ bool RunRecycleBenchmark(const LARGE_INTEGER& frequency) noexcept
         const std::uint64_t checksum = Checksum(pixels);
         if (checksum != kExpectedChecksum)
         {
-            std::printf("MEMORY RECYCLE BENCH status=failed reason=checksum iteration=%zu actual=%llu\n", iteration,
-                        static_cast<unsigned long long>(checksum));
+            std::printf("MEMORY RECYCLE BENCH status=failed reason=checksum iteration=%zu actual=%llu\n", iteration, static_cast<unsigned long long>(checksum));
             return false;
         }
         ProcessMemory afterTouch{};
-        if (!CaptureProcessMemory(afterTouch))
+        if (! CaptureProcessMemory(afterTouch))
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=process-memory-after iteration=%zu\n", iteration);
             return false;
@@ -324,13 +324,13 @@ bool RunRecycleBenchmark(const LARGE_INTEGER& frequency) noexcept
 
         LARGE_INTEGER retireStart{};
         LARGE_INTEGER retireFinish{};
-        if (!ReadCounter(retireStart))
+        if (! ReadCounter(retireStart))
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=qpc-retire-start iteration=%zu\n", iteration);
             return false;
         }
         pixels = PixelBuffer{};
-        if (!ReadCounter(retireFinish))
+        if (! ReadCounter(retireFinish))
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=qpc-retire-finish iteration=%zu\n", iteration);
             return false;
@@ -338,21 +338,20 @@ bool RunRecycleBenchmark(const LARGE_INTEGER& frequency) noexcept
 
         LARGE_INTEGER settleStart{};
         LARGE_INTEGER settleFinish{};
-        if (!ReadCounter(settleStart))
+        if (! ReadCounter(settleStart))
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=qpc-settle-start iteration=%zu\n", iteration);
             return false;
         }
         const SettleResult settleResult = SettleJobs(scheduler, 30000);
-        if (!ReadCounter(settleFinish))
+        if (! ReadCounter(settleFinish))
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=qpc-settle-finish iteration=%zu\n", iteration);
             return false;
         }
         if (settleResult != SettleResult::Settled)
         {
-            std::printf("MEMORY RECYCLE BENCH status=failed reason=settle iteration=%zu result=%u\n", iteration,
-                        static_cast<unsigned int>(settleResult));
+            std::printf("MEMORY RECYCLE BENCH status=failed reason=settle iteration=%zu result=%u\n", iteration, static_cast<unsigned int>(settleResult));
             return false;
         }
         const std::uint64_t cacheAfterSettle = PixelBufferRecycleBytes();
@@ -360,7 +359,8 @@ bool RunRecycleBenchmark(const LARGE_INTEGER& frequency) noexcept
         {
             std::printf("MEMORY RECYCLE BENCH status=failed reason=cache-after-settle iteration=%zu expected=%llu "
                         "actual=%llu\n",
-                        iteration, static_cast<unsigned long long>(requiredBytes),
+                        iteration,
+                        static_cast<unsigned long long>(requiredBytes),
                         static_cast<unsigned long long>(cacheAfterSettle));
             return false;
         }
@@ -368,32 +368,47 @@ bool RunRecycleBenchmark(const LARGE_INTEGER& frequency) noexcept
         if (iteration >= kWarmupPairs)
         {
             const std::size_t sample = iteration - kWarmupPairs;
-            allocateSamples[sample] = ElapsedMicroseconds(allocateStart, allocateFinish, frequency);
-            touchSamples[sample] = ElapsedMicroseconds(touchStart, touchFinish, frequency);
-            uiRetireSamples[sample] = ElapsedMicroseconds(retireStart, retireFinish, frequency);
-            settleSamples[sample] = ElapsedMicroseconds(settleStart, settleFinish, frequency);
+            allocateSamples[sample]  = ElapsedMicroseconds(allocateStart, allocateFinish, frequency);
+            touchSamples[sample]     = ElapsedMicroseconds(touchStart, touchFinish, frequency);
+            uiRetireSamples[sample]  = ElapsedMicroseconds(retireStart, retireFinish, frequency);
+            settleSamples[sample]    = ElapsedMicroseconds(settleStart, settleFinish, frequency);
             pageFaultTotal += static_cast<std::uint32_t>(afterTouch.pageFaults - before.pageFaults);
             checksumTotal += checksum;
         }
     }
 
     const Distribution allocate = Summarize(allocateSamples);
-    const Distribution touch = Summarize(touchSamples);
+    const Distribution touch    = Summarize(touchSamples);
     const Distribution uiRetire = Summarize(uiRetireSamples);
-    const Distribution settle = Summarize(settleSamples);
-    std::printf(
-        "MEMORY RECYCLE BENCH width=%zu height=%zu bytes=%zu required_bytes=%llu warmup=%zu samples=%zu threads=2 "
-        "allocate_median_us=%.3f allocate_p95_us=%.3f allocate_max_us=%.3f "
-        "touch_median_us=%.3f touch_p95_us=%.3f touch_max_us=%.3f "
-        "ui_retire_median_us=%.3f ui_retire_p95_us=%.3f ui_retire_max_us=%.3f "
-        "settle_median_us=%.3f settle_p95_us=%.3f settle_max_us=%.3f "
-        "cache_bytes=%llu page_faults_total=%llu checksum=%llu "
-        "ui_retire=enqueue_only worker_offload=deferred_release_worker status=ok\n",
-        kWidth, kHeight, kBufferBytes, static_cast<unsigned long long>(requiredBytes), kWarmupPairs, kSamplePairs,
-        allocate.median, allocate.p95, allocate.maximum, touch.median, touch.p95, touch.maximum, uiRetire.median,
-        uiRetire.p95, uiRetire.maximum, settle.median, settle.p95, settle.maximum,
-        static_cast<unsigned long long>(PixelBufferRecycleBytes()), static_cast<unsigned long long>(pageFaultTotal),
-        static_cast<unsigned long long>(checksumTotal));
+    const Distribution settle   = Summarize(settleSamples);
+    std::printf("MEMORY RECYCLE BENCH width=%zu height=%zu bytes=%zu required_bytes=%llu warmup=%zu samples=%zu threads=2 "
+                "allocate_median_us=%.3f allocate_p95_us=%.3f allocate_max_us=%.3f "
+                "touch_median_us=%.3f touch_p95_us=%.3f touch_max_us=%.3f "
+                "ui_retire_median_us=%.3f ui_retire_p95_us=%.3f ui_retire_max_us=%.3f "
+                "settle_median_us=%.3f settle_p95_us=%.3f settle_max_us=%.3f "
+                "cache_bytes=%llu page_faults_total=%llu checksum=%llu "
+                "ui_retire=enqueue_only worker_offload=deferred_release_worker status=ok\n",
+                kWidth,
+                kHeight,
+                kBufferBytes,
+                static_cast<unsigned long long>(requiredBytes),
+                kWarmupPairs,
+                kSamplePairs,
+                allocate.median,
+                allocate.p95,
+                allocate.maximum,
+                touch.median,
+                touch.p95,
+                touch.maximum,
+                uiRetire.median,
+                uiRetire.p95,
+                uiRetire.maximum,
+                settle.median,
+                settle.p95,
+                settle.maximum,
+                static_cast<unsigned long long>(PixelBufferRecycleBytes()),
+                static_cast<unsigned long long>(pageFaultTotal),
+                static_cast<unsigned long long>(checksumTotal));
 
     scheduler.Close();
     schedulerInitialized = false;
@@ -406,14 +421,14 @@ bool RunRecycleBenchmark(const LARGE_INTEGER& frequency) noexcept
 int RunMemoryBenchmark()
 {
     LARGE_INTEGER frequency{};
-    if (!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0)
+    if (! QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0)
     {
         std::printf("MEMORY BENCH status=failed reason=qpc-frequency\n");
         return 1;
     }
 
     PixelBuffer reused = PixelBuffer::TryAllocate(kBufferBytes);
-    if (!reused || reused.Size() != kBufferBytes)
+    if (! reused || reused.Size() != kBufferBytes)
     {
         std::printf("MEMORY BENCH status=failed reason=reuse-allocation bytes=%zu\n", kBufferBytes);
         return 1;
@@ -426,7 +441,7 @@ int RunMemoryBenchmark()
     }
 
     ProcessMemory initialMemory{};
-    if (!CaptureProcessMemory(initialMemory))
+    if (! CaptureProcessMemory(initialMemory))
     {
         std::printf("MEMORY BENCH status=failed reason=process-memory\n");
         return 1;
@@ -443,23 +458,21 @@ int RunMemoryBenchmark()
 
     for (std::size_t pair = 0; pair < kWarmupPairs + kSamplePairs; ++pair)
     {
-        const bool freshFirst = (pair & 1u) == 0;
-        double allocateUs = 0;
-        double freshTouchUs = 0;
-        double releaseUs = 0;
-        double reuseTouchUs = 0;
+        const bool freshFirst     = (pair & 1u) == 0;
+        double allocateUs         = 0;
+        double freshTouchUs       = 0;
+        double releaseUs          = 0;
+        double reuseTouchUs       = 0;
         std::uint32_t freshFaults = 0;
         std::uint32_t reuseFaults = 0;
         ProcessMemory freshTouchMemory{};
         ProcessMemory reuseTouchMemory{};
 
-        const auto runFresh = [&]() noexcept
-        { return MeasureFresh(frequency, allocateUs, freshTouchUs, releaseUs, freshFaults, freshTouchMemory); };
-        const auto runReuse = [&]() noexcept
-        { return MeasureReuse(reused, frequency, reuseTouchUs, reuseFaults, reuseTouchMemory); };
+        const auto runFresh = [&]() noexcept { return MeasureFresh(frequency, allocateUs, freshTouchUs, releaseUs, freshFaults, freshTouchMemory); };
+        const auto runReuse = [&]() noexcept { return MeasureReuse(reused, frequency, reuseTouchUs, reuseFaults, reuseTouchMemory); };
 
         const bool succeeded = freshFirst ? (runFresh() && runReuse()) : (runReuse() && runFresh());
-        if (!succeeded)
+        if (! succeeded)
         {
             if (pair >= kWarmupPairs)
             {
@@ -470,21 +483,21 @@ int RunMemoryBenchmark()
 
         if (pair >= kWarmupPairs)
         {
-            const std::size_t sample = pair - kWarmupPairs;
-            allocateSamples[sample] = allocateUs;
+            const std::size_t sample  = pair - kWarmupPairs;
+            allocateSamples[sample]   = allocateUs;
             freshTouchSamples[sample] = freshTouchUs;
-            releaseSamples[sample] = releaseUs;
+            releaseSamples[sample]    = releaseUs;
             reuseTouchSamples[sample] = reuseTouchUs;
-            freshPageFaults[sample] = freshFaults;
-            reusePageFaults[sample] = reuseFaults;
-            lastFreshTouchMemory = freshTouchMemory;
-            lastReuseTouchMemory = reuseTouchMemory;
+            freshPageFaults[sample]   = freshFaults;
+            reusePageFaults[sample]   = reuseFaults;
+            lastFreshTouchMemory      = freshTouchMemory;
+            lastReuseTouchMemory      = reuseTouchMemory;
         }
     }
 
-    const Distribution allocate = Summarize(allocateSamples);
+    const Distribution allocate   = Summarize(allocateSamples);
     const Distribution freshTouch = Summarize(freshTouchSamples);
-    const Distribution release = Summarize(releaseSamples);
+    const Distribution release    = Summarize(releaseSamples);
     const Distribution reuseTouch = Summarize(reuseTouchSamples);
     std::uint64_t freshFaultTotal = 0;
     std::uint64_t reuseFaultTotal = 0;
@@ -500,10 +513,25 @@ int RunMemoryBenchmark()
                 "fresh_release_median_us=%.3f fresh_release_p95_us=%.3f fresh_release_max_us=%.3f "
                 "reuse_touch_median_us=%.3f reuse_touch_p95_us=%.3f reuse_touch_max_us=%.3f "
                 "fresh_page_faults_total=%llu reuse_page_faults_total=%llu checksum=%llu scope=timed_qpc_phases_only",
-                kWidth, kHeight, kBufferBytes, kWarmupPairs, kSamplePairs, allocate.median, allocate.p95,
-                allocate.maximum, freshTouch.median, freshTouch.p95, freshTouch.maximum, release.median, release.p95,
-                release.maximum, reuseTouch.median, reuseTouch.p95, reuseTouch.maximum,
-                static_cast<unsigned long long>(freshFaultTotal), static_cast<unsigned long long>(reuseFaultTotal),
+                kWidth,
+                kHeight,
+                kBufferBytes,
+                kWarmupPairs,
+                kSamplePairs,
+                allocate.median,
+                allocate.p95,
+                allocate.maximum,
+                freshTouch.median,
+                freshTouch.p95,
+                freshTouch.maximum,
+                release.median,
+                release.p95,
+                release.maximum,
+                reuseTouch.median,
+                reuseTouch.p95,
+                reuseTouch.maximum,
+                static_cast<unsigned long long>(freshFaultTotal),
+                static_cast<unsigned long long>(reuseFaultTotal),
                 static_cast<unsigned long long>(kExpectedChecksum));
     PrintMemory("initial", initialMemory);
     PrintMemory("fresh_touch", lastFreshTouchMemory);

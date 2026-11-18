@@ -13,13 +13,13 @@
 // Callbacks cannot dispatch messages, reserve a job or replace the immutable final source.
 struct FinalPublicationCallbacks final
 {
-    void* context = nullptr;
-    bool (*currentOwner)(void*) noexcept = nullptr;
-    void (*waitingOwner)(void*, bool) noexcept = nullptr;
-    void (*residencyTryOwner)(void*) noexcept = nullptr;
-    void (*refreshForWork)(void*) noexcept = nullptr;
-    void (*preparedForWork)(void*, void* shutdownEvent) noexcept = nullptr;
-    void (*appliedOwner)(void*) noexcept = nullptr;
+    void* context                                                   = nullptr;
+    bool (*currentOwner)(void*) noexcept                            = nullptr;
+    void (*waitingOwner)(void*, bool) noexcept                      = nullptr;
+    void (*residencyTryOwner)(void*) noexcept                       = nullptr;
+    void (*refreshForWork)(void*) noexcept                          = nullptr;
+    void (*preparedForWork)(void*, void* shutdownEvent) noexcept    = nullptr;
+    void (*appliedOwner)(void*) noexcept                            = nullptr;
     void (*completedOwner)(void*, bool applied, JobResult) noexcept = nullptr;
 };
 
@@ -46,7 +46,7 @@ struct SizeFinalPublicationWork final
     PreparedDocumentSize publication;
     std::unique_ptr<DeferredReleaseNode, DestroyFinalParentForWork> parent;
     std::uint64_t remainingCpuBytes = 0, finalOutputBytes = 0;
-    std::uint32_t ownerThread = 0;
+    std::uint32_t ownerThread     = 0;
     std::uint64_t displayCpuBytes = 0, displayGpuBytes = 0;
 };
 #pragma warning(pop)

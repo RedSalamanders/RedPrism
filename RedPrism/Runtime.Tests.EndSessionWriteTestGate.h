@@ -23,8 +23,8 @@ struct EndSessionWriteTestGate final
     struct Observation final
     {
         ULONGLONG deadline = 0;
-        DWORD remaining = 0;
-        DWORD result = WAIT_FAILED;
+        DWORD remaining    = 0;
+        DWORD result       = WAIT_FAILED;
     };
     // Owner-only records. The helper reads only the event and atomic fields above.
     std::array<Observation, 2> waits{};

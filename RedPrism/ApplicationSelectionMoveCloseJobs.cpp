@@ -28,7 +28,7 @@ struct SelectionMoveClosePayload final : DeferredReleaseNode
     DWORD ownerThread = 0;
     SelectionMoveClosePayload() noexcept
     {
-        bytes = kDeferredReleaseThreshold;
+        bytes   = kDeferredReleaseThreshold;
         destroy = [](DeferredReleaseNode* node) noexcept
         { const std::unique_ptr<SelectionMoveClosePayload> owned(static_cast<SelectionMoveClosePayload*>(node)); };
     }
@@ -48,7 +48,7 @@ struct RetireSelectionMoveClosePayload final
 {
     void operator()(SelectionMoveClosePayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload))
+        if (payload && ! TryDeferRelease(*payload))
         {
             const std::unique_ptr<SelectionMoveClosePayload> owned(payload);
         }
@@ -62,13 +62,26 @@ struct RetireSelectionMoveClosePayload final
 #pragma warning(disable : 4625 4626 5027)
 class Application::SelectionMoveCloseJob final : public Job
 {
-  public:
-    SelectionMoveCloseJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t opening, bool cancel,
-                          std::uint64_t retirement, std::uint64_t declaredMemory, bool scalar) noexcept
-        : _owner(owner), _stamp(stamp), _opening(opening), _cancel(cancel), _retirement(retirement),
-          _declaredMemory(declaredMemory), _scalar(scalar), _generation(owner._session.Generation()),
-          _active(owner._session.ActiveLayerID()), _crop(owner._session.CropFrame()),
-          _maskSelected(owner._session.IsMaskSelected()), _gate(owner._selectionMoveCloseTestGate),
+public:
+    SelectionMoveCloseJob(Application& owner,
+                          HistoryWorkStamp stamp,
+                          std::uint64_t opening,
+                          bool cancel,
+                          std::uint64_t retirement,
+                          std::uint64_t declaredMemory,
+                          bool scalar) noexcept
+        : _owner(owner),
+          _stamp(stamp),
+          _opening(opening),
+          _cancel(cancel),
+          _retirement(retirement),
+          _declaredMemory(declaredMemory),
+          _scalar(scalar),
+          _generation(owner._session.Generation()),
+          _active(owner._session.ActiveLayerID()),
+          _crop(owner._session.CropFrame()),
+          _maskSelected(owner._session.IsMaskSelected()),
+          _gate(owner._selectionMoveCloseTestGate),
           _ownerThread(GetCurrentThreadId())
     {
     }
@@ -76,15 +89,15 @@ class Application::SelectionMoveCloseJob final : public Job
     {
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
-        if (!_payload)
+        if (! _payload)
         {
             if (_scalar)
             {
-                auto payload = std::make_unique<SelectionMoveClosePayload>();
-                payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
+                auto payload            = std::make_unique<SelectionMoveClosePayload>();
+                payload->bytes          = (std::max)(_retirement, kDeferredReleaseThreshold);
                 payload->geometryMemory = SharedPublicationMemory::CreateForWork(_declaredMemory);
-                payload->gate = _gate;
-                payload->ownerThread = _ownerThread;
+                payload->gate           = _gate;
+                payload->ownerThread    = _ownerThread;
                 if (_gate)
                 {
                     _gate->geometryMemory = payload->geometryMemory;
@@ -97,34 +110,33 @@ class Application::SelectionMoveCloseJob final : public Job
         DocumentHistory::PrepareObserver observer;
         if (_gate && _gate->throwHistoryStage)
             observer = {[](void* opaque, DocumentHistory::PrepareStage stage)
-                        {
-                            auto& gate = *static_cast<SelectionMoveCloseTestGate*>(opaque);
-                            if (gate.throwHistoryStage == stage)
-                            {
-                                gate.historyFaultHits.fetch_add(1);
-                                throw std::bad_alloc{};
-                            }
-                        },
+            {
+                auto& gate = *static_cast<SelectionMoveCloseTestGate*>(opaque);
+                if (gate.throwHistoryStage == stage)
+                {
+                    gate.historyFaultHits.fetch_add(1);
+                    throw std::bad_alloc{};
+                }
+            },
                         _gate.get()};
-        if (!_payload->input)
+        if (! _payload->input)
             return {JobStatus::Failed, E_UNEXPECTED};
         _payload->publication = DocumentSession::PrepareSelectionMoveClosurePublication(
             std::move(_payload->input.value()), context.cancellation, observer, nullptr, _payload->geometryMemory);
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
-        if (!_payload->publication)
+        if (! _payload->publication)
             return {JobStatus::Failed, E_FAIL};
         if (_gate && _gate->hold)
         {
             _gate->visits.fetch_add(1);
-            if (!PostThreadMessageW(_ownerThread, SelectionMoveCloseTestGate::kMessage, 0, 0))
+            if (! PostThreadMessageW(_ownerThread, SelectionMoveCloseTestGate::kMessage, 0, 0))
                 return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
             const HANDLE handles[]{_gate->release.get(), context.shutdownEvent};
             const auto waited = WaitForMultipleObjects(2, handles, FALSE, 10000);
             if (context.cancellation.IsCancelled() || waited == WAIT_OBJECT_0 + 1)
                 return {JobStatus::Cancelled};
-            return waited == WAIT_OBJECT_0 ? _gate->result
-                                           : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
+            return waited == WAIT_OBJECT_0 ? _gate->result : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
         }
         return {};
     }
@@ -140,27 +152,25 @@ class Application::SelectionMoveCloseJob final : public Job
     }
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (result.status != JobStatus::Finished || _captured || !Current() ||
-            _owner._historyWork.CancelRequested(_stamp))
+        if (result.status != JobStatus::Finished || _captured || ! Current() || _owner._historyWork.CancelRequested(_stamp))
             return false;
         try
         {
-            if (!_payload)
+            if (! _payload)
             {
                 _payload.reset(std::make_unique<SelectionMoveClosePayload>().release());
-                _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
-                _payload->gate = _gate;
+                _payload->bytes       = (std::max)(_retirement, kDeferredReleaseThreshold);
+                _payload->gate        = _gate;
                 _payload->ownerThread = _ownerThread;
             }
             if (_gate)
             {
-                _gate->reservationHeld.store(_gate->reservationBytes != 0 &&
-                                             _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes);
+                _gate->reservationHeld.store(_gate->reservationBytes != 0 && _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes);
                 if (_gate->throwCaptureFailure)
                     throw std::bad_alloc{};
             }
             _payload->input = _owner._session.PrepareSelectionMoveClosureInput(_cancel, _opening);
-            if (!_payload->input)
+            if (! _payload->input)
             {
                 _captureError = E_ABORT;
                 return false;
@@ -183,38 +193,36 @@ class Application::SelectionMoveCloseJob final : public Job
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
-        std::int32_t error = result.error;
-        if (!Current())
+        std::int32_t error  = result.error;
+        if (! Current())
         {
             outcome = HostOutcome::Stale;
-            error = E_ABORT;
+            error   = E_ABORT;
         }
         else if (_owner._historyWork.CancelRequested(_stamp))
         {
             outcome = HostOutcome::Cancelled;
-            error = E_ABORT;
+            error   = E_ABORT;
         }
         else if (_captureError && outcome == HostOutcome::Succeeded)
         {
             outcome = HostOutcome::Failed;
-            error = _captureError;
+            error   = _captureError;
         }
         else if (outcome == HostOutcome::Succeeded)
         {
-            const auto bound = !_scalar ? S_OK
-                               : _payload && _payload->geometryMemory
-                                   ? _payload->geometryMemory->BindAfterCompletedWork(_owner._jobs, _ticket)
-                                   : E_UNEXPECTED;
+            const auto bound = ! _scalar                              ? S_OK
+                               : _payload && _payload->geometryMemory ? _payload->geometryMemory->BindAfterCompletedWork(_owner._jobs, _ticket)
+                                                                      : E_UNEXPECTED;
             if (FAILED(bound))
             {
                 outcome = HostOutcome::Failed;
-                error = bound;
+                error   = bound;
             }
-            else if (!_payload || !_payload->publication ||
-                     !_owner._session.ApplyPreparedSelectionMoveClosureIfCurrent(_payload->publication.value()))
+            else if (! _payload || ! _payload->publication || ! _owner._session.ApplyPreparedSelectionMoveClosureIfCurrent(_payload->publication.value()))
             {
                 outcome = HostOutcome::Stale;
-                error = E_ABORT;
+                error   = E_ABORT;
             }
         }
         BindRetirement();
@@ -227,28 +235,22 @@ class Application::SelectionMoveCloseJob final : public Job
         _owner.ResumeHostHistory(_stamp, outcome, error);
     }
 
-  private:
+private:
     [[nodiscard]] bool Current() const noexcept
     {
-        const auto* size = _owner._activeHostRequest
-                               ? std::get_if<HostSizeApplyInput>(&_owner._activeHostRequest->input.Input())
-                               : nullptr;
-        const bool sizeCurrent = !size || !size->selectionMoveOpening ||
-                                 (size->invocation == _owner._sizeInvocation && _owner.SizeCardOpen() &&
-                                  _owner.CanQueueSelectionSizeOutline());
-        const bool ownsLifecycleOutline = _owner._activeHostRequest && _owner.SelectionLifecycleRequestOpening(
-                                                                           _owner._activeHostRequest->input.Input());
-        const bool lifecycleCurrent = !ownsLifecycleOutline || _owner.SelectionLifecycleOutlineCurrent();
-        return !_owner._shutdownStarted && _owner._selectionMoveCloseStamp == _stamp && sizeCurrent &&
-               lifecycleCurrent && _owner._historyWork.IsCurrent(_stamp) &&
-               _owner._session.DocumentSerial() == _stamp.documentSerial &&
-               _owner._session.SelectionMoveOpening() == std::optional(_opening) &&
-               _owner._session.Generation() == _generation && _owner._session.ActiveLayerID() == _active &&
-               _owner._session.CropFrame() == _crop && _owner._session.IsMaskSelected() == _maskSelected;
+        const auto* size                = _owner._activeHostRequest ? std::get_if<HostSizeApplyInput>(&_owner._activeHostRequest->input.Input()) : nullptr;
+        const bool sizeCurrent          = ! size || ! size->selectionMoveOpening ||
+                                          (size->invocation == _owner._sizeInvocation && _owner.SizeCardOpen() && _owner.CanQueueSelectionSizeOutline());
+        const bool ownsLifecycleOutline = _owner._activeHostRequest && _owner.SelectionLifecycleRequestOpening(_owner._activeHostRequest->input.Input());
+        const bool lifecycleCurrent     = ! ownsLifecycleOutline || _owner.SelectionLifecycleOutlineCurrent();
+        return ! _owner._shutdownStarted && _owner._selectionMoveCloseStamp == _stamp && sizeCurrent && lifecycleCurrent &&
+               _owner._historyWork.IsCurrent(_stamp) && _owner._session.DocumentSerial() == _stamp.documentSerial &&
+               _owner._session.SelectionMoveOpening() == std::optional(_opening) && _owner._session.Generation() == _generation &&
+               _owner._session.ActiveLayerID() == _active && _owner._session.CropFrame() == _crop && _owner._session.IsMaskSelected() == _maskSelected;
     }
     void BindRetirement() noexcept
     {
-        if (_payload && _payload->geometryMemory && !_payload->geometryMemory->IsBound() &&
+        if (_payload && _payload->geometryMemory && ! _payload->geometryMemory->IsBound() &&
             FAILED(_payload->geometryMemory->BindForRetirement(_owner._jobs, _ticket)))
             std::terminate(); // The descriptor reserved this exact original retirement slot.
     }
@@ -279,22 +281,19 @@ HRESULT Application::StartSelectionMoveClose(std::uint64_t opening, bool cancel)
     if (_session.SelectionMoveOpening() != std::optional(opening))
         return E_ABORT;
     const auto ordinal = _activeHostRequest ? std::optional(_activeHostRequest->ordinal) : _historyWork.NextOrdinal();
-    if (!ordinal)
+    if (! ordinal)
         return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
-    _selectionMoveCloseStamp =
-        _historyWork.Begin(_session.DocumentSerial(), ordinal.value(), HistoryWorkKind::Selection);
-    if (!_selectionMoveCloseStamp && _hostFinishedStamp && _hostFinishedStamp->ordinal == ordinal.value())
-        _selectionMoveCloseStamp =
-            _historyWork.Continue(_hostFinishedStamp.value(), _session.DocumentSerial(), HistoryWorkKind::Selection);
-    if (!_selectionMoveCloseStamp)
+    _selectionMoveCloseStamp = _historyWork.Begin(_session.DocumentSerial(), ordinal.value(), HistoryWorkKind::Selection);
+    if (! _selectionMoveCloseStamp && _hostFinishedStamp && _hostFinishedStamp->ordinal == ordinal.value())
+        _selectionMoveCloseStamp = _historyWork.Continue(_hostFinishedStamp.value(), _session.DocumentSerial(), HistoryWorkKind::Selection);
+    if (! _selectionMoveCloseStamp)
         return E_UNEXPECTED;
-    auto memory = _session.SelectionMoveClosureMemoryBytes();
-    auto retirement = _session.SelectionMoveClosureRetirementMemoryBytes();
+    auto memory        = _session.SelectionMoveClosureMemoryBytes();
+    auto retirement    = _session.SelectionMoveClosureRetirementMemoryBytes();
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
-    HRESULT result = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    const bool scalar = _session.IsDeferredSelectionMove();
-    const auto extra = sizeof(SelectionMoveCloseJob) + sizeof(SelectionMoveClosePayload) +
-                       (scalar ? SharedPublicationMemory::OwnershipAllowance() : 0);
+    HRESULT result     = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    const bool scalar  = _session.IsDeferredSelectionMove();
+    const auto extra   = sizeof(SelectionMoveCloseJob) + sizeof(SelectionMoveClosePayload) + (scalar ? SharedPublicationMemory::OwnershipAllowance() : 0);
     if (memory && retirement && extra <= maximum - memory)
     {
         memory += extra;
@@ -305,15 +304,15 @@ HRESULT Application::StartSelectionMoveClose(std::uint64_t opening, bool cancel)
             {
                 if (_selectionMoveCloseTestGate)
                     _selectionMoveCloseTestGate->reservationBytes = memory;
-                std::unique_ptr<Job> job = std::make_unique<SelectionMoveCloseJob>(
-                    *this, _selectionMoveCloseStamp.value(), opening, cancel, retirement, memory, scalar);
+                std::unique_ptr<Job> job =
+                    std::make_unique<SelectionMoveCloseJob>(*this, _selectionMoveCloseStamp.value(), opening, cancel, retirement, memory, scalar);
                 JobTicket ticket;
                 result = static_cast<HRESULT>(_jobs.Submit(job,
-                                                           {.kind = JobClass::Selection,
-                                                            .serialKey = _session.DocumentSerial(),
-                                                            .memoryBytes = memory,
-                                                            .deferredRetirement = scalar,
-                                                            .allowMemoryWaiting = !scalar,
+                                                           {.kind                  = JobClass::Selection,
+                                                            .serialKey             = _session.DocumentSerial(),
+                                                            .memoryBytes           = memory,
+                                                            .deferredRetirement    = scalar,
+                                                            .allowMemoryWaiting    = ! scalar,
                                                             .reserveRetainedMemory = scalar},
                                                            ticket));
                 if (SUCCEEDED(result))

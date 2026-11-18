@@ -17,9 +17,9 @@
 namespace
 {
 constexpr std::uint64_t kReservationBytes = 4096;
-constexpr std::uint64_t kAvailableBytes = 2ull * 1024 * 1024 * 1024;
-constexpr std::uint64_t kFirstSerialKey = 0x4A524101;
-constexpr std::uint64_t kSecondSerialKey = 0x4A524102;
+constexpr std::uint64_t kAvailableBytes   = 2ull * 1024 * 1024 * 1024;
+constexpr std::uint64_t kFirstSerialKey   = 0x4A524101;
+constexpr std::uint64_t kSecondSerialKey  = 0x4A524102;
 
 void Expect(bool condition, const char* name, int& failures) noexcept
 {
@@ -37,14 +37,14 @@ void Expect(bool condition, const char* name, int& failures) noexcept
 wil::unique_handle Event()
 {
     wil::unique_handle event{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    if (!event)
+    if (! event)
         SetupFailure("create-event");
     return event;
 }
 
 void Wait(HANDLE event, const char* name) noexcept
 {
-    if (!event || WaitForSingleObject(event, 10000) != WAIT_OBJECT_0)
+    if (! event || WaitForSingleObject(event, 10000) != WAIT_OBJECT_0)
         SetupFailure(name); // A bounded wait reports a stuck state transition; elapsed time is not an assertion.
 }
 
@@ -65,9 +65,9 @@ struct JoinedState final
     JobTicket ticket{};
     JobTicket otherTicket{};
     std::uint64_t serialKey = 0;
-    HANDLE entered = nullptr;
-    HANDLE release = nullptr;
-    HANDLE ended = nullptr;
+    HANDLE entered          = nullptr;
+    HANDLE release          = nullptr;
+    HANDLE ended            = nullptr;
     const DWORD ownerThread = GetCurrentThreadId();
     std::atomic<unsigned int> runs{0};
     std::atomic<unsigned int> runEnds{0};
@@ -94,8 +94,7 @@ DWORD WINAPI QueryJoinedAuthorityFromForeignThread(void* opaque) noexcept
 {
     auto& state = *static_cast<JoinedState*>(opaque);
     state.offOwnerSawHookActive.store(state.hookActive.load(std::memory_order_acquire), std::memory_order_relaxed);
-    state.offOwnerQueryFalse.store(!state.scheduler->InJoinedRetirementCallback(state.ticket),
-                                   std::memory_order_relaxed);
+    state.offOwnerQueryFalse.store(! state.scheduler->InJoinedRetirementCallback(state.ticket), std::memory_order_relaxed);
     return 0;
 }
 
@@ -105,16 +104,17 @@ DWORD WINAPI QueryJoinedAuthorityFromForeignThread(void* opaque) noexcept
 #pragma warning(disable : 4626 5027)
 class SuspendedJoinedJob final : public Job
 {
-  public:
-    explicit SuspendedJoinedJob(JoinedState& state) noexcept : _state(state) {}
+public:
+    explicit SuspendedJoinedJob(JoinedState& state) noexcept : _state(state)
+    {
+    }
 
     JobResult Run(JobContext&) override
     {
         _state.runs.fetch_add(1, std::memory_order_relaxed);
         (void)SetEvent(_state.entered);
         Wait(_state.release, "worker-release");
-        _state.workerQueryFalse.store(!_state.scheduler->InJoinedRetirementCallback(_state.ticket),
-                                      std::memory_order_relaxed);
+        _state.workerQueryFalse.store(! _state.scheduler->InJoinedRetirementCallback(_state.ticket), std::memory_order_relaxed);
         _state.runEnds.fetch_add(1, std::memory_order_release);
         (void)SetEvent(_state.ended);
         return {};
@@ -122,8 +122,7 @@ class SuspendedJoinedJob final : public Job
 
     bool DeferRetirement(JobResult, JobTicket) noexcept override
     {
-        _state.deferRetirementQueryFalse.store(!_state.scheduler->InJoinedRetirementCallback(_state.ticket),
-                                               std::memory_order_relaxed);
+        _state.deferRetirementQueryFalse.store(! _state.scheduler->InJoinedRetirementCallback(_state.ticket), std::memory_order_relaxed);
         _state.deferRetirementCalls.fetch_add(1, std::memory_order_release);
         return true; // The successful real worker stage remains suspended until actual Close.
     }
@@ -135,20 +134,16 @@ class SuspendedJoinedJob final : public Job
         _state.joinedTicketMatchesOriginal.store(original == _state.ticket, std::memory_order_relaxed);
         _state.joinedQueryTrue.store(scheduler.InJoinedRetirementCallback(original), std::memory_order_relaxed);
         const JobTicket wrong{original.slot, original.generation + 1};
-        _state.wrongTicketFalse.store(!scheduler.InJoinedRetirementCallback(wrong), std::memory_order_relaxed);
-        _state.otherTicketFalse.store(!scheduler.InJoinedRetirementCallback(_state.otherTicket),
-                                      std::memory_order_relaxed);
-        _state.acknowledgedQueryFalse.store(!scheduler.InAcknowledgedJobCallback(original), std::memory_order_relaxed);
-        _state.hookSawBothWorkersEnded.store(
-            _state.runs.load(std::memory_order_acquire) == 1 && _state.runEnds.load(std::memory_order_acquire) == 1 &&
-                _state.otherState != nullptr && _state.otherState->runs.load(std::memory_order_acquire) == 1 &&
-                _state.otherState->runEnds.load(std::memory_order_acquire) == 1,
-            std::memory_order_relaxed);
-        _state.hookSawBothReservations.store(scheduler.ReservedMemoryBytes() == 2 * kReservationBytes,
+        _state.wrongTicketFalse.store(! scheduler.InJoinedRetirementCallback(wrong), std::memory_order_relaxed);
+        _state.otherTicketFalse.store(! scheduler.InJoinedRetirementCallback(_state.otherTicket), std::memory_order_relaxed);
+        _state.acknowledgedQueryFalse.store(! scheduler.InAcknowledgedJobCallback(original), std::memory_order_relaxed);
+        _state.hookSawBothWorkersEnded.store(_state.runs.load(std::memory_order_acquire) == 1 && _state.runEnds.load(std::memory_order_acquire) == 1 &&
+                                                 _state.otherState != nullptr && _state.otherState->runs.load(std::memory_order_acquire) == 1 &&
+                                                 _state.otherState->runEnds.load(std::memory_order_acquire) == 1,
                                              std::memory_order_relaxed);
-        wil::unique_handle foreignThread{
-            CreateThread(nullptr, 0, QueryJoinedAuthorityFromForeignThread, &_state, 0, nullptr)};
-        if (!foreignThread)
+        _state.hookSawBothReservations.store(scheduler.ReservedMemoryBytes() == 2 * kReservationBytes, std::memory_order_relaxed);
+        wil::unique_handle foreignThread{CreateThread(nullptr, 0, QueryJoinedAuthorityFromForeignThread, &_state, 0, nullptr)};
+        if (! foreignThread)
             SetupFailure("create-foreign-query-thread");
         Wait(foreignThread.get(), "foreign-query-thread-join-inside-hook");
         _state.hookActive.store(false, std::memory_order_release);
@@ -165,7 +160,7 @@ class SuspendedJoinedJob final : public Job
         _state.completed.fetch_add(1, std::memory_order_relaxed);
     }
 
-  private:
+private:
     JoinedState& _state;
 };
 #pragma warning(pop)
@@ -191,8 +186,10 @@ struct NormalState final
 #pragma warning(disable : 4626 5027)
 class NormalCallbackJob final : public Job
 {
-  public:
-    explicit NormalCallbackJob(NormalState& state) noexcept : _state(state) {}
+public:
+    explicit NormalCallbackJob(NormalState& state) noexcept : _state(state)
+    {
+    }
 
     JobResult Run(JobContext&) override
     {
@@ -201,39 +198,36 @@ class NormalCallbackJob final : public Job
 
     bool DeferRetirement(JobResult, JobTicket ticket) noexcept override
     {
-        _state.deferRetirementFalse.store(!_state.scheduler->InJoinedRetirementCallback(ticket),
-                                          std::memory_order_relaxed);
+        _state.deferRetirementFalse.store(! _state.scheduler->InJoinedRetirementCallback(ticket), std::memory_order_relaxed);
         return false;
     }
 
     bool DeferCompletion(JobResult, JobTicket ticket) noexcept override
     {
-        _state.deferCompletionFalse.store(!_state.scheduler->InJoinedRetirementCallback(ticket),
-                                          std::memory_order_relaxed);
+        _state.deferCompletionFalse.store(! _state.scheduler->InJoinedRetirementCallback(ticket), std::memory_order_relaxed);
         return false;
     }
 
     void Completed(JobResult) noexcept override
     {
-        _state.completedFalse.store(!_state.scheduler->InJoinedRetirementCallback(_state.ticket),
-                                    std::memory_order_relaxed);
+        _state.completedFalse.store(! _state.scheduler->InJoinedRetirementCallback(_state.ticket), std::memory_order_relaxed);
         _state.completed.fetch_add(1, std::memory_order_relaxed);
     }
 
-  private:
+private:
     NormalState& _state;
 };
 #pragma warning(pop)
 
 void SubmitSuspended(JobScheduler& scheduler, JoinedState& state) noexcept
 {
-    state.scheduler = &scheduler;
+    state.scheduler          = &scheduler;
     std::unique_ptr<Job> job = std::make_unique<SuspendedJoinedJob>(state);
-    const JobOptions options{.kind = JobClass::Commit,
-                             .serialKey = state.serialKey,
-                             .memoryBytes = kReservationBytes,
-                             .deferredRetirement = true,
-                             .allowMemoryWaiting = false,
+    const JobOptions options{.kind                  = JobClass::Commit,
+                             .serialKey             = state.serialKey,
+                             .memoryBytes           = kReservationBytes,
+                             .deferredRetirement    = true,
+                             .allowMemoryWaiting    = false,
                              .reserveRetainedMemory = true};
     if (scheduler.Submit(job, options, state.ticket) != S_OK || job)
         SetupFailure("suspended-submit");
@@ -241,13 +235,13 @@ void SubmitSuspended(JobScheduler& scheduler, JoinedState& state) noexcept
 
 void SubmitNormal(JobScheduler& scheduler, NormalState& state) noexcept
 {
-    state.scheduler = &scheduler;
+    state.scheduler          = &scheduler;
     std::unique_ptr<Job> job = std::make_unique<NormalCallbackJob>(state);
-    const JobOptions options{.kind = JobClass::Background,
-                             .serialKey = 0,
-                             .memoryBytes = 0,
-                             .deferredRetirement = true,
-                             .allowMemoryWaiting = false,
+    const JobOptions options{.kind                  = JobClass::Background,
+                             .serialKey             = 0,
+                             .memoryBytes           = 0,
+                             .deferredRetirement    = true,
+                             .allowMemoryWaiting    = false,
                              .reserveRetainedMemory = false};
     if (scheduler.Submit(job, options, state.ticket) != S_OK || job)
         SetupFailure("normal-submit");
@@ -256,15 +250,13 @@ void SubmitNormal(JobScheduler& scheduler, NormalState& state) noexcept
 void DrainUntilRetirementCallbacks(JobScheduler& scheduler, JoinedState& first, JoinedState& second) noexcept
 {
     constexpr ULONGLONG kFailureDeadlineMs = 10000;
-    const ULONGLONG deadline = GetTickCount64() + kFailureDeadlineMs;
-    while (first.deferRetirementCalls.load(std::memory_order_acquire) != 1 ||
-           second.deferRetirementCalls.load(std::memory_order_acquire) != 1)
+    const ULONGLONG deadline               = GetTickCount64() + kFailureDeadlineMs;
+    while (first.deferRetirementCalls.load(std::memory_order_acquire) != 1 || second.deferRetirementCalls.load(std::memory_order_acquire) != 1)
     {
         if (GetTickCount64() >= deadline)
             SetupFailure("retirement-callback-witness-deadline");
         (void)DrainCompletions(scheduler);
-        if (first.deferRetirementCalls.load(std::memory_order_acquire) == 1 &&
-            second.deferRetirementCalls.load(std::memory_order_acquire) == 1)
+        if (first.deferRetirementCalls.load(std::memory_order_acquire) == 1 && second.deferRetirementCalls.load(std::memory_order_acquire) == 1)
             return;
         if (scheduler.HasUiWork())
             continue;
@@ -273,8 +265,8 @@ void DrainUntilRetirementCallbacks(JobScheduler& scheduler, JoinedState& first, 
         if (now >= deadline)
             SetupFailure("retirement-callback-witness-deadline");
         const DWORD remaining = static_cast<DWORD>(deadline - now);
-        const HANDLE wake = static_cast<HANDLE>(scheduler.WakeHandle());
-        if (!wake || WaitForSingleObject(wake, remaining) != WAIT_OBJECT_0)
+        const HANDLE wake     = static_cast<HANDLE>(scheduler.WakeHandle());
+        if (! wake || WaitForSingleObject(wake, remaining) != WAIT_OBJECT_0)
             SetupFailure("retirement-callback-witness-wake");
     }
 }
@@ -283,22 +275,22 @@ void RunJoinedAuthorityScenario(int& failures)
 {
     JoinedState first;
     JoinedState second;
-    auto firstEntered = Event();
-    auto firstRelease = Event();
-    auto firstEnded = Event();
+    auto firstEntered  = Event();
+    auto firstRelease  = Event();
+    auto firstEnded    = Event();
     auto secondEntered = Event();
     auto secondRelease = Event();
-    auto secondEnded = Event();
-    first.entered = firstEntered.get();
-    first.release = firstRelease.get();
-    first.ended = firstEnded.get();
-    second.entered = secondEntered.get();
-    second.release = secondRelease.get();
-    second.ended = secondEnded.get();
-    first.otherState = &second;
-    second.otherState = &first;
-    first.serialKey = kFirstSerialKey;
-    second.serialKey = kSecondSerialKey;
+    auto secondEnded   = Event();
+    first.entered      = firstEntered.get();
+    first.release      = firstRelease.get();
+    first.ended        = firstEnded.get();
+    second.entered     = secondEntered.get();
+    second.release     = secondRelease.get();
+    second.ended       = secondEnded.get();
+    first.otherState   = &second;
+    second.otherState  = &first;
+    first.serialKey    = kFirstSerialKey;
+    second.serialKey   = kSecondSerialKey;
 
     JobScheduler scheduler;
     if (scheduler.Initialize(2, {}, {SampleMemory, nullptr}) != S_OK)
@@ -306,63 +298,62 @@ void RunJoinedAuthorityScenario(int& failures)
     NormalState normal;
     SubmitNormal(scheduler, normal);
     Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "normal-callbacks-settle", failures);
-    Expect(normal.completed.load(std::memory_order_relaxed) == 1 && normal.deferRetirementFalse.load() &&
-               normal.deferCompletionFalse.load() && normal.completedFalse.load(),
-           "normal-retirement-completion-and-completed-callbacks-lack-joined-authority", failures);
+    Expect(normal.completed.load(std::memory_order_relaxed) == 1 && normal.deferRetirementFalse.load() && normal.deferCompletionFalse.load() &&
+               normal.completedFalse.load(),
+           "normal-retirement-completion-and-completed-callbacks-lack-joined-authority",
+           failures);
 
     SubmitSuspended(scheduler, first);
     Wait(firstEntered.get(), "first-worker-entered");
     SubmitSuspended(scheduler, second);
     Wait(secondEntered.get(), "second-worker-entered");
-    first.otherTicket = second.ticket;
-    second.otherTicket = first.ticket;
-    const bool firstReleased = SetEvent(firstRelease.get()) != FALSE;
+    first.otherTicket         = second.ticket;
+    second.otherTicket        = first.ticket;
+    const bool firstReleased  = SetEvent(firstRelease.get()) != FALSE;
     const bool secondReleased = SetEvent(secondRelease.get()) != FALSE;
     Expect(firstReleased && secondReleased, "worker-gates-released", failures);
     Wait(firstEnded.get(), "first-worker-ended");
     Wait(secondEnded.get(), "second-worker-ended");
     DrainUntilRetirementCallbacks(scheduler, first, second);
 
-    Expect(first.runs.load() == 1 && second.runs.load() == 1 && first.runEnds.load() == 1 &&
-               second.runEnds.load() == 1 && first.workerQueryFalse.load() && second.workerQueryFalse.load(),
-           "actual-worker-stages-finish-and-cannot-query-joined-authority", failures);
-    Expect(first.serialKey != 0 && second.serialKey != 0 && first.serialKey != second.serialKey &&
-               first.ticket != second.ticket && scheduler.ReservedMemoryBytes() == 2 * kReservationBytes,
-           "distinct-nonzero-serial-keys-original-tickets-and-fixed-reservations", failures);
-    Expect(first.deferRetirementCalls.load() == 1 && second.deferRetirementCalls.load() == 1 &&
-               first.joinedHooks.load() == 0 && second.joinedHooks.load() == 0 &&
-               !scheduler.InJoinedRetirementCallback(first.ticket) &&
-               !scheduler.InJoinedRetirementCallback(second.ticket) && first.deferRetirementQueryFalse.load() &&
-               second.deferRetirementQueryFalse.load(),
-           "suspended-defer-retirement-is-outside-joined-close-authority", failures);
+    Expect(first.runs.load() == 1 && second.runs.load() == 1 && first.runEnds.load() == 1 && second.runEnds.load() == 1 && first.workerQueryFalse.load() &&
+               second.workerQueryFalse.load(),
+           "actual-worker-stages-finish-and-cannot-query-joined-authority",
+           failures);
+    Expect(first.serialKey != 0 && second.serialKey != 0 && first.serialKey != second.serialKey && first.ticket != second.ticket &&
+               scheduler.ReservedMemoryBytes() == 2 * kReservationBytes,
+           "distinct-nonzero-serial-keys-original-tickets-and-fixed-reservations",
+           failures);
+    Expect(first.deferRetirementCalls.load() == 1 && second.deferRetirementCalls.load() == 1 && first.joinedHooks.load() == 0 &&
+               second.joinedHooks.load() == 0 && ! scheduler.InJoinedRetirementCallback(first.ticket) &&
+               ! scheduler.InJoinedRetirementCallback(second.ticket) && first.deferRetirementQueryFalse.load() && second.deferRetirementQueryFalse.load(),
+           "suspended-defer-retirement-is-outside-joined-close-authority",
+           failures);
 
     scheduler.Close(); // Real Close joins scheduler producers before invoking each suspended job's hook.
 
-    Expect(first.joinedHooks.load() == 1 && second.joinedHooks.load() == 1,
-           "actual-close-invokes-each-original-hook-once", failures);
+    Expect(first.joinedHooks.load() == 1 && second.joinedHooks.load() == 1, "actual-close-invokes-each-original-hook-once", failures);
     Expect(first.joinedQueryTrue.load() && second.joinedQueryTrue.load() && first.joinedTicketMatchesOriginal.load() &&
-               second.joinedTicketMatchesOriginal.load() && first.wrongTicketFalse.load() &&
-               second.wrongTicketFalse.load(),
-           "joined-authority-is-true-only-for-exact-original-ticket", failures);
-    Expect(first.offOwnerQueryFalse.load() && second.offOwnerQueryFalse.load() && first.offOwnerSawHookActive.load() &&
-               second.offOwnerSawHookActive.load(),
-           "foreign-thread-query-is-false-while-each-owner-hook-is-active", failures);
-    Expect(first.otherTicketFalse.load() && second.otherTicketFalse.load(), "neither-jobs-hook-proves-the-other-ticket",
+               second.joinedTicketMatchesOriginal.load() && first.wrongTicketFalse.load() && second.wrongTicketFalse.load(),
+           "joined-authority-is-true-only-for-exact-original-ticket",
            failures);
-    Expect(first.acknowledgedQueryFalse.load() && second.acknowledgedQueryFalse.load(),
-           "joined-retirement-is-not-acknowledged-job-callback", failures);
-    Expect(first.hookThread.load() == first.ownerThread && second.hookThread.load() == second.ownerThread &&
-               first.hookSawBothWorkersEnded.load() && second.hookSawBothWorkersEnded.load(),
-           "joined-hooks-run-on-owner-after-both-real-worker-stages-end", failures);
-    Expect(first.hookSawBothReservations.load() && second.hookSawBothReservations.load(),
-           "both-original-reservations-remain-held-through-their-hooks", failures);
-    Expect(first.completed.load() == 0 && second.completed.load() == 0,
-           "close-drops-useful-completed-callbacks-for-suspended-jobs", failures);
-    Expect(!scheduler.InJoinedRetirementCallback(first.ticket) && !scheduler.InJoinedRetirementCallback(second.ticket),
-           "joined-authority-clears-after-close", failures);
+    Expect(first.offOwnerQueryFalse.load() && second.offOwnerQueryFalse.load() && first.offOwnerSawHookActive.load() && second.offOwnerSawHookActive.load(),
+           "foreign-thread-query-is-false-while-each-owner-hook-is-active",
+           failures);
+    Expect(first.otherTicketFalse.load() && second.otherTicketFalse.load(), "neither-jobs-hook-proves-the-other-ticket", failures);
+    Expect(first.acknowledgedQueryFalse.load() && second.acknowledgedQueryFalse.load(), "joined-retirement-is-not-acknowledged-job-callback", failures);
+    Expect(first.hookThread.load() == first.ownerThread && second.hookThread.load() == second.ownerThread && first.hookSawBothWorkersEnded.load() &&
+               second.hookSawBothWorkersEnded.load(),
+           "joined-hooks-run-on-owner-after-both-real-worker-stages-end",
+           failures);
+    Expect(
+        first.hookSawBothReservations.load() && second.hookSawBothReservations.load(), "both-original-reservations-remain-held-through-their-hooks", failures);
+    Expect(first.completed.load() == 0 && second.completed.load() == 0, "close-drops-useful-completed-callbacks-for-suspended-jobs", failures);
+    Expect(! scheduler.InJoinedRetirementCallback(first.ticket) && ! scheduler.InJoinedRetirementCallback(second.ticket),
+           "joined-authority-clears-after-close",
+           failures);
     scheduler.Close();
-    Expect(first.joinedHooks.load() == 1 && second.joinedHooks.load() == 1,
-           "repeated-close-does-not-reinvoke-joined-hooks", failures);
+    Expect(first.joinedHooks.load() == 1 && second.joinedHooks.load() == 1, "repeated-close-does-not-reinvoke-joined-hooks", failures);
 }
 } // namespace
 

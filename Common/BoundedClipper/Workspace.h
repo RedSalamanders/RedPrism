@@ -29,10 +29,10 @@ namespace RedPrismBoundedClipper
 {
 class Workspace final
 {
-  public:
-    static constexpr std::size_t Alignment = 64;
+public:
+    static constexpr std::size_t Alignment  = 64;
     static constexpr std::size_t GuardBytes = 64;
-    static constexpr std::uint64_t Quantum = 64;
+    static constexpr std::uint64_t Quantum  = 64;
     enum class AllocationPolicy : std::uint8_t
     {
         Monotonic,
@@ -41,26 +41,33 @@ class Workspace final
     using Destructor = void (*)(void*) noexcept;
     struct Statistics
     {
-        std::size_t capacity = 0;
-        std::size_t consumed = 0;
+        std::size_t capacity    = 0;
+        std::size_t consumed    = 0;
         std::size_t allocations = 0;
         std::size_t liveObjects = 0;
         std::uint64_t workUnits = 0;
     };
 
-    explicit Workspace(std::size_t capacity, CancelToken cancellation,
-                       void (*checkpoint)(void*, std::uint64_t) noexcept = nullptr, void* context = nullptr,
-                       std::size_t allocationLimit = (std::numeric_limits<std::size_t>::max)(),
-                       AllocationPolicy policy = AllocationPolicy::Monotonic)
-        : _storage(AllocateStorage(capacity, cancellation)), _capacity(capacity), _cancellation(cancellation),
-          _checkpoint(checkpoint), _context(context), _entryExceptions(std::uncaught_exceptions()),
-          _allocationLimit(allocationLimit), _reuseFreed(policy == AllocationPolicy::ReuseFreed)
+    explicit Workspace(std::size_t capacity,
+                       CancelToken cancellation,
+                       void (*checkpoint)(void*, std::uint64_t) noexcept = nullptr,
+                       void* context                                     = nullptr,
+                       std::size_t allocationLimit                       = (std::numeric_limits<std::size_t>::max)(),
+                       AllocationPolicy policy                           = AllocationPolicy::Monotonic)
+        : _storage(AllocateStorage(capacity, cancellation)),
+          _capacity(capacity),
+          _cancellation(cancellation),
+          _checkpoint(checkpoint),
+          _context(context),
+          _entryExceptions(std::uncaught_exceptions()),
+          _allocationLimit(allocationLimit),
+          _reuseFreed(policy == AllocationPolicy::ReuseFreed)
     {
         // This engine is serial within one worker operation. No arena-owned object may escape the scope.
-        assert(!_current);
+        assert(! _current);
         _current = this;
     }
-    Workspace(const Workspace&) = delete;
+    Workspace(const Workspace&)            = delete;
     Workspace& operator=(const Workspace&) = delete;
     ~Workspace() noexcept
     {
@@ -94,12 +101,12 @@ class Workspace final
         if (workspace._allocations == workspace._allocationLimit)
             Refuse();
         bytes = std::max<std::size_t>(bytes, 1);
-        if (alignment > Alignment || !alignment || (alignment & (alignment - 1)) != 0)
+        if (alignment > Alignment || ! alignment || (alignment & (alignment - 1)) != 0)
             Refuse();
         // Offset normalization creates and retires many independent temporary paths. Its opt-in
         // size classes reuse only fully destroyed allocations within this same admitted buffer.
         // Header ownership remains in _head; reusing a slot never links it twice or allocates a free list.
-        std::size_t capacity = bytes;
+        std::size_t capacity  = bytes;
         std::size_t sizeClass = 0;
         if (workspace._reuseFreed)
         {
@@ -107,12 +114,12 @@ class Workspace final
             if (width >= std::numeric_limits<std::size_t>::digits)
                 Refuse();
             sizeClass = static_cast<std::size_t>(width);
-            capacity = std::size_t{1} << sizeClass;
+            capacity  = std::size_t{1} << sizeClass;
             if (Header* reused = workspace._free[sizeClass])
             {
                 workspace._free[sizeClass] = reused->freeNext;
-                reused->destroy = destroy;
-                reused->live = true;
+                reused->destroy            = destroy;
+                reused->live               = true;
                 ++workspace._allocations;
                 Unpoison(reused->object, capacity);
                 Poison(static_cast<std::byte*>(reused->object) + bytes, capacity - bytes + GuardBytes);
@@ -120,24 +127,22 @@ class Workspace final
             }
         }
         constexpr auto maximum = (std::numeric_limits<std::size_t>::max)();
-        const auto prefix = sizeof(Header) + sizeof(Header*);
+        const auto prefix      = sizeof(Header) + sizeof(Header*);
         if (workspace._consumed > maximum - prefix - (Alignment - 1))
             Refuse();
         const auto objectOffset = (workspace._consumed + prefix + Alignment - 1) & ~(Alignment - 1);
-        if (objectOffset > workspace._capacity || GuardBytes > workspace._capacity - objectOffset ||
-            capacity > workspace._capacity - objectOffset - GuardBytes)
+        if (objectOffset > workspace._capacity || GuardBytes > workspace._capacity - objectOffset || capacity > workspace._capacity - objectOffset - GuardBytes)
             Refuse();
-        auto* header = std::construct_at(
-            reinterpret_cast<Header*>(reinterpret_cast<std::byte*>(workspace._storage.Data()) + workspace._consumed));
+        auto* header = std::construct_at(reinterpret_cast<Header*>(reinterpret_cast<std::byte*>(workspace._storage.Data()) + workspace._consumed));
         void* object = reinterpret_cast<std::byte*>(workspace._storage.Data()) + objectOffset;
         // All returned buffers are 64-byte aligned; the back pointer is separate from their payload.
         *(static_cast<Header**>(object) - 1) = header;
-        header->next = workspace._head;
-        header->object = object;
-        header->size = capacity;
-        header->destroy = destroy;
-        header->live = true;
-        workspace._head = header;
+        header->next                         = workspace._head;
+        header->object                       = object;
+        header->size                         = capacity;
+        header->destroy                      = destroy;
+        header->live                         = true;
+        workspace._head                      = header;
         ++workspace._allocations;
         Poison(static_cast<std::byte*>(object) + bytes, capacity - bytes + GuardBytes);
         workspace._consumed = objectOffset + capacity + GuardBytes;
@@ -158,8 +163,8 @@ class Workspace final
             if (_current->_reuseFreed)
             {
                 assert(std::has_single_bit(header->size));
-                const auto sizeClass = static_cast<std::size_t>(std::bit_width(header->size) - 1);
-                header->freeNext = _current->_free[sizeClass];
+                const auto sizeClass       = static_cast<std::size_t>(std::bit_width(header->size) - 1);
+                header->freeNext           = _current->_free[sizeClass];
                 _current->_free[sizeClass] = header;
             }
         }
@@ -199,23 +204,23 @@ class Workspace final
     }
     class Suppress final
     {
-      public:
+    public:
         Suppress() noexcept : _previous(_current->_suppress)
         {
             _current->_suppress = true;
         }
-        Suppress(const Suppress&) = delete;
+        Suppress(const Suppress&)            = delete;
         Suppress& operator=(const Suppress&) = delete;
         ~Suppress() noexcept
         {
             _current->_suppress = _previous;
         }
 
-      private:
+    private:
         bool _previous;
     };
 
-  private:
+private:
     static void Unpoison(void* bytes, std::size_t count) noexcept
     {
 #if defined(REDPRISM_WAND_ARENA_ASAN)
@@ -227,8 +232,8 @@ class Workspace final
     }
     struct Header
     {
-        Header* next = nullptr;
-        void* object = nullptr;
+        Header* next     = nullptr;
+        void* object     = nullptr;
         std::size_t size = 0;
         // Only live objects have a destructor; only retired objects have a free-list link.
         union
@@ -249,10 +254,10 @@ class Workspace final
     }
     static PixelBuffer AllocateStorage(std::size_t capacity, const CancelToken& cancellation)
     {
-        if (_current || !capacity || cancellation.IsCancelled())
+        if (_current || ! capacity || cancellation.IsCancelled())
             throw std::bad_alloc{};
         auto storage = PixelBuffer::TryAllocate(capacity);
-        if (!storage)
+        if (! storage)
             throw std::bad_alloc{};
         return storage;
     }
@@ -260,23 +265,22 @@ class Workspace final
     {
         assert(_current && object);
         assert(static_cast<const std::byte*>(object) >= reinterpret_cast<std::byte*>(_current->_storage.Data()) &&
-               static_cast<const std::byte*>(object) <
-                   reinterpret_cast<std::byte*>(_current->_storage.Data()) + _current->_capacity);
+               static_cast<const std::byte*>(object) < reinterpret_cast<std::byte*>(_current->_storage.Data()) + _current->_capacity);
         return *(static_cast<Header* const*>(object) - 1);
     }
     inline static thread_local Workspace* _current = nullptr;
     PixelBuffer _storage;
-    std::size_t _capacity = 0;
-    std::size_t _consumed = 0;
+    std::size_t _capacity    = 0;
+    std::size_t _consumed    = 0;
     std::size_t _allocations = 0;
-    Header* _head = nullptr;
+    Header* _head            = nullptr;
     CancelToken _cancellation;
     void (*_checkpoint)(void*, std::uint64_t) noexcept = nullptr;
-    void* _context = nullptr;
-    int _entryExceptions = 0;
-    bool _aborted = false;
-    bool _suppress = false;
-    std::uint64_t _workUnits = 0;
+    void* _context                                     = nullptr;
+    int _entryExceptions                               = 0;
+    bool _aborted                                      = false;
+    bool _suppress                                     = false;
+    std::uint64_t _workUnits                           = 0;
     std::size_t _allocationLimit;
     bool _reuseFreed = false;
     std::array<Header*, std::numeric_limits<std::size_t>::digits> _free{};
@@ -284,7 +288,7 @@ class Workspace final
 
 template <class T> class ArenaObject
 {
-  public:
+public:
     static void* operator new(std::size_t bytes)
     {
         return Workspace::Allocate(bytes, alignof(T), [](void* object) noexcept { static_cast<T*>(object)->~T(); });
@@ -306,11 +310,13 @@ template <class T> class ArenaObject
 
 template <class T> class ArenaAllocator
 {
-  public:
-    using value_type = T;
-    using is_always_equal = std::true_type;
+public:
+    using value_type          = T;
+    using is_always_equal     = std::true_type;
     ArenaAllocator() noexcept = default;
-    template <class U> ArenaAllocator(const ArenaAllocator<U>&) noexcept {}
+    template <class U> ArenaAllocator(const ArenaAllocator<U>&) noexcept
+    {
+    }
     [[nodiscard]] T* allocate(std::size_t count)
     {
         if (count > (std::numeric_limits<std::size_t>::max)() / sizeof(T))
@@ -331,19 +337,29 @@ template <class T> class ArenaVector : public std::vector<T, ArenaAllocator<T>>,
 {
     using Base = std::vector<T, ArenaAllocator<T>>;
 
-  public:
+public:
     // MSVC's default and move vector constructors allocate a Debug iterator proxy inside noexcept.
     // Use the throwing size constructor, then swap on move. Arena exhaustion must reach the job runner.
-    ArenaVector() : Base(std::size_t{0}) {}
-    explicit ArenaVector(std::size_t count) : Base(count) {}
-    ArenaVector(std::size_t count, const T& value) : Base(count, value) {}
+    ArenaVector() : Base(std::size_t{0})
+    {
+    }
+    explicit ArenaVector(std::size_t count) : Base(count)
+    {
+    }
+    ArenaVector(std::size_t count, const T& value) : Base(count, value)
+    {
+    }
     template <class Iterator>
-        requires(!std::is_integral_v<Iterator>)
+    requires(! std::is_integral_v<Iterator>)
     ArenaVector(Iterator first, Iterator last) : Base(first, last)
     {
     }
-    ArenaVector(std::initializer_list<T> values) : Base(values) {}
-    ArenaVector(const ArenaVector& other) : Base(static_cast<const Base&>(other)) {}
+    ArenaVector(std::initializer_list<T> values) : Base(values)
+    {
+    }
+    ArenaVector(const ArenaVector& other) : Base(static_cast<const Base&>(other))
+    {
+    }
     ArenaVector(ArenaVector&& other)
 #if defined(_ITERATOR_DEBUG_LEVEL) && _ITERATOR_DEBUG_LEVEL == 0
         noexcept
@@ -367,7 +383,7 @@ template <class T> class ArenaVector : public std::vector<T, ArenaAllocator<T>>,
 
 template <class T> class ArenaQueue : public std::priority_queue<T, ArenaVector<T>>
 {
-  public:
+public:
     void Clear() noexcept
     {
         this->c.clear();
@@ -376,8 +392,10 @@ template <class T> class ArenaQueue : public std::priority_queue<T, ArenaVector<
 
 template <class Iterator> class CheckedIterator final
 {
-  public:
-    explicit CheckedIterator(Iterator iterator) : _iterator(iterator) {}
+public:
+    explicit CheckedIterator(Iterator iterator) : _iterator(iterator)
+    {
+    }
     decltype(auto) operator*() const
     {
         return *_iterator;
@@ -394,7 +412,7 @@ template <class Iterator> class CheckedIterator final
         return _iterator != other._iterator;
     }
 
-  private:
+private:
     Iterator _iterator;
 };
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -403,8 +421,10 @@ template <class Iterator> class CheckedIterator final
 #pragma warning(disable : 4626 5027)
 template <class Range> class CheckedRangeView final
 {
-  public:
-    explicit CheckedRangeView(Range& range) noexcept : _range(range) {}
+public:
+    explicit CheckedRangeView(Range& range) noexcept : _range(range)
+    {
+    }
     auto begin()
     {
         return CheckedIterator(_range.begin());
@@ -414,7 +434,7 @@ template <class Range> class CheckedRangeView final
         return CheckedIterator(_range.end());
     }
 
-  private:
+private:
     Range& _range;
 };
 #pragma warning(pop)
@@ -426,7 +446,7 @@ template <class Range> auto CheckedRange(Range& range) noexcept
 
 template <class Iterator, class Compare> void StableSort(Iterator first, Iterator last, Compare compare)
 {
-    using T = typename std::iterator_traits<Iterator>::value_type;
+    using T          = typename std::iterator_traits<Iterator>::value_type;
     const auto count = static_cast<std::size_t>(last - first);
     if (count < 2)
         return;
@@ -447,14 +467,13 @@ template <class Iterator, class Compare> void StableSort(Iterator first, Iterato
         for (std::size_t start = 0; start < count;)
         {
             const auto middle = start + std::min(width, count - start);
-            const auto end = middle + std::min(width, count - middle);
+            const auto end    = middle + std::min(width, count - middle);
             auto left = start, right = middle;
             for (auto destination = start; destination < end; ++destination)
             {
                 Workspace::Pulse();
                 // Equal keys retain their original left-before-right order.
-                const auto source =
-                    right == end || (left < middle && !compare(temporary[right], temporary[left])) ? left++ : right++;
+                const auto source = right == end || (left < middle && ! compare(temporary[right], temporary[left])) ? left++ : right++;
                 first[static_cast<std::ptrdiff_t>(destination)] = std::move(temporary[source]);
             }
             start = end;

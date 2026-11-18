@@ -8,9 +8,9 @@
 
 bool Application::CanQueueSampler(bool paletteInput) const noexcept
 {
-    if (_shutdownStarted || !_hostSourceRegistered || !_samplerState || !_session.Document())
+    if (_shutdownStarted || ! _hostSourceRegistered || ! _samplerState || ! _session.Document())
         return false;
-    if (_historyWork.Busy() && (!_samplerHostStamp || !_historyWork.IsCurrent(_samplerHostStamp.value())))
+    if (_historyWork.Busy() && (! _samplerHostStamp || ! _historyWork.IsCurrent(_samplerHostStamp.value())))
         return false;
     const auto accepts = [paletteInput](const HostRequest& request) noexcept
     {
@@ -20,13 +20,13 @@ bool Application::CanQueueSampler(bool paletteInput) const noexcept
     if (_activeHostRequest)
     {
         const auto* canvas = std::get_if<HostCanvasBrushInput>(&_activeHostRequest->input.Input());
-        if (!canvas || canvas->kind != HostCanvasInputKind::Sampler)
+        if (! canvas || canvas->kind != HostCanvasInputKind::Sampler)
             return false; // A replayed writer owns its distinct palette/settings policy.
     }
     for (std::size_t i = 0; i < _hostRequests.Size(); ++i)
     {
         const auto* pending = _hostRequests.PendingAt(i);
-        if (!pending || !accepts(pending->input))
+        if (! pending || ! accepts(pending->input))
             return false;
     }
     return true;
@@ -34,7 +34,7 @@ bool Application::CanQueueSampler(bool paletteInput) const noexcept
 
 bool Application::CanChangePaletteDuringSampling() const noexcept
 {
-    if (!CanQueueSampler(true) || _opacityEdit || _gradientCommitTicket)
+    if (! CanQueueSampler(true) || _opacityEdit || _gradientCommitTicket)
         return false;
     for (const auto& opening : _samplerState->openings)
         if (opening.opening != 0 && opening.receipt.Read().outcome == HostOutcome::Pending)
@@ -62,7 +62,7 @@ const SamplerOpening* Application::FindSamplerOpening(std::uint64_t opening) con
 
 void Application::SweepSamplerOpenings() noexcept
 {
-    if (!_samplerState)
+    if (! _samplerState)
         return;
     for (auto& opening : _samplerState->openings)
     {
@@ -82,14 +82,13 @@ void Application::SweepSamplerOpenings() noexcept
 
 std::optional<std::uint64_t> Application::BeginSamplerOpening(Vec2 pixel) noexcept
 {
-    if (!_samplerState || _shutdownStarted || !_hostSourceRegistered ||
-        _samplerState->nextOpening == (std::numeric_limits<std::uint64_t>::max)())
+    if (! _samplerState || _shutdownStarted || ! _hostSourceRegistered || _samplerState->nextOpening == (std::numeric_limits<std::uint64_t>::max)())
         return std::nullopt;
     const auto source = _session.CaptureDocumentReadAuthority();
-    if (!source)
+    if (! source)
         return std::nullopt;
     const auto picker = _chrome ? _chrome->CapturePickerIntentAuthority() : std::nullopt;
-    if (_chrome && _chrome->ColorPickerOpen() && !picker)
+    if (_chrome && _chrome->ColorPickerOpen() && ! picker)
         return std::nullopt;
     SweepSamplerOpenings();
     SamplerOpening* available = nullptr;
@@ -99,25 +98,24 @@ std::optional<std::uint64_t> Application::BeginSamplerOpening(Vec2 pixel) noexce
             available = &opening;
             break;
         }
-    if (!available)
+    if (! available)
         return std::nullopt;
     const auto opening = ++_samplerState->nextOpening;
-    if (!available->points.Begin(opening, source->canvasWidth, source->canvasHeight))
+    if (! available->points.Begin(opening, source->canvasWidth, source->canvasHeight))
         return std::nullopt;
-    available->opening = opening;
-    available->source = source.value();
-    available->picker =
-        picker ? std::optional(SamplerPickerBinding{picker->host, picker->opening, picker->target}) : std::nullopt;
+    available->opening      = opening;
+    available->source       = source.value();
+    available->picker       = picker ? std::optional(SamplerPickerBinding{picker->host, picker->opening, picker->target}) : std::nullopt;
     available->originalArgb = picker ? _chrome->PickerColor() : _session.ForegroundColor();
     available->resolvedArgb = available->originalArgb;
     available->latestAcceptedIntent.reset();
     available->resolvedIntent.reset();
     available->ticket.reset();
     available->consumers = 0;
-    available->jobAlive = false;
-    available->terminal = false;
-    available->overflow = false;
-    available->receipt = QueueHostInput(HostSamplerInput{opening, HostCanvasInputKind::Sampler});
+    available->jobAlive  = false;
+    available->terminal  = false;
+    available->overflow  = false;
+    available->receipt   = QueueHostInput(HostSamplerInput{opening, HostCanvasInputKind::Sampler});
     if (available->receipt.Read().outcome != HostOutcome::Pending)
     {
         RetireSamplerOpening(opening);
@@ -131,26 +129,25 @@ std::optional<std::uint64_t> Application::BeginSamplerOpening(Vec2 pixel) noexce
 void Application::RecordSamplerPoint(std::uint64_t openingId, Vec2 pixel) noexcept
 {
     auto* opening = FindSamplerOpening(openingId);
-    if (!opening || opening->terminal || opening->receipt.Read().outcome != HostOutcome::Pending)
+    if (! opening || opening->terminal || opening->receipt.Read().outcome != HostOutcome::Pending)
         return;
-    if (!_session.IsDocumentReadCurrent(opening->source))
+    if (! _session.IsDocumentReadCurrent(opening->source))
     {
         SealSamplerOpening(openingId);
         return;
     }
     // Nonfinite/outside coordinates only move/hide the ring. Never cast an unbounded double to an integer.
-    if (!std::isfinite(pixel.x) || !std::isfinite(pixel.y) || pixel.x < 0 || pixel.y < 0 ||
-        pixel.x >= opening->source.canvasWidth || pixel.y >= opening->source.canvasHeight)
+    if (! std::isfinite(pixel.x) || ! std::isfinite(pixel.y) || pixel.x < 0 || pixel.y < 0 || pixel.x >= opening->source.canvasWidth ||
+        pixel.y >= opening->source.canvasHeight)
         return;
     SamplerPointIntent intent;
     intent.paletteIntent = _session.CapturePaletteIntentAuthority().revision;
-    intent.baselineArgb = _session.ForegroundColor();
+    intent.baselineArgb  = _session.ForegroundColor();
     if (opening->picker)
     {
         const auto current = _chrome ? _chrome->CapturePickerIntentAuthority() : std::nullopt;
         const auto& target = opening->picker.value();
-        if (!current || current->host != target.host || current->opening != target.opening ||
-            current->target != target.target)
+        if (! current || current->host != target.host || current->opening != target.opening || current->target != target.target)
         {
             SealSamplerOpening(openingId);
             return; // This physical gesture must never adopt a replacement picker opening.
@@ -163,8 +160,8 @@ void Application::RecordSamplerPoint(std::uint64_t openingId, Vec2 pixel) noexce
         SealSamplerOpening(openingId);
         return;
     }
-    const auto admitted = opening->points.Accept(openingId, static_cast<std::int32_t>(std::floor(pixel.x)),
-                                                 static_cast<std::int32_t>(std::floor(pixel.y)), intent);
+    const auto admitted =
+        opening->points.Accept(openingId, static_cast<std::int32_t>(std::floor(pixel.x)), static_cast<std::int32_t>(std::floor(pixel.y)), intent);
     if (admitted == SamplerIntentInput::Admission::Recorded || admitted == SamplerIntentInput::Admission::Coalesced)
     {
         opening->latestAcceptedIntent = intent;
@@ -242,7 +239,7 @@ void Application::ReplaySamplerOpening(std::uint64_t openingId) noexcept
         AdvanceSamplerReadback();
         return; // The selected input survives stale/cancel until the original job acknowledges.
     }
-    if (!opening || !_session.IsDocumentReadCurrent(opening->source))
+    if (! opening || ! _session.IsDocumentReadCurrent(opening->source))
     {
         RetireSamplerOpening(openingId);
         FinishHostContinuation({HostOutcome::Stale, E_ABORT});
@@ -251,8 +248,8 @@ void Application::ReplaySamplerOpening(std::uint64_t openingId) noexcept
     if (opening->points.IsFinished(openingId))
     {
         RetireSamplerOpening(openingId);
-        FinishHostContinuation({opening->overflow ? HostOutcome::Failed : HostOutcome::Succeeded,
-                                opening->overflow ? HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) : S_OK});
+        FinishHostContinuation(
+            {opening->overflow ? HostOutcome::Failed : HostOutcome::Succeeded, opening->overflow ? HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) : S_OK});
         return;
     }
     _hostStage = HostStage::Sampler;
@@ -268,19 +265,16 @@ void Application::ReplaySamplerOpening(std::uint64_t openingId) noexcept
 
 std::optional<SamplerColorDependency> Application::CaptureSamplerColorDependency() noexcept
 {
-    if (!_samplerState)
+    if (! _samplerState)
         return std::nullopt;
-    const auto intent = _session.CapturePaletteIntentAuthority();
+    const auto intent      = _session.CapturePaletteIntentAuthority();
     SamplerOpening* newest = nullptr;
     for (auto& opening : _samplerState->openings)
-        if (opening.opening != 0 && !opening.picker && !opening.terminal &&
-            opening.receipt.Read().outcome == HostOutcome::Pending && opening.latestAcceptedIntent &&
-            opening.source.sessionIdentity == intent.session &&
-            opening.source.documentSerial == _session.DocumentSerial() &&
-            opening.latestAcceptedIntent->paletteIntent == intent.revision &&
-            (!newest || newest->opening < opening.opening))
+        if (opening.opening != 0 && ! opening.picker && ! opening.terminal && opening.receipt.Read().outcome == HostOutcome::Pending &&
+            opening.latestAcceptedIntent && opening.source.sessionIdentity == intent.session && opening.source.documentSerial == _session.DocumentSerial() &&
+            opening.latestAcceptedIntent->paletteIntent == intent.revision && (! newest || newest->opening < opening.opening))
             newest = &opening;
-    if (!newest || newest->consumers == (std::numeric_limits<std::uint32_t>::max)())
+    if (! newest || newest->consumers == (std::numeric_limits<std::uint32_t>::max)())
         return std::nullopt;
     ++newest->consumers; // Scalar lease before captured-input admission; every refused/retired consumer releases it.
     return SamplerColorDependency{newest->opening, intent, _session.ForegroundColor()};
@@ -289,9 +283,8 @@ std::optional<SamplerColorDependency> Application::CaptureSamplerColorDependency
 std::uint32_t Application::ResolveSamplerColor(const SamplerColorDependency& dependency) const noexcept
 {
     const auto* opening = FindSamplerOpening(dependency.opening);
-    return opening && opening->source.sessionIdentity == dependency.intent.session &&
-                   opening->source.documentSerial == _session.DocumentSerial() && opening->resolvedIntent &&
-                   opening->resolvedIntent->paletteIntent == dependency.intent.revision
+    return opening && opening->source.sessionIdentity == dependency.intent.session && opening->source.documentSerial == _session.DocumentSerial() &&
+                   opening->resolvedIntent && opening->resolvedIntent->paletteIntent == dependency.intent.revision
                ? opening->resolvedArgb
                : dependency.fallbackArgb;
 }

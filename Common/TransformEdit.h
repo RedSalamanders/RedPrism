@@ -22,7 +22,7 @@ struct TransformDrag
         Distort,
     };
 
-    Mode mode = Mode::Move;
+    Mode mode  = Mode::Move;
     int handle = -1; // Resize / Distort: index into LayerTransform::kHandles
     LayerTransform original{};
     Vec2 start{};
@@ -57,8 +57,8 @@ struct Result
 // The box (minX, minY, maxX, maxY) moved so whichever of its left, center or right lands nearest an `xs` target
 // does, and the same vertically; each axis on its own and only within `tolerance` document pixels. The targets
 // it landed on come back too, to draw a guide along.
-[[nodiscard]] Result Offset(double minX, double minY, double maxX, double maxY, std::span<const double> xs,
-                            std::span<const double> ys, double tolerance) noexcept;
+[[nodiscard]] Result Offset(
+    double minX, double minY, double maxX, double maxY, std::span<const double> xs, std::span<const double> ys, double tolerance) noexcept;
 } // namespace TransformSnap
 
 namespace DistortWarp
@@ -95,17 +95,15 @@ struct WarpedTrimmed
 // `image`, shown through `transform`, resampled so its corners land on `corners`: the warped pixels over the
 // shape's whole-pixel bounds and the axis-aligned transform for them. `limit` caps the longest side for previews
 // (0 keeps full resolution). A uniform 1 x 1 mask passes through untouched.
-[[nodiscard]] std::optional<Warped> Warp(const Raster& image, const LayerTransform& transform,
-                                         const std::array<Vec2, 4>& corners, bool isMask, double limit = 0.0);
+[[nodiscard]] std::optional<Warped> Warp(
+    const Raster& image, const LayerTransform& transform, const std::array<Vec2, 4>& corners, bool isMask, double limit = 0.0);
 // A full-resolution warp cropped to its visible pixels, with the crop in the warp's pixels (for a mask to match).
-[[nodiscard]] std::optional<WarpedTrimmed> WarpTrimmed(const Raster& image, const LayerTransform& transform,
-                                                       const std::array<Vec2, 4>& corners);
+[[nodiscard]] std::optional<WarpedTrimmed> WarpTrimmed(const Raster& image, const LayerTransform& transform, const std::array<Vec2, 4>& corners);
 // A mask warped like its layer, filled with `background` (0 hides, 1 reveals) outside the shape; `limit` caps the
 // longest side for previews (0 keeps full resolution).
-[[nodiscard]] std::optional<Warped> WarpMask(const Raster& mask, const LayerTransform& transform,
-                                             const std::array<Vec2, 4>& corners, double background, double limit = 0.0);
+[[nodiscard]] std::optional<Warped> WarpMask(
+    const Raster& mask, const LayerTransform& transform, const std::array<Vec2, 4>& corners, double background, double limit = 0.0);
 // Where `placement`'s corners land when the perspective taking `transform`'s corners to `corners` is applied to
 // it too: how a linked mask placed apart from its layer distorts with the layer.
-[[nodiscard]] std::array<Vec2, 4> Carried(const LayerTransform& placement, const LayerTransform& transform,
-                                          const std::array<Vec2, 4>& corners) noexcept;
+[[nodiscard]] std::array<Vec2, 4> Carried(const LayerTransform& placement, const LayerTransform& transform, const std::array<Vec2, 4>& corners) noexcept;
 } // namespace DistortWarp

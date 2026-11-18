@@ -45,7 +45,7 @@ struct Memory final
         auto& self = *static_cast<Memory*>(raw);
         ++self.queries;
         const auto available = self.scarce ? 0 : kMemoryAdmissionHeadroomBytes + 2ull * 1024 * 1024 * 1024;
-        value = {available, available};
+        value                = {available, available};
         return true;
     }
 };
@@ -54,8 +54,8 @@ struct Memory final
 void Install(DocumentSession& session, bool large = false)
 {
     DocumentFixture document;
-    document.id = Guid::Generate();
-    document.width = large ? 8192 : 8;
+    document.id     = Guid::Generate();
+    document.width  = large ? 8192 : 8;
     document.height = large ? 5464 : 8;
     SelectionLoop points;
     if (large)
@@ -68,50 +68,43 @@ void Install(DocumentSession& session, bool large = false)
     else
         points = {{1, 2}, {7, 2}, {7, 6}, {1, 6}};
     document.selection = DocumentSelection{false, SelectionLoops{std::vector<SelectionLoop>{std::move(points)}}};
-    auto layer = ImageLayer::Blank(L"Admission reference", {8, 8});
-    layer.asset =
-        RasterAsset{Raster::MakeSparse(document.width, document.height, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0),
-                    {},
-                    layer.name};
-    const auto id = layer.id;
+    auto layer         = ImageLayer::Blank(L"Admission reference", {8, 8});
+    layer.asset        = RasterAsset{Raster::MakeSparse(document.width, document.height, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0), {}, layer.name};
+    const auto id      = layer.id;
     document.layers.push_back(std::move(layer));
     session.ReplaceDocument(std::move(document).Seal(), id);
 }
 void Eligibility()
 {
-    current = "eligibility";
+    current      = "eligibility";
     auto session = std::make_unique<DocumentSession>();
-    Expect(!DescribeSelectionOutlineGestureMemory(*session), "no-document-refuses");
+    Expect(! DescribeSelectionOutlineGestureMemory(*session), "no-document-refuses");
     Install(*session);
-    const auto generation = session->Generation();
-    const auto revision = session->history.CurrentRevision();
-    const auto root = session->Selection()->loops.Identity();
+    const auto generation  = session->Generation();
+    const auto revision    = session->history.CurrentRevision();
+    const auto root        = session->Selection()->loops.Identity();
     const auto description = DescribeSelectionOutlineGestureMemory(*session);
     Expect(description && description->limits.continuingOutputBytes > 0 && description->limits.finalOutputBytes > 0 &&
-               description->limits.totalBytes >
-                   description->limits.continuingOutputBytes + description->limits.finalOutputBytes,
+               description->limits.totalBytes > description->limits.continuingOutputBytes + description->limits.finalOutputBytes,
            "valid-source-reserves-opening-final-and-temporary-phases");
-    Expect(description && session->IsDocumentReadCurrent(description->source.document) &&
-               session->Generation() == generation && session->history.CurrentRevision() == revision &&
-               session->Selection()->loops.Identity() == root,
+    Expect(description && session->IsDocumentReadCurrent(description->source.document) && session->Generation() == generation &&
+               session->history.CurrentRevision() == revision && session->Selection()->loops.Identity() == root,
            "cached-description-preserves-document-geometry-and-history");
     session->BeginTransform(true);
-    Expect(session->PendingTransformEdit() && !DescribeSelectionOutlineGestureMemory(*session),
-           "foreign-pending-transform-refuses-without-settlement");
+    Expect(session->PendingTransformEdit() && ! DescribeSelectionOutlineGestureMemory(*session), "foreign-pending-transform-refuses-without-settlement");
     session = std::make_unique<DocumentSession>();
     Install(*session);
     session->SetSelection(std::nullopt, L"No selection");
-    Expect(!DescribeSelectionOutlineGestureMemory(*session), "absent-selection-refuses");
+    Expect(! DescribeSelectionOutlineGestureMemory(*session), "absent-selection-refuses");
     session->SetSelection(DocumentSelection{false, SelectionLoops{}}, L"Empty selection");
-    Expect(!DescribeSelectionOutlineGestureMemory(*session), "explicit-empty-selection-refuses");
+    Expect(! DescribeSelectionOutlineGestureMemory(*session), "explicit-empty-selection-refuses");
     session = std::make_unique<DocumentSession>();
     Install(*session, true);
     const auto large = DescribeSelectionOutlineGestureMemory(*session);
-    Expect(large && description && large->geometryBytes > description->geometryBytes &&
-               large->sourceBytes > description->sourceBytes && large->limits.totalBytes > 8ull * 1024 * 1024,
+    Expect(large && description && large->geometryBytes > description->geometryBytes && large->sourceBytes > description->sourceBytes &&
+               large->limits.totalBytes > 8ull * 1024 * 1024,
            "long-outline-and45mp-source-exceed-fixed-fixture-reservation");
-    Expect(large && !session->Document()->layers[0].asset->image.IsMaterialized(),
-           "large-sparse-source-is-never-materialized-by-description");
+    Expect(large && ! session->Document()->layers[0].asset->image.IsMaterialized(), "large-sparse-source-is-never-materialized-by-description");
 }
 enum class Mode
 {
@@ -123,39 +116,39 @@ enum class Mode
 };
 void Run(Mode mode, const char* name)
 {
-    current = name;
+    current      = name;
     auto session = std::make_unique<DocumentSession>();
     Install(*session, mode == Mode::Large);
     const auto description = DescribeSelectionOutlineGestureMemory(*session);
-    if (!description)
+    if (! description)
         SetupFailure("complete-description");
     const auto generation = session->Generation();
-    const auto revision = session->history.CurrentRevision();
-    auto prefix = std::make_unique<HostSelectionPressInput>();
+    const auto revision   = session->history.CurrentRevision();
+    auto prefix           = std::make_unique<HostSelectionPressInput>();
     Memory memory;
     memory.scarce = mode == Mode::Scarce;
     JobScheduler scheduler;
-    if (scheduler.Initialize(2, {}, {Memory::Sample, &memory}) != S_OK || !scheduler.EnableDeferredRelease())
+    if (scheduler.Initialize(2, {}, {Memory::Sample, &memory}) != S_OK || ! scheduler.EnableDeferredRelease())
         SetupFailure("scheduler");
     HostSelectionPressInput::Context arrival;
     arrival.document = description->source.document;
-    arrival.ordinal = 1;
-    arrival.tool = HostSelectionPressInput::Tool::Marquee;
-    arrival.kind = LassoKind::Rectangle;
-    if (!prefix->Begin(19, arrival, {2, 3}, {}, false))
+    arrival.ordinal  = 1;
+    arrival.tool     = HostSelectionPressInput::Tool::Marquee;
+    arrival.kind     = LassoKind::Rectangle;
+    if (! prefix->Begin(19, arrival, {2, 3}, {}, false))
         SetupFailure("down");
     if (mode != Mode::Click && prefix->Move(19, {4, 6}, {}, false, 2) != HostSelectionPressInput::Admission::Recorded)
         SetupFailure("move");
     if (prefix->Finish(19, false, 3) != HostSelectionPressInput::Admission::Recorded)
         SetupFailure("up");
-    auto state = std::make_unique<SelectionOutlineGestureState>(scheduler, *session, *prefix, 19, description->limits);
-    state->admissionSource = description->source;
+    auto state               = std::make_unique<SelectionOutlineGestureState>(scheduler, *session, *prefix, 19, description->limits);
+    state->admissionSource   = description->source;
     std::unique_ptr<Job> job = std::make_unique<SelectionOutlineGestureJob>(*state);
-    const JobOptions options{.kind = JobClass::Selection,
-                             .serialKey = session->DocumentSerial(),
-                             .memoryBytes = description->limits.totalBytes,
-                             .deferredRetirement = true,
-                             .allowMemoryWaiting = false,
+    const JobOptions options{.kind                  = JobClass::Selection,
+                             .serialKey             = session->DocumentSerial(),
+                             .memoryBytes           = description->limits.totalBytes,
+                             .deferredRetirement    = true,
+                             .allowMemoryWaiting    = false,
                              .reserveRetainedMemory = true,
                              .continuingOutputLimit = description->limits.continuingOutputBytes};
     const auto admitted = scheduler.Submit(job, options, state->original);
@@ -164,9 +157,8 @@ void Run(Mode mode, const char* name)
         if (admitted != S_OK || job)
             SetupFailure("scarce-descriptor-submission");
         Settle(scheduler);
-        Expect(state->completed && state->outcome.status == JobStatus::Failed &&
-                   state->outcome.error == E_OUTOFMEMORY && state->captures == 0 && state->runs == 0 &&
-                   !state->opened && state->inputAcknowledged && !prefix->Busy(),
+        Expect(state->completed && state->outcome.status == JobStatus::Failed && state->outcome.error == E_OUTOFMEMORY && state->captures == 0 &&
+                   state->runs == 0 && ! state->opened && state->inputAcknowledged && ! prefix->Busy(),
                "memory-refusal-acknowledges-original-descriptor-before-run-or-source-capture");
         Expect(session->Generation() == generation && session->history.CurrentRevision() == revision &&
                    session->Selection()->Bounds() == std::optional<SelectionBounds>{{1, 2, 7, 6}},
@@ -179,40 +171,32 @@ void Run(Mode mode, const char* name)
         // No owner completion has run yet, even if Allocate already joined. An external edit therefore
         // tests the admission-to-capture interval without a sleep or worker scheduling assumption.
         if (mode == Mode::Stale)
-            session->SetSelection(DocumentSelection{true, SelectionLoops{{{0, 0}, {2, 0}, {2, 2}, {0, 2}}}},
-                                  L"External selection");
+            session->SetSelection(DocumentSelection{true, SelectionLoops{{{0, 0}, {2, 0}, {2, 2}, {0, 2}}}}, L"External selection");
         Settle(scheduler);
         if (mode == Mode::Stale)
         {
-            Expect(state->completed && state->outcome.status == JobStatus::Failed && state->outcome.error == E_ABORT &&
-                       state->captures == 0 && !state->opened && !state->aborted,
+            Expect(state->completed && state->outcome.status == JobStatus::Failed && state->outcome.error == E_ABORT && state->captures == 0 &&
+                       ! state->opened && ! state->aborted,
                    "source-change-after-admission-refuses-before-root-capture");
-            Expect(session->Generation() == generation + 1 && session->history.UndoName() == L"External selection" &&
-                       session->Selection()->antialiased &&
+            Expect(session->Generation() == generation + 1 && session->history.UndoName() == L"External selection" && session->Selection()->antialiased &&
                        session->Selection()->Bounds() == std::optional<SelectionBounds>{{0, 0, 2, 2}},
                    "stale-refusal-preserves-foreign-selection-and-history");
         }
         else
         {
-            Expect(state->completed && state->outcome.status == JobStatus::Finished && state->closed &&
-                       state->sameTicket && state->captures == 1 && state->hits == 1 && state->inputAcknowledged &&
-                       !prefix->Busy(),
+            Expect(state->completed && state->outcome.status == JobStatus::Finished && state->closed && state->sameTicket && state->captures == 1 &&
+                       state->hits == 1 && state->inputAcknowledged && ! prefix->Busy(),
                    "cache-derived-original-admission-completes-exact-parent");
             const auto& selection = session->Selection();
-            const bool geometry = mode == Mode::Click
-                                      ? !selection
-                                      : selection && !selection->antialiased &&
-                                            selection->Bounds() == std::optional<SelectionBounds>{{3, 5, 9, 9}} &&
-                                            selection->loops.PointCount() == (mode == Mode::Large ? 65540u : 4u) &&
-                                            selection->loops[0][0] == Vec2{3, 5};
+            const bool geometry   = mode == Mode::Click
+                                        ? ! selection
+                                        : selection && ! selection->antialiased && selection->Bounds() == std::optional<SelectionBounds>{{3, 5, 9, 9}} &&
+                                              selection->loops.PointCount() == (mode == Mode::Large ? 65540u : 4u) && selection->loops[0][0] == Vec2{3, 5};
             Expect(geometry && session->Generation() == generation + 2 &&
-                       session->history.UndoName() == (mode == Mode::Click ? L"Deselect" : L"Move Selection") &&
-                       session->history.CaptureState().Depth() == 0,
+                       session->history.UndoName() == (mode == Mode::Click ? L"Deselect" : L"Move Selection") && session->history.CaptureState().Depth() == 0,
                    "independent-literal-geometry-aa-generation-and-history");
-            Expect(state->firstBudget == description->limits.totalBytes &&
-                       state->openingBytes <= description->limits.continuingOutputBytes &&
-                       state->remainingBudget == description->limits.totalBytes - state->openingBytes &&
-                       memory.queries == 1,
+            Expect(state->firstBudget == description->limits.totalBytes && state->openingBytes <= description->limits.continuingOutputBytes &&
+                       state->remainingBudget == description->limits.totalBytes - state->openingBytes && memory.queries == 1,
                    "opening-transfer-and-useful-remainder-use-one-original-admission");
         }
     }

@@ -12,10 +12,9 @@
 // Standard C++ only. Kernels borrow an executor; they never own threads or Windows handles.
 class CancelToken final
 {
-  public:
+public:
     CancelToken() noexcept = default;
-    explicit CancelToken(std::stop_token local, std::stop_token shutdown = {}) noexcept
-        : _local(local), _shutdown(shutdown)
+    explicit CancelToken(std::stop_token local, std::stop_token shutdown = {}) noexcept : _local(local), _shutdown(shutdown)
     {
     }
     [[nodiscard]] bool IsCancelled() const noexcept
@@ -40,14 +39,14 @@ class CancelToken final
         return shutdown.stop_possible() ? CancelToken(_local, shutdown) : *this;
     }
 
-  private:
+private:
     std::stop_token _local;
     std::stop_token _shutdown;
 };
 
 class CancelSource final
 {
-  public:
+public:
     [[nodiscard]] CancelToken Token() const noexcept
     {
         return CancelToken{_source.get_token()};
@@ -57,23 +56,23 @@ class CancelSource final
         return _source.request_stop();
     }
 
-  private:
+private:
     std::stop_source _source;
 };
 
 struct Tile final
 {
-    std::uint32_t x = 0;
-    std::uint32_t y = 0;
-    std::uint32_t width = 0;
+    std::uint32_t x      = 0;
+    std::uint32_t y      = 0;
+    std::uint32_t width  = 0;
     std::uint32_t height = 0;
 };
 
 struct TileGrid final
 {
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
-    std::uint32_t tileWidth = 256;
+    std::uint32_t width      = 0;
+    std::uint32_t height     = 0;
+    std::uint32_t tileWidth  = 256;
     std::uint32_t tileHeight = 256;
 
     [[nodiscard]] bool IsValid() const noexcept
@@ -103,10 +102,10 @@ struct TileGrid final
 
 class Executor
 {
-  public:
-    using Participant = void (*)(void*) noexcept;
-    virtual ~Executor() = default;
-    [[nodiscard]] virtual unsigned int Concurrency() const noexcept = 0;
+public:
+    using Participant                                                    = void (*)(void*) noexcept;
+    virtual ~Executor()                                                  = default;
+    [[nodiscard]] virtual unsigned int Concurrency() const noexcept      = 0;
     [[nodiscard]] virtual std::stop_token ShutdownToken() const noexcept = 0;
 
     // Synchronous join for worker callers. The caller participates; a pool must cancel helpers that have not
@@ -116,7 +115,7 @@ class Executor
 
 class InlineExecutor final : public Executor
 {
-  public:
+public:
     [[nodiscard]] unsigned int Concurrency() const noexcept override
     {
         return 1;
@@ -134,19 +133,18 @@ class InlineExecutor final : public Executor
 // Each tile owns its output. The body returns false for an incomplete tile, checks cancellation per row (or
 // finer for an expensive row), and neither allocates nor blocks. Outputs/scratch are allocated before this call.
 // Exact kernels retain their scalar operation order and read halos from immutable input.
-template <typename Fn>
-[[nodiscard]] bool ParallelFor(Executor& executor, TileGrid grid, CancelToken token, Fn&& body) noexcept
+template <typename Fn> [[nodiscard]] bool ParallelFor(Executor& executor, TileGrid grid, CancelToken token, Fn&& body) noexcept
 {
     static_assert(std::is_nothrow_invocable_r_v<bool, Fn&, Tile, CancelToken>);
-    if (!grid.IsValid())
+    if (! grid.IsValid())
     {
         return false;
     }
-    token = token.WithShutdown(executor.ShutdownToken());
+    token                     = token.WithShutdown(executor.ShutdownToken());
     const std::uint64_t count = grid.Count();
     if (count == 0 || token.IsCancelled())
     {
-        return !token.IsCancelled();
+        return ! token.IsCancelled();
     }
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
@@ -166,20 +164,20 @@ template <typename Fn>
     state{grid, token, body, count};
     const auto run = [](void* context) noexcept
     {
-        auto& work = *static_cast<State*>(context);
+        auto& work          = *static_cast<State*>(context);
         std::uint64_t index = work.next.load(std::memory_order_relaxed);
-        while (!work.token.IsCancelled() && !work.aborted.load(std::memory_order_relaxed))
+        while (! work.token.IsCancelled() && ! work.aborted.load(std::memory_order_relaxed))
         {
             // A bounded claim avoids counter wrap even for a maximum-sized abstract grid.
             if (index >= work.count)
             {
                 return;
             }
-            if (!work.next.compare_exchange_weak(index, index + 1, std::memory_order_relaxed))
+            if (! work.next.compare_exchange_weak(index, index + 1, std::memory_order_relaxed))
             {
                 continue;
             }
-            if (!work.body(work.grid.At(index), work.token))
+            if (! work.body(work.grid.At(index), work.token))
             {
                 work.aborted.store(true, std::memory_order_relaxed);
                 return;
@@ -188,7 +186,6 @@ template <typename Fn>
             index = work.next.load(std::memory_order_relaxed);
         }
     };
-    executor.RunParticipants(
-        &state, run, static_cast<unsigned int>((std::min)(count, static_cast<std::uint64_t>(executor.Concurrency()))));
-    return state.completed.load(std::memory_order_relaxed) == count && !token.IsCancelled();
+    executor.RunParticipants(&state, run, static_cast<unsigned int>((std::min)(count, static_cast<std::uint64_t>(executor.Concurrency()))));
+    return state.completed.load(std::memory_order_relaxed) == count && ! token.IsCancelled();
 }

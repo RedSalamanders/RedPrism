@@ -16,107 +16,107 @@
 // The integer ids. ChromeHost derives from this, so `ChromeHost::kCommandSave` names the same constant.
 struct CommandIds
 {
-    static constexpr int kCommandNew = 100;
-    static constexpr int kCommandOpen = 101;
-    static constexpr int kCommandSave = 102;
-    static constexpr int kCommandSaveAs = 103;
-    static constexpr int kCommandExportPng = 104;
-    static constexpr int kCommandExportJpeg = 105;
-    static constexpr int kCommandExit = 106;
-    static constexpr int kCommandNewCanvas = 107;
-    static constexpr int kCommandImportImages = 108;
-    static constexpr int kCommandCloseProject = 109;
-    static constexpr int kCommandUndo = 200;
-    static constexpr int kCommandRedo = 201;
-    static constexpr int kCommandFreeTransform = 202;
-    static constexpr int kCommandCut = 203;
-    static constexpr int kCommandCopy = 204;
-    static constexpr int kCommandCopyMerged = 205;
-    static constexpr int kCommandPaste = 206;
-    static constexpr int kCommandFillForeground = 207;
-    static constexpr int kCommandFillBackground = 208;
-    static constexpr int kCommandClearPixels = 209;
-    static constexpr int kCommandInvert = 210;
-    static constexpr int kCommandContentAwareFill = 211;
-    static constexpr int kCommandSwapPalette = 212;
-    static constexpr int kCommandResetPalette = 213;
-    static constexpr int kCommandNewLayer = 300;
-    static constexpr int kCommandNewFolder = 301;
-    static constexpr int kCommandDeleteLayer = 302;
-    static constexpr int kCommandToggleLayerVisibility = 303;
-    static constexpr int kCommandMoveOutOfGroup = 304;
-    static constexpr int kCommandFlipLayerHorizontal = 305;
-    static constexpr int kCommandFlipLayerVertical = 306;
-    static constexpr int kCommandLayerViaCopy = 307;
-    static constexpr int kCommandAddMask = 308;
-    static constexpr int kCommandAddBlackMask = 309;
-    static constexpr int kCommandNewLevelsAdjustment = 310;
-    static constexpr int kCommandNewCurvesAdjustment = 311;
+    static constexpr int kCommandNew                        = 100;
+    static constexpr int kCommandOpen                       = 101;
+    static constexpr int kCommandSave                       = 102;
+    static constexpr int kCommandSaveAs                     = 103;
+    static constexpr int kCommandExportPng                  = 104;
+    static constexpr int kCommandExportJpeg                 = 105;
+    static constexpr int kCommandExit                       = 106;
+    static constexpr int kCommandNewCanvas                  = 107;
+    static constexpr int kCommandImportImages               = 108;
+    static constexpr int kCommandCloseProject               = 109;
+    static constexpr int kCommandUndo                       = 200;
+    static constexpr int kCommandRedo                       = 201;
+    static constexpr int kCommandFreeTransform              = 202;
+    static constexpr int kCommandCut                        = 203;
+    static constexpr int kCommandCopy                       = 204;
+    static constexpr int kCommandCopyMerged                 = 205;
+    static constexpr int kCommandPaste                      = 206;
+    static constexpr int kCommandFillForeground             = 207;
+    static constexpr int kCommandFillBackground             = 208;
+    static constexpr int kCommandClearPixels                = 209;
+    static constexpr int kCommandInvert                     = 210;
+    static constexpr int kCommandContentAwareFill           = 211;
+    static constexpr int kCommandSwapPalette                = 212;
+    static constexpr int kCommandResetPalette               = 213;
+    static constexpr int kCommandNewLayer                   = 300;
+    static constexpr int kCommandNewFolder                  = 301;
+    static constexpr int kCommandDeleteLayer                = 302;
+    static constexpr int kCommandToggleLayerVisibility      = 303;
+    static constexpr int kCommandMoveOutOfGroup             = 304;
+    static constexpr int kCommandFlipLayerHorizontal        = 305;
+    static constexpr int kCommandFlipLayerVertical          = 306;
+    static constexpr int kCommandLayerViaCopy               = 307;
+    static constexpr int kCommandAddMask                    = 308;
+    static constexpr int kCommandAddBlackMask               = 309;
+    static constexpr int kCommandNewLevelsAdjustment        = 310;
+    static constexpr int kCommandNewCurvesAdjustment        = 311;
     static constexpr int kCommandNewHueSaturationAdjustment = 312;
-    static constexpr int kCommandNewExposureAdjustment = 313;
-    static constexpr int kCommandNewGradientMapAdjustment = 314;
-    static constexpr int kCommandNewGrainAdjustment = 315;
-    static constexpr int kCommandEditAdjustment = 316;
-    static constexpr int kCommandGroupLayers = 317;
-    static constexpr int kCommandRenameLayer = 318;
-    static constexpr int kCommandMoveLayerUp = 319;
-    static constexpr int kCommandMoveLayerDown = 320;
-    static constexpr int kCommandClipToggle = 321;
-    static constexpr int kCommandMergeDown = 322;
-    static constexpr int kCommandTargetLayerMask = 323;
-    static constexpr int kCommandToggleMaskLink = 324;
-    static constexpr int kCommandToggleLayerMask = 325;
-    static constexpr int kCommandRetryLayerList = 326;
-    static constexpr int kCommandZoomFit = 400;
-    static constexpr int kCommandZoomActual = 401;
-    static constexpr int kCommandZoomIn = 402;
-    static constexpr int kCommandZoomOut = 403;
-    static constexpr int kCommandSampleRing = 404;
-    static constexpr int kCommandKeyboardShortcuts = 405;
-    static constexpr int kCommandAbout = 500;
-    static constexpr int kCommandFlipCanvasHorizontal = 600;
-    static constexpr int kCommandFlipCanvasVertical = 601;
-    static constexpr int kCommandCurves = 602;
-    static constexpr int kCommandLevels = 603;
-    static constexpr int kCommandHueSaturation = 604;
-    static constexpr int kCommandExposure = 605;
-    static constexpr int kCommandGradientMap = 606;
-    static constexpr int kCommandGrain = 607;
-    static constexpr int kCommandCanvasSize = 608;
-    static constexpr int kCommandImageSize = 609;
-    static constexpr int kCommandSelectAll = 700;
-    static constexpr int kCommandDeselect = 701;
-    static constexpr int kCommandInverse = 702;
-    static constexpr int kCommandLoadLayerSelection = 703;
-    static constexpr int kCommandLoadMaskSelection = 704;
-    static constexpr int kCommandGaussianBlur = 800;
-    static constexpr int kCommandMotionBlur = 801;
-    static constexpr int kCommandAddNoise = 802;
-    static constexpr int kCommandLensCorrection = 803;
+    static constexpr int kCommandNewExposureAdjustment      = 313;
+    static constexpr int kCommandNewGradientMapAdjustment   = 314;
+    static constexpr int kCommandNewGrainAdjustment         = 315;
+    static constexpr int kCommandEditAdjustment             = 316;
+    static constexpr int kCommandGroupLayers                = 317;
+    static constexpr int kCommandRenameLayer                = 318;
+    static constexpr int kCommandMoveLayerUp                = 319;
+    static constexpr int kCommandMoveLayerDown              = 320;
+    static constexpr int kCommandClipToggle                 = 321;
+    static constexpr int kCommandMergeDown                  = 322;
+    static constexpr int kCommandTargetLayerMask            = 323;
+    static constexpr int kCommandToggleMaskLink             = 324;
+    static constexpr int kCommandToggleLayerMask            = 325;
+    static constexpr int kCommandRetryLayerList             = 326;
+    static constexpr int kCommandZoomFit                    = 400;
+    static constexpr int kCommandZoomActual                 = 401;
+    static constexpr int kCommandZoomIn                     = 402;
+    static constexpr int kCommandZoomOut                    = 403;
+    static constexpr int kCommandSampleRing                 = 404;
+    static constexpr int kCommandKeyboardShortcuts          = 405;
+    static constexpr int kCommandAbout                      = 500;
+    static constexpr int kCommandFlipCanvasHorizontal       = 600;
+    static constexpr int kCommandFlipCanvasVertical         = 601;
+    static constexpr int kCommandCurves                     = 602;
+    static constexpr int kCommandLevels                     = 603;
+    static constexpr int kCommandHueSaturation              = 604;
+    static constexpr int kCommandExposure                   = 605;
+    static constexpr int kCommandGradientMap                = 606;
+    static constexpr int kCommandGrain                      = 607;
+    static constexpr int kCommandCanvasSize                 = 608;
+    static constexpr int kCommandImageSize                  = 609;
+    static constexpr int kCommandSelectAll                  = 700;
+    static constexpr int kCommandDeselect                   = 701;
+    static constexpr int kCommandInverse                    = 702;
+    static constexpr int kCommandLoadLayerSelection         = 703;
+    static constexpr int kCommandLoadMaskSelection          = 704;
+    static constexpr int kCommandGaussianBlur               = 800;
+    static constexpr int kCommandMotionBlur                 = 801;
+    static constexpr int kCommandAddNoise                   = 802;
+    static constexpr int kCommandLensCorrection             = 803;
     // One id per finished local action, so a settings replacement can name it. Tool order matches EditorTool.
-    static constexpr int kCommandSelectToolBase = 900;
-    static constexpr int kCommandNudgeSelectionLeft = 920;
+    static constexpr int kCommandSelectToolBase      = 900;
+    static constexpr int kCommandNudgeSelectionLeft  = 920;
     static constexpr int kCommandNudgeSelectionRight = 921;
-    static constexpr int kCommandNudgeSelectionUp = 922;
-    static constexpr int kCommandNudgeSelectionDown = 923;
-    static constexpr int kCommandNudgeLayerLeft = 924;
-    static constexpr int kCommandNudgeLayerRight = 925;
-    static constexpr int kCommandNudgeLayerUp = 926;
-    static constexpr int kCommandNudgeLayerDown = 927;
-    static constexpr int kCommandNudgePixelsLeft = 928;
-    static constexpr int kCommandNudgePixelsRight = 929;
-    static constexpr int kCommandNudgePixelsUp = 930;
-    static constexpr int kCommandNudgePixelsDown = 931;
-    static constexpr int kCommandBrushSmaller = 940;
-    static constexpr int kCommandBrushLarger = 941;
-    static constexpr int kCommandBrushSofter = 942;
-    static constexpr int kCommandBrushHarder = 943;
-    static constexpr int kCommandBlendPrevious = 944;
-    static constexpr int kCommandBlendNext = 945;
-    static constexpr int kCommandDeleteKey = 946;
-    static constexpr int kCommandToggleMarqueeKind = 947;
-    static constexpr int kCommandToggleLassoKind = 948;
-    static constexpr int kCommandToggleShapeKind = 949;
+    static constexpr int kCommandNudgeSelectionUp    = 922;
+    static constexpr int kCommandNudgeSelectionDown  = 923;
+    static constexpr int kCommandNudgeLayerLeft      = 924;
+    static constexpr int kCommandNudgeLayerRight     = 925;
+    static constexpr int kCommandNudgeLayerUp        = 926;
+    static constexpr int kCommandNudgeLayerDown      = 927;
+    static constexpr int kCommandNudgePixelsLeft     = 928;
+    static constexpr int kCommandNudgePixelsRight    = 929;
+    static constexpr int kCommandNudgePixelsUp       = 930;
+    static constexpr int kCommandNudgePixelsDown     = 931;
+    static constexpr int kCommandBrushSmaller        = 940;
+    static constexpr int kCommandBrushLarger         = 941;
+    static constexpr int kCommandBrushSofter         = 942;
+    static constexpr int kCommandBrushHarder         = 943;
+    static constexpr int kCommandBlendPrevious       = 944;
+    static constexpr int kCommandBlendNext           = 945;
+    static constexpr int kCommandDeleteKey           = 946;
+    static constexpr int kCommandToggleMarqueeKind   = 947;
+    static constexpr int kCommandToggleLassoKind     = 948;
+    static constexpr int kCommandToggleShapeKind     = 949;
 
     [[nodiscard]] static constexpr int SelectToolCommand(EditorTool tool) noexcept
     {
@@ -157,14 +157,14 @@ enum class CommandCondition : std::uint8_t
 
 struct CommandCatalogEntry
 {
-    int command = 0;
-    unsigned captionId = 0;      // the STRINGTABLE caption (menu row, Command List name)
-    const wchar_t* textId = L""; // the settings file's stable id (`cmd/edit/swapPalette`)
-    CommandScope scope = CommandScope::App;
+    int command                = 0;
+    unsigned captionId         = 0;   // the STRINGTABLE caption (menu row, Command List name)
+    const wchar_t* textId      = L""; // the settings file's stable id (`cmd/edit/swapPalette`)
+    CommandScope scope         = CommandScope::App;
     CommandCondition condition = CommandCondition::None;
-    bool shiftAllowed = false; // a chord without Shift also runs with Shift held (a nudge steps by ten; a tool key
-                               // or the palette keys ignore it, as the legacy canvas did)
-    bool repeats = true;       // an auto-repeated key runs the command again; false: holding the key runs it once
+    bool shiftAllowed          = false; // a chord without Shift also runs with Shift held (a nudge steps by ten; a tool key
+                                        // or the palette keys ignore it, as the legacy canvas did)
+    bool repeats = true;                // an auto-repeated key runs the command again; false: holding the key runs it once
 };
 
 // How a default chord belongs to its command.
@@ -186,10 +186,10 @@ struct DefaultChord
 
 namespace CommandCatalogDetail
 {
-using C = CommandIds;
-constexpr CommandScope kCanvas = CommandScope::Canvas;
-constexpr CommandScope kApp = CommandScope::App;
-constexpr CommandScope kGlobal = CommandScope::Global;
+using C                          = CommandIds;
+constexpr CommandScope kCanvas   = CommandScope::Canvas;
+constexpr CommandScope kApp      = CommandScope::App;
+constexpr CommandScope kGlobal   = CommandScope::Global;
 constexpr CommandCondition kNone = CommandCondition::None;
 
 [[nodiscard]] constexpr CommandCatalogEntry Tool(EditorTool tool, unsigned captionId, const wchar_t* textId) noexcept
@@ -225,8 +225,7 @@ constexpr CommandCondition kNone = CommandCondition::None;
         {C::kCommandCopy, IDS_CMD_COPY, L"cmd/edit/copy", kApp},
         {C::kCommandCopyMerged, IDS_CMD_COPY_MERGED, L"cmd/edit/copyMerged", kApp},
         {C::kCommandPaste, IDS_CMD_PASTE, L"cmd/edit/paste", kApp},
-        {C::kCommandFillForeground, IDS_CMD_FILL_FOREGROUND, L"cmd/edit/fillForeground", kCanvas,
-         CommandCondition::NoLassoDraft},
+        {C::kCommandFillForeground, IDS_CMD_FILL_FOREGROUND, L"cmd/edit/fillForeground", kCanvas, CommandCondition::NoLassoDraft},
         {C::kCommandFillBackground, IDS_CMD_FILL_BACKGROUND, L"cmd/edit/fillBackground", kApp},
         {C::kCommandSwapPalette, IDS_CMD_SWAP_PALETTE, L"cmd/edit/swapPalette", kCanvas, kNone, true},
         {C::kCommandResetPalette, IDS_CMD_RESET_PALETTE, L"cmd/edit/resetPalette", kCanvas, kNone, true},
@@ -302,30 +301,18 @@ constexpr CommandCondition kNone = CommandCondition::None;
         Tool(EditorTool::Eyedropper, IDS_CMD_TOOL_EYEDROPPER, L"cmd/tool/eyedropper"),
         Tool(EditorTool::Hand, IDS_CMD_TOOL_HAND, L"cmd/tool/hand"),
         Tool(EditorTool::Zoom, IDS_CMD_TOOL_ZOOM, L"cmd/tool/zoom"),
-        {C::kCommandNudgeSelectionLeft, IDS_CMD_NUDGE_SELECTION_LEFT, L"cmd/nudge/selectionLeft", kCanvas,
-         CommandCondition::SelectionOnOutline, true},
-        {C::kCommandNudgeSelectionRight, IDS_CMD_NUDGE_SELECTION_RIGHT, L"cmd/nudge/selectionRight", kCanvas,
-         CommandCondition::SelectionOnOutline, true},
-        {C::kCommandNudgeSelectionUp, IDS_CMD_NUDGE_SELECTION_UP, L"cmd/nudge/selectionUp", kCanvas,
-         CommandCondition::SelectionOnOutline, true},
-        {C::kCommandNudgeSelectionDown, IDS_CMD_NUDGE_SELECTION_DOWN, L"cmd/nudge/selectionDown", kCanvas,
-         CommandCondition::SelectionOnOutline, true},
-        {C::kCommandNudgeLayerLeft, IDS_CMD_NUDGE_LAYER_LEFT, L"cmd/nudge/layerLeft", kCanvas,
-         CommandCondition::MoveTool, true},
-        {C::kCommandNudgeLayerRight, IDS_CMD_NUDGE_LAYER_RIGHT, L"cmd/nudge/layerRight", kCanvas,
-         CommandCondition::MoveTool, true},
-        {C::kCommandNudgeLayerUp, IDS_CMD_NUDGE_LAYER_UP, L"cmd/nudge/layerUp", kCanvas, CommandCondition::MoveTool,
-         true},
-        {C::kCommandNudgeLayerDown, IDS_CMD_NUDGE_LAYER_DOWN, L"cmd/nudge/layerDown", kCanvas,
-         CommandCondition::MoveTool, true},
-        {C::kCommandNudgePixelsLeft, IDS_CMD_NUDGE_PIXELS_LEFT, L"cmd/nudge/pixelsLeft", kApp,
-         CommandCondition::PixelsSelected, true},
-        {C::kCommandNudgePixelsRight, IDS_CMD_NUDGE_PIXELS_RIGHT, L"cmd/nudge/pixelsRight", kApp,
-         CommandCondition::PixelsSelected, true},
-        {C::kCommandNudgePixelsUp, IDS_CMD_NUDGE_PIXELS_UP, L"cmd/nudge/pixelsUp", kApp,
-         CommandCondition::PixelsSelected, true},
-        {C::kCommandNudgePixelsDown, IDS_CMD_NUDGE_PIXELS_DOWN, L"cmd/nudge/pixelsDown", kApp,
-         CommandCondition::PixelsSelected, true},
+        {C::kCommandNudgeSelectionLeft, IDS_CMD_NUDGE_SELECTION_LEFT, L"cmd/nudge/selectionLeft", kCanvas, CommandCondition::SelectionOnOutline, true},
+        {C::kCommandNudgeSelectionRight, IDS_CMD_NUDGE_SELECTION_RIGHT, L"cmd/nudge/selectionRight", kCanvas, CommandCondition::SelectionOnOutline, true},
+        {C::kCommandNudgeSelectionUp, IDS_CMD_NUDGE_SELECTION_UP, L"cmd/nudge/selectionUp", kCanvas, CommandCondition::SelectionOnOutline, true},
+        {C::kCommandNudgeSelectionDown, IDS_CMD_NUDGE_SELECTION_DOWN, L"cmd/nudge/selectionDown", kCanvas, CommandCondition::SelectionOnOutline, true},
+        {C::kCommandNudgeLayerLeft, IDS_CMD_NUDGE_LAYER_LEFT, L"cmd/nudge/layerLeft", kCanvas, CommandCondition::MoveTool, true},
+        {C::kCommandNudgeLayerRight, IDS_CMD_NUDGE_LAYER_RIGHT, L"cmd/nudge/layerRight", kCanvas, CommandCondition::MoveTool, true},
+        {C::kCommandNudgeLayerUp, IDS_CMD_NUDGE_LAYER_UP, L"cmd/nudge/layerUp", kCanvas, CommandCondition::MoveTool, true},
+        {C::kCommandNudgeLayerDown, IDS_CMD_NUDGE_LAYER_DOWN, L"cmd/nudge/layerDown", kCanvas, CommandCondition::MoveTool, true},
+        {C::kCommandNudgePixelsLeft, IDS_CMD_NUDGE_PIXELS_LEFT, L"cmd/nudge/pixelsLeft", kApp, CommandCondition::PixelsSelected, true},
+        {C::kCommandNudgePixelsRight, IDS_CMD_NUDGE_PIXELS_RIGHT, L"cmd/nudge/pixelsRight", kApp, CommandCondition::PixelsSelected, true},
+        {C::kCommandNudgePixelsUp, IDS_CMD_NUDGE_PIXELS_UP, L"cmd/nudge/pixelsUp", kApp, CommandCondition::PixelsSelected, true},
+        {C::kCommandNudgePixelsDown, IDS_CMD_NUDGE_PIXELS_DOWN, L"cmd/nudge/pixelsDown", kApp, CommandCondition::PixelsSelected, true},
         {C::kCommandBrushSmaller, IDS_CMD_BRUSH_SMALLER, L"cmd/brush/smaller", kCanvas, CommandCondition::BrushTool},
         {C::kCommandBrushLarger, IDS_CMD_BRUSH_LARGER, L"cmd/brush/larger", kCanvas, CommandCondition::BrushTool},
         {C::kCommandBrushSofter, IDS_CMD_BRUSH_SOFTER, L"cmd/brush/softer", kCanvas, CommandCondition::BrushTool},
@@ -333,12 +320,9 @@ constexpr CommandCondition kNone = CommandCondition::None;
         {C::kCommandBlendPrevious, IDS_CMD_BLEND_PREVIOUS, L"cmd/blend/previous", kCanvas},
         {C::kCommandBlendNext, IDS_CMD_BLEND_NEXT, L"cmd/blend/next", kCanvas},
         {C::kCommandDeleteKey, IDS_CMD_DELETE_KEY, L"cmd/edit/delete", kCanvas},
-        {C::kCommandToggleMarqueeKind, IDS_CMD_TOGGLE_MARQUEE, L"cmd/tool/toggleMarquee", kCanvas,
-         CommandCondition::MarqueeTool, true, false},
-        {C::kCommandToggleLassoKind, IDS_CMD_TOGGLE_LASSO, L"cmd/tool/toggleLasso", kCanvas,
-         CommandCondition::LassoTool, true, false},
-        {C::kCommandToggleShapeKind, IDS_CMD_TOGGLE_SHAPE, L"cmd/tool/toggleShape", kCanvas,
-         CommandCondition::ShapeTool, false, false},
+        {C::kCommandToggleMarqueeKind, IDS_CMD_TOGGLE_MARQUEE, L"cmd/tool/toggleMarquee", kCanvas, CommandCondition::MarqueeTool, true, false},
+        {C::kCommandToggleLassoKind, IDS_CMD_TOGGLE_LASSO, L"cmd/tool/toggleLasso", kCanvas, CommandCondition::LassoTool, true, false},
+        {C::kCommandToggleShapeKind, IDS_CMD_TOGGLE_SHAPE, L"cmd/tool/toggleShape", kCanvas, CommandCondition::ShapeTool, false, false},
     };
     return kCatalog;
 }
@@ -351,8 +335,8 @@ constexpr CommandCondition kNone = CommandCondition::None;
     using C = CommandIds;
     using P = KeyPosition;
     using CommandCatalogDetail::ToolDefault;
-    namespace V = VirtualKey;
-    constexpr DefaultChordKind kShared = DefaultChordKind::SharedLabel;
+    namespace V                               = VirtualKey;
+    constexpr DefaultChordKind kShared        = DefaultChordKind::SharedLabel;
     static constexpr DefaultChord kDefaults[] = {
         {C::kCommandToggleMarqueeKind, Key('M')},
         {C::kCommandToggleLassoKind, Key('L')},

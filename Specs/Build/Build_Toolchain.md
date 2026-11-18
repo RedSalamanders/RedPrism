@@ -103,11 +103,16 @@ Log collection cannot replace the primary installer error. This CI setup never i
 computer. The artifact retains the selected ARM64 Release intermediates and DxUi library/identity for
 independent compiler/dependency readback. Provisioning alone grants no runtime or P1 qualification.
 
-`format.ps1` prefers the C++ Clang tools bundled with the discovered supported Visual Studio installation,
-then falls back to PATH and standalone LLVM. It reports the actual formatter and version. This prevents an
-unrelated global LLVM formatter from overriding the supported toolchain; tooling evidence includes the selected
-formatter's path and binary hash. Formatting uses bounded argument batches so deep checkout paths still cover
-every first-party source file within Windows process command-line limits.
+Formatting: the root `.clang-format` is the one style. `format.ps1` formats, and `format.ps1 -Check` verifies
+without writing and lists every file that needs formatting. Both take clang-format from `Install-CiFormatter` in the
+pinned `.ci-engine`, which installs the build that the engine's `Policy/clang-format.json` pins (22.1.3 today) under
+`.build/shared-format` and verifies its SHA-256 and version; no Visual Studio, `PATH` or repository-pinned formatter
+is used. Both cover the files CI formats: `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp` and `.hxx` files under the
+`formatRoots` of `.ci/project.json` that its `formatExclude` does not match. Pull-request checks run the same formatter
+over the files the pull request changes, or over every file when `.clang-format` or `.clang-format-ignore` changes;
+drift fails the check and retains the patch. The manual `Commit PR formatting` workflow commits that formatting to an
+open same-repository pull request with an ordinary push and requests fresh checks for the new head. Tooling evidence
+identifies the formatter by the hash of the engine's pin file.
 
 ## Configurations and platforms
 
@@ -133,9 +138,9 @@ MUST refuse to run on a non-ARM64 host.
 
 `.build/` MUST NOT be committed. `OutDir` / `IntDir` are set in `Directory.Build.props`.
 
-`format.ps1` MUST process every discovered C++ source even in a deep worktree. It submits bounded filename
-batches below the Windows process command-line limit and fails on the first formatter error; splitting the
-invocations MUST NOT change formatting options, omit files or change the final discovered-file count.
+`format.ps1` MUST process every discovered C++ source even in a deep worktree. It passes repository-relative
+paths in bounded batches below the Windows process command-line limit and fails on any formatter error; splitting
+the invocations MUST NOT change formatting options, omit files or change the final discovered-file count.
 
 Builds sharing a mutable dependency output MUST be serialized, including private candidate builds. A separate
 application `OutDir`/`IntDir` does not isolate a pinned DxUi rebuild that writes the same resolved library path.
@@ -253,7 +258,7 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 | `.\restore-dxui.ps1 [-Platform x64\|ARM64] [-CheckUpdates]` | Restore the exact DxUi pin as a sparse, long-path-safe checkout; `-CheckUpdates` prints one advisory when DxUi `main` is not the pin |
 | `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Analyze] [-Run]` | Preflight, restore, MSBuild, provenance; `-Analyze` runs native MSVC code analysis |
 | `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |
-| `.\format.ps1 [-Check]` | clang-format over `Common/`, `RedPrism/`, `Tests/` |
+| `.\format.ps1 [-Check]` | The pinned engine clang-format over the `formatRoots` of `.ci/project.json` (`Common/`, `RedPrism/`, `Tests/`) |
 | `.\package.ps1 [-Platform] [-SkipBuild] [-SkipSmoke]` | Release build, the portable ZIP with its `.sha256`, the clean-extraction smoke ([`Build_Packaging.md`](Build_Packaging.md)) |
 | `.\validate-skills.ps1` | Repository skill frontmatter and body checks |
 

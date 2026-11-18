@@ -12,28 +12,38 @@
 struct StrokeOpeningOptions final
 {
     BrushSettings settings;
-    BrushKind kind = BrushKind::Paint;
+    BrushKind kind          = BrushKind::Paint;
     SpotHealingMode healing = SpotHealingMode::ContentAware;
-    bool maskWhite = false;
+    bool maskWhite          = false;
     std::optional<Vec2> cloneOffset;
     Raster cloneSample;
 };
 
 class StrokeOpeningInput final
 {
-  public:
-    StrokeOpeningInput(const StrokeOpeningInput&) = delete;
+public:
+    StrokeOpeningInput(const StrokeOpeningInput&)            = delete;
     StrokeOpeningInput& operator=(const StrokeOpeningInput&) = delete;
-    StrokeOpeningInput(StrokeOpeningInput&&) noexcept = default;
-    StrokeOpeningInput& operator=(StrokeOpeningInput&&) = delete;
+    StrokeOpeningInput(StrokeOpeningInput&&) noexcept        = default;
+    StrokeOpeningInput& operator=(StrokeOpeningInput&&)      = delete;
 
-  private:
+private:
     friend class DocumentSession;
     friend class PreparedStrokeOpening;
-    StrokeOpeningInput(ImageImportAuthority authority, DocumentHistory::Authority history, CanvasDocument source,
-                       Guid target, bool mask, std::int64_t pixelLimit, StrokeOpeningOptions options) noexcept
-        : _authority(std::move(authority)), _history(history), _source(std::move(source)), _target(target), _mask(mask),
-          _pixelLimit(pixelLimit), _options(std::move(options))
+    StrokeOpeningInput(ImageImportAuthority authority,
+                       DocumentHistory::Authority history,
+                       CanvasDocument source,
+                       Guid target,
+                       bool mask,
+                       std::int64_t pixelLimit,
+                       StrokeOpeningOptions options) noexcept
+        : _authority(std::move(authority)),
+          _history(history),
+          _source(std::move(source)),
+          _target(target),
+          _mask(mask),
+          _pixelLimit(pixelLimit),
+          _options(std::move(options))
     {
     }
     ImageImportAuthority _authority;
@@ -49,21 +59,20 @@ class StrokeOpeningInput final
 // The complete CPU draft uses its producer-cached ownership bound for off-owner retirement, even on refusal.
 class PreparedStrokeOpening final
 {
-  public:
-    PreparedStrokeOpening(const PreparedStrokeOpening&) = delete;
+public:
+    PreparedStrokeOpening(const PreparedStrokeOpening&)            = delete;
     PreparedStrokeOpening& operator=(const PreparedStrokeOpening&) = delete;
-    PreparedStrokeOpening(PreparedStrokeOpening&&) noexcept = default;
-    PreparedStrokeOpening& operator=(PreparedStrokeOpening&&) = delete;
+    PreparedStrokeOpening(PreparedStrokeOpening&&) noexcept        = default;
+    PreparedStrokeOpening& operator=(PreparedStrokeOpening&&)      = delete;
     // Bind accounting before current owner publication. Refusal retains the caller's lease unchanged.
     [[nodiscard]] bool RetainMemory(SharedRetainedMemoryLease&& lease) noexcept;
     // Only after owner apply. Retain this empty graphics borrow on the owner while the original worker
     // retires the source aggregate; it must detach before any failed/shutdown CPU transfer.
     [[nodiscard]] std::shared_ptr<BrushStroke> TakeAppliedDraftForOwner() noexcept;
 
-  private:
+private:
     friend class DocumentSession;
-    PreparedStrokeOpening(StrokeOpeningInput input, std::shared_ptr<BrushStroke> stroke) noexcept
-        : _input(std::move(input)), _stroke(std::move(stroke))
+    PreparedStrokeOpening(StrokeOpeningInput input, std::shared_ptr<BrushStroke> stroke) noexcept : _input(std::move(input)), _stroke(std::move(stroke))
     {
     }
     StrokeOpeningInput _input;
@@ -91,7 +100,7 @@ enum class StrokeOpeningStage : std::uint8_t
 struct StrokeOpeningObserver final
 {
     void (*checkpoint)(void*, StrokeOpeningStage) = nullptr;
-    void* context = nullptr;
+    void* context                                 = nullptr;
 };
 
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -108,6 +117,10 @@ struct StrokeOpeningResult final
 // Complete CPU opening/live-draft declaration from cached owners and scalar grid bounds. This deliberately
 // reserves the supported live tile envelope, not just an empty draft; the exact lease survives its final reader.
 // Final history, final coverage scratch, GPU residency and publication have separate additional admissions.
-[[nodiscard]] std::uint64_t StrokeOpeningMemoryBytes(const CanvasDocument& source, const ImageLayer& layer, bool mask,
-                                                     std::int64_t pixelLimit, const BrushSettings& settings,
-                                                     BrushKind kind, const Raster* cloneSample = nullptr) noexcept;
+[[nodiscard]] std::uint64_t StrokeOpeningMemoryBytes(const CanvasDocument& source,
+                                                     const ImageLayer& layer,
+                                                     bool mask,
+                                                     std::int64_t pixelLimit,
+                                                     const BrushSettings& settings,
+                                                     BrushKind kind,
+                                                     const Raster* cloneSample = nullptr) noexcept;

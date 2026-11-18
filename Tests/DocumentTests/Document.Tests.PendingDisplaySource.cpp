@@ -27,8 +27,7 @@ void Expect(bool condition, const char* name) noexcept
 
 Raster SourceRaster()
 {
-    constexpr std::array<std::uint8_t, 16> pixels{10, 20, 30, 255, 40,  50,  60,  255,
-                                                  70, 80, 90, 255, 100, 110, 120, 255};
+    constexpr std::array<std::uint8_t, 16> pixels{10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 100, 110, 120, 255};
     return Raster::Make(2, 2, RasterFormat::Bgra8888, pixels.data(), pixels.size());
 }
 
@@ -36,14 +35,14 @@ DocumentSession Session(bool selection = false)
 {
     const Raster image = SourceRaster();
     DocumentFixture fixture;
-    fixture.id = Guid::Generate();
-    fixture.width = 4;
+    fixture.id     = Guid::Generate();
+    fixture.width  = 4;
     fixture.height = 4;
     if (selection)
         fixture.selection = DocumentSelection{true, SelectionGeometry::Rect(0, 0, 1, 2)};
-    ImageLayer layer = ImageLayer::Blank(L"Pending display", Vec2{2, 2});
+    ImageLayer layer  = ImageLayer::Blank(L"Pending display", Vec2{2, 2});
     const Guid active = layer.id;
-    layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
+    layer.asset       = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
     fixture.layers.push_back(std::move(layer));
     DocumentSession session;
     session.ReplaceDocument(std::move(fixture).Seal(), active);
@@ -60,15 +59,17 @@ FilterSettings Levels(double gamma = 2.0)
 struct OwnerSnapshot final
 {
     const CanvasDocument* document = nullptr;
-    const void* layerRoot = nullptr;
-    std::uint64_t generation = 0;
-    int undoCount = 0;
+    const void* layerRoot          = nullptr;
+    std::uint64_t generation       = 0;
+    int undoCount                  = 0;
     DocumentHistory::StateView history;
 
     explicit OwnerSnapshot(const DocumentSession& session)
         : document(session.Document() ? &session.Document().value() : nullptr),
-          layerRoot(document ? document->layers.Identity() : nullptr), generation(session.Generation()),
-          undoCount(session.history.UndoCount()), history(session.history.CaptureState())
+          layerRoot(document ? document->layers.Identity() : nullptr),
+          generation(session.Generation()),
+          undoCount(session.history.UndoCount()),
+          history(session.history.CaptureState())
     {
     }
 };
@@ -76,9 +77,8 @@ struct OwnerSnapshot final
 bool SameOwner(const DocumentSession& session, const OwnerSnapshot& before) noexcept
 {
     const CanvasDocument* const document = session.Document() ? &session.Document().value() : nullptr;
-    return document == before.document && (!document || document->layers.Identity() == before.layerRoot) &&
-           session.Generation() == before.generation && session.history.UndoCount() == before.undoCount &&
-           session.history.IsCurrent(before.history);
+    return document == before.document && (! document || document->layers.Identity() == before.layerRoot) && session.Generation() == before.generation &&
+           session.history.UndoCount() == before.undoCount && session.history.IsCurrent(before.history);
 }
 
 Raster ActiveImage(const DocumentSession& session)
@@ -89,11 +89,11 @@ Raster ActiveImage(const DocumentSession& session)
 
 bool BeginLiveAdjustment(DocumentSession& session, const Raster& below, Guid& id)
 {
-    if (!below.HasStorage())
+    if (! below.HasStorage())
         return false;
     session.AddAdjustment(AdjustmentKind::Levels);
     const auto editing = session.AdjustmentEditingID();
-    if (!editing)
+    if (! editing)
         return false;
     id = editing.value();
     return session.BeginAdjustmentEditing(id, below, true);
@@ -103,7 +103,7 @@ ColorEditPreviewResult PrepareLiveLookup(DocumentSession& session)
 {
     session.UpdateColorEdit(Levels(), true);
     auto input = session.PrepareColorEditPreview();
-    if (!input || !session.AdjustmentOriginal())
+    if (! input || ! session.AdjustmentOriginal())
         return {};
     // Match the actual host ConfigureColorLookupPreview capture: live work carries the original
     // adjustment record separately from the generic immutable panel input.
@@ -115,12 +115,11 @@ ColorEditPreviewResult PrepareLiveLookup(DocumentSession& session)
 bool PublishDestructiveColorDisplay(DocumentSession& session)
 {
     auto input = session.PrepareColorDisplayPreviewInput(true);
-    if (!input)
+    if (! input)
         return false;
     InlineExecutor executor;
     auto result = DocumentSession::PrepareColorDisplayPreviewPublication(std::move(input.value()), executor, {}, {});
-    return result.status == ColorEditJobStatus::Ready && result.publication &&
-           session.ApplyPreparedColorDisplayPreviewIfCurrent(result.publication.value());
+    return result.status == ColorEditJobStatus::Ready && result.publication && session.ApplyPreparedColorDisplayPreviewIfCurrent(result.publication.value());
 }
 
 bool Describe(DocumentSession& session, PendingDisplaySource& output)
@@ -133,29 +132,28 @@ void NoPendingSourceAndOptInControls()
     DocumentSession empty;
     PendingDisplaySource output;
     output.opening = 73;
-    output.kind = PendingDisplaySource::Kind::Color;
-    Expect(!Describe(empty, output) && output.opening == 73 && output.document == nullptr,
-           "empty-session-has-no-source-and-refusal-preserves-output");
+    output.kind    = PendingDisplaySource::Kind::Color;
+    Expect(! Describe(empty, output) && output.opening == 73 && output.document == nullptr, "empty-session-has-no-source-and-refusal-preserves-output");
 
     DocumentSession idle = Session();
-    Expect(!Describe(idle, output), "committed-idle-session-has-no-pending-source");
+    Expect(! Describe(idle, output), "committed-idle-session-has-no-pending-source");
 
-    DocumentSession disabled = Session();
+    DocumentSession disabled   = Session();
     const Raster disabledBelow = ActiveImage(disabled);
     Guid disabledId;
-    if (!BeginLiveAdjustment(disabled, disabledBelow, disabledId))
+    if (! BeginLiveAdjustment(disabled, disabledBelow, disabledId))
     {
         Expect(false, "reference-live-fixture-opens");
         return;
     }
     disabled.SetColorDisplayJobsEnabled(true);
-    auto completed = PrepareLiveLookup(disabled);
+    auto completed     = PrepareLiveLookup(disabled);
     const bool applied = completed.status == ColorEditJobStatus::Ready && disabled.ApplyColorEditPreview(completed);
     Expect(applied, "reference-live-fixture-builds-completed-lookup");
-    if (!applied)
+    if (! applied)
         return;
     disabled.SetColorDisplayJobsEnabled(false);
-    Expect(!Describe(disabled, output), "default-reference-live-route-rejects-cached-lookup");
+    Expect(! Describe(disabled, output), "default-reference-live-route-rejects-cached-lookup");
 
     DocumentSession waiting = Session();
     waiting.SetColorDisplayJobsEnabled(true);
@@ -164,7 +162,7 @@ void NoPendingSourceAndOptInControls()
     const bool opened = BeginLiveAdjustment(waiting, waitingBelow, waitingId);
     Expect(opened, "deferred-live-fixture-opens-with-worker-route");
     if (opened)
-        Expect(!Describe(waiting, output), "worker-enabled-live-route-waits-for-completed-lookup");
+        Expect(! Describe(waiting, output), "worker-enabled-live-route-waits-for-completed-lookup");
 }
 
 void CompletedLiveLookupIsBorrowedWithoutOwnerMutation()
@@ -173,42 +171,40 @@ void CompletedLiveLookupIsBorrowedWithoutOwnerMutation()
     session.SetColorDisplayJobsEnabled(true);
     const Raster below = ActiveImage(session);
     Guid id;
-    if (!BeginLiveAdjustment(session, below, id))
+    if (! BeginLiveAdjustment(session, below, id))
     {
         Expect(false, "live-descriptor-fixture-opens");
         return;
     }
-    auto completed = PrepareLiveLookup(session);
-    const bool applied = completed.status == ColorEditJobStatus::Ready && session.ApplyColorEditPreview(completed);
+    auto completed        = PrepareLiveLookup(session);
+    const bool applied    = completed.status == ColorEditJobStatus::Ready && session.ApplyColorEditPreview(completed);
     const auto& published = session.PendingColorEdit();
-    const bool lookupOnly = applied && published && published->previewLookup && !published->previewRaster.HasStorage();
+    const bool lookupOnly = applied && published && published->previewLookup && ! published->previewRaster.HasStorage();
     Expect(lookupOnly, "live-descriptor-fixture-publishes-lookup-only-result");
-    if (!lookupOnly)
+    if (! lookupOnly)
         return;
 
-    const auto& pending = session.PendingColorEdit();
-    const auto authority = session.CaptureDocumentReadAuthority();
+    const auto& pending          = session.PendingColorEdit();
+    const auto authority         = session.CaptureDocumentReadAuthority();
     const auto& originalSettings = session.AdjustmentOriginal();
-    if (!session.Document() || !authority || !originalSettings)
+    if (! session.Document() || ! authority || ! originalSettings)
     {
         Expect(false, "completed-live-fixture-has-document-authority-and-original");
         return;
     }
     const CanvasDocument* const root = &session.Document().value();
-    const auto rootIdentity = root->layers.Identity();
-    const auto* const lookup = pending->previewLookup.get();
-    const auto* const original = &originalSettings.value();
+    const auto rootIdentity          = root->layers.Identity();
+    const auto* const lookup         = pending->previewLookup.get();
+    const auto* const original       = &originalSettings.value();
     const OwnerSnapshot before(session);
     PendingDisplaySource described;
     const bool available = Describe(session, described);
     Expect(available, "completed-live-lookup-is-describable");
     if (available)
         Expect(described.kind == PendingDisplaySource::Kind::Adjustment && described.authority == authority.value() &&
-                   described.authority.generation == session.Generation() && described.document == root &&
-                   described.sourceIdentity == rootIdentity && described.target == id &&
-                   described.opening == pending->openingSequence && described.publication == pending->previewSequence &&
-                   described.lookup == &session.PendingColorEdit()->previewLookup &&
-                   described.lookup->get() == lookup && described.original == original &&
+                   described.authority.generation == session.Generation() && described.document == root && described.sourceIdentity == rootIdentity &&
+                   described.target == id && described.opening == pending->openingSequence && described.publication == pending->previewSequence &&
+                   described.lookup == &session.PendingColorEdit()->previewLookup && described.lookup->get() == lookup && described.original == original &&
                    described.adjustmentSource == nullptr && described.adjustmentCoverage == nullptr,
                "live-descriptor-borrows-exact-root-authority-opening-publication-lookup-and-original");
     Expect(SameOwner(session, before), "describe-live-source-does-not-change-document-generation-or-history");
@@ -220,38 +216,37 @@ void NewerLiveSettingsKeepCompatibleLookupAndOffRefuses()
     session.SetColorDisplayJobsEnabled(true);
     const Raster below = ActiveImage(session);
     Guid id;
-    if (!BeginLiveAdjustment(session, below, id))
+    if (! BeginLiveAdjustment(session, below, id))
     {
         Expect(false, "newer-controls-fixture-opens");
         return;
     }
     auto completed = PrepareLiveLookup(session);
-    if (completed.status != ColorEditJobStatus::Ready || !session.ApplyColorEditPreview(completed))
+    if (completed.status != ColorEditJobStatus::Ready || ! session.ApplyColorEditPreview(completed))
     {
         Expect(false, "newer-controls-fixture-publishes-lookup");
         return;
     }
     const auto& pending = session.PendingColorEdit();
-    if (!pending || !pending->previewLookup)
+    if (! pending || ! pending->previewLookup)
     {
         Expect(false, "newer-controls-fixture-has-published-lookup");
         return;
     }
-    const std::uint64_t opening = pending->openingSequence;
+    const std::uint64_t opening           = pending->openingSequence;
     const std::uint64_t completedSequence = pending->previewSequence;
-    const auto* const lookup = pending->previewLookup.get();
+    const auto* const lookup              = pending->previewLookup.get();
     session.UpdateColorEdit(Levels(1.5), true);
     PendingDisplaySource newer;
     const bool stillAvailable = Describe(session, newer);
-    Expect(stillAvailable && newer.kind == PendingDisplaySource::Kind::Adjustment && newer.target == id &&
-               newer.opening == opening && newer.publication == completedSequence && newer.lookup != nullptr &&
-               newer.lookup->get() == lookup && session.PendingColorEdit() &&
+    Expect(stillAvailable && newer.kind == PendingDisplaySource::Kind::Adjustment && newer.target == id && newer.opening == opening &&
+               newer.publication == completedSequence && newer.lookup != nullptr && newer.lookup->get() == lookup && session.PendingColorEdit() &&
                session.PendingColorEdit()->settings == Levels(1.5),
            "new-controls-retain-last-compatible-completed-lookup-and-sequence");
 
     session.UpdateColorEdit(Levels(1.5), false);
     PendingDisplaySource off;
-    Expect(!Describe(session, off), "preview-off-refuses-previously-completed-lookup");
+    Expect(! Describe(session, off), "preview-off-refuses-previously-completed-lookup");
 }
 
 void CancelAndReopenRefuseLateOldLookup()
@@ -260,14 +255,14 @@ void CancelAndReopenRefuseLateOldLookup()
     session.SetColorDisplayJobsEnabled(true);
     const Raster below = ActiveImage(session);
     Guid id;
-    if (!BeginLiveAdjustment(session, below, id))
+    if (! BeginLiveAdjustment(session, below, id))
     {
         Expect(false, "late-opening-fixture-opens");
         return;
     }
-    auto oldResult = PrepareLiveLookup(session);
+    auto oldResult      = PrepareLiveLookup(session);
     const auto& pending = session.PendingColorEdit();
-    if (!pending)
+    if (! pending)
     {
         Expect(false, "late-opening-fixture-has-pending-edit");
         return;
@@ -279,15 +274,14 @@ void CancelAndReopenRefuseLateOldLookup()
 
     session.CancelColorEdit();
     session.SetAdjustmentEditingID(id);
-    const bool reopened = session.BeginAdjustmentEditing(id, below, true);
+    const bool reopened         = session.BeginAdjustmentEditing(id, below, true);
     const auto& reopenedPending = session.PendingColorEdit();
-    Expect(reopened && reopenedPending && reopenedPending->openingSequence != oldOpening,
-           "late-opening-new-panel-has-distinct-opening");
-    if (!reopened || !reopenedPending)
+    Expect(reopened && reopenedPending && reopenedPending->openingSequence != oldOpening, "late-opening-new-panel-has-distinct-opening");
+    if (! reopened || ! reopenedPending)
         return;
     PendingDisplaySource output;
-    Expect(!session.ApplyColorEditPreview(oldResult) && !Describe(session, output) && session.PendingColorEdit() &&
-               !session.PendingColorEdit()->previewLookup,
+    Expect(! session.ApplyColorEditPreview(oldResult) && ! Describe(session, output) && session.PendingColorEdit() &&
+               ! session.PendingColorEdit()->previewLookup,
            "late-old-lookup-result-cannot-describe-or-publish-into-new-opening");
 }
 
@@ -297,29 +291,29 @@ void DestructiveColorDescribesPreparedDisplayAndLookupInputs()
     session.SetColorDisplayJobsEnabled(true);
     session.BeginColorEdit(FilterKind::Levels, true);
     session.UpdateColorEdit(Levels(), true);
-    if (!session.Document() || !session.PendingColorEdit())
+    if (! session.Document() || ! session.PendingColorEdit())
     {
         Expect(false, "destructive-color-fixture-has-document-and-pending-edit");
         return;
     }
     const CanvasDocument* const committed = &session.Document().value();
-    const auto authority = session.CaptureDocumentReadAuthority();
-    if (!authority)
+    const auto authority                  = session.CaptureDocumentReadAuthority();
+    if (! authority)
     {
         Expect(false, "destructive-color-fixture-has-read-authority");
         return;
     }
     const bool published = PublishDestructiveColorDisplay(session);
     Expect(published, "destructive-color-prepared-display-and-lookup-publish");
-    if (!published)
+    if (! published)
         return;
-    if (!session.ColorLookupPreviewReady())
+    if (! session.ColorLookupPreviewReady())
     {
         Expect(false, "destructive-color-lookup-is-ready");
         return;
     }
     const auto& pending = session.PendingColorEdit();
-    if (!pending || !pending->previewLookup)
+    if (! pending || ! pending->previewLookup)
     {
         Expect(false, "destructive-color-fixture-retains-published-lookup");
         return;
@@ -330,21 +324,16 @@ void DestructiveColorDescribesPreparedDisplayAndLookupInputs()
     const bool available = Describe(session, described);
     Expect(available, "destructive-color-source-is-describable-after-prepared-display");
     if (available)
-        Expect(described.kind == PendingDisplaySource::Kind::Color && described.authority == authority.value() &&
-                   described.document == display && display != nullptr && display != committed &&
-                   !display->layers.empty() && described.sourceIdentity == display->layers.Identity() &&
-                   described.target == pending->layerID && described.opening == pending->openingSequence &&
-                   described.publication == pending->previewSequence &&
+        Expect(described.kind == PendingDisplaySource::Kind::Color && described.authority == authority.value() && described.document == display &&
+                   display != nullptr && display != committed && ! display->layers.empty() && described.sourceIdentity == display->layers.Identity() &&
+                   described.target == pending->layerID && described.opening == pending->openingSequence && described.publication == pending->previewSequence &&
                    described.lookup == &session.PendingColorEdit()->previewLookup && described.lookup != nullptr &&
-                   described.lookup->get() == pending->previewLookup.get() &&
-                   described.adjustmentSource == &session.PendingColorEdit()->previewSource &&
+                   described.lookup->get() == pending->previewLookup.get() && described.adjustmentSource == &session.PendingColorEdit()->previewSource &&
                    described.adjustmentCoverage == &session.PendingColorEdit()->previewCoverage &&
-                   described.adjustmentSource->Format() == RasterFormat::Bgra8888 &&
-                   described.adjustmentCoverage->Format() == RasterFormat::Gray8 &&
+                   described.adjustmentSource->Format() == RasterFormat::Bgra8888 && described.adjustmentCoverage->Format() == RasterFormat::Gray8 &&
                    described.adjustmentCoverage->Width() == described.adjustmentSource->Width() &&
-                   described.adjustmentCoverage->Height() == described.adjustmentSource->Height() &&
-                   described.previewScale == pending->previewScale && described.previewScale > 0 &&
-                   described.original == nullptr,
+                   described.adjustmentCoverage->Height() == described.adjustmentSource->Height() && described.previewScale == pending->previewScale &&
+                   described.previewScale > 0 && described.original == nullptr,
                "destructive-color-descriptor-borrows-display-source-gray-coverage-lookup-and-scale");
     Expect(SameOwner(session, before), "describe-destructive-source-does-not-change-document-generation-or-history");
 }
@@ -359,39 +348,34 @@ DocumentSession TransformSession()
 bool PublishTransform(DocumentSession& session)
 {
     auto input = session.PrepareTransformPreviewInput();
-    if (!input)
+    if (! input)
         return false;
     InlineExecutor executor;
     auto result = DocumentSession::PrepareTransformPreviewPublication(std::move(input.value()), executor, {}, {});
-    return result.status == DistortWorkStatus::Ready && result.publication &&
-           session.ApplyPreparedTransformPreviewIfCurrent(result.publication.value());
+    return result.status == DistortWorkStatus::Ready && result.publication && session.ApplyPreparedTransformPreviewIfCurrent(result.publication.value());
 }
 
-bool TransformDescriptorMatches(DocumentSession& session, const Raster& source, bool expectSharedRaster,
-                                const char* prefix)
+bool TransformDescriptorMatches(DocumentSession& session, const Raster& source, bool expectSharedRaster, const char* prefix)
 {
-    const auto& pending = session.PendingTransformEdit();
+    const auto& pending  = session.PendingTransformEdit();
     const auto authority = session.CaptureDocumentReadAuthority();
-    if (!pending || !authority || !session.Document())
+    if (! pending || ! authority || ! session.Document())
     {
         Expect(false, "transform-descriptor-fixture-has-edit-authority-and-document");
         return false;
     }
-    const auto opening = pending->opening;
+    const auto opening        = pending->opening;
     const auto* const display = session.DisplayDocument();
     const OwnerSnapshot before(session);
     PendingDisplaySource described;
     const bool available = Describe(session, described);
     Expect(available, prefix);
     const bool matches =
-        available && described.kind == PendingDisplaySource::Kind::Transform &&
-        described.authority == authority.value() && described.document == display && display != nullptr &&
-        !display->layers.empty() && described.document != &session.Document().value() &&
-        display->layers.front().asset.has_value() && described.sourceIdentity == display->layers.Identity() &&
-        described.opening == opening && described.publication == session.TransformDraftRevision() &&
-        !described.lookup && !described.original && !described.adjustmentSource && !described.adjustmentCoverage &&
-        described.previewScale == 1.0 && display->layers.front().asset->image.HasStorage() &&
-        (display->layers.front().asset->image.Identity() == source.Identity()) == expectSharedRaster;
+        available && described.kind == PendingDisplaySource::Kind::Transform && described.authority == authority.value() && described.document == display &&
+        display != nullptr && ! display->layers.empty() && described.document != &session.Document().value() && display->layers.front().asset.has_value() &&
+        described.sourceIdentity == display->layers.Identity() && described.opening == opening && described.publication == session.TransformDraftRevision() &&
+        ! described.lookup && ! described.original && ! described.adjustmentSource && ! described.adjustmentCoverage && described.previewScale == 1.0 &&
+        display->layers.front().asset->image.HasStorage() && (display->layers.front().asset->image.Identity() == source.Identity()) == expectSharedRaster;
     Expect(matches, "transform-descriptor-borrows-prepared-display-and-exact-opening-revision");
     Expect(SameOwner(session, before), "describe-transform-source-does-not-change-document-generation-or-history");
     return matches;
@@ -400,16 +384,15 @@ bool TransformDescriptorMatches(DocumentSession& session, const Raster& source, 
 void DeferredTransformRequiresPreparedAffineOrDistortDisplay()
 {
     {
-        DocumentSession session = TransformSession();
+        DocumentSession session    = TransformSession();
         const auto* const document = session.Document() ? &session.Document().value() : nullptr;
-        const Raster source = document != nullptr && !document->layers.empty() && document->layers.front().asset
-                                  ? document->layers.front().asset->image
-                                  : Raster{};
+        const Raster source =
+            document != nullptr && ! document->layers.empty() && document->layers.front().asset ? document->layers.front().asset->image : Raster{};
         PendingDisplaySource initial;
-        Expect(source.HasStorage() && session.PendingTransformEdit() && !Describe(session, initial) &&
+        Expect(source.HasStorage() && session.PendingTransformEdit() && ! Describe(session, initial) &&
                    session.DisplayDocument() == &session.Document().value(),
                "deferred-affine-without-completed-display-is-refused");
-        if (!source.HasStorage() || !session.PendingTransformEdit())
+        if (! source.HasStorage() || ! session.PendingTransformEdit())
         {
             Expect(false, "deferred-affine-fixture-opens");
             return;
@@ -417,28 +400,26 @@ void DeferredTransformRequiresPreparedAffineOrDistortDisplay()
         auto draft = session.PendingTransformEdit()->draft;
         draft.origin.x += 1;
         session.PreviewTransform(draft);
-        const auto& affine = session.PendingTransformEdit();
+        const auto& affine   = session.PendingTransformEdit();
         const bool published = affine.has_value() && affine->deferred && PublishTransform(session);
         Expect(published, "deferred-affine-display-is-prepared-through-transform-preview-work");
-        if (!published)
+        if (! published)
             return;
-        Expect(TransformDescriptorMatches(session, source, true, "prepared-affine-display-is-describable"),
-               "prepared-affine-source-shares-original-raster");
+        Expect(TransformDescriptorMatches(session, source, true, "prepared-affine-display-is-describable"), "prepared-affine-source-shares-original-raster");
     }
     {
-        DocumentSession session = TransformSession();
+        DocumentSession session    = TransformSession();
         const auto* const document = session.Document() ? &session.Document().value() : nullptr;
-        const Raster source = document != nullptr && !document->layers.empty() && document->layers.front().asset
-                                  ? document->layers.front().asset->image
-                                  : Raster{};
-        if (!source.HasStorage() || !session.PendingTransformEdit())
+        const Raster source =
+            document != nullptr && ! document->layers.empty() && document->layers.front().asset ? document->layers.front().asset->image : Raster{};
+        if (! source.HasStorage() || ! session.PendingTransformEdit())
         {
             Expect(false, "deferred-distort-fixture-opens");
             return;
         }
         session.BeginDistort();
         const auto& distort = session.PendingTransformEdit();
-        if (!distort || !distort->corners)
+        if (! distort || ! distort->corners)
         {
             Expect(false, "deferred-distort-fixture-has-corners");
             return;
@@ -448,16 +429,14 @@ void DeferredTransformRequiresPreparedAffineOrDistortDisplay()
         corners[2].y += 0.25;
         session.PreviewCorners(corners);
         PendingDisplaySource initial;
-        Expect(!Describe(session, initial), "deferred-distort-without-completed-display-is-refused");
+        Expect(! Describe(session, initial), "deferred-distort-without-completed-display-is-refused");
         const bool published = PublishTransform(session);
         Expect(published, "deferred-distort-display-is-prepared-through-transform-preview-work");
-        if (!published)
+        if (! published)
             return;
-        const bool described =
-            TransformDescriptorMatches(session, source, false, "prepared-distort-display-is-describable");
-        const auto* display = session.DisplayDocument();
-        Expect(described && display->layers.front().asset->image.Identity() != source.Identity(),
-               "prepared-distort-display-owns-warped-raster");
+        const bool described = TransformDescriptorMatches(session, source, false, "prepared-distort-display-is-describable");
+        const auto* display  = session.DisplayDocument();
+        Expect(described && display->layers.front().asset->image.Identity() != source.Identity(), "prepared-distort-display-owns-warped-raster");
     }
 }
 } // namespace

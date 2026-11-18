@@ -16,11 +16,11 @@ namespace
 constexpr wchar_t kImagePatterns[] = L"*.png;*.jpg;*.jpeg;*.tif;*.tiff;*.heic;*.heif";
 
 constexpr HRESULT kInvalidDialogInput = HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
-constexpr HRESULT kDialogCancelled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+constexpr HRESULT kDialogCancelled    = HRESULT_FROM_WIN32(ERROR_CANCELLED);
 
 [[nodiscard]] HRESULT ReadShellPath(IShellItem* item, wil::unique_cotaskmem_string& path) noexcept
 {
-    if (!item)
+    if (! item)
     {
         return E_UNEXPECTED;
     }
@@ -43,8 +43,7 @@ constexpr HRESULT kDialogCancelled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
     return ReadShellPath(item.get(), path);
 }
 
-[[nodiscard]] HRESULT ConfigureOpenDialog(IFileOpenDialog* dialog, const COMDLG_FILTERSPEC* filters, UINT filterCount,
-                                          bool multiSelect) noexcept
+[[nodiscard]] HRESULT ConfigureOpenDialog(IFileOpenDialog* dialog, const COMDLG_FILTERSPEC* filters, UINT filterCount, bool multiSelect) noexcept
 {
     HRESULT result = dialog->SetFileTypes(filterCount, filters);
     if (FAILED(result))
@@ -52,7 +51,7 @@ constexpr HRESULT kDialogCancelled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
         return result;
     }
     FILEOPENDIALOGOPTIONS options = 0;
-    result = dialog->GetOptions(&options);
+    result                        = dialog->GetOptions(&options);
     if (FAILED(result))
     {
         return result;
@@ -68,10 +67,12 @@ constexpr HRESULT kDialogCancelled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
 
 FilterStrings LoadFilterStrings()
 {
-    return FilterStrings{
-        LoadStringResource(nullptr, IDS_FILTER_PROJECT), LoadStringResource(nullptr, IDS_FILTER_IMAGES),
-        LoadStringResource(nullptr, IDS_FILTER_ALL),     LoadStringResource(nullptr, IDS_FILTER_EXPLODED),
-        LoadStringResource(nullptr, IDS_FILTER_JPEG),    LoadStringResource(nullptr, IDS_FILTER_PNG)};
+    return FilterStrings{LoadStringResource(nullptr, IDS_FILTER_PROJECT),
+                         LoadStringResource(nullptr, IDS_FILTER_IMAGES),
+                         LoadStringResource(nullptr, IDS_FILTER_ALL),
+                         LoadStringResource(nullptr, IDS_FILTER_EXPLODED),
+                         LoadStringResource(nullptr, IDS_FILTER_JPEG),
+                         LoadStringResource(nullptr, IDS_FILTER_PNG)};
 }
 
 std::wstring FileTitle(const std::wstring& path)
@@ -91,8 +92,7 @@ bool EndsWithNoCase(std::wstring_view text, std::wstring_view suffix) noexcept
         return false;
     }
     const std::wstring_view tail = text.substr(text.size() - suffix.size());
-    return CompareStringOrdinal(tail.data(), static_cast<int>(tail.size()), suffix.data(),
-                                static_cast<int>(suffix.size()), TRUE) == CSTR_EQUAL;
+    return CompareStringOrdinal(tail.data(), static_cast<int>(tail.size()), suffix.data(), static_cast<int>(suffix.size()), TRUE) == CSTR_EQUAL;
 }
 
 HRESULT PickOpenRequest(HWND owner, HostInputBudget& budget, std::optional<HostRequest>& request) noexcept
@@ -100,17 +100,16 @@ HRESULT PickOpenRequest(HWND owner, HostInputBudget& budget, std::optional<HostR
     try
     {
         wil::com_ptr_nothrow<IFileOpenDialog> dialog;
-        HRESULT result =
-            CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
+        HRESULT result = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
         if (FAILED(result))
         {
             return result;
         }
-        if (!dialog)
+        if (! dialog)
         {
             return E_UNEXPECTED;
         }
-        const FilterStrings strings = LoadFilterStrings();
+        const FilterStrings strings       = LoadFilterStrings();
         const COMDLG_FILTERSPEC filters[] = {
             {strings.project.c_str(), L"*.prism"},
             {strings.images.c_str(), kImagePatterns},
@@ -139,14 +138,13 @@ HRESULT PickOpenRequest(HWND owner, HostInputBudget& budget, std::optional<HostR
             return result;
         }
         const auto path = HostBoundedPathView(shellPaths[0].get());
-        if (!path || path->empty())
+        if (! path || path->empty())
         {
             return kInvalidDialogInput;
         }
-        pathViews[0] = path.value();
-        auto admitted = HostRequest::TryCopyPaths(std::span<const std::wstring_view>(pathViews.data(), 1),
-                                                  HostPathAction::OpenPaths, std::nullopt, budget);
-        if (!admitted)
+        pathViews[0]  = path.value();
+        auto admitted = HostRequest::TryCopyPaths(std::span<const std::wstring_view>(pathViews.data(), 1), HostPathAction::OpenPaths, std::nullopt, budget);
+        if (! admitted)
         {
             return kInvalidDialogInput;
         }
@@ -164,17 +162,16 @@ HRESULT PickImageRequest(HWND owner, HostInputBudget& budget, std::optional<Host
     try
     {
         wil::com_ptr_nothrow<IFileOpenDialog> dialog;
-        HRESULT result =
-            CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
+        HRESULT result = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
         if (FAILED(result))
         {
             return result;
         }
-        if (!dialog)
+        if (! dialog)
         {
             return E_UNEXPECTED;
         }
-        const FilterStrings strings = LoadFilterStrings();
+        const FilterStrings strings       = LoadFilterStrings();
         const COMDLG_FILTERSPEC filters[] = {
             {strings.images.c_str(), kImagePatterns},
             {strings.all.c_str(), L"*.*"},
@@ -200,12 +197,12 @@ HRESULT PickImageRequest(HWND owner, HostInputBudget& budget, std::optional<Host
         {
             return result;
         }
-        if (!items)
+        if (! items)
         {
             return E_UNEXPECTED;
         }
         DWORD count = 0;
-        result = items->GetCount(&count);
+        result      = items->GetCount(&count);
         if (FAILED(result))
         {
             return result;
@@ -225,7 +222,7 @@ HRESULT PickImageRequest(HWND owner, HostInputBudget& budget, std::optional<Host
             {
                 return result;
             }
-            if (!item)
+            if (! item)
             {
                 return E_UNEXPECTED;
             }
@@ -235,7 +232,7 @@ HRESULT PickImageRequest(HWND owner, HostInputBudget& budget, std::optional<Host
                 return result;
             }
             const auto path = HostBoundedPathView(shellPaths[index].get());
-            if (!path || path->empty())
+            if (! path || path->empty())
             {
                 return kInvalidDialogInput;
             }
@@ -243,9 +240,8 @@ HRESULT PickImageRequest(HWND owner, HostInputBudget& budget, std::optional<Host
         }
 
         auto admitted = HostRequest::TryCopyPaths(
-            std::span<const std::wstring_view>(pathViews.data(), static_cast<std::size_t>(count)),
-            HostPathAction::ImportImages, std::nullopt, budget);
-        if (!admitted)
+            std::span<const std::wstring_view>(pathViews.data(), static_cast<std::size_t>(count)), HostPathAction::ImportImages, std::nullopt, budget);
+        if (! admitted)
         {
             return kInvalidDialogInput;
         }
@@ -258,20 +254,23 @@ HRESULT PickImageRequest(HWND owner, HostInputBudget& budget, std::optional<Host
     }
 }
 
-HRESULT PickOutputForRequest(HWND owner, const wchar_t* defaultName, const wchar_t* defaultExt,
-                             const COMDLG_FILTERSPEC* filters, UINT filterCount, HostRequest& request,
+HRESULT PickOutputForRequest(HWND owner,
+                             const wchar_t* defaultName,
+                             const wchar_t* defaultExt,
+                             const COMDLG_FILTERSPEC* filters,
+                             UINT filterCount,
+                             HostRequest& request,
                              HostInputBudget& budget) noexcept
 {
     try
     {
         wil::com_ptr_nothrow<IFileSaveDialog> dialog;
-        HRESULT result =
-            CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
+        HRESULT result = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
         if (FAILED(result))
         {
             return result;
         }
-        if (!dialog)
+        if (! dialog)
         {
             return E_UNEXPECTED;
         }
@@ -300,7 +299,7 @@ HRESULT PickOutputForRequest(HWND owner, const wchar_t* defaultName, const wchar
             }
         }
         FILEOPENDIALOGOPTIONS options = 0;
-        result = dialog->GetOptions(&options);
+        result                        = dialog->GetOptions(&options);
         if (FAILED(result))
         {
             return result;
@@ -327,7 +326,7 @@ HRESULT PickOutputForRequest(HWND owner, const wchar_t* defaultName, const wchar
             return result;
         }
         const auto path = HostBoundedPathView(shellPath.get());
-        if (!path || path->empty())
+        if (! path || path->empty())
         {
             return kInvalidDialogInput;
         }
@@ -343,17 +342,13 @@ UINT LoadErrorStringId(ProjectIoStatus status) noexcept
 {
     switch (status)
     {
-    case ProjectIoStatus::UnsupportedVersion:
-        return IDS_ERROR_UNSUPPORTED_VERSION;
-    case ProjectIoStatus::TooLarge:
-        return IDS_ERROR_TOO_LARGE;
-    case ProjectIoStatus::MissingImage:
-        return IDS_ERROR_MISSING_IMAGE;
-    case ProjectIoStatus::Ok:
-    case ProjectIoStatus::Invalid:
-    case ProjectIoStatus::Encode:
-    case ::ProjectIoStatus::Cancelled:
-    default:
-        return IDS_ERROR_OPEN_PROJECT;
+        case ProjectIoStatus::UnsupportedVersion: return IDS_ERROR_UNSUPPORTED_VERSION;
+        case ProjectIoStatus::TooLarge: return IDS_ERROR_TOO_LARGE;
+        case ProjectIoStatus::MissingImage: return IDS_ERROR_MISSING_IMAGE;
+        case ProjectIoStatus::Ok:
+        case ProjectIoStatus::Invalid:
+        case ProjectIoStatus::Encode:
+        case ::ProjectIoStatus::Cancelled:
+        default: return IDS_ERROR_OPEN_PROJECT;
     }
 }

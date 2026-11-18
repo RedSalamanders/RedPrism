@@ -32,9 +32,8 @@ struct CloneReadbackState final : DeferredReleaseNode
 
     CloneReadbackState() noexcept
     {
-        bytes = kDeferredReleaseThreshold;
-        destroy = [](DeferredReleaseNode* node) noexcept
-        { const std::unique_ptr<CloneReadbackState> owned(static_cast<CloneReadbackState*>(node)); };
+        bytes   = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* node) noexcept { const std::unique_ptr<CloneReadbackState> owned(static_cast<CloneReadbackState*>(node)); };
     }
     ~CloneReadbackState();
     [[nodiscard]] bool HasReservation() const noexcept
@@ -49,7 +48,7 @@ struct CloneReadbackState final : DeferredReleaseNode
     {
         void operator()(CloneReadbackState* state) const noexcept
         {
-            if (state && !TryDeferRelease(*state, DeferredReleasePolicy::AlwaysOnOwner))
+            if (state && ! TryDeferRelease(*state, DeferredReleasePolicy::AlwaysOnOwner))
             {
                 const std::unique_ptr<CloneReadbackState> owned(state);
             }

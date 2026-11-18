@@ -43,18 +43,12 @@ enum class KernelIsa : std::uint8_t
 {
     switch (isa)
     {
-    case KernelIsa::Auto:
-        return L"auto";
-    case KernelIsa::Scalar:
-        return L"scalar";
-    case KernelIsa::Sse2:
-        return L"sse2";
-    case KernelIsa::Avx2:
-        return L"avx2";
-    case KernelIsa::Avx512:
-        return L"avx512";
-    case KernelIsa::Neon:
-        return L"neon";
+        case KernelIsa::Auto: return L"auto";
+        case KernelIsa::Scalar: return L"scalar";
+        case KernelIsa::Sse2: return L"sse2";
+        case KernelIsa::Avx2: return L"avx2";
+        case KernelIsa::Avx512: return L"avx512";
+        case KernelIsa::Neon: return L"neon";
     }
     return L"invalid";
 }
@@ -65,10 +59,8 @@ struct KernelTable final
 {
     KernelIsa isa;
     void (*applyTables)(std::uint8_t*, int, int, int, const Adjust::ChannelTables&, const CancelToken&) noexcept;
-    void (*applyGradientMap)(std::uint8_t*, int, int, int, const std::array<std::uint8_t, 768>&,
-                             const CancelToken&) noexcept;
-    void (*applyGrain)(std::uint8_t*, int, int, int, const GrainSettings&, double, double, double,
-                       const CancelToken&) noexcept;
+    void (*applyGradientMap)(std::uint8_t*, int, int, int, const std::array<std::uint8_t, 768>&, const CancelToken&) noexcept;
+    void (*applyGrain)(std::uint8_t*, int, int, int, const GrainSettings&, double, double, double, const CancelToken&) noexcept;
     void (*addNoise)(std::uint8_t*, int, int, int, float, bool, bool, std::uint32_t, const CancelToken&) noexcept;
     void (*lensDistort)(const std::uint8_t*, std::uint8_t*, int, int, int, double, const CancelToken&) noexcept;
     void (*applyCube)(std::uint8_t*, int, int, int, const std::vector<float>&, const CancelToken&) noexcept;
@@ -76,10 +68,10 @@ struct KernelTable final
 
 struct KernelCapabilities final
 {
-    bool sse2 = false;
-    bool avx2 = false;
+    bool sse2   = false;
+    bool avx2   = false;
     bool avx512 = false;
-    bool neon = false;
+    bool neon   = false;
 };
 
 // Raw feature input makes every missing CPUID/OS-state bit testable on any host. Missing leaves stay zero.
@@ -88,7 +80,7 @@ struct X64KernelFeatures final
     std::uint32_t leaf1Ecx = 0;
     std::uint32_t leaf1Edx = 0;
     std::uint32_t leaf7Ebx = 0;
-    std::uint64_t xcr0 = 0;
+    std::uint64_t xcr0     = 0;
 };
 [[nodiscard]] KernelCapabilities DecodeX64KernelFeatures(const X64KernelFeatures& features) noexcept;
 [[nodiscard]] KernelCapabilities DetectKernelCapabilities() noexcept;

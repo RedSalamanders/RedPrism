@@ -12,8 +12,11 @@
 // temporary storage; ordinary raster producers have one level of contiguous tiles. Deeper-than-limit graphs
 // fail the operation, without publishing a partial result. Padding in the destination is never written.
 inline constexpr std::size_t kRasterWorkDepthLimit = 64;
-[[nodiscard]] bool ReadRasterRegionForWork(const Raster& image, GridRect region, std::span<std::uint8_t> output,
-                                           std::size_t outputStride, std::uint8_t outsideFill,
+[[nodiscard]] bool ReadRasterRegionForWork(const Raster& image,
+                                           GridRect region,
+                                           std::span<std::uint8_t> output,
+                                           std::size_t outputStride,
+                                           std::uint8_t outsideFill,
                                            CancelToken cancellation = {}) noexcept;
 
 // Empty on cancellation/allocation failure/invalid input. Every output byte is initialized before publication.
@@ -23,15 +26,23 @@ inline constexpr std::size_t kRasterWorkDepthLimit = 64;
 [[nodiscard]] Raster ContiguousRasterForWork(const Raster& image, CancelToken cancellation = {});
 // A supplied lifetime belongs only to a newly allocated crop. The caller must include its 32-byte charged
 // metadata in the complete existing bound. An empty default uses the ordinary allocation path.
-[[nodiscard]] Raster CropRasterForWork(const Raster& image, GridRect region, std::uint8_t outsideFill,
-                                       CancelToken cancellation = {},
-                                       const std::shared_ptr<const void>& outputLifetime = {});
+[[nodiscard]] Raster CropRasterForWork(
+    const Raster& image, GridRect region, std::uint8_t outsideFill, CancelToken cancellation = {}, const std::shared_ptr<const void>& outputLifetime = {});
 // Exact nearest grid stretch, as Raster::Stretched, with a private source row and adopted output.
 [[nodiscard]] Raster StretchedRasterForWork(const Raster& source, int width, int height, CancelToken cancellation = {});
 // Worker equivalents of Raster::MakeThumbnail and CarriedMask. They check cancellation before returning even
 // shared/no-op results and never publish partially initialized pixels.
-[[nodiscard]] Raster ThumbnailRasterForWork(const Raster& source, int maxSide = 96, CancelToken cancellation = {},
+[[nodiscard]] Raster ThumbnailRasterForWork(const Raster& source,
+                                            int maxSide                                       = 96,
+                                            CancelToken cancellation                          = {},
                                             const std::shared_ptr<const void>& outputLifetime = {});
-[[nodiscard]] Raster CarriedMaskForWork(const Raster& mask, int oldWidth, int oldHeight, int x, int y, int width,
-                                        int height, std::uint8_t outside, CancelToken cancellation = {},
+[[nodiscard]] Raster CarriedMaskForWork(const Raster& mask,
+                                        int oldWidth,
+                                        int oldHeight,
+                                        int x,
+                                        int y,
+                                        int width,
+                                        int height,
+                                        std::uint8_t outside,
+                                        CancelToken cancellation                          = {},
                                         const std::shared_ptr<const void>& outputLifetime = {});

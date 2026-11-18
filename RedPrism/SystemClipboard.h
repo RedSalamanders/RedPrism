@@ -19,7 +19,7 @@ namespace SystemClipboard
 // user's copy or paste waits briefly so the UI thread does not stall; the self-test, which asserts on what it wrote
 // and borrows the user's clipboard, waits them all out (RF-1110: five listeners here, up to 47 ms each).
 inline constexpr int kInteractiveAttempts = 5;
-inline constexpr int kHarnessAttempts = 300;
+inline constexpr int kHarnessAttempts     = 300;
 
 // Writes `image` (premultiplied BGRA) as PNG and CF_DIBV5; false when the clipboard could not be opened or filled.
 [[nodiscard]] bool WriteImage(HWND owner, const Raster& image, int attempts = kInteractiveAttempts) noexcept;
@@ -27,8 +27,7 @@ inline constexpr int kHarnessAttempts = 300;
 [[nodiscard]] bool HasImage() noexcept;
 // Decodes the clipboard's PNG or DIB into a premultiplied BGRA raster within `pixelBudget`; false when there is no
 // image, it is too large, or it cannot be read.
-[[nodiscard]] bool ReadImage(HWND owner, std::int64_t pixelBudget, Raster& image,
-                             int attempts = kInteractiveAttempts) noexcept;
+[[nodiscard]] bool ReadImage(HWND owner, std::int64_t pixelBudget, Raster& image, int attempts = kInteractiveAttempts) noexcept;
 // Opens and closes the clipboard (changing nothing, so no listener wakes): true once no other application holds it.
 // The self-test calls it before a command whose clipboard write or read it asserts on.
 [[nodiscard]] bool WaitUntilFree(HWND owner, int attempts = kHarnessAttempts) noexcept;

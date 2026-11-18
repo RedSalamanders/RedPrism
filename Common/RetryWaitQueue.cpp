@@ -32,17 +32,17 @@ struct RetryWaitQueue::Impl final
         JobTicket ticket;
         CancelToken cancellation;
         RetryWaitReceiver* receiver = nullptr;
-        std::int32_t error = 0;
-        bool cancelSignalled = false;
+        std::int32_t error          = 0;
+        bool cancelSignalled        = false;
     };
 #pragma warning(pop)
 
-    JobScheduler* scheduler = nullptr;
+    JobScheduler* scheduler      = nullptr;
     OwnerWorkMultiplexer* routes = nullptr;
     RetryWaitObserver observer;
     std::array<Slot, kCapacity> slots;
     DWORD ownerThread = GetCurrentThreadId();
-    std::size_t next = 0;
+    std::size_t next  = 0;
     bool attached = false, stopped = false, pumping = false;
 
     void CheckOwner() const noexcept
@@ -58,7 +58,7 @@ struct RetryWaitQueue::Impl final
         auto& slot = *static_cast<Slot*>(context);
         // Read stable owners before publication. After the release-store, the owner may deliver/reuse this
         // slot while this callback finishes NotifyOwnerWork. No subsequent callback access to slot metadata.
-        auto* scheduler = slot.owner->scheduler;
+        auto* scheduler     = slot.owner->scheduler;
         const auto observer = slot.owner->observer;
         if (observer.beforePublication)
             observer.beforePublication(observer.context);
@@ -73,16 +73,15 @@ RetryWaitQueue::~RetryWaitQueue()
 {
     if (_impl)
     {
-        assert(!HasPending());
+        assert(! HasPending());
         StopNotifications();
         CloseAfterWorkers();
     }
 }
 
-std::int32_t RetryWaitQueue::Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer& routes,
-                                        RetryWaitObserver observer) noexcept
+std::int32_t RetryWaitQueue::Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer& routes, RetryWaitObserver observer) noexcept
 {
-    if (_impl || !scheduler.WakeHandle() || scheduler.InUiCallback())
+    if (_impl || ! scheduler.WakeHandle() || scheduler.InUiCallback())
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     try
     {
@@ -92,19 +91,19 @@ std::int32_t RetryWaitQueue::Initialize(JobScheduler& scheduler, OwnerWorkMultip
     {
         return E_OUTOFMEMORY;
     }
-    auto& self = *_impl;
+    auto& self     = *_impl;
     self.scheduler = &scheduler;
-    self.routes = &routes;
-    self.observer = observer;
+    self.routes    = &routes;
+    self.observer  = observer;
     for (std::size_t index = 0; index < kCapacity; ++index)
     {
-        auto& slot = self.slots[index];
-        slot.owner = &self;
+        auto& slot  = self.slots[index];
+        slot.owner  = &self;
         auto result = self.Fault(RetryWaitFault::EventCreation, index);
         if (FAILED(result))
             return result;
         slot.event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-        if (!slot.event)
+        if (! slot.event)
             return HRESULT_FROM_WIN32(GetLastError());
         result = self.Fault(RetryWaitFault::RegisterWait, index);
         if (FAILED(result))
@@ -113,17 +112,15 @@ std::int32_t RetryWaitQueue::Initialize(JobScheduler& scheduler, OwnerWorkMultip
         if (FAILED(result))
             return result;
     }
-    if (!routes.Attach(*this))
+    if (! routes.Attach(*this))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     self.attached = true;
     return S_OK;
 }
 
-std::int32_t RetryWaitQueue::Start(JobTicket ticket, unsigned int retry, CancelToken cancellation,
-                                   RetryWaitReceiver& receiver) noexcept
+std::int32_t RetryWaitQueue::Start(JobTicket ticket, unsigned int retry, CancelToken cancellation, RetryWaitReceiver& receiver) noexcept
 {
-    if (!_impl || _impl->stopped || !_impl->attached || ticket.slot >= JobScheduler::kCapacity ||
-        ticket.generation == 0 || DelayMs(retry) == 0)
+    if (! _impl || _impl->stopped || ! _impl->attached || ticket.slot >= JobScheduler::kCapacity || ticket.generation == 0 || DelayMs(retry) == 0)
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     auto& self = *_impl;
     self.CheckOwner();
@@ -138,22 +135,22 @@ std::int32_t RetryWaitQueue::Start(JobTicket ticket, unsigned int retry, CancelT
         auto result = self.Fault(RetryWaitFault::ResetEvent, index);
         if (FAILED(result))
             return result;
-        if (!ResetEvent(slot.event.get()))
+        if (! ResetEvent(slot.event.get()))
             return HRESULT_FROM_WIN32(GetLastError());
         result = self.Fault(RetryWaitFault::ArmWait, index);
         if (FAILED(result))
             return result;
         slot.ready.store(false, std::memory_order_relaxed);
-        slot.ticket = ticket;
-        slot.cancellation = cancellation;
-        slot.receiver = &receiver;
-        slot.error = S_OK;
+        slot.ticket          = ticket;
+        slot.cancellation    = cancellation;
+        slot.receiver        = &receiver;
+        slot.error           = S_OK;
         slot.cancelSignalled = false;
         // Startup waits have never fired; reused waits have published their sole prior callback. Resetting
         // the event and arming a new relative timeout cannot recall/relabel an unacknowledged old callback.
-        if (!self.scheduler->RearmEventWait(slot.wait, DelayMs(retry)))
+        if (! self.scheduler->RearmEventWait(slot.wait, DelayMs(retry)))
         {
-            slot.receiver = nullptr;
+            slot.receiver     = nullptr;
             slot.cancellation = {};
             return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         }
@@ -181,12 +178,11 @@ bool RetryWaitQueue::HasPending() const noexcept
 
 bool RetryWaitQueue::HasReady() const noexcept
 {
-    if (_impl && !_impl->stopped)
+    if (_impl && ! _impl->stopped)
     {
         _impl->CheckOwner();
         for (const auto& slot : _impl->slots)
-            if (slot.receiver && (slot.ready.load(std::memory_order_acquire) ||
-                                  (!slot.cancelSignalled && slot.cancellation.IsCancelled())))
+            if (slot.receiver && (slot.ready.load(std::memory_order_acquire) || (! slot.cancelSignalled && slot.cancellation.IsCancelled())))
                 return true;
     }
     return false;
@@ -194,39 +190,37 @@ bool RetryWaitQueue::HasReady() const noexcept
 
 void RetryWaitQueue::Pump() noexcept
 {
-    if (!_impl || _impl->stopped || _impl->pumping)
+    if (! _impl || _impl->stopped || _impl->pumping)
         return;
     auto& self = *_impl;
     self.CheckOwner();
-    self.pumping = true;
+    self.pumping      = true;
     const auto finish = wil::scope_exit([&]() noexcept { self.pumping = false; });
     for (std::size_t offset = 0; offset < kCapacity; ++offset)
     {
         const auto index = (self.next + offset) % kCapacity;
-        auto& slot = self.slots[index];
-        if (!slot.receiver)
+        auto& slot       = self.slots[index];
+        if (! slot.receiver)
             continue;
         if (slot.ready.load(std::memory_order_acquire))
         {
-            self.next = (index + 1) % kCapacity;
-            auto* receiver = std::exchange(slot.receiver, nullptr);
+            self.next         = (index + 1) % kCapacity;
+            auto* receiver    = std::exchange(slot.receiver, nullptr);
             const auto ticket = slot.ticket;
-            const auto error = slot.error;
-            const auto status = slot.cancellation.IsCancelled() ? RetryWaitStatus::Cancelled
-                                : FAILED(error)                 ? RetryWaitStatus::Failed
-                                                                : RetryWaitStatus::Ready;
+            const auto error  = slot.error;
+            const auto status = slot.cancellation.IsCancelled() ? RetryWaitStatus::Cancelled : FAILED(error) ? RetryWaitStatus::Failed : RetryWaitStatus::Ready;
             slot.cancellation = {};
             slot.ready.store(false, std::memory_order_relaxed);
             // No slot accesses after delivery: the receiver may arm its next retry in this same slot.
             receiver->RetryWaitReady(ticket, status, error);
             return;
         }
-        if (!slot.cancelSignalled && slot.cancellation.IsCancelled())
+        if (! slot.cancelSignalled && slot.cancellation.IsCancelled())
         {
-            self.next = (index + 1) % kCapacity;
+            self.next            = (index + 1) % kCapacity;
             slot.cancelSignalled = true;
-            slot.error = self.Fault(RetryWaitFault::SignalCancel, index);
-            if (SUCCEEDED(slot.error) && !SetEvent(slot.event.get()))
+            slot.error           = self.Fault(RetryWaitFault::SignalCancel, index);
+            if (SUCCEEDED(slot.error) && ! SetEvent(slot.event.get()))
                 slot.error = HRESULT_FROM_WIN32(GetLastError());
             // Even a signal failure retains the slot/receiver until the original deadline acknowledges.
             // HasReady becomes false until that callback publishes; no failed-signal busy loop.
@@ -237,10 +231,10 @@ void RetryWaitQueue::Pump() noexcept
 
 void RetryWaitQueue::StopNotifications() noexcept
 {
-    if (_impl && !_impl->stopped)
+    if (_impl && ! _impl->stopped)
     {
         _impl->CheckOwner();
-        assert(!_impl->pumping && !_impl->scheduler->InUiCallback());
+        assert(! _impl->pumping && ! _impl->scheduler->InUiCallback());
         if (_impl->pumping || _impl->scheduler->InUiCallback())
             return;
         _impl->stopped = true;
@@ -255,16 +249,16 @@ void RetryWaitQueue::StopNotifications() noexcept
 
 void RetryWaitQueue::CloseAfterWorkers() noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return;
     auto& self = *_impl;
     self.CheckOwner();
-    assert(self.stopped && !self.pumping);
-    if (!self.stopped || self.pumping)
+    assert(self.stopped && ! self.pumping);
+    if (! self.stopped || self.pumping)
         return;
     for (auto& slot : self.slots)
     {
-        slot.receiver = nullptr;
+        slot.receiver     = nullptr;
         slot.cancellation = {};
         slot.ready.store(false, std::memory_order_relaxed);
     }
@@ -279,7 +273,7 @@ void RetryWaitQueue::CloseAfterWorkers() noexcept
 
 bool RetryWaitQueue::SignalDeadlineForTest(JobTicket ticket) noexcept
 {
-    if (!_impl || _impl->stopped)
+    if (! _impl || _impl->stopped)
         return false;
     _impl->CheckOwner();
     for (auto& slot : _impl->slots)

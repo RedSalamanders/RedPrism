@@ -59,19 +59,15 @@ struct ColorEditHistogramResult final
 [[nodiscard]] int ColorEditPreviewLimit(FilterKind kind) noexcept;
 [[nodiscard]] std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput& input) noexcept;
 // Borrowed planning before any settings/target capture. The legacy input overload delegates here.
-[[nodiscard]] std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEdit& edit, bool lookupPreview,
-                                                                       bool liveAdjustment = false) noexcept;
+[[nodiscard]] std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEdit& edit, bool lookupPreview, bool liveAdjustment = false) noexcept;
 [[nodiscard]] std::optional<std::uint64_t> ColorEditHistogramMemoryBytes(const ColorEditJobInput& input) noexcept;
 [[nodiscard]] std::optional<std::uint64_t> ColorEditHistogramMemoryBytes(const ColorEdit& edit) noexcept;
-[[nodiscard]] ColorEditPreviewResult RunColorEditPreviewJob(const ColorEditJobInput& input, Executor& executor,
-                                                            CancelToken cancellation = {});
-[[nodiscard]] ColorEditHistogramResult RunColorEditHistogramJob(const ColorEditJobInput& input, Executor& executor,
-                                                                CancelToken cancellation = {});
+[[nodiscard]] ColorEditPreviewResult RunColorEditPreviewJob(const ColorEditJobInput& input, Executor& executor, CancelToken cancellation = {});
+[[nodiscard]] ColorEditHistogramResult RunColorEditHistogramJob(const ColorEditJobInput& input, Executor& executor, CancelToken cancellation = {});
 
 [[nodiscard]] bool ColorEditChangesNothing(FilterKind kind, const FilterSettings& settings) noexcept;
-[[nodiscard]] Raster RenderColorEditRaster(const ColorEdit& edit, const Raster& source, const LayerTransform& placement,
-                                           double scale, bool* noSource = nullptr,
-                                           const CancelToken& cancellation = {});
+[[nodiscard]] Raster RenderColorEditRaster(
+    const ColorEdit& edit, const Raster& source, const LayerTransform& placement, double scale, bool* noSource = nullptr, const CancelToken& cancellation = {});
 
 // Additional live allocation peak of the complete commit graph, before it is submitted. Includes selection
 // coverage, private sparse reads, kernel scratch, blending, trimming, carried masks, thumbnails and metadata.
@@ -80,5 +76,4 @@ struct ColorEditHistogramResult final
 
 // Run may throw bad_alloc; the job runner (or the direct inline wrapper) translates it to a failed operation.
 // Apply never invokes a pixel kernel. Inner loops observe cancellation; the host supplies memory admission.
-[[nodiscard]] ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& executor,
-                                                 CancelToken cancellation = {});
+[[nodiscard]] ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& executor, CancelToken cancellation = {});

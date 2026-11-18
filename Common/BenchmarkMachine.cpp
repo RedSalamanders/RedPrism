@@ -41,16 +41,14 @@ constexpr std::size_t kMaximumTopologyBytes = 16u * 1024u * 1024u;
         return std::nullopt;
     }
 
-    const int byteCount =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text, length, nullptr, 0, nullptr, nullptr);
+    const int byteCount = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text, length, nullptr, 0, nullptr, nullptr);
     if (byteCount <= 0)
     {
         return std::nullopt;
     }
 
     std::string result(static_cast<std::size_t>(byteCount), '\0');
-    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text, length, result.data(), byteCount, nullptr, nullptr) !=
-        byteCount)
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text, length, result.data(), byteCount, nullptr, nullptr) != byteCount)
     {
         return std::nullopt;
     }
@@ -60,16 +58,16 @@ constexpr std::size_t kMaximumTopologyBytes = 16u * 1024u * 1024u;
 [[nodiscard]] std::optional<std::string> ReadRegistryCpuBrand()
 {
     wchar_t value[256]{};
-    DWORD byteCount = static_cast<DWORD>(sizeof(value));
-    const LSTATUS status = RegGetValueW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
-                                        L"ProcessorNameString", RRF_RT_REG_SZ, nullptr, value, &byteCount);
+    DWORD byteCount      = static_cast<DWORD>(sizeof(value));
+    const LSTATUS status = RegGetValueW(
+        HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", L"ProcessorNameString", RRF_RT_REG_SZ, nullptr, value, &byteCount);
     if (status != ERROR_SUCCESS || byteCount < sizeof(wchar_t) || byteCount > sizeof(value))
     {
         return std::nullopt;
     }
 
     const std::size_t chars = byteCount / sizeof(wchar_t);
-    std::size_t length = 0;
+    std::size_t length      = 0;
     while (length < chars && value[length] != L'\0')
     {
         ++length;
@@ -96,14 +94,14 @@ constexpr std::size_t kMaximumTopologyBytes = 16u * 1024u * 1024u;
     {
         __cpuid(registers, static_cast<int>(0x80000002u + static_cast<std::uint32_t>(leaf)));
         const std::size_t offset = static_cast<std::size_t>(leaf) * 16;
-        const auto* bytes = reinterpret_cast<const char*>(registers);
+        const auto* bytes        = reinterpret_cast<const char*>(registers);
         for (std::size_t index = 0; index < 16; ++index)
         {
             brand[offset + index] = bytes[index];
         }
     }
     std::string result(brand);
-    while (!result.empty() && (result.back() == ' ' || result.back() == '\t'))
+    while (! result.empty() && (result.back() == ' ' || result.back() == '\t'))
     {
         result.pop_back();
     }
@@ -120,7 +118,7 @@ constexpr std::size_t kMaximumTopologyBytes = 16u * 1024u * 1024u;
 [[nodiscard]] std::optional<std::string> ReadCpuBrand()
 {
     auto brand = ReadRegistryCpuBrand();
-    if (!brand.has_value() || brand.value().empty())
+    if (! brand.has_value() || brand.value().empty())
     {
         brand = ReadCpuidCpuBrand();
     }
@@ -129,12 +127,12 @@ constexpr std::size_t kMaximumTopologyBytes = 16u * 1024u * 1024u;
 
 struct ProcessorTopology final
 {
-    std::uint32_t physicalCores = 0;
+    std::uint32_t physicalCores     = 0;
     std::uint32_t logicalProcessors = 0;
-    std::uint32_t l3Caches = 0;
-    std::uint64_t l3Bytes = 0;
-    bool sawProcessorCore = false;
-    bool sawL3Cache = false;
+    std::uint32_t l3Caches          = 0;
+    std::uint64_t l3Bytes           = 0;
+    bool sawProcessorCore           = false;
+    bool sawL3Cache                 = false;
 };
 
 [[nodiscard]] bool AddChecked(const std::uint64_t amount, std::uint64_t& total) noexcept
@@ -158,20 +156,16 @@ struct ProcessorTopology final
 
     std::vector<std::byte> buffer(requiredBytes);
     DWORD returnedBytes = requiredBytes;
-    if (GetLogicalProcessorInformationEx(RelationAll,
-                                         reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data()),
-                                         &returnedBytes) == FALSE ||
+    if (GetLogicalProcessorInformationEx(RelationAll, reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data()), &returnedBytes) == FALSE ||
         returnedBytes == 0 || returnedBytes > buffer.size())
     {
         return false;
     }
 
     ProcessorTopology result{};
-    std::size_t offset = 0;
-    const std::size_t processorHeaderBytes =
-        offsetof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, Processor) + offsetof(PROCESSOR_RELATIONSHIP, GroupMask);
-    const std::size_t cacheGroupMasksOffset =
-        offsetof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, Cache) + offsetof(CACHE_RELATIONSHIP, GroupMask);
+    std::size_t offset                      = 0;
+    const std::size_t processorHeaderBytes  = offsetof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, Processor) + offsetof(PROCESSOR_RELATIONSHIP, GroupMask);
+    const std::size_t cacheGroupMasksOffset = offsetof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, Cache) + offsetof(CACHE_RELATIONSHIP, GroupMask);
     while (offset < returnedBytes)
     {
         const std::size_t remaining = static_cast<std::size_t>(returnedBytes) - offset;
@@ -180,10 +174,9 @@ struct ProcessorTopology final
             return false;
         }
 
-        const auto* record = reinterpret_cast<const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(buffer.data() + offset);
+        const auto* record            = reinterpret_cast<const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(buffer.data() + offset);
         const std::size_t recordBytes = record->Size;
-        if (recordBytes < offsetof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, Size) + sizeof(DWORD) ||
-            recordBytes > remaining)
+        if (recordBytes < offsetof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, Size) + sizeof(DWORD) || recordBytes > remaining)
         {
             return false;
         }
@@ -205,15 +198,14 @@ struct ProcessorTopology final
             for (std::size_t groupIndex = 0; groupIndex < groupCount; ++groupIndex)
             {
                 const GROUP_AFFINITY& group = record->Processor.GroupMask[groupIndex];
-                const auto count = static_cast<std::uint32_t>(std::popcount(static_cast<std::uint64_t>(group.Mask)));
+                const auto count            = static_cast<std::uint32_t>(std::popcount(static_cast<std::uint64_t>(group.Mask)));
                 if (count > std::numeric_limits<std::uint32_t>::max() - logicalCountForCore)
                 {
                     return false;
                 }
                 logicalCountForCore += count;
             }
-            if (logicalCountForCore == 0 ||
-                logicalCountForCore > std::numeric_limits<std::uint32_t>::max() - result.logicalProcessors)
+            if (logicalCountForCore == 0 || logicalCountForCore > std::numeric_limits<std::uint32_t>::max() - result.logicalProcessors)
             {
                 return false;
             }
@@ -235,7 +227,7 @@ struct ProcessorTopology final
             if (record->Cache.Level == 3)
             {
                 if (record->Cache.CacheSize == 0 || result.l3Caches == std::numeric_limits<std::uint32_t>::max() ||
-                    !AddChecked(record->Cache.CacheSize, result.l3Bytes))
+                    ! AddChecked(record->Cache.CacheSize, result.l3Bytes))
                 {
                     return false;
                 }
@@ -256,7 +248,7 @@ struct ProcessorTopology final
 
 [[nodiscard]] std::optional<std::string> ReadActivePowerSchemeGuid()
 {
-    GUID* returned = nullptr;
+    GUID* returned     = nullptr;
     const DWORD status = PowerGetActiveScheme(nullptr, &returned);
     wil::unique_hlocal_ptr<GUID> scheme{returned};
     if (status != ERROR_SUCCESS || scheme.get() == nullptr)
@@ -277,8 +269,7 @@ struct ProcessorTopology final
 #if defined(_M_ARM64)
     return BenchmarkMachineInfo::Fma3Status::NotApplicable;
 #elif defined(_M_X64)
-    return _get_FMA3_enable() != 0 ? BenchmarkMachineInfo::Fma3Status::Enabled
-                                   : BenchmarkMachineInfo::Fma3Status::Disabled;
+    return _get_FMA3_enable() != 0 ? BenchmarkMachineInfo::Fma3Status::Enabled : BenchmarkMachineInfo::Fma3Status::Disabled;
 #else
     return BenchmarkMachineInfo::Fma3Status::Unknown;
 #endif
@@ -289,14 +280,10 @@ struct ProcessorTopology final
     using Status = BenchmarkMachineInfo::Fma3Status;
     switch (status)
     {
-    case Status::Enabled:
-        return "enabled";
-    case Status::Disabled:
-        return "disabled";
-    case Status::NotApplicable:
-        return "n/a";
-    case Status::Unknown:
-        return "unknown";
+        case Status::Enabled: return "enabled";
+        case Status::Disabled: return "disabled";
+        case Status::NotApplicable: return "n/a";
+        case Status::Unknown: return "unknown";
     }
     return "unknown";
 }
@@ -309,38 +296,27 @@ void AppendQuoted(std::string& output, const std::string_view value)
         const auto character = static_cast<unsigned char>(rawCharacter);
         switch (character)
         {
-        case '"':
-            output.append("\\\"");
-            break;
-        case '\\':
-            output.append("\\\\");
-            break;
-        case '\n':
-            output.append("\\n");
-            break;
-        case '\r':
-            output.append("\\r");
-            break;
-        case '\t':
-            output.append("\\t");
-            break;
-        default:
-            if (character < 0x20u || character == 0x7fu)
-            {
-                output.append(std::format("\\x{:02X}", static_cast<unsigned int>(character)));
-            }
-            else
-            {
-                output.push_back(static_cast<char>(character));
-            }
-            break;
+            case '"': output.append("\\\""); break;
+            case '\\': output.append("\\\\"); break;
+            case '\n': output.append("\\n"); break;
+            case '\r': output.append("\\r"); break;
+            case '\t': output.append("\\t"); break;
+            default:
+                if (character < 0x20u || character == 0x7fu)
+                {
+                    output.append(std::format("\\x{:02X}", static_cast<unsigned int>(character)));
+                }
+                else
+                {
+                    output.push_back(static_cast<char>(character));
+                }
+                break;
         }
     }
     output.push_back('"');
 }
 
-template <typename T>
-void AppendOptionalNumber(std::string& output, const std::string_view name, const std::optional<T>& value)
+template <typename T> void AppendOptionalNumber(std::string& output, const std::string_view name, const std::optional<T>& value)
 {
     output.append(name);
     output.push_back('=');
@@ -381,7 +357,7 @@ BenchmarkMachineInfo ReadBenchmarkMachine()
     {
         if (topology.sawProcessorCore)
         {
-            info.physicalCoreCount = topology.physicalCores;
+            info.physicalCoreCount     = topology.physicalCores;
             info.logicalProcessorCount = topology.logicalProcessors;
         }
         if (topology.sawL3Cache)
@@ -400,14 +376,14 @@ BenchmarkMachineInfo ReadBenchmarkMachine()
 
     RTL_OSVERSIONINFOW version{};
     version.dwOSVersionInfoSize = static_cast<ULONG>(sizeof(version));
-    using ReadVersion = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
-    const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll"); // borrowed; no library load in the benchmark
-    const auto readVersion = ntdll ? std::bit_cast<ReadVersion>(GetProcAddress(ntdll, "RtlGetVersion")) : nullptr;
+    using ReadVersion           = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
+    const HMODULE ntdll         = GetModuleHandleW(L"ntdll.dll"); // borrowed; no library load in the benchmark
+    const auto readVersion      = ntdll ? std::bit_cast<ReadVersion>(GetProcAddress(ntdll, "RtlGetVersion")) : nullptr;
     if (readVersion && readVersion(&version) >= 0)
     {
         info.osMajorVersion = version.dwMajorVersion;
         info.osMinorVersion = version.dwMinorVersion;
-        info.osBuildNumber = version.dwBuildNumber;
+        info.osBuildNumber  = version.dwBuildNumber;
     }
 
     info.activePowerSchemeGuid = ReadActivePowerSchemeGuid();
@@ -469,8 +445,7 @@ std::string FormatBenchmarkMachineInfo(const BenchmarkMachineInfo& info)
     }
 
     output.append(" refresh_numerator=");
-    if (info.refreshRate.has_value() && info.refreshRate.value().numerator != 0 &&
-        info.refreshRate.value().denominator != 0)
+    if (info.refreshRate.has_value() && info.refreshRate.value().numerator != 0 && info.refreshRate.value().denominator != 0)
     {
         output.append(std::to_string(info.refreshRate.value().numerator));
         output.append(" refresh_denominator=");
@@ -483,20 +458,19 @@ std::string FormatBenchmarkMachineInfo(const BenchmarkMachineInfo& info)
     return output;
 }
 
-std::optional<BenchmarkMachineInfo::RefreshRate> SelectBenchmarkRefreshRate(
-    std::span<const BenchmarkRefreshCandidate> candidates) noexcept
+std::optional<BenchmarkMachineInfo::RefreshRate> SelectBenchmarkRefreshRate(std::span<const BenchmarkRefreshCandidate> candidates) noexcept
 {
     std::optional<BenchmarkMachineInfo::RefreshRate> selected;
     for (const auto& candidate : candidates)
     {
-        if (!candidate.matches)
+        if (! candidate.matches)
             continue;
-        if (!candidate.eligible || candidate.rate.numerator == 0 || candidate.rate.denominator == 0)
+        if (! candidate.eligible || candidate.rate.numerator == 0 || candidate.rate.denominator == 0)
             return std::nullopt;
         if (selected && static_cast<std::uint64_t>(selected->numerator) * candidate.rate.denominator !=
                             static_cast<std::uint64_t>(candidate.rate.numerator) * selected->denominator)
             return std::nullopt;
-        if (!selected)
+        if (! selected)
             selected = candidate.rate;
     }
     return selected;
@@ -506,7 +480,6 @@ void BenchmarkDisplayContinuity::ObserveMessage(const std::uint32_t message, con
 {
     if (invalidated)
         return;
-    if (message == WM_DISPLAYCHANGE || message == WM_DPICHANGED || message == WM_EXITSIZEMOVE ||
-        (message == WM_MOVE && monitorIdentityChanged))
+    if (message == WM_DISPLAYCHANGE || message == WM_DPICHANGED || message == WM_EXITSIZEMOVE || (message == WM_MOVE && monitorIdentityChanged))
         invalidated = true;
 }

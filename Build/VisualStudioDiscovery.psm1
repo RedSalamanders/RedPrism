@@ -89,40 +89,8 @@ function Find-RedPrismMSBuild {
     throw 'MSBuild was not found. Install Visual Studio 2026 (18.x) with the Desktop development with C++ workload.'
 }
 
-function Find-RedPrismClangFormat {
-    <#
-    .SYNOPSIS
-    Resolves clang-format.exe from the supported Visual Studio 2026 C++ Clang tools bundle first,
-    then PATH and standalone LLVM. Returns $null when none is found.
-    #>
-    [CmdletBinding()]
-    param()
-    $installationPath = Find-RedPrismVisualStudioInstallationPath
-    if ($installationPath) {
-        $candidates = @(Get-ChildItem -Path @(
-                (Join-Path $installationPath 'VC\Tools\Llvm\x64\bin\clang-format.exe'),
-                (Join-Path $installationPath 'VC\Tools\Llvm\bin\clang-format.exe')
-            ) -ErrorAction SilentlyContinue | Sort-Object FullName -Descending)
-        if ($candidates.Count -gt 0) {
-            return $candidates[0].FullName
-        }
-    }
-
-    $pathCommand = Get-Command 'clang-format.exe' -ErrorAction SilentlyContinue
-    if ($pathCommand) {
-        return $pathCommand.Source
-    }
-    $standalone = Join-Path $env:ProgramFiles 'LLVM\bin\clang-format.exe'
-    if (Test-Path -LiteralPath $standalone -PathType Leaf) {
-        return $standalone
-    }
-
-    return $null
-}
-
 Export-ModuleMember -Function @(
     'Find-RedPrismVisualStudioInstallationPath',
     'Find-RedPrismVisualStudioInstallationOfMSBuild',
-    'Find-RedPrismMSBuild',
-    'Find-RedPrismClangFormat'
+    'Find-RedPrismMSBuild'
 ) -Variable @('RedPrismVisualStudioVersionRange')

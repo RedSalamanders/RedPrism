@@ -30,22 +30,20 @@ bool Application::InitializePreparedDisplayOwner(bool allowHidden) noexcept
     // A partly acquired controller is closed on failure. Its one-shot state cannot be reinitialized;
     // the caller joins Application shutdown. The independent shared command route remains live.
     _preparedDisplayAcquisitionStarted = true;
-    if (FAILED(_committedDisplay.InitializeOwner(_jobs, _gpuWork, _recordedCommands, _ownerWork, *this,
-                                                 &_graphGpuBudget, false, false)))
+    if (FAILED(_committedDisplay.InitializeOwner(_jobs, _gpuWork, _recordedCommands, _ownerWork, *this, &_graphGpuBudget, false, false)))
     {
         return false;
     }
-    if (FAILED(_pendingDisplay.InitializeOwner(_jobs, _gpuWork, _recordedCommands, _ownerWork, _pendingDisplayClient,
-                                               &_graphGpuBudget, true, false)))
+    if (FAILED(_pendingDisplay.InitializeOwner(_jobs, _gpuWork, _recordedCommands, _ownerWork, _pendingDisplayClient, &_graphGpuBudget, true, false)))
     {
         _committedDisplay.StopOwner();
         _committedDisplay.JoinedShutdownOwner(); // No graph was requested or captured.
-        if (!_committedDisplay.CloseAfterWorkersOwner())
+        if (! _committedDisplay.CloseAfterWorkersOwner())
             std::terminate();
         return false;
     }
-    _pendingDisplayInitialized = true;
-    _committedDisplayInitialized = true;
+    _pendingDisplayInitialized          = true;
+    _committedDisplayInitialized        = true;
     _committedDisplayAllowHiddenForTest = allowHidden;
     ReleaseSurfacesWhileUnseen();
     if (_rendererReady)
@@ -57,25 +55,24 @@ bool Application::InitializePreparedDisplayOwner(bool allowHidden) noexcept
 bool Application::DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept
 {
     descriptor = {};
-    if (_shutdownStarted || !_committedDisplayInitialized || !_rendererReady || !_gpuWorkInitialized ||
-        FAILED(_gpuBindingError))
+    if (_shutdownStarted || ! _committedDisplayInitialized || ! _rendererReady || ! _gpuWorkInitialized || FAILED(_gpuBindingError))
         return false;
     const auto authority = _session.CaptureDocumentReadAuthority();
     const auto& document = std::as_const(_session).Document();
-    if (!authority || !document || !_renderer.Device() || !_renderer.Context())
+    if (! authority || ! document || ! _renderer.Device() || ! _renderer.Context())
         return false;
-    descriptor.key = {authority.value(), _gpuWork.DeviceGeneration()};
-    descriptor.document = &document.value();
-    descriptor.device = _renderer.Device();
+    descriptor.key       = {authority.value(), _gpuWork.DeviceGeneration()};
+    descriptor.document  = &document.value();
+    descriptor.device    = _renderer.Device();
     descriptor.immediate = _renderer.Context();
-    descriptor.software = _renderer.IsWarp();
+    descriptor.software  = _renderer.IsWarp();
     return true;
 }
 
 void Application::CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) noexcept
 {
     _acknowledgedCommittedDisplay = graph;
-    _committedDisplayFailure = S_OK;
+    _committedDisplayFailure      = S_OK;
     _committedDisplayFailureKey.reset();
     if (_processingTestProbe && _processingTestProbe->committedDisplayPublished)
         _processingTestProbe->committedDisplayPublished(_processingTestProbe->context, graph);
@@ -84,7 +81,7 @@ void Application::CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) no
 
 void Application::CommittedDisplayFailedOwner(CommittedDisplayKey key, HRESULT failure) noexcept
 {
-    _committedDisplayFailure = failure;
+    _committedDisplayFailure    = failure;
     _committedDisplayFailureKey = key;
     InvalidateFrame(); // Existing canvas-error notice runs outside scheduler/owner-pump callbacks.
 }
@@ -93,10 +90,10 @@ HRESULT Application::CurrentCommittedDisplayFailureOwner() const noexcept
 {
     if (FAILED(_gpuBindingError))
         return _gpuBindingError;
-    if (SUCCEEDED(_committedDisplayFailure) || !_committedDisplayFailureKey)
+    if (SUCCEEDED(_committedDisplayFailure) || ! _committedDisplayFailureKey)
         return S_OK;
     const auto authority = _session.CaptureDocumentReadAuthority();
-    if (!authority)
+    if (! authority)
         return S_OK;
     const CommittedDisplayKey current{authority.value(), _gpuWork.DeviceGeneration()};
     return current == _committedDisplayFailureKey.value() ? _committedDisplayFailure : S_OK;
@@ -105,39 +102,36 @@ HRESULT Application::CurrentCommittedDisplayFailureOwner() const noexcept
 bool Application::PendingDisplayClient::DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept
 {
     descriptor = {};
-    if (_owner._shutdownStarted || !_owner._pendingDisplayInitialized || !_owner._rendererReady ||
-        !_owner._gpuWorkInitialized || FAILED(_owner._gpuBindingError))
+    if (_owner._shutdownStarted || ! _owner._pendingDisplayInitialized || ! _owner._rendererReady || ! _owner._gpuWorkInitialized ||
+        FAILED(_owner._gpuBindingError))
         return false;
     PendingDisplaySource source;
-    if (!_owner._session.DescribePendingDisplaySource(source))
+    if (! _owner._session.DescribePendingDisplaySource(source))
         return false;
     // Accepted Cancel excludes useful preview immediately. Its original panel/source still belongs to the
     // selected closure until acknowledgement; admission refusal and another opening must not hide it.
-    if (source.kind != PendingDisplaySource::Kind::Transform &&
-        _owner._pendingCancelOpening == std::optional(source.opening) &&
-        _owner._pendingCancelDocumentSerial == _owner._session.DocumentSerial() &&
-        _owner._pendingCancelReceipt.Read().outcome == HostOutcome::Pending)
+    if (source.kind != PendingDisplaySource::Kind::Transform && _owner._pendingCancelOpening == std::optional(source.opening) &&
+        _owner._pendingCancelDocumentSerial == _owner._session.DocumentSerial() && _owner._pendingCancelReceipt.Read().outcome == HostOutcome::Pending)
         return false;
-    descriptor.key.document = source.authority;
-    descriptor.key.deviceGeneration = _owner._gpuWork.DeviceGeneration();
-    descriptor.key.purpose = source.kind == PendingDisplaySource::Kind::Transform   ? DisplaySourcePurpose::Transform
-                             : source.kind == PendingDisplaySource::Kind::Color     ? DisplaySourcePurpose::Color
-                             : source.kind == PendingDisplaySource::Kind::Gradient  ? DisplaySourcePurpose::Gradient
-                             : source.kind == PendingDisplaySource::Kind::PixelMove ? DisplaySourcePurpose::PixelMove
-                                                                                    : DisplaySourcePurpose::Adjustment;
-    descriptor.key.opening = source.opening;
-    descriptor.key.publication = source.publication;
-    descriptor.key.sourceIdentity = source.sourceIdentity;
-    descriptor.key.lookupIdentity = source.lookup && *source.lookup ? source.lookup->get() : nullptr;
-    descriptor.key.rasterPreviewIdentity = source.pixelOpening && *source.pixelOpening
-                                               ? static_cast<const void*>(source.pixelOpening->get())
+    descriptor.key.document              = source.authority;
+    descriptor.key.deviceGeneration      = _owner._gpuWork.DeviceGeneration();
+    descriptor.key.purpose               = source.kind == PendingDisplaySource::Kind::Transform   ? DisplaySourcePurpose::Transform
+                                           : source.kind == PendingDisplaySource::Kind::Color     ? DisplaySourcePurpose::Color
+                                           : source.kind == PendingDisplaySource::Kind::Gradient  ? DisplaySourcePurpose::Gradient
+                                           : source.kind == PendingDisplaySource::Kind::PixelMove ? DisplaySourcePurpose::PixelMove
+                                                                                                  : DisplaySourcePurpose::Adjustment;
+    descriptor.key.opening               = source.opening;
+    descriptor.key.publication           = source.publication;
+    descriptor.key.sourceIdentity        = source.sourceIdentity;
+    descriptor.key.lookupIdentity        = source.lookup && *source.lookup ? source.lookup->get() : nullptr;
+    descriptor.key.rasterPreviewIdentity = source.pixelOpening && *source.pixelOpening     ? static_cast<const void*>(source.pixelOpening->get())
                                            : source.rasterPreview && *source.rasterPreview ? source.rasterPreview->get()
                                                                                            : nullptr;
-    descriptor.document = source.document;
-    descriptor.device = _owner._renderer.Device();
-    descriptor.immediate = _owner._renderer.Context();
-    descriptor.software = _owner._renderer.IsWarp();
-    descriptor.pending = source;
+    descriptor.document                  = source.document;
+    descriptor.device                    = _owner._renderer.Device();
+    descriptor.immediate                 = _owner._renderer.Context();
+    descriptor.software                  = _owner._renderer.IsWarp();
+    descriptor.pending                   = source;
     return true;
 }
 
@@ -150,7 +144,7 @@ void Application::PendingDisplayClient::CommittedDisplayPublishedOwner(RecordedD
 
 void Application::PendingDisplayClient::CommittedDisplayFailedOwner(CommittedDisplayKey key, HRESULT failure) noexcept
 {
-    _owner._pendingDisplayFailure = failure;
+    _owner._pendingDisplayFailure    = failure;
     _owner._pendingDisplayFailureKey = key;
     _owner.InvalidateFrame();
 }

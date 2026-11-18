@@ -22,7 +22,7 @@
 class BoundedLassoPoints final
 {
     static constexpr std::uint32_t kChunkPoints = 64;
-    static constexpr std::uint32_t kNoBlock = (std::numeric_limits<std::uint32_t>::max)();
+    static constexpr std::uint32_t kNoBlock     = (std::numeric_limits<std::uint32_t>::max)();
     struct Block final
     {
         std::array<Vec2, kChunkPoints> points;
@@ -33,14 +33,16 @@ class BoundedLassoPoints final
     static_assert(std::is_trivially_destructible_v<Block>);
     struct Arena final
     {
-        explicit Arena(std::uint32_t limit) : blocks(std::allocator<Block>{}.allocate(limit)), capacity(limit) {}
+        explicit Arena(std::uint32_t limit) : blocks(std::allocator<Block>{}.allocate(limit)), capacity(limit)
+        {
+        }
         ~Arena() noexcept
         {
             // Trivial nodes have no recursive ownership. The enclosing accounted publication routes the
             // entire allocation to the original worker release sink, including tiny arenas on the owner.
             std::allocator<Block>{}.deallocate(blocks, capacity);
         }
-        Arena(const Arena&) = delete;
+        Arena(const Arena&)            = delete;
         Arena& operator=(const Arena&) = delete;
         // The worker's private page touches are not synchronization; retain the target volatile model.
         // Keep the ARM64 notice annotation on this definition only. Owner: raster maintainers; review: 2027-01-31.
@@ -52,7 +54,7 @@ class BoundedLassoPoints final
         {
             // Move demand-zero page faults to the admitted worker before publishing an owner writer.
             // One byte per 4 KiB also touches every page on systems with a larger native page size.
-            auto* bytes = reinterpret_cast<volatile unsigned char*>(blocks);
+            auto* bytes       = reinterpret_cast<volatile unsigned char*>(blocks);
             const auto length = static_cast<std::size_t>(capacity) * sizeof(Block);
             for (std::size_t offset = 0; offset < length; offset += 4096)
             {
@@ -60,13 +62,13 @@ class BoundedLassoPoints final
                     return false;
                 bytes[offset] = 0;
             }
-            return !cancel.IsCancelled();
+            return ! cancel.IsCancelled();
         }
 #if defined(_M_ARM64)
 #pragma warning(pop)
 #endif
-        [[nodiscard]] bool SealOwner(const std::array<Vec2, kChunkPoints>& points, std::uint32_t previous,
-                                     std::uint32_t count, SelectionBounds bounds, std::uint32_t& result) noexcept
+        [[nodiscard]] bool SealOwner(
+            const std::array<Vec2, kChunkPoints>& points, std::uint32_t previous, std::uint32_t count, SelectionBounds bounds, std::uint32_t& result) noexcept
         {
             if (used == capacity)
                 return false;
@@ -80,18 +82,21 @@ class BoundedLassoPoints final
         std::uint32_t used = 0; // Single writer only; snapshots never read this field.
     };
 
-  public:
+public:
     static constexpr std::uint32_t kMaxPoints = 8u * 1024u * 1024u;
     static constexpr std::uint32_t kMaxBlocks = (kMaxPoints - 1u) / kChunkPoints;
     class Snapshot final
     {
-      public:
-        Snapshot() noexcept = default;
-        Snapshot(const Snapshot&) noexcept = default;
+    public:
+        Snapshot() noexcept                           = default;
+        Snapshot(const Snapshot&) noexcept            = default;
         Snapshot& operator=(const Snapshot&) noexcept = default;
         Snapshot(Snapshot&& source) noexcept
-            : _arena(std::move(source._arena)), _prefix(std::exchange(source._prefix, kNoBlock)), _tail(source._tail),
-              _tailCount(std::exchange(source._tailCount, 0)), _count(std::exchange(source._count, 0)),
+            : _arena(std::move(source._arena)),
+              _prefix(std::exchange(source._prefix, kNoBlock)),
+              _tail(source._tail),
+              _tailCount(std::exchange(source._tailCount, 0)),
+              _count(std::exchange(source._count, 0)),
               _bounds(std::exchange(source._bounds, std::nullopt))
         {
         }
@@ -99,12 +104,12 @@ class BoundedLassoPoints final
         {
             if (this != &source)
             {
-                _arena = std::move(source._arena);
-                _prefix = std::exchange(source._prefix, kNoBlock);
-                _tail = source._tail;
+                _arena     = std::move(source._arena);
+                _prefix    = std::exchange(source._prefix, kNoBlock);
+                _tail      = source._tail;
                 _tailCount = std::exchange(source._tailCount, 0);
-                _count = std::exchange(source._count, 0);
-                _bounds = std::exchange(source._bounds, std::nullopt);
+                _count     = std::exchange(source._count, 0);
+                _bounds    = std::exchange(source._bounds, std::nullopt);
             }
             return *this;
         }
@@ -126,8 +131,7 @@ class BoundedLassoPoints final
         }
         [[nodiscard]] bool SameCapture(const Snapshot& other) const noexcept
         {
-            if (_arena != other._arena || _prefix != other._prefix || _tailCount != other._tailCount ||
-                _count != other._count || _bounds != other._bounds)
+            if (_arena != other._arena || _prefix != other._prefix || _tailCount != other._tailCount || _count != other._count || _bounds != other._bounds)
                 return false;
             for (std::uint32_t index = 0; index < _tailCount; ++index)
                 if (_tail[index] != other._tail[index])
@@ -158,12 +162,10 @@ class BoundedLassoPoints final
             }
             for (auto sealedBlock = order.rbegin(); sealedBlock != order.rend(); ++sealedBlock)
             {
-                if (cancel.IsCancelled() || !visitor(std::span<const Vec2>(_arena->blocks[*sealedBlock].points)))
+                if (cancel.IsCancelled() || ! visitor(std::span<const Vec2>(_arena->blocks[*sealedBlock].points)))
                     return false;
             }
-            return !cancel.IsCancelled() &&
-                   (_tailCount == 0 || visitor(std::span<const Vec2>(_tail.data(), _tailCount))) &&
-                   !cancel.IsCancelled();
+            return ! cancel.IsCancelled() && (_tailCount == 0 || visitor(std::span<const Vec2>(_tail.data(), _tailCount))) && ! cancel.IsCancelled();
         }
         [[nodiscard]] bool CopyToForWork(std::vector<Vec2>& output, CancelToken cancel = {}) const
         {
@@ -173,27 +175,30 @@ class BoundedLassoPoints final
             output.reserve(_count);
             return VisitForWork(
                 [&](std::span<const Vec2> chunk)
-                {
-                    output.insert(output.end(), chunk.begin(), chunk.end());
-                    return true;
-                },
+            {
+                output.insert(output.end(), chunk.begin(), chunk.end());
+                return true;
+            },
                 cancel);
         }
 
-      private:
+    private:
         friend class BoundedLassoPoints;
         std::shared_ptr<const Arena> _arena;
         std::uint32_t _prefix = kNoBlock;
         std::array<Vec2, kChunkPoints> _tail{};
         std::uint32_t _tailCount = 0;
-        std::uint32_t _count = 0;
+        std::uint32_t _count     = 0;
         std::optional<SelectionBounds> _bounds;
     };
-    BoundedLassoPoints(const BoundedLassoPoints&) = delete;
+    BoundedLassoPoints(const BoundedLassoPoints&)            = delete;
     BoundedLassoPoints& operator=(const BoundedLassoPoints&) = delete;
     BoundedLassoPoints(BoundedLassoPoints&& source) noexcept
-        : _arena(std::move(source._arena)), _prefix(std::exchange(source._prefix, kNoBlock)), _tail(source._tail),
-          _tailCount(std::exchange(source._tailCount, 0)), _count(std::exchange(source._count, 0)),
+        : _arena(std::move(source._arena)),
+          _prefix(std::exchange(source._prefix, kNoBlock)),
+          _tail(source._tail),
+          _tailCount(std::exchange(source._tailCount, 0)),
+          _count(std::exchange(source._count, 0)),
           _bounds(std::exchange(source._bounds, std::nullopt))
     {
     }
@@ -201,56 +206,54 @@ class BoundedLassoPoints final
     {
         if (this != &source)
         {
-            _arena = std::move(source._arena);
-            _prefix = std::exchange(source._prefix, kNoBlock);
-            _tail = source._tail;
+            _arena     = std::move(source._arena);
+            _prefix    = std::exchange(source._prefix, kNoBlock);
+            _tail      = source._tail;
             _tailCount = std::exchange(source._tailCount, 0);
-            _count = std::exchange(source._count, 0);
-            _bounds = std::exchange(source._bounds, std::nullopt);
+            _count     = std::exchange(source._count, 0);
+            _bounds    = std::exchange(source._bounds, std::nullopt);
         }
         return *this;
     }
     // Original complete job admission must precede creation; bind its accounting owner after successful
     // Completed before exposing a writer/snapshot. A null accounting owner is not a production fallback.
-    [[nodiscard]] static std::optional<BoundedLassoPoints> CreateForWork(
-        std::shared_ptr<const SharedPublicationMemory> memory, std::uint32_t blocks, CancelToken cancel = {})
+    [[nodiscard]] static std::optional<BoundedLassoPoints> CreateForWork(std::shared_ptr<const SharedPublicationMemory> memory,
+                                                                         std::uint32_t blocks,
+                                                                         CancelToken cancel = {})
     {
         const auto bytes = MemoryBytes(blocks);
-        if (!memory || !bytes || cancel.IsCancelled())
+        if (! memory || ! bytes || cancel.IsCancelled())
             return std::nullopt;
-        auto arena = MakeLocallyOwnedPublicationObject<Arena>(
-            std::move(memory), bytes, static_cast<std::uint64_t>(blocks) * sizeof(Block), blocks);
-        if (!arena->PreparePagesForWork(cancel))
+        auto arena = MakeLocallyOwnedPublicationObject<Arena>(std::move(memory), bytes, static_cast<std::uint64_t>(blocks) * sizeof(Block), blocks);
+        if (! arena->PreparePagesForWork(cancel))
             return std::nullopt;
         return BoundedLassoPoints(std::move(arena));
     }
     [[nodiscard]] static constexpr std::uint64_t MemoryBytes(std::uint32_t blocks) noexcept
     {
-        return blocks && blocks <= kMaxBlocks
-                   ? LocallyOwnedPublicationAllowance<Arena>() + static_cast<std::uint64_t>(blocks) * sizeof(Block)
-                   : 0;
+        return blocks && blocks <= kMaxBlocks ? LocallyOwnedPublicationAllowance<Arena>() + static_cast<std::uint64_t>(blocks) * sizeof(Block) : 0;
     }
     [[nodiscard]] Snapshot CaptureOwner() const noexcept
     {
         Snapshot result;
-        result._arena = _arena;
-        result._prefix = _prefix;
-        result._tail = _tail;
+        result._arena     = _arena;
+        result._prefix    = _prefix;
+        result._tail      = _tail;
         result._tailCount = _tailCount;
-        result._count = _count;
-        result._bounds = _bounds;
+        result._count     = _count;
+        result._bounds    = _bounds;
         return result;
     }
     [[nodiscard]] bool PushOwner(Vec2 point) noexcept
     {
-        if (!_arena || _count == kMaxPoints || !std::isfinite(point.x) || !std::isfinite(point.y))
+        if (! _arena || _count == kMaxPoints || ! std::isfinite(point.x) || ! std::isfinite(point.y))
             return false;
         if (_tailCount == kChunkPoints)
         {
             std::uint32_t prefix = kNoBlock;
-            if (!_arena->SealOwner(_tail, _prefix, _count, _bounds.value(), prefix))
+            if (! _arena->SealOwner(_tail, _prefix, _count, _bounds.value(), prefix))
                 return false;
-            _prefix = prefix;
+            _prefix    = prefix;
             _tailCount = 0;
         }
         _tail[_tailCount++] = point;
@@ -260,14 +263,14 @@ class BoundedLassoPoints final
     }
     [[nodiscard]] bool PopOwner() noexcept
     {
-        if (!_arena || _count == 0)
+        if (! _arena || _count == 0)
             return false;
         if (_tailCount == 0)
         {
             const auto& block = _arena->blocks[_prefix];
-            _tail = block.points;
-            _tailCount = kChunkPoints;
-            _prefix = block.previous;
+            _tail             = block.points;
+            _tailCount        = kChunkPoints;
+            _prefix           = block.previous;
         }
         --_tailCount;
         --_count;
@@ -278,10 +281,9 @@ class BoundedLassoPoints final
     }
     [[nodiscard]] std::optional<Vec2> LastOwner() const noexcept
     {
-        if (!_count)
+        if (! _count)
             return std::nullopt;
-        return _tailCount ? std::optional(_tail[_tailCount - 1])
-                          : std::optional(_arena->blocks[_prefix].points[kChunkPoints - 1]);
+        return _tailCount ? std::optional(_tail[_tailCount - 1]) : std::optional(_arena->blocks[_prefix].points[kChunkPoints - 1]);
     }
     [[nodiscard]] std::uint32_t CountOwner() const noexcept
     {
@@ -293,18 +295,20 @@ class BoundedLassoPoints final
     }
     void ClearOwner() noexcept
     {
-        _prefix = kNoBlock;
+        _prefix    = kNoBlock;
         _tailCount = 0;
-        _count = 0;
+        _count     = 0;
         _bounds.reset();
         // Do not reset the arena allocation cursor: outstanding snapshots still own its old immutable nodes.
     }
 
-  private:
-    explicit BoundedLassoPoints(std::shared_ptr<Arena> arena) noexcept : _arena(std::move(arena)) {}
+private:
+    explicit BoundedLassoPoints(std::shared_ptr<Arena> arena) noexcept : _arena(std::move(arena))
+    {
+    }
     static void Include(std::optional<SelectionBounds>& bounds, Vec2 point) noexcept
     {
-        if (!bounds)
+        if (! bounds)
             bounds = SelectionBounds{point.x, point.y, point.x, point.y};
         else
         {
@@ -318,6 +322,6 @@ class BoundedLassoPoints final
     std::uint32_t _prefix = kNoBlock;
     std::array<Vec2, kChunkPoints> _tail{};
     std::uint32_t _tailCount = 0;
-    std::uint32_t _count = 0;
+    std::uint32_t _count     = 0;
     std::optional<SelectionBounds> _bounds;
 };

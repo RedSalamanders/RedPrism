@@ -31,9 +31,8 @@ struct SamplerReadbackPayload final : DeferredReleaseNode
 
     SamplerReadbackPayload() noexcept
     {
-        bytes = kDeferredReleaseThreshold;
-        destroy = [](DeferredReleaseNode* node) noexcept
-        { const std::unique_ptr<SamplerReadbackPayload> owned(static_cast<SamplerReadbackPayload*>(node)); };
+        bytes   = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* node) noexcept { const std::unique_ptr<SamplerReadbackPayload> owned(static_cast<SamplerReadbackPayload*>(node)); };
     }
 };
 #pragma warning(pop)
@@ -43,7 +42,7 @@ struct RetireSamplerPayload final
 {
     void operator()(SamplerReadbackPayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload, DeferredReleasePolicy::AlwaysOnOwner))
+        if (payload && ! TryDeferRelease(*payload, DeferredReleasePolicy::AlwaysOnOwner))
             std::terminate();
     }
 };
@@ -66,14 +65,28 @@ bool SameSamplerIntent(const SamplerPointIntent& left, const SamplerPointIntent&
 #pragma warning(disable : 4625 4626)
 class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
 {
-  public:
-    SamplerHostJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t opening, SamplerIntentPoint point,
-                   D3D11_BOX region, UtilityReadbackAdmission::Envelope envelope,
+public:
+    SamplerHostJob(Application& owner,
+                   HistoryWorkStamp stamp,
+                   std::uint64_t opening,
+                   SamplerIntentPoint point,
+                   D3D11_BOX region,
+                   UtilityReadbackAdmission::Envelope envelope,
                    GpuResidencyReservation reservation) noexcept
-        : RecordedDocumentReadbackJob(owner._jobs, owner._gpuWork, owner._recordedCommands, owner._utilityReadback,
-                                      owner._graphGpuBudget, envelope, std::move(reservation), region,
+        : RecordedDocumentReadbackJob(owner._jobs,
+                                      owner._gpuWork,
+                                      owner._recordedCommands,
+                                      owner._utilityReadback,
+                                      owner._graphGpuBudget,
+                                      envelope,
+                                      std::move(reservation),
+                                      region,
                                       owner._renderer.IsWarp()),
-          _owner(owner), _stamp(stamp), _opening(opening), _point(point), _retirement(envelope.cpuBytes)
+          _owner(owner),
+          _stamp(stamp),
+          _opening(opening),
+          _point(point),
+          _retirement(envelope.cpuBytes)
     {
     }
     ~SamplerHostJob() override
@@ -90,10 +103,10 @@ class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
     // Owner-only, called after the preceding worker/GPU lease has acknowledged. Idle input causes no resume.
     void Advance() noexcept
     {
-        if (!_waiting)
+        if (! _waiting)
             return;
         auto* opening = _owner.FindSamplerOpening(_opening);
-        if (!Current() || !opening || _owner._historyWork.CancelRequested(_stamp))
+        if (! Current() || ! opening || _owner._historyWork.CancelRequested(_stamp))
         {
             (void)_owner._jobs.Cancel(_waiting.value());
             if (ResumeDetachedReadback(_waiting.value()))
@@ -103,14 +116,13 @@ class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
         if (const auto next = opening->points.SelectNext(_opening))
         {
             _point = next.value();
-            if (ContinuePixelReadback(_waiting.value(), static_cast<unsigned int>(_point.point.x),
-                                      static_cast<unsigned int>(_point.point.y)))
+            if (ContinuePixelReadback(_waiting.value(), static_cast<unsigned int>(_point.point.x), static_cast<unsigned int>(_point.point.y)))
             {
                 _waiting.reset();
                 return;
             }
             // A failed resume changed no base request. Finish that exact suspended record with a local error.
-            _terminal = true;
+            _terminal      = true;
             _terminalError = E_UNEXPECTED;
         }
         else if (opening->points.IsFinished(_opening))
@@ -125,16 +137,16 @@ class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
             _waiting.reset();
     }
 
-  private:
+private:
     [[nodiscard]] bool Current() const noexcept
     {
         const auto* opening = _owner.FindSamplerOpening(_opening);
-        return !_owner._shutdownStarted && opening && _owner._samplerHostStamp == _stamp &&
-               _owner._historyWork.IsCurrent(_stamp) && _owner._session.IsDocumentReadCurrent(opening->source);
+        return ! _owner._shutdownStarted && opening && _owner._samplerHostStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
+               _owner._session.IsDocumentReadCurrent(opening->source);
     }
     HRESULT CaptureReadbackDocument(CanvasDocument& document) noexcept override
     {
-        if (!Current() || _owner._historyWork.CancelRequested(_stamp))
+        if (! Current() || _owner._historyWork.CancelRequested(_stamp))
             return E_ABORT;
         document = _owner._session.Document().value(); // Original admitted committed root, once.
         if (_owner._samplerSourceCapturesForTest)
@@ -143,12 +155,11 @@ class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
     }
     JobResult PrepareReadbackSnapshot(CanvasDocument&, JobContext&) override
     {
-        if (!_payload)
+        if (! _payload)
         {
-            std::unique_ptr<SamplerReadbackPayload, RetireSamplerPayload> payload(
-                std::make_unique<SamplerReadbackPayload>().release());
+            std::unique_ptr<SamplerReadbackPayload, RetireSamplerPayload> payload(std::make_unique<SamplerReadbackPayload>().release());
             payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
-            _payload = std::move(payload); // Worker allocation under the complete original admission.
+            _payload       = std::move(payload); // Worker allocation under the complete original admission.
         }
         return {};
     }
@@ -170,8 +181,7 @@ class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
             return FAILED(_terminalError) ? JobResult{JobStatus::Failed, _terminalError} : JobResult{};
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
-        if (!image.HasStorage() || image.Width() != 1 || image.Height() != 1 ||
-            image.Format() != RasterFormat::Bgra8888)
+        if (! image.HasStorage() || image.Width() != 1 || image.Height() != 1 || image.Format() != RasterFormat::Bgra8888)
             return {JobStatus::Failed, E_UNEXPECTED};
         _opaque = DocumentSession::SampleCompositeColor(image, {0, 0}); // Unchanged straight-sRGB formula.
         return {};
@@ -181,25 +191,24 @@ class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
         if (_terminal)
             return false;
         auto* opening = _owner.FindSamplerOpening(_opening);
-        if (!Current() || !opening || _owner._historyWork.CancelRequested(_stamp))
+        if (! Current() || ! opening || _owner._historyWork.CancelRequested(_stamp))
         {
             (void)_owner._jobs.Cancel(ticket);
             (void)ResumeDetachedReadback(ticket);
             return true;
         }
         const auto active = opening->points.ActivePoint(_opening);
-        if (!active || active->point.stamp.opening != _point.point.stamp.opening ||
-            active->point.stamp.sequence != _point.point.stamp.sequence)
+        if (! active || active->point.stamp.opening != _point.point.stamp.opening || active->point.stamp.sequence != _point.point.stamp.sequence)
         {
-            _terminal = true;
+            _terminal      = true;
             _terminalError = E_UNEXPECTED;
             (void)ResumeDetachedReadback(ticket);
             return true;
         }
         _owner.PublishSamplerPoint(_opening, _point, _opaque);
-        if (!opening->points.Acknowledge(_point.point.stamp, _opaque))
+        if (! opening->points.Acknowledge(_point.point.stamp, _opaque))
         {
-            _terminal = true;
+            _terminal      = true;
             _terminalError = E_UNEXPECTED;
             (void)ResumeDetachedReadback(ticket);
             return true;
@@ -220,8 +229,8 @@ class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
     {
         if (_payload)
             _payload->completedImage = std::move(image);
-        const bool current = Current();
-        HostOutcome outcome = !current                                ? HostOutcome::Stale
+        const bool current  = Current();
+        HostOutcome outcome = ! current                               ? HostOutcome::Stale
                               : result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed    ? HostOutcome::Failed
                                                                       : HostOutcome::Succeeded;
@@ -232,9 +241,9 @@ class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
         if (overflow)
             outcome = HostOutcome::Failed;
         const auto error = outcome == HostOutcome::Cancelled || outcome == HostOutcome::Stale ? E_ABORT
-                           : overflow ? HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)
-                                      : result.error;
-        if (outcome == HostOutcome::Failed && !overflow && !_owner._shutdownStarted)
+                           : overflow                                                         ? HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)
+                                                                                              : result.error;
+        if (outcome == HostOutcome::Failed && ! overflow && ! _owner._shutdownStarted)
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, IDS_ERROR_READBACK);
         _owner.RetireSamplerOpening(_opening);
         _owner._samplerHostTicket.reset();
@@ -250,7 +259,7 @@ class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
     const std::uint64_t _retirement;
     std::optional<JobTicket> _waiting;
     std::optional<std::uint32_t> _opaque; // Worker result, read only after that worker has joined.
-    bool _terminal = false;
+    bool _terminal         = false;
     HRESULT _terminalError = S_OK;
     std::unique_ptr<SamplerReadbackPayload, RetireSamplerPayload> _payload;
 };
@@ -259,10 +268,10 @@ class Application::SamplerHostJob final : public RecordedDocumentReadbackJob
 HRESULT Application::StartSamplerReadback(std::uint64_t openingId) noexcept
 {
     auto* opening = FindSamplerOpening(openingId);
-    if (!opening || _samplerHostTicket || !_session.IsDocumentReadCurrent(opening->source))
+    if (! opening || _samplerHostTicket || ! _session.IsDocumentReadCurrent(opening->source))
         return E_ABORT;
     const auto point = opening->points.SelectNext(openingId);
-    if (!point)
+    if (! point)
         return S_FALSE;
     const auto x = static_cast<unsigned int>(point->point.x);
     const auto y = static_cast<unsigned int>(point->point.y);
@@ -270,39 +279,39 @@ HRESULT Application::StartSamplerReadback(std::uint64_t openingId) noexcept
     // Complete immutable-source/private-graph/scratch admission precedes capture. The sampler's
     // additional bound includes its full control lifetime and reusable 1x1 output.
     auto memory = RecordedDocumentReadbackJob::RequiredMemory(region);
-    const auto metadata = sizeof(SamplerHostJob) + sizeof(SamplerReadbackPayload) + sizeof(SamplerState) +
-                          SharedPublicationMemory::OwnershipAllowance() + 8192ull;
-    if (!memory || !AddSamplerBytes(memory, metadata))
+    const auto metadata =
+        sizeof(SamplerHostJob) + sizeof(SamplerReadbackPayload) + sizeof(SamplerState) + SharedPublicationMemory::OwnershipAllowance() + 8192ull;
+    if (! memory || ! AddSamplerBytes(memory, metadata))
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     UtilityReadbackAdmission::Envelope envelope;
     GpuResidencyReservation reservation;
     RETURN_IF_FAILED(PrepareRecordedUtilityAdmission(_session.Document().value(), memory, envelope, reservation));
     const auto ordinal = _activeHostRequest ? std::optional(_activeHostRequest->ordinal) : _historyWork.NextOrdinal();
-    if (!ordinal)
+    if (! ordinal)
         return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
     _samplerHostStamp = _historyWork.Begin(_session.DocumentSerial(), ordinal.value(), HistoryWorkKind::Selection);
-    if (!_samplerHostStamp)
+    if (! _samplerHostStamp)
         return E_UNEXPECTED;
     HRESULT error = E_OUTOFMEMORY;
     try
     {
-        std::unique_ptr<Job> job = std::make_unique<SamplerHostJob>(
-            *this, _samplerHostStamp.value(), openingId, point.value(), region, envelope, std::move(reservation));
+        std::unique_ptr<Job> job =
+            std::make_unique<SamplerHostJob>(*this, _samplerHostStamp.value(), openingId, point.value(), region, envelope, std::move(reservation));
         auto* borrowed = static_cast<SamplerHostJob*>(job.get());
         JobTicket ticket;
         error = static_cast<HRESULT>(_jobs.Submit(job,
-                                                  {.kind = JobClass::Selection,
-                                                   .serialKey = _session.DocumentSerial(),
-                                                   .memoryBytes = envelope.cpuBytes,
-                                                   .deferredRetirement = true,
-                                                   .allowMemoryWaiting = true,
+                                                  {.kind                  = JobClass::Selection,
+                                                   .serialKey             = _session.DocumentSerial(),
+                                                   .memoryBytes           = envelope.cpuBytes,
+                                                   .deferredRetirement    = true,
+                                                   .allowMemoryWaiting    = true,
                                                    .reserveRetainedMemory = true},
                                                   ticket));
         if (SUCCEEDED(error))
         {
-            opening->jobAlive = true;
-            opening->ticket = ticket;
-            _samplerHostJob = borrowed;
+            opening->jobAlive  = true;
+            opening->ticket    = ticket;
+            _samplerHostJob    = borrowed;
             _samplerHostTicket = ticket;
         }
     }
@@ -318,7 +327,7 @@ HRESULT Application::StartSamplerReadback(std::uint64_t openingId) noexcept
     }
     if (_activeHostRequest)
     {
-        _hostCommitStamp = _samplerHostStamp;
+        _hostCommitStamp       = _samplerHostStamp;
         _hostAfterPrerequisite = HostStage::Complete;
     }
     return S_OK;
@@ -339,34 +348,31 @@ void Application::CancelSamplerReadback() noexcept
     }
 }
 
-void Application::PublishSamplerPoint(std::uint64_t openingId, const SamplerIntentPoint& point,
-                                      std::optional<std::uint32_t> opaqueArgb) noexcept
+void Application::PublishSamplerPoint(std::uint64_t openingId, const SamplerIntentPoint& point, std::optional<std::uint32_t> opaqueArgb) noexcept
 {
     auto* opening = FindSamplerOpening(openingId);
-    if (!opening)
+    if (! opening)
         return;
-    if (!opening->resolvedIntent || !SameSamplerIntent(opening->resolvedIntent.value(), point.intent))
+    if (! opening->resolvedIntent || ! SameSamplerIntent(opening->resolvedIntent.value(), point.intent))
     {
         opening->resolvedArgb = point.intent.baselineArgb | 0xFF000000u;
-        const auto& prefix = _samplerState->palettePrefix;
-        if (!opening->picker && prefix && prefix->session == opening->source.sessionIdentity &&
-            prefix->documentSerial == opening->source.documentSerial && prefix->intent == point.intent.paletteIntent)
+        const auto& prefix    = _samplerState->palettePrefix;
+        if (! opening->picker && prefix && prefix->session == opening->source.sessionIdentity && prefix->documentSerial == opening->source.documentSerial &&
+            prefix->intent == point.intent.paletteIntent)
             opening->resolvedArgb = prefix->argb;
     }
     if (opaqueArgb)
         opening->resolvedArgb = opaqueArgb.value();
     opening->resolvedIntent = point.intent;
-    if (!opening->picker)
+    if (! opening->picker)
         _samplerState->palettePrefix =
-            SamplerState::PalettePrefix{opening->source.sessionIdentity, opening->source.documentSerial,
-                                        point.intent.paletteIntent, opening->resolvedArgb};
-    if (!opaqueArgb)
+            SamplerState::PalettePrefix{opening->source.sessionIdentity, opening->source.documentSerial, point.intent.paletteIntent, opening->resolvedArgb};
+    if (! opaqueArgb)
         return; // A transparent point carries the accepted prefix but performs no palette/picker write.
     if (opening->picker && _chrome)
     {
         const auto& target = opening->picker.value();
-        const ChromeHost::PickerIntentAuthority intent{target.host, target.opening, point.intent.pickerIntent,
-                                                       target.target};
+        const ChromeHost::PickerIntentAuthority intent{target.host, target.opening, point.intent.pickerIntent, target.target};
         if (_chrome->IsPickerIntentCurrent(intent))
         {
             auto publication = _chrome->CapturePickerSampleAuthority();
@@ -375,10 +381,8 @@ void Application::PublishSamplerPoint(std::uint64_t openingId, const SamplerInte
                 // Worker-mode Preview preserves its root/generation; direct reference Preview may mutate
                 // parameters. Only this exact own callback renews authority over the admitted original root.
                 const auto current = _session.CaptureDocumentReadAuthority();
-                if (current && current->sessionIdentity == opening->source.sessionIdentity &&
-                    current->documentSerial == opening->source.documentSerial &&
-                    current->restoreSerial == opening->source.restoreSerial &&
-                    current->canvasWidth == opening->source.canvasWidth &&
+                if (current && current->sessionIdentity == opening->source.sessionIdentity && current->documentSerial == opening->source.documentSerial &&
+                    current->restoreSerial == opening->source.restoreSerial && current->canvasWidth == opening->source.canvasWidth &&
                     current->canvasHeight == opening->source.canvasHeight)
                     opening->source = current.value();
             }
@@ -386,8 +390,7 @@ void Application::PublishSamplerPoint(std::uint64_t openingId, const SamplerInte
     }
     else if (_session.PendingBrush() == nullptr)
     {
-        const DocumentSession::PaletteIntentAuthority intent{opening->source.sessionIdentity,
-                                                             point.intent.paletteIntent};
+        const DocumentSession::PaletteIntentAuthority intent{opening->source.sessionIdentity, point.intent.paletteIntent};
         if (_session.IsPaletteIntentCurrent(intent))
         {
             auto publication = _session.CapturePaletteSampleAuthority();

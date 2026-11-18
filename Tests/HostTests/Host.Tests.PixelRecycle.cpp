@@ -17,18 +17,18 @@
 
 namespace
 {
-constexpr std::size_t kMiB = 1024u * 1024u;
-constexpr std::size_t kClassBytes = 16u * kMiB;
-constexpr std::size_t kLargeBytes = kClassBytes + 1u;
+constexpr std::size_t kMiB              = 1024u * 1024u;
+constexpr std::size_t kClassBytes       = 16u * kMiB;
+constexpr std::size_t kLargeBytes       = kClassBytes + 1u;
 constexpr std::size_t kLargerClassBytes = 2u * kClassBytes + 1u;
-constexpr std::uint64_t kRecordBytes = 64;
+constexpr std::uint64_t kRecordBytes    = 64;
 
 int g_failures = 0;
 
 void Expect(bool condition, const char* name) noexcept
 {
     std::printf("%s pixel-recycle.%s\n", condition ? "PASS" : "FAIL", name);
-    if (!condition)
+    if (! condition)
     {
         ++g_failures;
     }
@@ -46,19 +46,19 @@ constexpr std::array<std::size_t, 7> SampleOffsets(std::size_t size) noexcept
 
 std::uint64_t FillAndChecksum(PixelBuffer& buffer, std::uint8_t salt) noexcept
 {
-    const auto offsets = SampleOffsets(buffer.Size());
+    const auto offsets     = SampleOffsets(buffer.Size());
     std::uint64_t checksum = 1469598103934665603ULL;
     for (std::size_t i = 0; i < offsets.size(); ++i)
     {
         buffer[offsets[i]] = SampleValue(i, salt);
-        checksum = (checksum ^ SampleValue(i, salt)) * 1099511628211ULL;
+        checksum           = (checksum ^ SampleValue(i, salt)) * 1099511628211ULL;
     }
     return checksum;
 }
 
 std::uint64_t ReadChecksum(const PixelBuffer& buffer) noexcept
 {
-    const auto offsets = SampleOffsets(buffer.Size());
+    const auto offsets     = SampleOffsets(buffer.Size());
     std::uint64_t checksum = 1469598103934665603ULL;
     for (std::size_t i = 0; i < offsets.size(); ++i)
     {
@@ -80,8 +80,7 @@ std::uint64_t ExpectedChecksum(std::uint8_t salt) noexcept
 void TestAccountingAndInvalidSizes() noexcept
 {
     Expect(PixelBuffer::RequiredBytes(0) == 0, "required-zero");
-    Expect(PixelBuffer::RequiredBytes(1) == 1u + kRecordBytes &&
-               PixelBuffer::RequiredBytes(4097) == 4097u + kRecordBytes,
+    Expect(PixelBuffer::RequiredBytes(1) == 1u + kRecordBytes && PixelBuffer::RequiredBytes(4097) == 4097u + kRecordBytes,
            "required-small-sizes-exact-includes-record");
     Expect(PixelBuffer::RequiredBytes(kClassBytes) == kClassBytes + kRecordBytes &&
                PixelBuffer::RequiredBytes(kLargeBytes) == 2u * kClassBytes + kRecordBytes &&
@@ -89,13 +88,12 @@ void TestAccountingAndInvalidSizes() noexcept
            "required-large-sizes-rounds-to-16mib-includes-record");
     Expect(PixelBuffer::RequiredBytes((std::numeric_limits<std::size_t>::max)()) == 0, "required-overflow-is-zero");
 
-    const PixelBuffer zero = PixelBuffer::TryAllocate(0);
+    const PixelBuffer zero     = PixelBuffer::TryAllocate(0);
     const PixelBuffer overflow = PixelBuffer::TryAllocate((std::numeric_limits<std::size_t>::max)());
-    Expect(!zero && zero.Size() == 0 && !overflow && overflow.Size() == 0, "invalid-size-allocations-empty");
+    Expect(! zero && zero.Size() == 0 && ! overflow && overflow.Size() == 0, "invalid-size-allocations-empty");
 
     PixelBuffer small = PixelBuffer::TryAllocate(4097);
-    Expect(small && small.Size() == 4097 && small.AllocationBytes() == 4097u + kRecordBytes,
-           "small-allocation-exact-size-and-accounting");
+    Expect(small && small.Size() == 4097 && small.AllocationBytes() == 4097u + kRecordBytes, "small-allocation-exact-size-and-accounting");
     small = PixelBuffer{};
     Expect(PixelBufferRecycleBytes() == 0, "small-allocation-never-cached");
 }
@@ -104,18 +102,17 @@ void TestClassReuseAndMoveAdopt() noexcept
 {
     SetPixelBufferRecycleCap(PixelBuffer::RequiredBytes(kLargeBytes) + PixelBuffer::RequiredBytes(kLargerClassBytes));
     PixelBuffer first = PixelBuffer::TryAllocate(kLargeBytes);
-    Expect(first && first.Size() == kLargeBytes && first.AllocationBytes() == PixelBuffer::RequiredBytes(kLargeBytes),
-           "large-allocation-size-and-accounting");
-    if (!first)
+    Expect(first && first.Size() == kLargeBytes && first.AllocationBytes() == PixelBuffer::RequiredBytes(kLargeBytes), "large-allocation-size-and-accounting");
+    if (! first)
     {
         return;
     }
 
-    const auto firstChecksum = FillAndChecksum(first, 3);
+    const auto firstChecksum       = FillAndChecksum(first, 3);
     const auto* const firstAddress = first.Data();
     PixelBuffer moved{std::move(first)};
-    Expect(!first && moved.Data() == firstAddress && moved.Size() == kLargeBytes &&
-               ReadChecksum(moved) == firstChecksum && firstChecksum == ExpectedChecksum(3),
+    Expect(! first && moved.Data() == firstAddress && moved.Size() == kLargeBytes && ReadChecksum(moved) == firstChecksum &&
+               firstChecksum == ExpectedChecksum(3),
            "move-preserves-pointer-size-and-sampled-pixels");
 
     PixelBuffer otherClass = PixelBuffer::TryAllocate(kLargerClassBytes);
@@ -125,18 +122,15 @@ void TestClassReuseAndMoveAdopt() noexcept
         otherClass = PixelBuffer{};
     }
     moved = PixelBuffer{};
-    Expect(PixelBufferRecycleBytes() ==
-               PixelBuffer::RequiredBytes(kLargerClassBytes) + PixelBuffer::RequiredBytes(kLargeBytes),
+    Expect(PixelBufferRecycleBytes() == PixelBuffer::RequiredBytes(kLargerClassBytes) + PixelBuffer::RequiredBytes(kLargeBytes),
            "different-size-classes-account-independently");
 
     PixelBuffer sameClass = PixelBuffer::TryAllocate(kLargeBytes);
-    Expect(sameClass && sameClass.Data() == firstAddress && sameClass.Size() == kLargeBytes,
-           "same-size-class-reuses-exact-pointer");
+    Expect(sameClass && sameClass.Data() == firstAddress && sameClass.Size() == kLargeBytes, "same-size-class-reuses-exact-pointer");
     sameClass = PixelBuffer{};
 
     PixelBuffer classChange = PixelBuffer::TryAllocate(kLargerClassBytes);
-    Expect(classChange && classChange.Size() == kLargerClassBytes && classChange.Data() != firstAddress,
-           "different-size-class-does-not-reuse-pointer");
+    Expect(classChange && classChange.Size() == kLargerClassBytes && classChange.Data() != firstAddress, "different-size-class-does-not-reuse-pointer");
     classChange = PixelBuffer{};
 
     PixelBuffer adoptBuffer = PixelBuffer::TryAllocate(64);
@@ -149,12 +143,10 @@ void TestClassReuseAndMoveAdopt() noexcept
         }
         const auto* const adoptedAddress = adoptBuffer.Data();
         PixelBuffer movedForAdopt{std::move(adoptBuffer)};
-        Raster adopted = Raster::Adopt(8, 8, RasterFormat::Gray8, std::move(movedForAdopt));
-        const bool pixelsMatch = adopted.HasStorage() && adopted.Width() == 8 && adopted.Height() == 8 &&
-                                 adopted.ByteSize() == 64 && adopted.Data() == adoptedAddress &&
-                                 adopted.Data()[17] == static_cast<std::uint8_t>(17u ^ 0xA5u);
-        Expect(!adoptBuffer && !movedForAdopt && pixelsMatch,
-               "adopt-transfers-requested-size-and-pointer-with-sampled-content");
+        Raster adopted         = Raster::Adopt(8, 8, RasterFormat::Gray8, std::move(movedForAdopt));
+        const bool pixelsMatch = adopted.HasStorage() && adopted.Width() == 8 && adopted.Height() == 8 && adopted.ByteSize() == 64 &&
+                                 adopted.Data() == adoptedAddress && adopted.Data()[17] == static_cast<std::uint8_t>(17u ^ 0xA5u);
+        Expect(! adoptBuffer && ! movedForAdopt && pixelsMatch, "adopt-transfers-requested-size-and-pointer-with-sampled-content");
     }
     TrimPixelBufferRecycle();
     Expect(PixelBufferRecycleBytes() == 0, "class-reuse-cleanup-trim");
@@ -165,26 +157,21 @@ void TestAsanRetirementAnnotations() noexcept
 #if defined(__SANITIZE_ADDRESS__)
     SetPixelBufferRecycleCap(PixelBuffer::RequiredBytes(kLargeBytes));
     PixelBuffer retired = PixelBuffer::TryAllocate(kLargeBytes);
-    if (!retired)
+    if (! retired)
     {
         Expect(false, "asan-annotation-allocation-valid");
         return;
     }
-    auto* const address = retired.Data();
-    retired = PixelBuffer{};
-    const bool cachedPoison = __asan_address_is_poisoned(address) != 0 &&
-                              __asan_address_is_poisoned(address + kLargeBytes - 1u) != 0 &&
-                              __asan_address_is_poisoned(address + kLargeBytes) != 0 &&
-                              __asan_address_is_poisoned(address + 2u * kClassBytes - 1u) != 0;
-    Expect(cachedPoison && PixelBufferRecycleBytes() == PixelBuffer::RequiredBytes(kLargeBytes),
-           "asan-retired-payload-and-class-slack-poisoned-while-cached");
+    auto* const address     = retired.Data();
+    retired                 = PixelBuffer{};
+    const bool cachedPoison = __asan_address_is_poisoned(address) != 0 && __asan_address_is_poisoned(address + kLargeBytes - 1u) != 0 &&
+                              __asan_address_is_poisoned(address + kLargeBytes) != 0 && __asan_address_is_poisoned(address + 2u * kClassBytes - 1u) != 0;
+    Expect(cachedPoison && PixelBufferRecycleBytes() == PixelBuffer::RequiredBytes(kLargeBytes), "asan-retired-payload-and-class-slack-poisoned-while-cached");
 
     constexpr std::size_t reusedSize = kLargeBytes + 256;
-    PixelBuffer reused = PixelBuffer::TryAllocate(reusedSize);
-    Expect(reused && reused.Data() == address && reused.Size() == reusedSize &&
-               __asan_address_is_poisoned(reused.Data()) == 0 &&
-               __asan_address_is_poisoned(reused.Data() + reusedSize - 1) == 0 &&
-               __asan_address_is_poisoned(reused.Data() + reusedSize) != 0,
+    PixelBuffer reused               = PixelBuffer::TryAllocate(reusedSize);
+    Expect(reused && reused.Data() == address && reused.Size() == reusedSize && __asan_address_is_poisoned(reused.Data()) == 0 &&
+               __asan_address_is_poisoned(reused.Data() + reusedSize - 1) == 0 && __asan_address_is_poisoned(reused.Data() + reusedSize) != 0,
            "asan-reuse-unpoisons-requested-bytes-only");
     reused = PixelBuffer{};
     TrimPixelBufferRecycle();
@@ -218,14 +205,13 @@ void TestTrimCapZeroAndCloseWithLiveBuffer() noexcept
     SetPixelBufferRecycleCap(PixelBuffer::RequiredBytes(kLargeBytes));
     PixelBuffer live = PixelBuffer::TryAllocate(kLargeBytes);
     Expect(static_cast<bool>(live), "close-live-source-allocation-valid");
-    if (!live)
+    if (! live)
     {
         return;
     }
     const auto expected = FillAndChecksum(live, 9);
     ClosePixelBufferRecycle();
-    Expect(live && live.Size() == kLargeBytes && ReadChecksum(live) == expected && expected == ExpectedChecksum(9) &&
-               PixelBufferRecycleBytes() == 0,
+    Expect(live && live.Size() == kLargeBytes && ReadChecksum(live) == expected && expected == ExpectedChecksum(9) && PixelBufferRecycleBytes() == 0,
            "close-with-live-buffer-preserves-owner-and-data");
     live = PixelBuffer{};
     Expect(PixelBufferRecycleBytes() == 0, "free-after-close-does-not-cache");
@@ -235,18 +221,18 @@ void TestTrimCapZeroAndCloseWithLiveBuffer() noexcept
 
 void TestSlotLimit() noexcept
 {
-    constexpr std::size_t kSlotCount = 33;
+    constexpr std::size_t kSlotCount  = 33;
     const std::uint64_t oneAllocation = PixelBuffer::RequiredBytes(kClassBytes);
     SetPixelBufferRecycleCap(oneAllocation * kSlotCount);
     std::array<PixelBuffer, kSlotCount> buffers;
     bool allAllocated = true;
     for (PixelBuffer& buffer : buffers)
     {
-        buffer = PixelBuffer::TryAllocate(kClassBytes);
+        buffer       = PixelBuffer::TryAllocate(kClassBytes);
         allAllocated = allAllocated && static_cast<bool>(buffer);
     }
     Expect(allAllocated, "slot-limit-fixtures-allocated");
-    if (!allAllocated)
+    if (! allAllocated)
     {
         for (PixelBuffer& buffer : buffers)
         {
@@ -271,21 +257,20 @@ void TestConcurrentBorrowers() noexcept
     struct BorrowerResult final
     {
         const std::uint8_t* address = nullptr;
-        std::uint64_t checksum = 0;
-        bool allocated = false;
+        std::uint64_t checksum      = 0;
+        bool allocated              = false;
     };
     std::array<BorrowerResult, 2> results{};
 
     auto borrow = [&](std::size_t index) noexcept
     {
-        PixelBuffer buffer = PixelBuffer::TryAllocate(kLargeBytes);
+        PixelBuffer buffer       = PixelBuffer::TryAllocate(kLargeBytes);
         results[index].allocated = static_cast<bool>(buffer);
-        results[index].address = buffer.Data();
+        results[index].address   = buffer.Data();
         rendezvous.arrive_and_wait();
         if (buffer)
         {
-            const bool unique = results[0].address != nullptr && results[1].address != nullptr &&
-                                results[0].address != results[1].address;
+            const bool unique = results[0].address != nullptr && results[1].address != nullptr && results[0].address != results[1].address;
             if (unique)
             {
                 const auto offsets = SampleOffsets(buffer.Size());

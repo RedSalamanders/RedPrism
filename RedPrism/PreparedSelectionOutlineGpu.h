@@ -21,14 +21,14 @@
 // fence acknowledgement or a producer join. Device removal alone never authorizes unrelated retirement.
 class PreparedSelectionOutlineGpu final
 {
-  public:
+public:
     using GridKey = PreparedSelectionOutlineRaster::GridKey;
     struct Views final
     {
-        ID3D11ShaderResourceView* solid = nullptr;
+        ID3D11ShaderResourceView* solid  = nullptr;
         ID3D11ShaderResourceView* dashes = nullptr;
-        unsigned int width = 0;
-        unsigned int height = 0;
+        unsigned int width               = 0;
+        unsigned int height              = 0;
         [[nodiscard]] explicit operator bool() const noexcept
         {
             return solid && dashes;
@@ -36,27 +36,30 @@ class PreparedSelectionOutlineGpu final
     };
     struct Observer final
     {
-        void* context = nullptr;
+        void* context                                           = nullptr;
         void (*afterResourceCall)(void*, unsigned int) noexcept = nullptr;
     };
     PreparedSelectionOutlineGpu() noexcept = default;
     ~PreparedSelectionOutlineGpu();
-    PreparedSelectionOutlineGpu(const PreparedSelectionOutlineGpu&) = delete;
+    PreparedSelectionOutlineGpu(const PreparedSelectionOutlineGpu&)            = delete;
     PreparedSelectionOutlineGpu& operator=(const PreparedSelectionOutlineGpu&) = delete;
-    [[nodiscard]] static std::int32_t GpuMemoryBytes(unsigned int width, unsigned int height,
-                                                     std::uint64_t& output) noexcept;
+    [[nodiscard]] static std::int32_t GpuMemoryBytes(unsigned int width, unsigned int height, std::uint64_t& output) noexcept;
     // A refusal keeps the caller's reservation and this empty graph unchanged. Capture creates no resource.
-    [[nodiscard]] HRESULT CaptureOwner(ID3D11Device* device, ID3D11DeviceContext* immediate, std::uint64_t generation,
+    [[nodiscard]] HRESULT CaptureOwner(ID3D11Device* device,
+                                       ID3D11DeviceContext* immediate,
+                                       std::uint64_t generation,
                                        GpuResidencyReservation& reservation) noexcept;
-    [[nodiscard]] HRESULT CreateOnWorker(PreparedSelectionOutlineRaster raster, CancelToken cancellation = {},
-                                         Observer observer = {}) noexcept;
+    [[nodiscard]] HRESULT CreateOnWorker(PreparedSelectionOutlineRaster raster, CancelToken cancellation = {}, Observer observer = {}) noexcept;
     // All source/view/device values must still match the current requested display. A stale candidate
     // remains unpublished and retains its original charge for worker retirement.
-    [[nodiscard]] HRESULT PublishOwner(ID3D11Device* device, ID3D11DeviceContext* immediate, std::uint64_t generation,
-                                       const void* sourceIdentity, const GridKey& grid) noexcept;
+    [[nodiscard]] HRESULT PublishOwner(
+        ID3D11Device* device, ID3D11DeviceContext* immediate, std::uint64_t generation, const void* sourceIdentity, const GridKey& grid) noexcept;
     // One bounded two-view borrow. No allocation, COM query, resource creation, pixel copying or point walk.
-    [[nodiscard]] Views BorrowOwner(ID3D11Device* device, ID3D11DeviceContext* immediate, std::uint64_t generation,
-                                    const void* sourceIdentity, const GridKey& grid,
+    [[nodiscard]] Views BorrowOwner(ID3D11Device* device,
+                                    ID3D11DeviceContext* immediate,
+                                    std::uint64_t generation,
+                                    const void* sourceIdentity,
+                                    const GridKey& grid,
                                     unsigned int antPhase) const noexcept;
     [[nodiscard]] bool DetachOwner() noexcept;
     [[nodiscard]] bool RetireDetachedOnWorker() noexcept;
@@ -69,7 +72,7 @@ class PreparedSelectionOutlineGpu final
     [[nodiscard]] bool RestrictConcurrencyForTest() noexcept;
     [[nodiscard]] bool SetResourceFailureForTest(unsigned int call, HRESULT error = E_FAIL) noexcept;
 
-  private:
+private:
     enum class Phase : std::uint8_t
     {
         Empty,
@@ -82,8 +85,8 @@ class PreparedSelectionOutlineGpu final
         Retired
     };
     [[nodiscard]] bool IsOwner() const noexcept;
-    [[nodiscard]] bool Matches(ID3D11Device* device, ID3D11DeviceContext* immediate, std::uint64_t generation,
-                               const void* sourceIdentity, const GridKey& grid) const noexcept;
+    [[nodiscard]] bool Matches(
+        ID3D11Device* device, ID3D11DeviceContext* immediate, std::uint64_t generation, const void* sourceIdentity, const GridKey& grid) const noexcept;
     [[nodiscard]] bool RetireForWork(Phase expected) noexcept;
     // Declaration order retains admission after graphics and CPU-source owners; actual cleanup is explicit.
     GpuResidencyReservation _reservation;
@@ -94,11 +97,11 @@ class PreparedSelectionOutlineGpu final
     std::array<wil::com_ptr_nothrow<ID3D11Texture2D>, PreparedSelectionOutlineRaster::PlaneCount> _textures;
     std::array<wil::com_ptr_nothrow<ID3D11ShaderResourceView>, PreparedSelectionOutlineRaster::PlaneCount> _views;
     std::atomic<Phase> _phase{Phase::Empty};
-    std::uint64_t _generation = 0;
-    std::uint32_t _ownerThread = 0;
-    HRESULT _result = E_PENDING;
-    HRESULT _failureResult = E_FAIL;
-    unsigned int _failureCall = 18;
+    std::uint64_t _generation   = 0;
+    std::uint32_t _ownerThread  = 0;
+    HRESULT _result             = E_PENDING;
+    HRESULT _failureResult      = E_FAIL;
+    unsigned int _failureCall   = 18;
     unsigned int _resourceCalls = 0;
-    bool _concurrentCreates = false;
+    bool _concurrentCreates     = false;
 };

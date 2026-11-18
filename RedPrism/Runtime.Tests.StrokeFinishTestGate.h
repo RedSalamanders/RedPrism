@@ -34,7 +34,9 @@ struct StrokeFinishTestGate final
     };
     static constexpr std::uint32_t kWaitTimeoutMs = 10000;
 
-    explicit StrokeFinishTestGate(bool hold) noexcept : ownerThread(GetCurrentThreadId()), holdAfterPreparation(hold) {}
+    explicit StrokeFinishTestGate(bool hold) noexcept : ownerThread(GetCurrentThreadId()), holdAfterPreparation(hold)
+    {
+    }
 
     wil::unique_handle reached{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};

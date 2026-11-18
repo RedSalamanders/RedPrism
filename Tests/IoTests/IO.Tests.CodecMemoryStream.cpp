@@ -19,7 +19,7 @@
 
 namespace
 {
-int gFailures = 0;
+int gFailures   = 0;
 int gAssertions = 0;
 
 void Expect(bool condition, const char* name) noexcept
@@ -38,8 +38,7 @@ void ExpectHr(HRESULT actual, HRESULT expected, const char* name) noexcept
     }
     else
     {
-        std::printf("FAIL codecmem.%s actual=0x%08lX expected=0x%08lX\n", name, static_cast<unsigned long>(actual),
-                    static_cast<unsigned long>(expected));
+        std::printf("FAIL codecmem.%s actual=0x%08lX expected=0x%08lX\n", name, static_cast<unsigned long>(actual), static_cast<unsigned long>(expected));
         ++gFailures;
     }
 }
@@ -53,14 +52,14 @@ void ExpectHr(HRESULT actual, HRESULT expected, const char* name) noexcept
 
 struct ObserverState final
 {
-    CodecMemoryStage selected = CodecMemoryStage::Reserve;
-    std::uint64_t selectedCount = 0;
-    CodecMemoryStage faultStage = CodecMemoryStage::Reserve;
-    std::uint32_t faultCode = ERROR_SUCCESS;
-    std::uint32_t faultCalls = 0;
-    std::uint32_t faultOnCall = 1;
-    std::uint32_t reachedCalls = 0;
-    std::uint64_t lastCount = 0;
+    CodecMemoryStage selected      = CodecMemoryStage::Reserve;
+    std::uint64_t selectedCount    = 0;
+    CodecMemoryStage faultStage    = CodecMemoryStage::Reserve;
+    std::uint32_t faultCode        = ERROR_SUCCESS;
+    std::uint32_t faultCalls       = 0;
+    std::uint32_t faultOnCall      = 1;
+    std::uint32_t reachedCalls     = 0;
+    std::uint64_t lastCount        = 0;
     std::stop_source* cancellation = nullptr;
 };
 
@@ -93,7 +92,7 @@ void LiteralWriteOverwriteReadAndEof()
 {
     wil::com_ptr_nothrow<CodecMemoryStream> stream;
     ExpectHr(CodecMemoryStream::Create(32, {}, stream.put()), S_OK, "literal.create");
-    if (!stream)
+    if (! stream)
         return;
 
     constexpr std::array<std::uint8_t, 6> initial{'a', 'b', 'c', 'd', 'e', 'f'};
@@ -107,8 +106,7 @@ void LiteralWriteOverwriteReadAndEof()
     ExpectHr(stream->Seek(move, STREAM_SEEK_SET, &position), S_OK, "literal.seek-overwrite");
     Expect(position.QuadPart == 2, "literal.seek-position");
     constexpr std::array<std::uint8_t, 2> replacement{'X', 'Y'};
-    ExpectHr(stream->Write(replacement.data(), static_cast<ULONG>(replacement.size()), &count), S_OK,
-             "literal.overwrite");
+    ExpectHr(stream->Write(replacement.data(), static_cast<ULONG>(replacement.size()), &count), S_OK, "literal.overwrite");
     Expect(count == replacement.size() && CursorIs(stream.get(), 4), "literal.overwrite-count-and-cursor");
 
     move.QuadPart = 0;
@@ -119,7 +117,7 @@ void LiteralWriteOverwriteReadAndEof()
     Expect(count == expected.size() && actual == expected, "literal.exact-bytes");
 
     std::uint8_t eofByte = 0xCC;
-    count = 99;
+    count                = 99;
     ExpectHr(stream->Read(&eofByte, 1, &count), S_FALSE, "literal.eof-short-read");
     Expect(count == 0 && eofByte == 0xCC && CursorIs(stream.get(), expected.size()), "literal.eof-count-buffer-cursor");
 }
@@ -128,25 +126,24 @@ void CapRejectsWithoutChangingPrefixCursorOrCommit()
 {
     wil::com_ptr_nothrow<CodecMemoryStream> stream;
     ExpectHr(CodecMemoryStream::Create(4, {}, stream.put()), S_OK, "cap.create");
-    if (!stream)
+    if (! stream)
         return;
     constexpr std::array<std::uint8_t, 3> prefix{'o', 'k', '!'};
     ULONG written = 0;
     ExpectHr(stream->Write(prefix.data(), static_cast<ULONG>(prefix.size()), &written), S_OK, "cap.prefix-write");
     Expect(written == prefix.size(), "cap.prefix-count");
     constexpr std::uint8_t finalByte = '?';
-    written = 0;
+    written                          = 0;
     ExpectHr(stream->Write(&finalByte, 1, &written), S_OK, "cap.write-exact-capacity");
     Expect(written == 1 && CursorIs(stream.get(), 4), "cap.exact-capacity-count-and-cursor");
-    const auto committed = stream->CommittedBytes();
+    const auto committed            = stream->CommittedBytes();
     constexpr std::uint8_t overflow = '!';
-    written = 99;
+    written                         = 99;
     ExpectHr(stream->Write(&overflow, 1, &written), STG_E_MEDIUMFULL, "cap.overwrite-cap-rejected");
     Expect(stream->LimitExceeded(), "cap.overflow-sets-limit-flag");
     const auto bytes = stream->WrittenBytes();
     constexpr std::array<std::uint8_t, 4> exactPrefix{'o', 'k', '!', '?'};
-    Expect(written == 0 && bytes.size() == exactPrefix.size() &&
-               std::equal(bytes.begin(), bytes.end(), exactPrefix.begin()),
+    Expect(written == 0 && bytes.size() == exactPrefix.size() && std::equal(bytes.begin(), bytes.end(), exactPrefix.begin()),
            "cap.unchanged-prefix-and-zero-count");
     Expect(CursorIs(stream.get(), exactPrefix.size()), "cap.unchanged-cursor");
     Expect(stream->CommittedBytes() == committed, "cap.unchanged-committed-bytes");
@@ -159,7 +156,7 @@ void LimitExceededIsStickyForCapacityFailures()
 {
     wil::com_ptr_nothrow<CodecMemoryStream> resized;
     ExpectHr(CodecMemoryStream::Create(8, {}, resized.put()), S_OK, "limit.resize-create");
-    if (!resized)
+    if (! resized)
         return;
     ULARGE_INTEGER size{};
     size.QuadPart = 9;
@@ -171,7 +168,7 @@ void LimitExceededIsStickyForCapacityFailures()
 
     wil::com_ptr_nothrow<CodecMemoryStream> positiveSeek;
     ExpectHr(CodecMemoryStream::Create(8, {}, positiveSeek.put()), S_OK, "limit.positive-seek-create");
-    if (!positiveSeek)
+    if (! positiveSeek)
         return;
     LARGE_INTEGER move{};
     move.QuadPart = 9;
@@ -183,18 +180,18 @@ void LimitExceededIsStickyForCapacityFailures()
 
     wil::com_ptr_nothrow<CodecMemoryStream> negativeSeek;
     ExpectHr(CodecMemoryStream::Create(8, {}, negativeSeek.put()), S_OK, "limit.negative-seek-create");
-    if (!negativeSeek)
+    if (! negativeSeek)
         return;
     move.QuadPart = -1;
     ExpectHr(negativeSeek->Seek(move, STREAM_SEEK_SET, nullptr), STG_E_SEEKERROR, "limit.negative-seek-before-zero");
-    Expect(!negativeSeek->LimitExceeded(), "limit.negative-seek-does-not-set-cap-flag");
+    Expect(! negativeSeek->LimitExceeded(), "limit.negative-seek-does-not-set-cap-flag");
 }
 
 void SeekValidationAndSparseGap()
 {
     wil::com_ptr_nothrow<CodecMemoryStream> stream;
     ExpectHr(CodecMemoryStream::Create(16, {}, stream.put()), S_OK, "seek.create");
-    if (!stream)
+    if (! stream)
         return;
     constexpr std::array<std::uint8_t, 3> prefix{'A', 'B', 'C'};
     ULONG written = 0;
@@ -204,7 +201,7 @@ void SeekValidationAndSparseGap()
     move.QuadPart = 1;
     ExpectHr(stream->Seek(move, STREAM_SEEK_SET, &position), S_OK, "seek.establish-cursor");
 
-    move.QuadPart = (std::numeric_limits<std::int64_t>::min)();
+    move.QuadPart     = (std::numeric_limits<std::int64_t>::min)();
     position.QuadPart = 0xA5A5;
     ExpectHr(stream->Seek(move, STREAM_SEEK_CUR, &position), STG_E_SEEKERROR, "seek.int64-min-rejected");
     Expect(position.QuadPart == 0xA5A5 && CursorIs(stream.get(), 1), "seek.min-preserves-output-and-cursor");
@@ -222,15 +219,14 @@ void SeekValidationAndSparseGap()
     Expect(written == suffix.size() && CursorIs(stream.get(), 11), "seek.gap-write-count-and-cursor");
     const auto bytes = stream->WrittenBytes();
     constexpr std::array<std::uint8_t, 11> expected{'A', 'B', 'C', 0, 0, 0, 0, 0, 0, 'Y', 'Z'};
-    Expect(bytes.size() == expected.size() && std::equal(bytes.begin(), bytes.end(), expected.begin()),
-           "seek.zero-filled-logical-gap");
+    Expect(bytes.size() == expected.size() && std::equal(bytes.begin(), bytes.end(), expected.begin()), "seek.zero-filled-logical-gap");
 }
 
 void ShrinkRegrowAndNullBuffers()
 {
     wil::com_ptr_nothrow<CodecMemoryStream> stream;
     ExpectHr(CodecMemoryStream::Create(16, {}, stream.put()), S_OK, "resize.create");
-    if (!stream)
+    if (! stream)
         return;
     constexpr std::array<std::uint8_t, 6> original{'a', 'b', 'c', 'd', 'e', 'f'};
     ULONG written = 0;
@@ -247,8 +243,7 @@ void ShrinkRegrowAndNullBuffers()
     Expect(CursorIs(stream.get(), 8), "resize.regrow-preserves-cursor");
     constexpr std::array<std::uint8_t, 6> expected{'a', 'b', 0, 0, 0, 0};
     const auto bytes = stream->WrittenBytes();
-    Expect(bytes.size() == expected.size() && std::equal(bytes.begin(), bytes.end(), expected.begin()),
-           "resize.regrown-bytes-zero-and-prefix-preserved");
+    Expect(bytes.size() == expected.size() && std::equal(bytes.begin(), bytes.end(), expected.begin()), "resize.regrown-bytes-zero-and-prefix-preserved");
 
     ExpectHr(stream->Write(nullptr, 0, &written), S_OK, "buffer.zero-write-null-accepted");
     Expect(written == 0 && CursorIs(stream.get(), 8), "buffer.zero-write-null-keeps-cursor");
@@ -265,58 +260,50 @@ void ShrinkRegrowAndNullBuffers()
 void FactoryValidationAndAllocationFaults()
 {
     ExpectHr(CodecMemoryStream::Create(1, {}, nullptr), E_POINTER, "factory.null-output");
-    constexpr std::array<std::uint64_t, 3> invalidCaps{0, CodecMemoryStream::kMaximumBytes + 1,
-                                                       (std::numeric_limits<std::uint64_t>::max)()};
+    constexpr std::array<std::uint64_t, 3> invalidCaps{0, CodecMemoryStream::kMaximumBytes + 1, (std::numeric_limits<std::uint64_t>::max)()};
     for (std::size_t index = 0; index < invalidCaps.size(); ++index)
     {
         CodecMemoryStream* raw = reinterpret_cast<CodecMemoryStream*>(static_cast<std::uintptr_t>(1));
-        const HRESULT result = CodecMemoryStream::Create(invalidCaps[index], {}, &raw);
-        ExpectHr(result, E_INVALIDARG,
-                 index == 0   ? "factory.zero-cap"
-                 : index == 1 ? "factory.over-512m-cap"
-                              : "factory.uint64-max-cap");
-        Expect(raw == nullptr, index == 0   ? "factory.zero-cap-clears-output"
-                               : index == 1 ? "factory.over-cap-clears-output"
-                                            : "factory.max-cap-clears-output");
+        const HRESULT result   = CodecMemoryStream::Create(invalidCaps[index], {}, &raw);
+        ExpectHr(result, E_INVALIDARG, index == 0 ? "factory.zero-cap" : index == 1 ? "factory.over-512m-cap" : "factory.uint64-max-cap");
+        Expect(raw == nullptr, index == 0 ? "factory.zero-cap-clears-output" : index == 1 ? "factory.over-cap-clears-output" : "factory.max-cap-clears-output");
     }
 
     ObserverState reserveFailure{};
     reserveFailure.faultStage = CodecMemoryStage::Reserve;
-    reserveFailure.faultCode = ERROR_NOT_ENOUGH_MEMORY;
+    reserveFailure.faultCode  = ERROR_NOT_ENOUGH_MEMORY;
     wil::com_ptr_nothrow<CodecMemoryStream> noReserve;
-    ExpectHr(CodecMemoryStream::Create(32, {}, noReserve.put(), Observe(reserveFailure)),
-             HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY), "fault.reserve-exact-error");
-    Expect(reserveFailure.faultCalls == 1 && !noReserve, "fault.reserve-reached-and-output-empty");
+    ExpectHr(
+        CodecMemoryStream::Create(32, {}, noReserve.put(), Observe(reserveFailure)), HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY), "fault.reserve-exact-error");
+    Expect(reserveFailure.faultCalls == 1 && ! noReserve, "fault.reserve-reached-and-output-empty");
 
     ObserverState commitFailure{};
-    commitFailure.faultStage = CodecMemoryStage::Commit;
+    commitFailure.faultStage  = CodecMemoryStage::Commit;
     commitFailure.faultOnCall = 2;
-    commitFailure.faultCode = ERROR_NOT_ENOUGH_MEMORY;
+    commitFailure.faultCode   = ERROR_NOT_ENOUGH_MEMORY;
     wil::com_ptr_nothrow<CodecMemoryStream> stream;
     ExpectHr(CodecMemoryStream::Create(131073, {}, stream.put(), Observe(commitFailure)), S_OK, "fault.commit-create");
-    if (!stream)
+    if (! stream)
         return;
     commitFailure.faultCalls = 0;
     // The first 4 KiB page is committed before a later write requests a larger commit range.
-    commitFailure.faultStage = CodecMemoryStage::Commit;
+    commitFailure.faultStage     = CodecMemoryStage::Commit;
     constexpr std::uint8_t first = 0x5A;
-    ULONG written = 0;
+    ULONG written                = 0;
     ExpectHr(stream->Write(&first, 1, &written), S_OK, "fault.commit-prefix-write");
     const auto beforeCommitted = stream->CommittedBytes();
-    const auto beforeBytes = stream->WrittenBytes();
+    const auto beforeBytes     = stream->WrittenBytes();
     LARGE_INTEGER move{};
     move.QuadPart = 65536;
     ExpectHr(stream->Seek(move, STREAM_SEEK_SET, nullptr), S_OK, "fault.commit-position-next-band");
     constexpr std::uint8_t second = 0xA5;
-    written = 99;
-    ExpectHr(stream->Write(&second, 1, &written), HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY),
-             "fault.commit-exact-error");
+    written                       = 99;
+    ExpectHr(stream->Write(&second, 1, &written), HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY), "fault.commit-exact-error");
     Expect(commitFailure.faultCalls == 2, "fault.commit-reached-after-successful-prior-commit");
     Expect(written == 0 && stream->CommittedBytes() == beforeCommitted, "fault.commit-count-and-commit-unchanged");
     Expect(CursorIs(stream.get(), 65536), "fault.commit-cursor-unchanged");
     const auto afterBytes = stream->WrittenBytes();
-    Expect(afterBytes.size() == beforeBytes.size() && afterBytes.size() == 1 && afterBytes[0] == 0x5A,
-           "fault.commit-content-unchanged");
+    Expect(afterBytes.size() == beforeBytes.size() && afterBytes.size() == 1 && afterBytes[0] == 0x5A, "fault.commit-content-unchanged");
 }
 
 void CancellationAtReserveAndCommit()
@@ -324,34 +311,31 @@ void CancellationAtReserveAndCommit()
     std::stop_source preCancelledSource;
     (void)preCancelledSource.request_stop();
     wil::com_ptr_nothrow<CodecMemoryStream> preCancelled;
-    ExpectHr(CodecMemoryStream::Create(8, CancelToken{preCancelledSource.get_token()}, preCancelled.put()), E_ABORT,
-             "cancel.pre-cancelled-create");
-    Expect(!preCancelled, "cancel.pre-cancelled-create-clears-output");
+    ExpectHr(CodecMemoryStream::Create(8, CancelToken{preCancelledSource.get_token()}, preCancelled.put()), E_ABORT, "cancel.pre-cancelled-create");
+    Expect(! preCancelled, "cancel.pre-cancelled-create-clears-output");
 
     std::stop_source reserveStop;
     ObserverState reserve{};
-    reserve.selected = CodecMemoryStage::Reserve;
+    reserve.selected      = CodecMemoryStage::Reserve;
     reserve.selectedCount = 1;
-    reserve.cancellation = &reserveStop;
+    reserve.cancellation  = &reserveStop;
     wil::com_ptr_nothrow<CodecMemoryStream> noStream;
-    ExpectHr(CodecMemoryStream::Create(8, CancelToken{reserveStop.get_token()}, noStream.put(), Observe(reserve)),
-             E_ABORT, "cancel.reserve-aborts-create");
-    Expect(reserve.reachedCalls == 1 && !noStream, "cancel.reserve-reached-and-clears-output");
+    ExpectHr(CodecMemoryStream::Create(8, CancelToken{reserveStop.get_token()}, noStream.put(), Observe(reserve)), E_ABORT, "cancel.reserve-aborts-create");
+    Expect(reserve.reachedCalls == 1 && ! noStream, "cancel.reserve-reached-and-clears-output");
 
     SYSTEM_INFO pageInfo{};
     GetSystemInfo(&pageInfo);
     std::stop_source commitStop;
     ObserverState commit{};
-    commit.selected = CodecMemoryStage::Commit;
+    commit.selected      = CodecMemoryStage::Commit;
     commit.selectedCount = 1;
-    commit.cancellation = &commitStop;
+    commit.cancellation  = &commitStop;
     wil::com_ptr_nothrow<CodecMemoryStream> stream;
-    ExpectHr(CodecMemoryStream::Create(131073, CancelToken{commitStop.get_token()}, stream.put(), Observe(commit)),
-             S_OK, "cancel.commit-create");
-    if (!stream)
+    ExpectHr(CodecMemoryStream::Create(131073, CancelToken{commitStop.get_token()}, stream.put(), Observe(commit)), S_OK, "cancel.commit-create");
+    if (! stream)
         return;
     constexpr std::uint8_t byte = 7;
-    ULONG written = 99;
+    ULONG written               = 99;
     ExpectHr(stream->Write(&byte, 1, &written), E_ABORT, "cancel.commit-aborts-write");
     Expect(commit.reachedCalls == 2 && commit.lastCount == pageInfo.dwPageSize, "cancel.commit-stage-reached");
     const auto bytes = stream->WrittenBytes();
@@ -363,28 +347,25 @@ void PreCancelledOperationsLeaveLogicalStateUnchanged()
 {
     std::stop_source source;
     wil::com_ptr_nothrow<CodecMemoryStream> stream;
-    ExpectHr(CodecMemoryStream::Create(16, CancelToken{source.get_token()}, stream.put()), S_OK,
-             "cancel.pre-op-create");
-    if (!stream)
+    ExpectHr(CodecMemoryStream::Create(16, CancelToken{source.get_token()}, stream.put()), S_OK, "cancel.pre-op-create");
+    if (! stream)
         return;
     constexpr std::array<std::uint8_t, 4> original{0x10, 0x20, 0x30, 0x40};
     ULONG count = 0;
-    ExpectHr(stream->Write(original.data(), static_cast<ULONG>(original.size()), &count), S_OK,
-             "cancel.pre-op-fixture-write");
+    ExpectHr(stream->Write(original.data(), static_cast<ULONG>(original.size()), &count), S_OK, "cancel.pre-op-fixture-write");
     LARGE_INTEGER position{};
     position.QuadPart = 1;
     ExpectHr(stream->Seek(position, STREAM_SEEK_SET, nullptr), S_OK, "cancel.pre-op-fixture-position");
     (void)source.request_stop();
 
     constexpr std::uint8_t replacement = 0xEE;
-    ULONG written = 99;
+    ULONG written                      = 99;
     ExpectHr(stream->Write(&replacement, 1, &written), E_ABORT, "cancel.pre-op-write-aborts");
     Expect(written == 0, "cancel.pre-op-write-zero-count");
     std::array<std::uint8_t, 4> output{};
     output.fill(0xCC);
     ULONG received = 99;
-    ExpectHr(stream->Read(output.data(), static_cast<ULONG>(output.size()), &received), E_ABORT,
-             "cancel.pre-op-read-aborts");
+    ExpectHr(stream->Read(output.data(), static_cast<ULONG>(output.size()), &received), E_ABORT, "cancel.pre-op-read-aborts");
     Expect(received == 0 && std::all_of(output.begin(), output.end(), [](std::uint8_t byte) { return byte == 0xCC; }),
            "cancel.pre-op-read-zero-count-and-untouched-buffer");
     ULARGE_INTEGER size{};
@@ -392,8 +373,7 @@ void PreCancelledOperationsLeaveLogicalStateUnchanged()
     ExpectHr(stream->SetSize(size), E_ABORT, "cancel.pre-op-resize-aborts");
     ExpectHr(stream->Commit(STGC_DEFAULT), E_ABORT, "cancel.pre-op-commit-aborts");
     const auto bytes = stream->WrittenBytes();
-    Expect(bytes.size() == original.size() && std::equal(bytes.begin(), bytes.end(), original.begin()),
-           "cancel.pre-op-preserves-content-and-logical-size");
+    Expect(bytes.size() == original.size() && std::equal(bytes.begin(), bytes.end(), original.begin()), "cancel.pre-op-preserves-content-and-logical-size");
 }
 
 void CancellationAtZeroBand()
@@ -403,14 +383,13 @@ void CancellationAtZeroBand()
     observer.selected = CodecMemoryStage::ZeroBand;
     // ZeroBand reports absolute end positions; the first band ends at 1 + 65536.
     observer.selectedCount = 65537;
-    observer.cancellation = &stop;
+    observer.cancellation  = &stop;
     wil::com_ptr_nothrow<CodecMemoryStream> stream;
-    ExpectHr(CodecMemoryStream::Create(131073, CancelToken{stop.get_token()}, stream.put(), Observe(observer)), S_OK,
-             "cancel.zero-create");
-    if (!stream)
+    ExpectHr(CodecMemoryStream::Create(131073, CancelToken{stop.get_token()}, stream.put(), Observe(observer)), S_OK, "cancel.zero-create");
+    if (! stream)
         return;
     constexpr std::size_t byteCount = 131073;
-    auto pattern = std::make_unique<std::uint8_t[]>(byteCount);
+    auto pattern                    = std::make_unique<std::uint8_t[]>(byteCount);
     std::fill_n(pattern.get(), byteCount, std::uint8_t{0x6D});
     ULONG written = 0;
     ExpectHr(stream->Write(pattern.get(), static_cast<ULONG>(byteCount), &written), S_OK, "cancel.zero-fixture-write");
@@ -431,7 +410,7 @@ void CancellationAtZeroBand()
 void CancellationStopsWriteAndReadAfterOne64KiBBand()
 {
     constexpr std::size_t byteCount = 131073;
-    auto input = std::make_unique<std::uint8_t[]>(byteCount);
+    auto input                      = std::make_unique<std::uint8_t[]>(byteCount);
     // Fixture generation must run on the baseline ISA, independently of the machine running this test.
 #pragma loop(no_vector)
     for (std::size_t index = 0; index < byteCount; ++index)
@@ -439,47 +418,38 @@ void CancellationStopsWriteAndReadAfterOne64KiBBand()
 
     std::stop_source writeStop;
     ObserverState writeObserver{};
-    writeObserver.selected = CodecMemoryStage::WriteBand;
+    writeObserver.selected      = CodecMemoryStage::WriteBand;
     writeObserver.selectedCount = 65536;
-    writeObserver.cancellation = &writeStop;
+    writeObserver.cancellation  = &writeStop;
     wil::com_ptr_nothrow<CodecMemoryStream> writeStream;
-    ExpectHr(CodecMemoryStream::Create(byteCount, CancelToken{writeStop.get_token()}, writeStream.put(),
-                                       Observe(writeObserver)),
-             S_OK, "cancel.write-create");
-    if (!writeStream)
+    ExpectHr(CodecMemoryStream::Create(byteCount, CancelToken{writeStop.get_token()}, writeStream.put(), Observe(writeObserver)), S_OK, "cancel.write-create");
+    if (! writeStream)
         return;
     ULONG written = 99;
-    ExpectHr(writeStream->Write(input.get(), static_cast<ULONG>(byteCount), &written), E_ABORT,
-             "cancel.write-band-aborts");
+    ExpectHr(writeStream->Write(input.get(), static_cast<ULONG>(byteCount), &written), E_ABORT, "cancel.write-band-aborts");
     const auto partial = writeStream->WrittenBytes();
     Expect(writeObserver.lastCount == 65536 && written == 65536, "cancel.write-exact-partial-count");
-    Expect(partial.size() == 65536 && std::equal(partial.begin(), partial.end(), input.get()),
-           "cancel.write-partial-prefix-and-cursor");
+    Expect(partial.size() == 65536 && std::equal(partial.begin(), partial.end(), input.get()), "cancel.write-partial-prefix-and-cursor");
 
     LARGE_INTEGER rewind{};
     std::stop_source readStop;
     ObserverState readObserver{};
-    readObserver.selected = CodecMemoryStage::ReadBand;
+    readObserver.selected      = CodecMemoryStage::ReadBand;
     readObserver.selectedCount = 65536;
-    readObserver.cancellation = &readStop;
+    readObserver.cancellation  = &readStop;
     // The observer is fixed at construction; use a second stream whose fixture is written before observing reads.
     wil::com_ptr_nothrow<CodecMemoryStream> observedRead;
-    ExpectHr(CodecMemoryStream::Create(byteCount, CancelToken{readStop.get_token()}, observedRead.put(),
-                                       Observe(readObserver)),
-             S_OK, "cancel.read-create");
-    if (!observedRead)
+    ExpectHr(CodecMemoryStream::Create(byteCount, CancelToken{readStop.get_token()}, observedRead.put(), Observe(readObserver)), S_OK, "cancel.read-create");
+    if (! observedRead)
         return;
-    ExpectHr(observedRead->Write(input.get(), static_cast<ULONG>(byteCount), &written), S_OK,
-             "cancel.read-observed-fixture-write");
+    ExpectHr(observedRead->Write(input.get(), static_cast<ULONG>(byteCount), &written), S_OK, "cancel.read-observed-fixture-write");
     ExpectHr(observedRead->Seek(rewind, STREAM_SEEK_SET, nullptr), S_OK, "cancel.read-observed-fixture-rewind");
     auto output = std::make_unique<std::uint8_t[]>(byteCount);
     std::fill_n(output.get(), byteCount, std::uint8_t{0xCC});
     ULONG received = 99;
-    ExpectHr(observedRead->Read(output.get(), static_cast<ULONG>(byteCount), &received), E_ABORT,
-             "cancel.read-band-aborts");
+    ExpectHr(observedRead->Read(output.get(), static_cast<ULONG>(byteCount), &received), E_ABORT, "cancel.read-band-aborts");
     Expect(readObserver.lastCount == 65536 && received == 65536, "cancel.read-exact-partial-count");
-    Expect(std::equal(output.get(), output.get() + 65536, input.get()) && output[65536] == 0xCC,
-           "cancel.read-partial-bytes-and-cursor");
+    Expect(std::equal(output.get(), output.get() + 65536, input.get()) && output[65536] == 0xCC, "cancel.read-partial-bytes-and-cursor");
 }
 
 void TinyCapBoundedZeroWriteReadAndComLifetime()
@@ -487,7 +457,7 @@ void TinyCapBoundedZeroWriteReadAndComLifetime()
     constexpr std::uint64_t capacity = 131073;
     wil::com_ptr_nothrow<CodecMemoryStream> stream;
     ExpectHr(CodecMemoryStream::Create(capacity, {}, stream.put()), S_OK, "bounded.create");
-    if (!stream)
+    if (! stream)
         return;
     LARGE_INTEGER move{};
     move.QuadPart = static_cast<std::int64_t>(capacity - 3);
@@ -497,41 +467,37 @@ void TinyCapBoundedZeroWriteReadAndComLifetime()
     ExpectHr(stream->Write(tail.data(), static_cast<ULONG>(tail.size()), &count), S_OK, "bounded.write-tail");
     Expect(count == tail.size() && stream->CommittedBytes() >= capacity && stream->CommittedBytes() <= capacity + 65536,
            "bounded.capacity-commit-and-write-count");
-    const auto written = stream->WrittenBytes();
-    const bool gapIsZero = written.size() == capacity && std::all_of(written.begin(), written.end() - 3,
-                                                                     [](std::uint8_t value) { return value == 0; });
+    const auto written   = stream->WrittenBytes();
+    const bool gapIsZero = written.size() == capacity && std::all_of(written.begin(), written.end() - 3, [](std::uint8_t value) { return value == 0; });
     Expect(gapIsZero && std::equal(written.end() - 3, written.end(), tail.begin()), "bounded.zero-gap-and-tail");
 
     LARGE_INTEGER rewind{};
     ExpectHr(stream->Seek(rewind, STREAM_SEEK_SET, nullptr), S_OK, "bounded.rewind");
-    auto actual = std::make_unique<std::uint8_t[]>(static_cast<std::size_t>(capacity));
+    auto actual    = std::make_unique<std::uint8_t[]>(static_cast<std::size_t>(capacity));
     ULONG received = 0;
     ExpectHr(stream->Read(actual.get(), static_cast<ULONG>(capacity), &received), S_OK, "bounded.read-all");
-    Expect(received == capacity && actual[capacity - 3] == tail[0] && actual[capacity - 2] == tail[1] &&
-               actual[capacity - 1] == tail[2] &&
+    Expect(received == capacity && actual[capacity - 3] == tail[0] && actual[capacity - 2] == tail[1] && actual[capacity - 1] == tail[2] &&
                std::all_of(actual.get(), actual.get() + capacity - 3, [](std::uint8_t value) { return value == 0; }),
            "bounded.read-all-exact-data");
 
     wil::com_ptr_nothrow<IStream> retained;
     ExpectHr(stream->QueryInterface(IID_IStream, reinterpret_cast<void**>(retained.put())), S_OK, "com.query-stream");
-    if (!retained)
+    if (! retained)
         return;
     wil::com_ptr_nothrow<IUnknown> identity;
     wil::com_ptr_nothrow<IUnknown> identityFromStream;
     ExpectHr(stream->QueryInterface(IID_IUnknown, reinterpret_cast<void**>(identity.put())), S_OK, "com.query-unknown");
     if (retained)
-        ExpectHr(retained->QueryInterface(IID_IUnknown, reinterpret_cast<void**>(identityFromStream.put())), S_OK,
-                 "com.stream-query-unknown");
+        ExpectHr(retained->QueryInterface(IID_IUnknown, reinterpret_cast<void**>(identityFromStream.put())), S_OK, "com.stream-query-unknown");
     Expect(identity && identityFromStream && identity.get() == identityFromStream.get(), "com.iunknown-identity");
 
     STATSTG stat{};
     ExpectHr(stream->Stat(nullptr, STATFLAG_NONAME), E_POINTER, "com.stat-null-output");
     ExpectHr(stream->Stat(&stat, STATFLAG_NONAME), S_OK, "com.stat");
-    Expect(stat.type == STGTY_STREAM && stat.cbSize.QuadPart == capacity && stat.grfMode == STGM_READWRITE,
-           "com.stat-type-size-mode");
+    Expect(stat.type == STGTY_STREAM && stat.cbSize.QuadPart == capacity && stat.grfMode == STGM_READWRITE, "com.stat-type-size-mode");
     ULARGE_INTEGER copiedRead{};
     ULARGE_INTEGER copiedWritten{};
-    copiedRead.QuadPart = 0xA5A5;
+    copiedRead.QuadPart    = 0xA5A5;
     copiedWritten.QuadPart = 0xA5A5;
     ExpectHr(stream->CopyTo(nullptr, {}, &copiedRead, &copiedWritten), E_NOTIMPL, "com.copyto-unsupported");
     Expect(copiedRead.QuadPart == 0 && copiedWritten.QuadPart == 0, "com.copyto-clears-counts");
@@ -541,10 +507,10 @@ void TinyCapBoundedZeroWriteReadAndComLifetime()
     Expect(cloneRaw == nullptr, "com.clone-clears-output");
 
     const auto* retainedConcrete = static_cast<CodecMemoryStream*>(retained.get());
-    const auto retainedBytes = retainedConcrete->WrittenBytes();
+    const auto retainedBytes     = retainedConcrete->WrittenBytes();
     stream.reset();
-    Expect(retainedBytes.size() == capacity && retainedBytes[capacity - 3] == tail[0] &&
-               retainedBytes[capacity - 2] == tail[1] && retainedBytes[capacity - 1] == tail[2],
+    Expect(retainedBytes.size() == capacity && retainedBytes[capacity - 3] == tail[0] && retainedBytes[capacity - 2] == tail[1] &&
+               retainedBytes[capacity - 1] == tail[2],
            "com.retained-reference-keeps-byte-view-alive");
     identity.reset();
     identityFromStream.reset();
@@ -553,10 +519,10 @@ void TinyCapBoundedZeroWriteReadAndComLifetime()
 
 struct CommitTrace final
 {
-    std::uint64_t last = 0;
-    unsigned int commits = 0;
+    std::uint64_t last     = 0;
+    unsigned int commits   = 0;
     unsigned int zeroBands = 0;
-    bool bounded = true;
+    bool bounded           = true;
 };
 void TraceCommit(void* context, CodecMemoryStage stage, std::uint64_t count) noexcept
 {
@@ -564,7 +530,7 @@ void TraceCommit(void* context, CodecMemoryStage stage, std::uint64_t count) noe
     if (stage == CodecMemoryStage::Commit)
     {
         trace.bounded = trace.bounded && count > trace.last && count - trace.last <= 65536;
-        trace.last = count;
+        trace.last    = count;
         ++trace.commits;
     }
     if (stage == CodecMemoryStage::ZeroBand)
@@ -575,9 +541,8 @@ void CommitGrowthIsBoundedAndNewPagesAreZero()
     constexpr std::uint64_t capacity = 131073;
     CommitTrace trace{};
     wil::com_ptr_nothrow<CodecMemoryStream> stream;
-    ExpectHr(CodecMemoryStream::Create(capacity, {}, stream.put(), {&trace, TraceCommit, nullptr}), S_OK,
-             "commit-bands.create");
-    if (!stream)
+    ExpectHr(CodecMemoryStream::Create(capacity, {}, stream.put(), {&trace, TraceCommit, nullptr}), S_OK, "commit-bands.create");
+    if (! stream)
         return;
     ULARGE_INTEGER size{};
     size.QuadPart = capacity;
@@ -588,45 +553,40 @@ void CommitGrowthIsBoundedAndNewPagesAreZero()
     Expect(trace.commits == 3 && trace.bounded && trace.last == expected && stream->CommittedBytes() == expected,
            "commit-bands.exact-os-page-rounding-and-three-bounded-commits");
     const auto bytes = stream->WrittenBytes();
-    Expect(bytes.size() == capacity &&
-               std::all_of(bytes.begin(), bytes.end(), [](std::uint8_t byte) { return byte == 0; }),
+    Expect(bytes.size() == capacity && std::all_of(bytes.begin(), bytes.end(), [](std::uint8_t byte) { return byte == 0; }),
            "commit-bands.new-pages-visible-zero");
     Expect(trace.zeroBands == 0 && CursorIs(stream.get(), 0), "commit-bands.no-redundant-zero-pass-or-cursor-change");
 
     std::stop_source source;
     ObserverState cancellation{};
-    cancellation.selected = CodecMemoryStage::Commit;
+    cancellation.selected      = CodecMemoryStage::Commit;
     cancellation.selectedCount = 131072;
-    cancellation.cancellation = &source;
+    cancellation.cancellation  = &source;
     wil::com_ptr_nothrow<CodecMemoryStream> cancelled;
-    ExpectHr(
-        CodecMemoryStream::Create(capacity, CancelToken{source.get_token()}, cancelled.put(), Observe(cancellation)),
-        S_OK, "commit-bands.cancel-create");
-    if (!cancelled)
+    ExpectHr(CodecMemoryStream::Create(capacity, CancelToken{source.get_token()}, cancelled.put(), Observe(cancellation)), S_OK, "commit-bands.cancel-create");
+    if (! cancelled)
         return;
     ExpectHr(cancelled->SetSize(size), E_ABORT, "commit-bands.stop-after-second-commit");
     Expect(cancelled->CommittedBytes() == 131072 && cancelled->WrittenBytes().empty() && cancellation.reachedCalls == 3,
            "commit-bands.stop-no-third-commit-or-logical-output");
 
     ObserverState failure{};
-    failure.faultStage = CodecMemoryStage::Commit;
+    failure.faultStage  = CodecMemoryStage::Commit;
     failure.faultOnCall = 3;
-    failure.faultCode = ERROR_DISK_FULL;
+    failure.faultCode   = ERROR_DISK_FULL;
     wil::com_ptr_nothrow<CodecMemoryStream> faulted;
-    ExpectHr(CodecMemoryStream::Create(capacity, {}, faulted.put(), Observe(failure)), S_OK,
-             "commit-bands.fault-create");
-    if (!faulted)
+    ExpectHr(CodecMemoryStream::Create(capacity, {}, faulted.put(), Observe(failure)), S_OK, "commit-bands.fault-create");
+    if (! faulted)
         return;
     ExpectHr(faulted->SetSize(size), HRESULT_FROM_WIN32(ERROR_DISK_FULL), "commit-bands.third-commit-exact-error");
-    Expect(failure.faultCalls == 3 && faulted->CommittedBytes() == 131072 && faulted->WrittenBytes().empty() &&
-               CursorIs(faulted.get(), 0),
+    Expect(failure.faultCalls == 3 && faulted->CommittedBytes() == 131072 && faulted->WrittenBytes().empty() && CursorIs(faulted.get(), 0),
            "commit-bands.partial-commit-retained-no-logical-output");
 }
 void UnsupportedOperations()
 {
     wil::com_ptr_nothrow<CodecMemoryStream> stream;
     ExpectHr(CodecMemoryStream::Create(8, {}, stream.put()), S_OK, "unsupported.create");
-    if (!stream)
+    if (! stream)
         return;
     ExpectHr(stream->Revert(), STG_E_INVALIDFUNCTION, "unsupported.revert");
     ExpectHr(stream->LockRegion({}, {}, 0), STG_E_INVALIDFUNCTION, "unsupported.lock-region");
@@ -640,7 +600,7 @@ void UnsupportedOperations()
 
 int RunCodecMemoryStreamTests()
 {
-    const int failuresBefore = gFailures;
+    const int failuresBefore   = gFailures;
     const int assertionsBefore = gAssertions;
     LiteralWriteOverwriteReadAndEof();
     CapRejectsWithoutChangingPrefixCursorOrCommit();
@@ -655,7 +615,6 @@ int RunCodecMemoryStreamTests()
     TinyCapBoundedZeroWriteReadAndComLifetime();
     CommitGrowthIsBoundedAndNewPagesAreZero();
     UnsupportedOperations();
-    std::printf("ASSERTIONS codecmem.total=%d failures=%d\n", gAssertions - assertionsBefore,
-                gFailures - failuresBefore);
+    std::printf("ASSERTIONS codecmem.total=%d failures=%d\n", gAssertions - assertionsBefore, gFailures - failuresBefore);
     return gFailures - failuresBefore;
 }

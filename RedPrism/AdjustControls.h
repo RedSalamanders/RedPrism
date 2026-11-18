@@ -38,15 +38,15 @@
 // neighbors, the ends fixed), the selected point can be removed.
 class CurveEditor final : public DxUi::Button
 {
-  public:
+public:
     CurveEditor()
     {
         SetFocusable(false);
     }
-    CurveEditor(const CurveEditor&) = delete;
+    CurveEditor(const CurveEditor&)            = delete;
     CurveEditor& operator=(const CurveEditor&) = delete;
-    CurveEditor(CurveEditor&&) = delete;
-    CurveEditor& operator=(CurveEditor&&) = delete;
+    CurveEditor(CurveEditor&&)                 = delete;
+    CurveEditor& operator=(CurveEditor&&)      = delete;
     void SetCurves(const CurvesSettings& settings, int channel) noexcept;
     [[nodiscard]] std::optional<std::size_t> SelectedIndex() const noexcept
     {
@@ -75,7 +75,7 @@ class CurveEditor final : public DxUi::Button
         return DxUi::Control::OnMnemonic(host);
     }
 
-  private:
+private:
     [[nodiscard]] const std::vector<CurvePoint>& Points() const noexcept;
     [[nodiscard]] D2D1_POINT_2F Position(const CurvePoint& point) const noexcept;
     [[nodiscard]] CurvePoint Unposition(D2D1_POINT_2F point) const noexcept;
@@ -91,15 +91,15 @@ class CurveEditor final : public DxUi::Button
 // gradient with its two handles. A drag reports the handle and its 0-255 position.
 class LevelsBar final : public DxUi::Button
 {
-  public:
+public:
     LevelsBar()
     {
         SetFocusable(false);
     }
-    LevelsBar(const LevelsBar&) = delete;
+    LevelsBar(const LevelsBar&)            = delete;
     LevelsBar& operator=(const LevelsBar&) = delete;
-    LevelsBar(LevelsBar&&) = delete;
-    LevelsBar& operator=(LevelsBar&&) = delete;
+    LevelsBar(LevelsBar&&)                 = delete;
+    LevelsBar& operator=(LevelsBar&&)      = delete;
     enum class Kind : std::uint8_t
     {
         Input,  // histogram plus black / gamma / white handles
@@ -131,7 +131,7 @@ class LevelsBar final : public DxUi::Button
         return DxUi::Control::OnMnemonic(host);
     }
 
-  private:
+private:
     [[nodiscard]] std::vector<double> HandlePositions() const noexcept;
     [[nodiscard]] double ValueAt(float x) const noexcept;
     void Drag(D2D1_POINT_2F point);
@@ -147,15 +147,15 @@ class LevelsBar final : public DxUi::Button
 // them. Dragging a handle reports its index (0 falloff start, 1 range start, 2 range end, 3 falloff end) and degrees.
 class SpectrumEditor final : public DxUi::Button
 {
-  public:
+public:
     SpectrumEditor()
     {
         SetFocusable(false);
     }
-    SpectrumEditor(const SpectrumEditor&) = delete;
+    SpectrumEditor(const SpectrumEditor&)            = delete;
     SpectrumEditor& operator=(const SpectrumEditor&) = delete;
-    SpectrumEditor(SpectrumEditor&&) = delete;
-    SpectrumEditor& operator=(SpectrumEditor&&) = delete;
+    SpectrumEditor(SpectrumEditor&&)                 = delete;
+    SpectrumEditor& operator=(SpectrumEditor&&)      = delete;
     void SetSettings(const HueSaturationSettings& settings) noexcept;
     void SetOnHandle(std::function<void(int, double)> onHandle)
     {
@@ -179,7 +179,7 @@ class SpectrumEditor final : public DxUi::Button
         return DxUi::Control::OnMnemonic(host);
     }
 
-  private:
+private:
     [[nodiscard]] int NearestHandle(double degrees) const noexcept;
     void Drag(D2D1_POINT_2F point);
     HueSaturationSettings _settings;
@@ -193,17 +193,17 @@ class SpectrumEditor final : public DxUi::Button
 // already true of a purely decorative strip, and its Paint is fully overridden below and never invoked.
 class GradientRamp final : public DxUi::Label
 {
-  public:
-    GradientRamp() = default;
-    GradientRamp(const GradientRamp&) = delete;
+public:
+    GradientRamp()                               = default;
+    GradientRamp(const GradientRamp&)            = delete;
     GradientRamp& operator=(const GradientRamp&) = delete;
-    GradientRamp(GradientRamp&&) = delete;
-    GradientRamp& operator=(GradientRamp&&) = delete;
+    GradientRamp(GradientRamp&&)                 = delete;
+    GradientRamp& operator=(GradientRamp&&)      = delete;
 
     void SetEnds(const AdjustmentColor& dark, const AdjustmentColor& light) noexcept;
     void Paint(DxUi::ControlHost& host) const override;
 
-  private:
+private:
     AdjustmentColor _dark{0, 0, 0};
     AdjustmentColor _light{1, 1, 1};
 };

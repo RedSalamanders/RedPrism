@@ -7,8 +7,10 @@
 // an earlier accepted input. A containing session/host identity supplies the separate owner lifetime.
 class InputRevision final
 {
-  public:
-    explicit InputRevision(std::uint64_t initial = 1) noexcept : _value(initial) {}
+public:
+    explicit InputRevision(std::uint64_t initial = 1) noexcept : _value(initial)
+    {
+    }
     [[nodiscard]] std::uint64_t Current() const noexcept
     {
         return _value;
@@ -23,6 +25,6 @@ class InputRevision final
             _value = _value == (std::numeric_limits<std::uint64_t>::max)() ? 0 : _value + 1;
     }
 
-  private:
+private:
     std::uint64_t _value;
 };

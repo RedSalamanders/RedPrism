@@ -31,12 +31,10 @@ static_assert(sizeof(wchar_t) == sizeof(char16_t));
         return false;
     }
     const std::wstring_view tail = path.substr(path.size() - extension.size());
-    return CompareStringOrdinal(tail.data(), static_cast<int>(tail.size()), extension.data(),
-                                static_cast<int>(extension.size()), TRUE) == CSTR_EQUAL;
+    return CompareStringOrdinal(tail.data(), static_cast<int>(tail.size()), extension.data(), static_cast<int>(extension.size()), TRUE) == CSTR_EQUAL;
 }
 
-[[nodiscard]] PathClassification ClassifyTerminatedPath(const wchar_t* path, std::wstring_view pathView,
-                                                        const CancelToken& cancellation) noexcept
+[[nodiscard]] PathClassification ClassifyTerminatedPath(const wchar_t* path, std::wstring_view pathView, const CancelToken& cancellation) noexcept
 {
     const DWORD attributes = GetFileAttributesW(path);
     if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
@@ -53,9 +51,8 @@ static_assert(sizeof(wchar_t) == sizeof(char16_t));
         return PathClassification::Image;
     }
 
-    wil::unique_hfile file{CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr)};
-    if (!file)
+    wil::unique_hfile file{CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr)};
+    if (! file)
     {
         return PathClassification::Image;
     }
@@ -67,15 +64,14 @@ static_assert(sizeof(wchar_t) == sizeof(char16_t));
     std::array<std::uint8_t, 4> header{};
     wil::unique_event_nothrow completed;
     wil::unique_event_nothrow cancelled;
-    if (FAILED(completed.create(wil::EventOptions::ManualReset)) ||
-        FAILED(cancelled.create(wil::EventOptions::ManualReset)))
+    if (FAILED(completed.create(wil::EventOptions::ManualReset)) || FAILED(cancelled.create(wil::EventOptions::ManualReset)))
     {
         return PathClassification::Image;
     }
     OVERLAPPED operation{};
     operation.hEvent = completed.get();
-    DWORD bytesRead = 0;
-    if (!ReadFile(file.get(), header.data(), static_cast<DWORD>(header.size()), &bytesRead, &operation))
+    DWORD bytesRead  = 0;
+    if (! ReadFile(file.get(), header.data(), static_cast<DWORD>(header.size()), &bytesRead, &operation))
     {
         if (GetLastError() != ERROR_IO_PENDING)
         {
@@ -91,7 +87,7 @@ static_assert(sizeof(wchar_t) == sizeof(char16_t));
         const auto waited = WaitForMultipleObjects(2, events, FALSE, INFINITE);
         if (waited != WAIT_OBJECT_0)
             (void)CancelIoEx(file.get(), &operation); // the worker owns driver cancellation, never the UI callback
-        if (!GetOverlappedResult(file.get(), &operation, &bytesRead, TRUE))
+        if (! GetOverlappedResult(file.get(), &operation, &bytesRead, TRUE))
         {
             return PathClassification::Image;
         }
@@ -100,13 +96,13 @@ static_assert(sizeof(wchar_t) == sizeof(char16_t));
         return PathClassification::Image;
 
     const bool zipSignature = header[0] == 'P' && header[1] == 'K' &&
-                              ((header[2] == 3 && header[3] == 4) || (header[2] == 5 && header[3] == 6) ||
-                               (header[2] == 7 && header[3] == 8));
+                              ((header[2] == 3 && header[3] == 4) || (header[2] == 5 && header[3] == 6) || (header[2] == 7 && header[3] == 8));
     return zipSignature ? PathClassification::Project : PathClassification::Image;
 }
 } // namespace
 
-PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> paths, const CancelToken& cancellation,
+PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> paths,
+                                          const CancelToken& cancellation,
                                           PathClassificationScratchSource scratchSource) noexcept
 {
     if (paths.size() > kMaxPathClassificationBatch)
@@ -120,8 +116,7 @@ PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> pat
     {
         if (cancellation.IsCancelled())
             return FailedBatch(PathClassificationStatus::Cancelled);
-        if (path.empty() || path.size() > kMaxPathClassificationLength ||
-            std::find(path.begin(), path.end(), L'\0') != path.end())
+        if (path.empty() || path.size() > kMaxPathClassificationLength || std::find(path.begin(), path.end(), L'\0') != path.end())
         {
             return FailedBatch(PathClassificationStatus::InvalidInput);
         }
@@ -134,18 +129,15 @@ PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> pat
     std::unique_ptr<PathClassificationScratch> scratch;
     try
     {
-        scratch = scratchSource.create ? scratchSource.create(scratchSource.context)
-                                       : std::make_unique<PathClassificationScratch>();
+        scratch = scratchSource.create ? scratchSource.create(scratchSource.context) : std::make_unique<PathClassificationScratch>();
     }
     catch (const std::bad_alloc&)
     {
         // One bounded allocation at this noexcept batch-admission boundary; refuse the whole batch.
-        return FailedBatch(cancellation.IsCancelled() ? PathClassificationStatus::Cancelled
-                                                      : PathClassificationStatus::OutOfMemory);
+        return FailedBatch(cancellation.IsCancelled() ? PathClassificationStatus::Cancelled : PathClassificationStatus::OutOfMemory);
     }
-    if (!scratch)
-        return FailedBatch(cancellation.IsCancelled() ? PathClassificationStatus::Cancelled
-                                                      : PathClassificationStatus::OutOfMemory);
+    if (! scratch)
+        return FailedBatch(cancellation.IsCancelled() ? PathClassificationStatus::Cancelled : PathClassificationStatus::OutOfMemory);
     auto& terminatedPath = *scratch;
     for (std::size_t index = 0; index < paths.size(); ++index)
     {
@@ -156,7 +148,7 @@ PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> pat
 
         const std::wstring_view path = paths[index];
         std::copy(path.begin(), path.end(), terminatedPath.begin());
-        terminatedPath[path.size()] = L'\0';
+        terminatedPath[path.size()]   = L'\0';
         result.classifications[index] = ClassifyTerminatedPath(terminatedPath.data(), path, cancellation);
         if (cancellation.IsCancelled())
         {

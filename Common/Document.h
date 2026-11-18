@@ -28,19 +28,19 @@
 #include <utility>
 #include <vector>
 
-inline constexpr int kMaxCanvasSide = 30'000;
-inline constexpr int kMaxTransformSide = 300'000;
-inline constexpr double kMaxTransformOrigin = 1'000'000.0;
-inline constexpr int kMaxLayerPixels = 100'000'000;
-inline constexpr int kMaxMaskPixels = 100'000'000;
-inline constexpr int kMaxLayerCount = 10'000;
-inline constexpr int kMaxNameUtf8Bytes = 16'384;
-inline constexpr int kMaxGroupDepth = 64;
-inline constexpr int kMaxLiveMaskPath = 256;
-inline constexpr int kMinFormatVersion = 1;
-inline constexpr int kMaxFormatVersion = 7;
-inline constexpr int kCurrentFormatVersion = 7;
-inline constexpr int kHistoryEntryLimit = 100;
+inline constexpr int kMaxCanvasSide                      = 30'000;
+inline constexpr int kMaxTransformSide                   = 300'000;
+inline constexpr double kMaxTransformOrigin              = 1'000'000.0;
+inline constexpr int kMaxLayerPixels                     = 100'000'000;
+inline constexpr int kMaxMaskPixels                      = 100'000'000;
+inline constexpr int kMaxLayerCount                      = 10'000;
+inline constexpr int kMaxNameUtf8Bytes                   = 16'384;
+inline constexpr int kMaxGroupDepth                      = 64;
+inline constexpr int kMaxLiveMaskPath                    = 256;
+inline constexpr int kMinFormatVersion                   = 1;
+inline constexpr int kMaxFormatVersion                   = 7;
+inline constexpr int kCurrentFormatVersion               = 7;
+inline constexpr int kHistoryEntryLimit                  = 100;
 inline constexpr std::uint64_t kHistoryRetainedByteLimit = 256ull * 1024 * 1024;
 // A failed physical-memory query uses the legacy class default. Division before capping cannot overflow.
 [[nodiscard]] constexpr std::uint64_t HistoryLimitForPhysicalMemory(std::uint64_t bytes) noexcept
@@ -87,18 +87,18 @@ template <> struct std::hash<Guid>
 
 struct Vec2
 {
-    double x = 0;
-    double y = 0;
+    double x                                                  = 0;
+    double y                                                  = 0;
     [[nodiscard]] bool operator==(const Vec2&) const noexcept = default;
 };
 
 // A 2-D affine map in the row-vector convention of CGAffineTransform: x' = a*x + c*y + tx, y' = b*x + d*y + ty.
 struct Affine2
 {
-    double a = 1;
-    double b = 0;
-    double c = 0;
-    double d = 1;
+    double a  = 1;
+    double b  = 0;
+    double c  = 0;
+    double d  = 1;
     double tx = 0;
     double ty = 0;
     [[nodiscard]] static Affine2 Translation(double x, double y) noexcept
@@ -134,25 +134,25 @@ struct RasterTile;
 // base with the raster they came from, and assemble contiguous bytes only when a consumer asks for Data().
 class Raster
 {
-  public:
+public:
     // Brief process-wide gate for sparse resident-cache publication. Workers may wait while sampling history;
     // owners only try. Holding this gate never authorizes pixel work on the owner. A lease stays on its acquiring
     // thread and is released before callbacks, waits or transfer to a different thread.
     class ResidencyLease final
     {
-      public:
+    public:
         ResidencyLease() noexcept = default;
         ~ResidencyLease() noexcept;
-        ResidencyLease(const ResidencyLease&) = delete;
+        ResidencyLease(const ResidencyLease&)            = delete;
         ResidencyLease& operator=(const ResidencyLease&) = delete;
-        ResidencyLease(ResidencyLease&&) = delete;
-        ResidencyLease& operator=(ResidencyLease&&) = delete;
+        ResidencyLease(ResidencyLease&&)                 = delete;
+        ResidencyLease& operator=(ResidencyLease&&)      = delete;
         [[nodiscard]] bool Held() const noexcept;
         // One nonblocking attempt; reuses the scope owner, refuses recursion and never waits/allocates.
         [[nodiscard]] bool TryAcquire() noexcept;
         void Reset() noexcept;
 
-      private:
+    private:
         friend class Raster;
         explicit ResidencyLease(bool attempt, CancelToken cancellation = {}) noexcept;
         void CheckThread() const noexcept;
@@ -163,7 +163,7 @@ class Raster
     [[nodiscard]] static ResidencyLease TryResidencyLease() noexcept; // owner, one attempt only
     [[nodiscard]] static std::uint64_t ResidencyEpoch() noexcept;
     static constexpr std::size_t kResidencyJournalCapacity = 4096;
-    using ResidencyJournal = RasterResidencyJournal<kResidencyJournalCapacity>;
+    using ResidencyJournal                                 = RasterResidencyJournal<kResidencyJournalCapacity>;
     // Copies numeric cache-growth events only while this same thread owns the exclusive residency lease.
     [[nodiscard]] static ResidencyJournal::CopyResult CopyResidencyChanges(std::uint64_t afterEpoch,
                                                                            std::span<RasterResidencyChange> output,
@@ -176,31 +176,29 @@ class Raster
     // This is notification only: it cannot authorize an edit or account/trim history on a producer thread.
     class ResidencySubscription final
     {
-      public:
-        using Changed = void (*)(void*) noexcept;
+    public:
+        using Changed                          = void (*)(void*) noexcept;
         static constexpr std::size_t kCapacity = 8;
-        ResidencySubscription() noexcept = default;
+        ResidencySubscription() noexcept       = default;
         ~ResidencySubscription() noexcept;
-        ResidencySubscription(const ResidencySubscription&) = delete;
+        ResidencySubscription(const ResidencySubscription&)            = delete;
         ResidencySubscription& operator=(const ResidencySubscription&) = delete;
         [[nodiscard]] bool Start(Changed changed, void* context) noexcept;
         void Stop() noexcept;
 
-      private:
+    private:
         friend class Raster;
         Changed _changed = nullptr;
-        void* _context = nullptr;
+        void* _context   = nullptr;
         bool _registered = false;
     };
     [[nodiscard]] static Raster Make(int width, int height, RasterFormat format);
-    [[nodiscard]] static Raster Make(int width, int height, RasterFormat format, const std::uint8_t* pixels,
-                                     std::size_t byteCount);
+    [[nodiscard]] static Raster Make(int width, int height, RasterFormat format, const std::uint8_t* pixels, std::size_t byteCount);
     // Publishes a completely initialized buffer without copying. Invalid input leaves ownership with the caller.
     [[nodiscard]] static Raster Adopt(int width, int height, RasterFormat format, PixelBuffer&& pixels);
     // Caller precreates lifetime under its complete admission. The immutable storage and its weak control
     // block retain it through actual worker destruction; no pixel copy, mutation or new memory admission.
-    [[nodiscard]] static Raster Adopt(int width, int height, RasterFormat format, PixelBuffer&& pixels,
-                                      const std::shared_ptr<const void>& lifetime);
+    [[nodiscard]] static Raster Adopt(int width, int height, RasterFormat format, PixelBuffer&& pixels, const std::shared_ptr<const void>& lifetime);
     [[nodiscard]] std::weak_ptr<const void> WeakStorageForTest() const noexcept
     {
         return _storage;
@@ -208,16 +206,29 @@ class Raster
     [[nodiscard]] static Raster MakeThumbnail(const Raster& source, int maxSide = 96);
     // A sparse raster: `base` (contiguous; may be empty) with its top-left at (baseX, baseY) of the new grid, under
     // `tiles` (clipped to the grid, later tiles over earlier ones). Pixels no base or tile reaches read `fill`.
-    [[nodiscard]] static Raster MakeSparse(int width, int height, RasterFormat format, const Raster& base, int baseX,
-                                           int baseY, std::vector<RasterTile> tiles, std::uint8_t fill,
+    [[nodiscard]] static Raster MakeSparse(int width,
+                                           int height,
+                                           RasterFormat format,
+                                           const Raster& base,
+                                           int baseX,
+                                           int baseY,
+                                           std::vector<RasterTile> tiles,
+                                           std::uint8_t fill,
                                            const std::shared_ptr<const void>& outputLifetime = {});
     // `source` (its top-left at (sourceX, sourceY) of a working grid) with `tiles` of that grid written over it,
     // cropped to the given rectangle of the grid. Older tiles are split around newer ones so the tile list stays
     // disjoint; the base and untouched tiles are shared, never copied. `fill` is what the crop reads beyond the
     // source; a sparse source keeps its own fill over its own extent (a painted hide-all mask stays hidden).
-    [[nodiscard]] static Raster Replacing(const Raster& source, int sourceX, int sourceY, std::vector<RasterTile> tiles,
-                                          int cropX, int cropY, int cropWidth, int cropHeight, std::uint8_t fill,
-                                          CancelToken cancellation = {},
+    [[nodiscard]] static Raster Replacing(const Raster& source,
+                                          int sourceX,
+                                          int sourceY,
+                                          std::vector<RasterTile> tiles,
+                                          int cropX,
+                                          int cropY,
+                                          int cropWidth,
+                                          int cropHeight,
+                                          std::uint8_t fill,
+                                          CancelToken cancellation                          = {},
                                           const std::shared_ptr<const void>& outputLifetime = {});
     // A contiguous copy of the region (pixels outside this raster read `fill`).
     [[nodiscard]] Raster Crop(int x, int y, int width, int height, std::uint8_t fill) const;
@@ -256,9 +267,7 @@ class Raster
     // base and the tiles are separate storages (ForEachStorage).
     [[nodiscard]] std::size_t ByteSize() const noexcept
     {
-        return IsMaterialized()
-                   ? static_cast<std::size_t>(_storage->stride) * static_cast<std::size_t>(_storage->height)
-                   : 0;
+        return IsMaterialized() ? static_cast<std::size_t>(_storage->stride) * static_cast<std::size_t>(_storage->height) : 0;
     }
     [[nodiscard]] const void* Identity() const noexcept
     {
@@ -302,8 +311,7 @@ class Raster
     }
     // The region [x, x + width) × [y, y + height) of this raster written to `out` (`outStride` bytes per row),
     // without assembling a sparse raster; pixels outside it read `fill`.
-    void ReadRegion(int x, int y, int width, int height, std::uint8_t* out, int outStride,
-                    std::uint8_t fill) const noexcept;
+    void ReadRegion(int x, int y, int width, int height, std::uint8_t* out, int outStride, std::uint8_t fill) const noexcept;
     // Every storage this raster reaches: itself, then its base and tiles (retained-memory accounting).
     void ForEachStorage(const std::function<void(const Raster&)>& visit) const;
     // Construction-time conservative capacity of this complete owning graph, including a possible sparse
@@ -331,7 +339,7 @@ class Raster
         return _storage && _storage->retirementBytes ? _storage->graphNodes : 0;
     }
 
-  private:
+private:
     static void NotifyResidencyChanged() noexcept;
     // The intrusive base outlives the last shared_ptr when large storage is handed to the worker release queue.
 #pragma warning(push)
@@ -344,26 +352,26 @@ class Raster
     {
         explicit Storage(std::uint64_t identity) noexcept;
         const std::uint64_t serial;
-        int width = 0;
-        int height = 0;
-        int stride = 0;
+        int width           = 0;
+        int height          = 0;
+        int stride          = 0;
         RasterFormat format = RasterFormat::Bgra8888;
         // Written once under assemblyMutex, then published through assembled. Readers never inspect bytes.
         mutable std::vector<std::uint8_t> bytes;
         PixelBuffer adoptedBytes;
         mutable std::atomic<const std::uint8_t*> assembled{nullptr};
         mutable std::mutex assemblyMutex;
-        bool sparse = false;
+        bool sparse       = false;
         std::uint8_t fill = 0;
         std::shared_ptr<const Storage> base;
         int baseX = 0;
         int baseY = 0;
         std::vector<RasterTile> tiles;
         std::uint64_t selfRetirementBytes = 0;
-        std::uint64_t retirementBytes = 0;
+        std::uint64_t retirementBytes     = 0;
         std::optional<std::uint64_t> gridReplacementWorkspaceBytes;
         std::uint64_t graphNodes = 1;
-        unsigned int graphDepth = 0;
+        unsigned int graphDepth  = 0;
 #if defined(_M_ARM64)
         // Occupy the base tail padding: MSVC C5291 warns that deriving through it can violate the ARM64 ABI.
         std::uint64_t arm64AbiTailPadding = 0;
@@ -398,11 +406,13 @@ class Raster
     [[nodiscard]] static std::shared_ptr<Storage> AllocateStorage();
     [[nodiscard]] static std::shared_ptr<Storage> AllocateChargedStorage(std::shared_ptr<const void> lifetime);
     static void CacheRetirementMemory(Storage& storage) noexcept;
-    explicit Raster(std::shared_ptr<const Storage> storage) noexcept : _storage(std::move(storage)) {}
+    explicit Raster(std::shared_ptr<const Storage> storage) noexcept : _storage(std::move(storage))
+    {
+    }
     static void Materialize(const Storage& storage) noexcept;
     std::shared_ptr<const Storage> _storage;
 
-  public:
+public:
     Raster() = default;
 };
 
@@ -415,8 +425,8 @@ struct RasterTile
     Raster pixels;
     int sourceX = 0; // window origin inside `pixels`
     int sourceY = 0;
-    int width = 0; // 0: the whole of `pixels`
-    int height = 0;
+    int width   = 0; // 0: the whole of `pixels`
+    int height  = 0;
     [[nodiscard]] int Width() const noexcept
     {
         return width > 0 ? width : pixels.Width();
@@ -429,8 +439,12 @@ struct RasterTile
 
 // Constructor cleanup can instantiate vector<RasterTile>'s destructor. Define these only after
 // RasterTile is complete, retaining inline construction and the same storage layout/ownership.
-inline Raster::Storage::Storage(std::uint64_t identity) noexcept : serial(identity) {}
-inline Raster::ChargedStorage::ChargedStorage(std::uint64_t identity) noexcept : Storage(identity) {}
+inline Raster::Storage::Storage(std::uint64_t identity) noexcept : serial(identity)
+{
+}
+inline Raster::ChargedStorage::ChargedStorage(std::uint64_t identity) noexcept : Storage(identity)
+{
+}
 
 struct RasterAsset
 {
@@ -454,9 +468,9 @@ struct LayerTransform
 {
     Vec2 origin{};
     Vec2 size{1, 1};
-    double rotation = 0;
-    bool flipX = false;
-    bool flipY = false;
+    double rotation        = 0;
+    bool flipX             = false;
+    bool flipY             = false;
     LayerSampling sampling = LayerSampling::High;
 
     [[nodiscard]] bool operator==(const LayerTransform&) const noexcept = default;
@@ -487,8 +501,7 @@ struct LayerTransform
     [[nodiscard]] bool SamePlacement(const LayerTransform& other) const noexcept;
     // Mirrored across a vertical line at `axis` (horizontally) or a horizontal one.
     [[nodiscard]] LayerTransform Mirrored(bool horizontally, double axis) const noexcept;
-    static constexpr std::array<Vec2, 8> kHandles{Vec2{0, 0}, Vec2{0.5, 0}, Vec2{1, 0}, Vec2{1, 0.5},
-                                                  Vec2{1, 1}, Vec2{0.5, 1}, Vec2{0, 1}, Vec2{0, 0.5}};
+    static constexpr std::array<Vec2, 8> kHandles{Vec2{0, 0}, Vec2{0.5, 0}, Vec2{1, 0}, Vec2{1, 0.5}, Vec2{1, 1}, Vec2{0.5, 1}, Vec2{0, 1}, Vec2{0, 0.5}};
 };
 
 enum class LayerBlendMode
@@ -545,11 +558,11 @@ enum class ColorRange : std::uint8_t
 
 struct LevelRange
 {
-    double black = 0;
-    double gamma = 1;
-    double white = 255;
-    double outputBlack = 0;
-    double outputWhite = 255;
+    double black                                                    = 0;
+    double gamma                                                    = 1;
+    double white                                                    = 255;
+    double outputBlack                                              = 0;
+    double outputWhite                                              = 255;
     [[nodiscard]] bool operator==(const LevelRange&) const noexcept = default;
     [[nodiscard]] LevelRange Normalized() const noexcept;
 };
@@ -563,8 +576,8 @@ struct LevelsSettings
 
 struct CurvePoint
 {
-    double x = 0;
-    double y = 0;
+    double x                                                        = 0;
+    double y                                                        = 0;
     [[nodiscard]] bool operator==(const CurvePoint&) const noexcept = default;
 };
 
@@ -583,22 +596,21 @@ struct CurvesSettings
 
 struct AdjustmentColor
 {
-    double red = 0;
-    double green = 0;
-    double blue = 0;
+    double red                                                           = 0;
+    double green                                                         = 0;
+    double blue                                                          = 0;
     [[nodiscard]] bool operator==(const AdjustmentColor&) const noexcept = default;
     [[nodiscard]] bool IsValid() const noexcept
     {
-        return std::isfinite(red) && std::isfinite(green) && std::isfinite(blue) && red >= 0 && red <= 1 &&
-               green >= 0 && green <= 1 && blue >= 0 && blue <= 1;
+        return std::isfinite(red) && std::isfinite(green) && std::isfinite(blue) && red >= 0 && red <= 1 && green >= 0 && green <= 1 && blue >= 0 && blue <= 1;
     }
 };
 
 struct ExposureSettings
 {
-    double exposure = 0;
-    double offset = 0;
-    double gamma = 1;
+    double exposure                                                       = 0;
+    double offset                                                         = 0;
+    double gamma                                                          = 1;
     [[nodiscard]] bool operator==(const ExposureSettings&) const noexcept = default;
     [[nodiscard]] bool IsValid() const noexcept
     {
@@ -610,7 +622,7 @@ struct GradientMapSettings
 {
     AdjustmentColor shadows{0, 0, 0};
     AdjustmentColor highlights{1, 1, 1};
-    bool reversed = false;
+    bool reversed                                                            = false;
     [[nodiscard]] bool operator==(const GradientMapSettings&) const noexcept = default;
     [[nodiscard]] bool IsValid() const noexcept
     {
@@ -620,10 +632,10 @@ struct GradientMapSettings
 
 struct GrainSettings
 {
-    double amount = 25;
-    double size = 1.5;
-    double roughness = 50;
-    std::uint32_t seed = 0;
+    double amount                                                      = 25;
+    double size                                                        = 1.5;
+    double roughness                                                   = 50;
+    std::uint32_t seed                                                 = 0;
     [[nodiscard]] bool operator==(const GrainSettings&) const noexcept = default;
     [[nodiscard]] bool IsValid() const noexcept
     {
@@ -633,18 +645,18 @@ struct GrainSettings
 
 struct RangeAdjustment
 {
-    double hue = 0;
-    double saturation = 0;
-    double lightness = 0;
+    double hue                                                           = 0;
+    double saturation                                                    = 0;
+    double lightness                                                     = 0;
     [[nodiscard]] bool operator==(const RangeAdjustment&) const noexcept = default;
 };
 
 struct HueBand
 {
-    double falloffStart = 0;
-    double rangeStart = 0;
-    double rangeEnd = 360;
-    double falloffEnd = 360;
+    double falloffStart                                          = 0;
+    double rangeStart                                            = 0;
+    double rangeEnd                                              = 360;
+    double falloffEnd                                            = 360;
     [[nodiscard]] bool operator==(const HueBand&) const noexcept = default;
     [[nodiscard]] std::array<double, 4> Handles() const noexcept
     {
@@ -655,10 +667,10 @@ struct HueBand
 struct HueSaturationSettings
 {
     ColorRange range = ColorRange::Master;
-    bool colorize = false;
+    bool colorize    = false;
     bool invertRange = false;
     std::array<RangeAdjustment, static_cast<std::size_t>(ColorRange::Count)> adjustments{};
-    std::array<HueBand, static_cast<std::size_t>(ColorRange::Count)> bands = DefaultBands();
+    std::array<HueBand, static_cast<std::size_t>(ColorRange::Count)> bands     = DefaultBands();
     [[nodiscard]] bool operator==(const HueSaturationSettings&) const noexcept = default;
     [[nodiscard]] static std::array<HueBand, static_cast<std::size_t>(ColorRange::Count)> DefaultBands() noexcept;
 };
@@ -666,10 +678,10 @@ struct HueSaturationSettings
 struct LayerAdjustment
 {
     AdjustmentKind kind = AdjustmentKind::Hsv;
-    double hue = 0;
-    double saturation = 0;
-    double lightness = 0;
-    bool colorize = false;
+    double hue          = 0;
+    double saturation   = 0;
+    double lightness    = 0;
+    bool colorize       = false;
     std::optional<HueSaturationSettings> hsvSettings;
     LevelsSettings levels{};
     CurvesSettings curves{};
@@ -722,11 +734,11 @@ enum class ShapeKind
 
 struct LayerShapeStyle
 {
-    ShapeKind kind = ShapeKind::Rectangle;
-    double red = 0;
-    double green = 0;
-    double blue = 0;
-    double cornerRadius = 0;
+    ShapeKind kind                                                       = ShapeKind::Rectangle;
+    double red                                                           = 0;
+    double green                                                         = 0;
+    double blue                                                          = 0;
+    double cornerRadius                                                  = 0;
     [[nodiscard]] bool operator==(const LayerShapeStyle&) const noexcept = default;
 };
 
@@ -738,16 +750,14 @@ struct LayerMask
     bool linked = true;
     [[nodiscard]] bool operator==(const LayerMask& other) const noexcept
     {
-        return asset.image == other.asset.image && enabled == other.enabled && placement == other.placement &&
-               linked == other.linked;
+        return asset.image == other.asset.image && enabled == other.enabled && placement == other.placement && linked == other.linked;
     }
     [[nodiscard]] static bool IsValid(const Raster& image) noexcept;
 };
 
 // Where a mask sits after its layer moves from `from` to `to`: a linked placement follows, an unlinked mask stays,
 // a uniform 1 x 1 mask and a mask that lands exactly on its layer report nullopt.
-[[nodiscard]] std::optional<LayerTransform> MaskPlacementMoving(const LayerMask& mask, const LayerTransform& from,
-                                                                const LayerTransform& to) noexcept;
+[[nodiscard]] std::optional<LayerTransform> MaskPlacementMoving(const LayerMask& mask, const LayerTransform& from, const LayerTransform& to) noexcept;
 
 // Selection (C9, Specs/Document/Document_Tools.md): closed loops in document pixels under the nonzero winding rule,
 // Clipper2-normalized (outer loops and holes) except a wand or mask trace, whose pixel-edge loops already are.
@@ -781,23 +791,26 @@ struct SelectionBounds
 // editing an outline constructs a new value. Equality still compares geometry, so no-op edits preserve redo.
 class SelectionLoops
 {
-  public:
+public:
     SelectionLoops() noexcept = default;
     // Worker-only immutable adoption: cancellable cached metadata, no point-buffer copy. The caller
     // admits storage/control bounds and explicitly retains its output-phase lifetime when charged.
     // Last owner-thread destruction of geometry is deferred; last weak control retains accounting.
-    [[nodiscard]] static std::optional<SelectionLoops> AdoptForWork(
-        std::vector<SelectionLoop> loops, CancelToken cancellation = {}, std::shared_ptr<const void> lifetime = {},
-        void (*checkpoint)(void*, std::uint64_t) noexcept = nullptr, void* context = nullptr);
+    [[nodiscard]] static std::optional<SelectionLoops> AdoptForWork(std::vector<SelectionLoop> loops,
+                                                                    CancelToken cancellation                          = {},
+                                                                    std::shared_ptr<const void> lifetime              = {},
+                                                                    void (*checkpoint)(void*, std::uint64_t) noexcept = nullptr,
+                                                                    void* context                                     = nullptr);
     [[nodiscard]] static std::uint64_t WorkOwnershipAllowance(std::uint64_t loopCount) noexcept;
     [[nodiscard]] std::weak_ptr<const void> WeakStorageForTest() const noexcept
     {
         return _loops;
     }
 
-    SelectionLoops(std::initializer_list<SelectionLoop> loops) : SelectionLoops(std::vector<SelectionLoop>(loops)) {}
-    SelectionLoops(std::vector<SelectionLoop> loops)
-        : _loops(loops.empty() ? nullptr : std::make_shared<const std::vector<SelectionLoop>>(std::move(loops)))
+    SelectionLoops(std::initializer_list<SelectionLoop> loops) : SelectionLoops(std::vector<SelectionLoop>(loops))
+    {
+    }
+    SelectionLoops(std::vector<SelectionLoop> loops) : _loops(loops.empty() ? nullptr : std::make_shared<const std::vector<SelectionLoop>>(std::move(loops)))
     {
         if (_loops)
         {
@@ -810,20 +823,22 @@ class SelectionLoops
         }
         _bounds = LoopsBounds(Get());
     }
-    SelectionLoops(const SelectionLoops&) noexcept = default;
+    SelectionLoops(const SelectionLoops&) noexcept            = default;
     SelectionLoops& operator=(const SelectionLoops&) noexcept = default;
     SelectionLoops(SelectionLoops&& other) noexcept
-        : _loops(std::move(other._loops)), _pointCount(std::exchange(other._pointCount, 0)),
-          _bounds(std::exchange(other._bounds, std::nullopt)), _storageBytes(std::exchange(other._storageBytes, 0))
+        : _loops(std::move(other._loops)),
+          _pointCount(std::exchange(other._pointCount, 0)),
+          _bounds(std::exchange(other._bounds, std::nullopt)),
+          _storageBytes(std::exchange(other._storageBytes, 0))
     {
     }
     SelectionLoops& operator=(SelectionLoops&& other) noexcept
     {
         if (this != &other)
         {
-            _loops = std::move(other._loops);
-            _pointCount = std::exchange(other._pointCount, 0);
-            _bounds = std::exchange(other._bounds, std::nullopt);
+            _loops        = std::move(other._loops);
+            _pointCount   = std::exchange(other._pointCount, 0);
+            _bounds       = std::exchange(other._bounds, std::nullopt);
             _storageBytes = std::exchange(other._storageBytes, 0);
         }
         return *this;
@@ -882,12 +897,11 @@ class SelectionLoops
         return Get()[index];
     }
 
-  private:
+private:
     friend class SelectionNudgeBuilder;
     // Trusted worker producer only: cached metadata was accumulated while constructing these exact loops.
     // Reuse normal GeometryNode/weak-control lifetime without a second complete geometry traversal.
-    [[nodiscard]] bool SealPreparedStorageForWork(std::vector<SelectionLoop> loops,
-                                                  std::shared_ptr<const void> lifetime);
+    [[nodiscard]] bool SealPreparedStorageForWork(std::vector<SelectionLoop> loops, std::shared_ptr<const void> lifetime);
 
     std::shared_ptr<const std::vector<SelectionLoop>> _loops;
     std::uint64_t _pointCount = 0;
@@ -910,7 +924,7 @@ struct DocumentSelection
     [[nodiscard]] bool IsEmpty() const noexcept
     {
         const std::optional<SelectionBounds> bounds = Bounds();
-        return !bounds.has_value() || !(bounds->Width() > 0.0) || !(bounds->Height() > 0.0);
+        return ! bounds.has_value() || ! (bounds->Width() > 0.0) || ! (bounds->Height() > 0.0);
     }
 };
 
@@ -956,9 +970,12 @@ enum class PreparedLassoRemoval : std::uint8_t
 struct LassoDraft
 {
     LassoDraft() = default;
-    LassoDraft(std::vector<Vec2> value, std::optional<Vec2> at, SelectionMode selectionMode, LassoKind lasso,
-               std::optional<Vec2> start)
-        : points(std::move(value)), cursor(at), mode(selectionMode), kind(lasso), anchor(start)
+    LassoDraft(std::vector<Vec2> value, std::optional<Vec2> at, SelectionMode selectionMode, LassoKind lasso, std::optional<Vec2> start)
+        : points(std::move(value)),
+          cursor(at),
+          mode(selectionMode),
+          kind(lasso),
+          anchor(start)
     {
     }
     [[nodiscard]] std::size_t PointCount() const noexcept;
@@ -972,10 +989,10 @@ struct LassoDraft
     std::vector<Vec2> points;
     std::optional<Vec2> cursor;
     SelectionMode mode = SelectionMode::New;
-    LassoKind kind = LassoKind::Freehand;
+    LassoKind kind     = LassoKind::Freehand;
     std::optional<Vec2> anchor;
 
-  private:
+private:
     friend class DocumentSession;
     std::shared_ptr<BoundedLassoGesture> _bounded;
     std::uint64_t _boundedRetirementBytes = 0;
@@ -992,7 +1009,7 @@ enum class WandSampleSize : std::uint8_t
 struct WandSettings
 {
     // How far (0–255) each channel may differ from the sampled color and still be selected.
-    int tolerance = 32;
+    int tolerance             = 32;
     WandSampleSize sampleSize = WandSampleSize::Point;
     // Only similar pixels connected to the clicked one, rather than every similar pixel.
     bool contiguous = true;
@@ -1022,8 +1039,8 @@ struct ImageLayer
     std::wstring name;
     bool visible = true;
     std::optional<Guid> parentID;
-    bool isGroup = false;
-    double opacity = 1;
+    bool isGroup             = false;
+    double opacity           = 1;
     LayerBlendMode blendMode = LayerBlendMode::Normal;
     std::optional<Guid> maskSourceID;
     std::optional<LayerMask> mask;
@@ -1051,12 +1068,12 @@ template <> struct RecordOwnershipPolicy<ImageLayer> final
 
 template <> struct RecordLookupPolicy<ImageLayer> final
 {
-    static constexpr bool enabled = true;
+    static constexpr bool enabled               = true;
     static constexpr std::size_t maximumRecords = kMaxLayerCount;
     // Validation and malformed-input fixtures retain oversized record values.
     // They receive no index/uniqueness authority and cannot pass document admission.
     static constexpr bool allowUnindexedOverflow = true;
-    using Key = Guid;
+    using Key                                    = Guid;
     [[nodiscard]] static Guid KeyOf(const ImageLayer& layer) noexcept
     {
         return layer.id;
@@ -1066,8 +1083,8 @@ template <> struct RecordLookupPolicy<ImageLayer> final
 struct CanvasDocument
 {
     Guid id;
-    int width = 1;
-    int height = 1;
+    int width         = 1;
+    int height        = 1;
     double resolution = 72;
     RecordRoot<ImageLayer> layers;
     std::optional<DocumentSelection> selection;
@@ -1094,12 +1111,12 @@ struct JobToken
 {
     Guid sessionIdentity;
     std::uint64_t documentSerial = 0;
-    std::uint64_t generation = 0;
-    std::uint64_t restoreSerial = 0;
+    std::uint64_t generation     = 0;
+    std::uint64_t restoreSerial  = 0;
     std::optional<TargetIdentity> target;
     std::optional<DocumentSelection> selection;
-    int canvasWidth = 0;
-    int canvasHeight = 0;
+    int canvasWidth        = 0;
+    int canvasHeight       = 0;
     std::uint64_t sequence = 0;
 };
 
@@ -1107,20 +1124,20 @@ struct JobToken
 struct DocumentReadAuthority final
 {
     Guid sessionIdentity;
-    std::uint64_t documentSerial = 0;
-    std::uint64_t generation = 0;
-    std::uint64_t restoreSerial = 0;
-    int canvasWidth = 0;
-    int canvasHeight = 0;
+    std::uint64_t documentSerial                                 = 0;
+    std::uint64_t generation                                     = 0;
+    std::uint64_t restoreSerial                                  = 0;
+    int canvasWidth                                              = 0;
+    int canvasHeight                                             = 0;
     bool operator==(const DocumentReadAuthority&) const noexcept = default;
 };
 
 // The Crop tool's frame in document pixels (C16, Common/Crop.h holds its geometry, drag and snap).
 struct CropRect
 {
-    double x = 0;
-    double y = 0;
-    double width = 0;
+    double x      = 0;
+    double y      = 0;
+    double width  = 0;
     double height = 0;
 
     [[nodiscard]] double MinX() const noexcept
@@ -1172,7 +1189,7 @@ struct FloatingTransform
     std::shared_ptr<CanvasDocument> before;
     std::optional<Guid> beforeActive;
     LayerTransform original;
-    int pixelWidth = 0;
+    int pixelWidth  = 0;
     int pixelHeight = 0;
 };
 
@@ -1188,7 +1205,7 @@ struct TransformEdit
     std::optional<TransformGroup> group;
     // Set when transforming selected pixels (Ctrl+T with a selection) rather than a layer.
     std::optional<FloatingTransform> floating;
-    bool deferred = false;
+    bool deferred         = false;
     std::uint64_t opening = 0; // Stable across settings ticks; assigned when owner policy becomes deferred.
 };
 
@@ -1236,7 +1253,7 @@ struct CloneSettings
     // source point.
     bool aligned = true;
     // Copy from every visible layer as shown rather than the active layer alone.
-    bool sampleAllLayers = false;
+    bool sampleAllLayers                                               = false;
     [[nodiscard]] bool operator==(const CloneSettings&) const noexcept = default;
 };
 
@@ -1255,10 +1272,10 @@ enum class GradientStyle : std::uint8_t
 
 struct GradientSettings
 {
-    GradientShape shape = GradientShape::Linear;
-    GradientStyle style = GradientStyle::ForegroundToTransparent;
-    bool reversed = false;
-    double opacity = 1;
+    GradientShape shape                                                   = GradientShape::Linear;
+    GradientStyle style                                                   = GradientStyle::ForegroundToTransparent;
+    bool reversed                                                         = false;
+    double opacity                                                        = 1;
     [[nodiscard]] bool operator==(const GradientSettings&) const noexcept = default;
 };
 
@@ -1266,11 +1283,11 @@ struct BrushSettings
 {
     double diameter = 40; // document pixels, 1–2000
     double hardness = 1;  // 0 (soft) … 1 (hard)
-    double red = 0;       // paint color, straight 0…1
-    double green = 0;
-    double blue = 0;
+    double red      = 0;  // paint color, straight 0…1
+    double green    = 0;
+    double blue     = 0;
     // Caps the whole stroke, as in Photoshop: overlapping dabs never exceed it (0.01–1).
-    double opacity = 1;
+    double opacity                                                     = 1;
     [[nodiscard]] bool operator==(const BrushSettings&) const noexcept = default;
     [[nodiscard]] bool IsValid() const noexcept;
     // Soft-tip deposition rate shared by the continuous integral and the dab fallback.
@@ -1316,11 +1333,11 @@ struct GradientEdit
     Vec2 start;
     Vec2 end;
     Guid target;
-    bool mask = false;
-    bool deferred = false;
-    std::uint64_t opening = 0;
-    std::uint64_t sequence = 1;
-    std::uint64_t publishedSequence = 0;
+    bool mask                         = false;
+    bool deferred                     = false;
+    std::uint64_t opening             = 0;
+    std::uint64_t sequence            = 1;
+    std::uint64_t publishedSequence   = 0;
     std::uint64_t publishedGeneration = 0;
     std::optional<CapturedInputs> capturedInputs; // Event-time values of an admitted, delayed pointer opening.
     [[nodiscard]] bool HasLine() const noexcept
@@ -1336,7 +1353,7 @@ struct ShapeDraft
     Vec2 anchor;
     SelectionBounds rect;
     // Document pixels, fixed when the drag starts; rectangles only.
-    double cornerRadius = 0;
+    double cornerRadius                                             = 0;
     [[nodiscard]] bool operator==(const ShapeDraft&) const noexcept = default;
 };
 
@@ -1362,12 +1379,12 @@ struct PixelMove
     bool duplicate = false;
     Vec2 offset;
     Guid target;
-    bool deferred = false;
-    std::uint64_t opening = 0;
-    std::uint64_t sequence = 1;
-    std::uint64_t publishedSequence = 0;
+    bool deferred                     = false;
+    std::uint64_t opening             = 0;
+    std::uint64_t sequence            = 1;
+    std::uint64_t publishedSequence   = 0;
     std::uint64_t publishedGeneration = 0;
-    std::uint64_t openingGeneration = 0;
+    std::uint64_t openingGeneration   = 0;
     // Original fixed-press CPU opening. Later frame consumers capture these handles only after their own admission.
     std::shared_ptr<const PixelMoveOpening> proceduralOpening;
     std::shared_ptr<const SharedPublicationMemory> proceduralMemory;
@@ -1409,13 +1426,13 @@ enum class FilterKind : std::uint8_t
 // Every kind's settings; each kind reads only its own.
 struct FilterSettings
 {
-    double radius = 1;          // Gaussian Blur: the blur's standard deviation in layer pixels, 0.1–250
-    double angle = 0;           // Motion Blur: degrees, counterclockwise from horizontal as in Photoshop, −90–90
-    double distance = 10;       // Motion Blur: streak length in layer pixels, 1–2000
-    double amount = 10;         // Add Noise: Photoshop's percentage, 0.1–400
-    bool gaussian = false;      // Add Noise: Gaussian (more speckled) instead of Uniform
+    double radius      = 1;     // Gaussian Blur: the blur's standard deviation in layer pixels, 0.1–250
+    double angle       = 0;     // Motion Blur: degrees, counterclockwise from horizontal as in Photoshop, −90–90
+    double distance    = 10;    // Motion Blur: streak length in layer pixels, 1–2000
+    double amount      = 10;    // Add Noise: Photoshop's percentage, 0.1–400
+    bool gaussian      = false; // Add Noise: Gaussian (more speckled) instead of Uniform
     bool monochromatic = false; // Add Noise: the same amount on every channel
-    double distortion = 0;      // Lens Correction: Remove Distortion −100–100, positive straightens barrel distortion
+    double distortion  = 0;     // Lens Correction: Remove Distortion −100–100, positive straightens barrel distortion
     CurvesSettings curves{};
     ExposureSettings exposure{};
     GradientMapSettings gradientMap{};
@@ -1454,8 +1471,8 @@ using LevelsHistogram = std::array<std::array<double, 256>, 4>;
 // A targeted-adjustment drag in progress: the range it picked and the values it started from.
 struct HueTargetDrag
 {
-    ColorRange range = ColorRange::Reds;
-    double hue = 0;
+    ColorRange range  = ColorRange::Reds;
+    double hue        = 0;
     double saturation = 0;
 };
 
@@ -1588,10 +1605,10 @@ struct ColorEditHistogramResult;
 
 struct ColorEditGrid final
 {
-    int x = 0;
-    int y = 0;
-    int width = 0;
-    int height = 0;
+    int x                                                              = 0;
+    int y                                                              = 0;
+    int width                                                          = 0;
+    int height                                                         = 0;
     [[nodiscard]] bool operator==(const ColorEditGrid&) const noexcept = default;
 };
 
@@ -1612,20 +1629,20 @@ struct ColorEdit
     // Deferred destructive panels borrow the opening records. Their token keeps mask pixel/placement
     // authority, while complete asset-name metadata is copied only by admitted worker preparation.
     RecordRoot<ImageLayer> sourceLayers;
-    bool deferred = false; // Host captures metadata; its jobs run the same graph as direct inline callers.
-    std::uint64_t openingSequence = 0;
-    std::uint64_t previewSequence = 0;            // Exact settings/seed/grid sequence of the published preview.
+    bool deferred                            = false; // Host captures metadata; its jobs run the same graph as direct inline callers.
+    std::uint64_t openingSequence            = 0;
+    std::uint64_t previewSequence            = 0; // Exact settings/seed/grid sequence of the published preview.
     std::uint64_t previewInvalidatedSequence = 0; // Preview off/identity/growth refusal invalidates earlier output.
-    bool commitFailed = false;
-    bool preview = true;
-    std::uint32_t seed = 0;   // Add Noise's and Grain's pattern, fixed while the panel is open
-    Raster grownImage;        // the pixels padded out for a blur or a fill (empty when not grown)
-    Raster retiredGrownImage; // Prepared display path: one invalidated grown cache, held until aggregate transfer.
-    std::optional<ColorEditGrid> grownGrid; // Planned extent on the original grid, before worker preparation.
+    bool commitFailed                        = false;
+    bool preview                             = true;
+    std::uint32_t seed                       = 0; // Add Noise's and Grain's pattern, fixed while the panel is open
+    Raster grownImage;                            // the pixels padded out for a blur or a fill (empty when not grown)
+    Raster retiredGrownImage;                     // Prepared display path: one invalidated grown cache, held until aggregate transfer.
+    std::optional<ColorEditGrid> grownGrid;       // Planned extent on the original grid, before worker preparation.
     LayerTransform grownTransform;
     double grownMargin = 0;
-    int grownOffsetX = 0; // where the original grid sits in the grown one
-    int grownOffsetY = 0;
+    int grownOffsetX   = 0; // where the original grid sits in the grown one
+    int grownOffsetY   = 0;
     Raster previewSource;    // the source no larger than the kind's preview limit
     double previewScale = 1; // pixels in previewSource per source pixel
     Raster previewRaster;
@@ -1661,7 +1678,7 @@ struct ColorEdit
         return grownGrid ? grownGrid->height : Source().Height();
     }
 
-  private:
+private:
     friend class DocumentSession;
     friend std::uint64_t ColorEditHeldMemoryBytes(const ColorEdit&) noexcept;
     // Only an acknowledged preserving-panel Wand may bind a new document selection for future jobs.
@@ -1679,23 +1696,23 @@ struct ColorEdit
 struct BrushCommitInfo
 {
     Raster image;
-    int x = 0;
-    int y = 0;
-    int width = 0;
+    int x      = 0;
+    int y      = 0;
+    int width  = 0;
     int height = 0;
-    bool mask = false;
+    bool mask  = false;
 };
 
 struct HierarchyEntry
 {
     Guid id;
     std::wstring name;
-    int depth = 0;
-    bool visible = true;
-    bool isGroup = false;
-    bool collapsed = false;
-    bool hasMask = false;    // the layers panel's Mask badge (RF-907)
-    bool maskEnabled = true; // false for a disabled mask
+    int depth        = 0;
+    bool visible     = true;
+    bool isGroup     = false;
+    bool collapsed   = false;
+    bool hasMask     = false; // the layers panel's Mask badge (RF-907)
+    bool maskEnabled = true;  // false for a disabled mask
 };
 
 // What a mask shows beyond its pixels once placed apart from its layer: 1 (reveal) or 0 (hide), whichever most
@@ -1706,8 +1723,7 @@ struct HierarchyEntry
 // carried onto a new grid of that layer: the old grid's top-left lands at (`x`, `y`) of the `width` × `height` result
 // and only the area beyond the old grid reads `outside`. A sparse mask keeps its tiles and its own fill. Empty when
 // the sizes are out of range.
-[[nodiscard]] Raster CarriedMask(const Raster& mask, int oldWidth, int oldHeight, int x, int y, int width, int height,
-                                 std::uint8_t outside);
+[[nodiscard]] Raster CarriedMask(const Raster& mask, int oldWidth, int oldHeight, int x, int y, int width, int height, std::uint8_t outside);
 
 // Where a mask's pixels sit on the document: its own placement, else the layer's transform.
 [[nodiscard]] inline LayerTransform MaskTransform(const ImageLayer& layer) noexcept
@@ -1723,9 +1739,9 @@ struct HierarchyEntry
 [[nodiscard]] bool NameUtf8LengthOk(std::wstring_view name) noexcept;
 [[nodiscard]] DocumentStatus ValidateHierarchy(std::span<const ImageLayer> layers);
 [[nodiscard]] DocumentStatus ValidateLiveMaskGraph(std::span<const ImageLayer> layers);
-[[nodiscard]] DocumentStatus ValidateDocument(const CanvasDocument& document,
-                                              int formatVersion = kCurrentFormatVersion);
-[[nodiscard]] std::vector<HierarchyEntry> HierarchyEntries(std::span<const ImageLayer> layers, bool topFirst = false,
+[[nodiscard]] DocumentStatus ValidateDocument(const CanvasDocument& document, int formatVersion = kCurrentFormatVersion);
+[[nodiscard]] std::vector<HierarchyEntry> HierarchyEntries(std::span<const ImageLayer> layers,
+                                                           bool topFirst                             = false,
                                                            const std::unordered_set<Guid>& collapsed = {});
 [[nodiscard]] std::vector<Guid> RenderLayerIds(const CanvasDocument& document);
 // A layer shown: it and every folder above it are visible.
@@ -1750,22 +1766,25 @@ struct HierarchyEntry
 struct HistoryRasterRootGroup;
 class HistoryStorageTopology final
 {
-  private:
+private:
     struct ConstructionTag final
     {
     };
 
-  public:
-    explicit HistoryStorageTopology(ConstructionTag) noexcept {}
-    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> Prepare(
-        const std::optional<CanvasDocument>& document, CancelToken cancellation = {},
-        std::shared_ptr<const SharedPublicationMemory> memory = {});
+public:
+    explicit HistoryStorageTopology(ConstructionTag) noexcept
+    {
+    }
+    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> Prepare(const std::optional<CanvasDocument>& document,
+                                                                               CancelToken cancellation                              = {},
+                                                                               std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool Matches(const std::optional<CanvasDocument>& document) const noexcept;
     // Managed preparation captures direct source roots only, sharing exact scalar-equivalent owners.
     // The reference Prepare/RasterOwners API keeps its complete closure semantics and independent goldens.
-    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> PrepareIncremental(
-        const std::optional<CanvasDocument>& document, std::shared_ptr<const HistoryStorageTopology> previous = {},
-        CancelToken cancellation = {}, std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> PrepareIncremental(const std::optional<CanvasDocument>& document,
+                                                                                          std::shared_ptr<const HistoryStorageTopology> previous = {},
+                                                                                          CancelToken cancellation                               = {},
+                                                                                          std::shared_ptr<const SharedPublicationMemory> memory  = {});
     [[nodiscard]] std::span<const Raster> RasterRoots() const noexcept;
     [[nodiscard]] const void* RasterRootIdentity() const noexcept;
     [[nodiscard]] bool HasRasterRoot(std::uint64_t serial) const noexcept;
@@ -1791,25 +1810,25 @@ class HistoryStorageTopology final
         return _retirementBytes;
     }
 
-  private:
+private:
     RecordRoot<ImageLayer> _layers;
     SelectionLoops _selection;
     std::vector<Raster> _rasters;
     std::shared_ptr<const HistoryRasterRootGroup> _managedRoots;
-    std::uint64_t _metadataBytes = 0;
+    std::uint64_t _metadataBytes   = 0;
     std::uint64_t _retirementBytes = 0;
-    bool _hasDocument = false;
+    bool _hasDocument              = false;
 };
 
 class DocumentHistory
 {
-  private:
+private:
     struct Entry;
     struct Pending;
     struct StorageIndex;
     using EntryHandle = std::shared_ptr<const Entry>;
 
-  public:
+public:
     struct Snapshot
     {
         std::optional<CanvasDocument> document;
@@ -1821,47 +1840,55 @@ class DocumentHistory
         [[nodiscard]] std::optional<RecordOwnershipBounds> OwnershipBounds() const noexcept;
     };
 
-    explicit DocumentHistory(int entryLimit = kHistoryEntryLimit,
-                             std::uint64_t retainedByteLimit = kHistoryRetainedByteLimit) noexcept;
+    explicit DocumentHistory(int entryLimit = kHistoryEntryLimit, std::uint64_t retainedByteLimit = kHistoryRetainedByteLimit) noexcept;
 
     // Owning immutable handles only: capturing the history stacks never copies layer, raster or outline records.
     // Capture shares two immutable stack roots without allocation or handle-vector traversal.
     // Saved-revision publication is independent of this structural epoch and never invalidates an edit view.
     struct StateView final
     {
-        StateView() = default;
-        StateView(const StateView&) = default;
+        StateView()                            = default;
+        StateView(const StateView&)            = default;
         StateView& operator=(const StateView&) = default;
         StateView(StateView&& source) noexcept
-            : past(std::move(source.past)), future(std::move(source.future)), pending(std::move(source.pending)),
-              storageIndex(std::move(source.storageIndex)), publicationMemory(std::move(source.publicationMemory)),
-              owner(std::exchange(source.owner, nullptr)), revision(source.revision), epoch(source.epoch),
-              depth(source.depth), entryLimit(source.entryLimit), byteLimit(source.byteLimit),
+            : past(std::move(source.past)),
+              future(std::move(source.future)),
+              pending(std::move(source.pending)),
+              storageIndex(std::move(source.storageIndex)),
+              publicationMemory(std::move(source.publicationMemory)),
+              owner(std::exchange(source.owner, nullptr)),
+              revision(source.revision),
+              epoch(source.epoch),
+              depth(source.depth),
+              entryLimit(source.entryLimit),
+              byteLimit(source.byteLimit),
               requirePredecessor(std::exchange(source.requirePredecessor, false)),
-              precedingPast(std::move(source.precedingPast)), precedingFuture(std::move(source.precedingFuture)),
-              precedingPending(std::move(source.precedingPending)), precedingDepth(source.precedingDepth)
+              precedingPast(std::move(source.precedingPast)),
+              precedingFuture(std::move(source.precedingFuture)),
+              precedingPending(std::move(source.precedingPending)),
+              precedingDepth(source.precedingDepth)
         {
         }
         StateView& operator=(StateView&& source) noexcept
         {
             if (this != &source)
             {
-                past = std::move(source.past);
-                future = std::move(source.future);
-                pending = std::move(source.pending);
-                storageIndex = std::move(source.storageIndex);
-                publicationMemory = std::move(source.publicationMemory);
-                owner = std::exchange(source.owner, nullptr);
-                revision = source.revision;
-                epoch = source.epoch;
-                depth = source.depth;
-                entryLimit = source.entryLimit;
-                byteLimit = source.byteLimit;
+                past               = std::move(source.past);
+                future             = std::move(source.future);
+                pending            = std::move(source.pending);
+                storageIndex       = std::move(source.storageIndex);
+                publicationMemory  = std::move(source.publicationMemory);
+                owner              = std::exchange(source.owner, nullptr);
+                revision           = source.revision;
+                epoch              = source.epoch;
+                depth              = source.depth;
+                entryLimit         = source.entryLimit;
+                byteLimit          = source.byteLimit;
                 requirePredecessor = std::exchange(source.requirePredecessor, false);
-                precedingPast = std::move(source.precedingPast);
-                precedingFuture = std::move(source.precedingFuture);
-                precedingPending = std::move(source.precedingPending);
-                precedingDepth = source.precedingDepth;
+                precedingPast      = std::move(source.precedingPast);
+                precedingFuture    = std::move(source.precedingFuture);
+                precedingPending   = std::move(source.precedingPending);
+                precedingDepth     = source.precedingDepth;
             }
             return *this;
         }
@@ -1884,7 +1911,7 @@ class DocumentHistory
         [[nodiscard]] const std::wstring& UndoName() const noexcept;
         [[nodiscard]] const std::wstring& RedoName() const noexcept;
 
-      private:
+    private:
         friend class DocumentHistory;
         HistoryEntries<EntryHandle> past;
         HistoryEntries<EntryHandle> future;
@@ -1894,9 +1921,9 @@ class DocumentHistory
         std::shared_ptr<const SharedPublicationMemory> publicationMemory;
         const DocumentHistory* owner = nullptr; // opaque identity only; workers never dereference the live history
         Guid revision;
-        std::uint64_t epoch = 0;
-        int depth = 0;
-        int entryLimit = 0;
+        std::uint64_t epoch     = 0;
+        int depth               = 0;
+        int entryLimit          = 0;
         std::uint64_t byteLimit = 0;
         // A dependent publication owns the exact predecessor roots, preventing another publication at
         // the same epoch/revision from satisfying its authority. Capturing these handles never allocates.
@@ -1913,13 +1940,13 @@ class DocumentHistory
     // opaque on workers; its monotonic epoch also guards replacement with the same revision/contents.
     class Authority final
     {
-      public:
+    public:
         Authority() noexcept = default;
 
-      private:
+    private:
         friend class DocumentHistory;
         const DocumentHistory* _owner = nullptr;
-        std::uint64_t _epoch = 0;
+        std::uint64_t _epoch          = 0;
         Guid _revision;
     };
     [[nodiscard]] Authority CaptureAuthority() const noexcept;
@@ -1952,7 +1979,7 @@ class DocumentHistory
     struct PrepareObserver final
     {
         void (*checkpoint)(void*, PrepareStage) = nullptr;
-        void* context = nullptr;
+        void* context                           = nullptr;
     };
 
     class ResidencyPermit;
@@ -1961,7 +1988,7 @@ class DocumentHistory
     {
         Publication() = default;
         ~Publication() noexcept;
-        Publication(const Publication&) = delete;
+        Publication(const Publication&)            = delete;
         Publication& operator=(const Publication&) = delete;
         Publication(Publication&& source) noexcept;
         Publication& operator=(Publication&& source) noexcept;
@@ -1971,7 +1998,7 @@ class DocumentHistory
         }
         [[nodiscard]] std::optional<Snapshot> TakeRestoreSnapshot() noexcept
         {
-            if (!published)
+            if (! published)
                 return std::nullopt;
             auto result = std::move(restore);
             restore.reset();
@@ -1982,16 +2009,16 @@ class DocumentHistory
             return state.revision != expectedRevision;
         }
 
-      private:
+    private:
         friend class DocumentHistory;
         friend class ResidencyPermit;
         StateView state;
         std::optional<Snapshot> restore;
         Guid expectedRevision;
-        std::uint64_t expectedEpoch = 0;
-        bool published = false;
-        bool sampledResidency = false;
-        bool requiresResidencyPermit = false;
+        std::uint64_t expectedEpoch      = 0;
+        bool published                   = false;
+        bool sampledResidency            = false;
+        bool requiresResidencyPermit     = false;
         ResidencyPermit* residencyPermit = nullptr; // borrowed only within the acquiring owner's completion
     };
     enum class ResidencyValidation : std::uint8_t
@@ -2007,19 +2034,19 @@ class DocumentHistory
     // and requires a fresh permit at the new destination. Default/reference publication remains unchanged.
     class ResidencyPermit final
     {
-      public:
+    public:
         ResidencyPermit() noexcept = default;
         ~ResidencyPermit()
         {
             Reset();
         }
-        ResidencyPermit(const ResidencyPermit&) = delete;
+        ResidencyPermit(const ResidencyPermit&)            = delete;
         ResidencyPermit& operator=(const ResidencyPermit&) = delete;
         [[nodiscard]] ResidencyValidation TryAcquire(Publication& publication) noexcept;
         [[nodiscard]] ResidencyValidation TryAcquire(ReplacementPublication& publication) noexcept;
         void Reset() noexcept;
 
-      private:
+    private:
         Publication* _publication = nullptr;
         Raster::ResidencyLease _lease;
     };
@@ -2028,36 +2055,45 @@ class DocumentHistory
     // admission must cover the extra candidate-index/container peak before using this staged protocol.
     [[nodiscard]] static bool RefreshPreparedResidency(Publication& publication,
                                                        const std::optional<CanvasDocument>& current,
-                                                       CancelToken cancellation = {}, PrepareObserver observer = {});
+                                                       CancelToken cancellation = {},
+                                                       PrepareObserver observer = {});
     // Owner-only constant-time hint. It never samples raster bytes or changes history. Empty history needs no
     // maintenance. Reference-written history with no index must be rebuilt on the worker before a budget claim.
     [[nodiscard]] bool NeedsResidencyMaintenance() const noexcept;
     // Worker-only maintenance of the captured current history, with no user edit or new/saved revision.
     // Normal publication authority/permit and full reservation still apply. The host must serialize it with
     // accepted document writers and retire replaced containers off owner; this API alone does not wire notices.
-    [[nodiscard]] static std::optional<Publication> PrepareResidencyMaintenance(
-        StateView view, const std::optional<CanvasDocument>& current, CancelToken cancellation = {},
-        PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<Publication> PrepareResidencyMaintenance(StateView view,
+                                                                                const std::optional<CanvasDocument>& current,
+                                                                                CancelToken cancellation = {},
+                                                                                PrepareObserver observer = {});
     // Detached preparation owns all snapshot, entry, container and trim allocations. nullopt means cancellation
     // or ineligible/default state. Allocation failures propagate to the standard worker runner. The returned
     // publication must survive apply/drop and retire on the worker lane: Publish swaps retired live containers
     // into it rather than destroying history on the owner. No worker ever consults live mutable history.
-    [[nodiscard]] static std::optional<Publication> PrepareEdit(
-        StateView view, const std::optional<CanvasDocument>& before, const std::optional<Guid>& beforeActive,
-        const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive, std::wstring name,
-        CancelToken cancellation = {}, PrepareObserver observer = {},
-        std::shared_ptr<const SharedPublicationMemory> memory = {});
-    [[nodiscard]] static std::optional<Publication> PrepareRestore(StateView view, bool redo,
-                                                                   CancelToken cancellation = {},
-                                                                   PrepareObserver observer = {});
-    [[nodiscard]] static std::optional<Publication> PrepareBegin(
-        StateView view, const std::optional<CanvasDocument>& before, const std::optional<Guid>& active,
-        std::wstring name, CancelToken cancellation = {}, PrepareObserver observer = {},
-        std::shared_ptr<const SharedPublicationMemory> memory = {});
-    [[nodiscard]] static std::optional<Publication> PrepareEnd(
-        StateView view, const std::optional<CanvasDocument>& after, const std::optional<Guid>& active,
-        CancelToken cancellation = {}, PrepareObserver observer = {},
-        std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] static std::optional<Publication> PrepareEdit(StateView view,
+                                                                const std::optional<CanvasDocument>& before,
+                                                                const std::optional<Guid>& beforeActive,
+                                                                const std::optional<CanvasDocument>& after,
+                                                                const std::optional<Guid>& afterActive,
+                                                                std::wstring name,
+                                                                CancelToken cancellation                              = {},
+                                                                PrepareObserver observer                              = {},
+                                                                std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] static std::optional<Publication> PrepareRestore(StateView view, bool redo, CancelToken cancellation = {}, PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<Publication> PrepareBegin(StateView view,
+                                                                 const std::optional<CanvasDocument>& before,
+                                                                 const std::optional<Guid>& active,
+                                                                 std::wstring name,
+                                                                 CancelToken cancellation                              = {},
+                                                                 PrepareObserver observer                              = {},
+                                                                 std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] static std::optional<Publication> PrepareEnd(StateView view,
+                                                               const std::optional<CanvasDocument>& after,
+                                                               const std::optional<Guid>& active,
+                                                               CancelToken cancellation                              = {},
+                                                               PrepareObserver observer                              = {},
+                                                               std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool CanPublish(const Publication& publication) const noexcept;
     // Prepare a dependent closure before the first publication becomes visible. The resulting view belongs to
     // the exact next structural epoch and can publish only after this predecessor successfully publishes.
@@ -2068,21 +2104,20 @@ class DocumentHistory
     // The result still validates the old owner's exact epoch/revision and retains retired containers after apply.
     class ReplacementPublication final
     {
-      public:
-        ReplacementPublication(const ReplacementPublication&) = delete;
-        ReplacementPublication& operator=(const ReplacementPublication&) = delete;
-        ReplacementPublication(ReplacementPublication&&) noexcept = default;
+    public:
+        ReplacementPublication(const ReplacementPublication&)                = delete;
+        ReplacementPublication& operator=(const ReplacementPublication&)     = delete;
+        ReplacementPublication(ReplacementPublication&&) noexcept            = default;
         ReplacementPublication& operator=(ReplacementPublication&&) noexcept = default;
         [[nodiscard]] Guid BaselineRevision() const noexcept
         {
             return savedRevision;
         }
 
-      private:
+    private:
         friend class DocumentHistory;
         friend class ResidencyPermit;
-        ReplacementPublication(Publication prepared, Guid baseline) noexcept
-            : history(std::move(prepared)), savedRevision(baseline)
+        ReplacementPublication(Publication prepared, Guid baseline) noexcept : history(std::move(prepared)), savedRevision(baseline)
         {
         }
         Publication history;
@@ -2090,16 +2125,24 @@ class DocumentHistory
     };
     [[nodiscard]] static bool RefreshPreparedResidency(ReplacementPublication& publication,
                                                        const std::optional<CanvasDocument>& current,
-                                                       CancelToken cancellation = {}, PrepareObserver observer = {});
-    [[nodiscard]] static std::optional<ReplacementPublication> PrepareReplacement(
-        StateView view, const std::optional<CanvasDocument>& baseline, const std::optional<Guid>& baselineActive,
-        const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive, std::wstring name,
-        CancelToken cancellation = {}, PrepareObserver observer = {});
+                                                       CancelToken cancellation = {},
+                                                       PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<ReplacementPublication> PrepareReplacement(StateView view,
+                                                                                  const std::optional<CanvasDocument>& baseline,
+                                                                                  const std::optional<Guid>& baselineActive,
+                                                                                  const std::optional<CanvasDocument>& after,
+                                                                                  const std::optional<Guid>& afterActive,
+                                                                                  std::wstring name,
+                                                                                  CancelToken cancellation = {},
+                                                                                  PrepareObserver observer = {});
     [[nodiscard]] bool CanPublishReplacement(const ReplacementPublication& publication) const noexcept;
     // New/Close save the final replacement state, including New's one entry from an absent baseline.
-    [[nodiscard]] static std::optional<ReplacementPublication> PrepareSavedReplacement(
-        StateView view, const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive,
-        std::wstring name, CancelToken cancellation = {}, PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<ReplacementPublication> PrepareSavedReplacement(StateView view,
+                                                                                       const std::optional<CanvasDocument>& after,
+                                                                                       const std::optional<Guid>& afterActive,
+                                                                                       std::wstring name,
+                                                                                       CancelToken cancellation = {},
+                                                                                       PrepareObserver observer = {});
     [[nodiscard]] bool PublishReplacement(ReplacementPublication& publication) noexcept;
 
     void Begin(std::wstring name, const std::optional<CanvasDocument>& document, const std::optional<Guid>& selection);
@@ -2117,11 +2160,11 @@ class DocumentHistory
 
     [[nodiscard]] bool CanUndo() const noexcept
     {
-        return _depth == 0 && !_past.empty();
+        return _depth == 0 && ! _past.empty();
     }
     [[nodiscard]] bool CanRedo() const noexcept
     {
-        return _depth == 0 && !_future.empty();
+        return _depth == 0 && ! _future.empty();
     }
     [[nodiscard]] const std::wstring& UndoName() const noexcept;
     [[nodiscard]] const std::wstring& RedoName() const noexcept;
@@ -2137,15 +2180,13 @@ class DocumentHistory
     // Conservative allocation declaration for Begin/End metadata copies, entry growth and trim bookkeeping.
     // Shared pixel/selection inputs are already resident. Zero refuses overflow or excessive graph depth.
     [[nodiscard]] std::uint64_t EditMemoryBytes(const std::optional<CanvasDocument>& current) const noexcept;
-    [[nodiscard]] std::uint64_t RestoreMemoryBytes(const std::optional<CanvasDocument>& current,
-                                                   bool redo) const noexcept;
+    [[nodiscard]] std::uint64_t RestoreMemoryBytes(const std::optional<CanvasDocument>& current, bool redo) const noexcept;
     // Conservative held-graph capacity for retirement, including current, pending, past/future and an optional
     // additional raster owner. Prepared stacks use a worker-sealed unique owning index; reference stacks and
     // unmatched/pending/additional sources retain occurrence bounds. No set/allocation/materialization on read.
     // Includes a possible sparse materialization cache. Zero refuses overflow or a graph deeper than 128.
     // Reads construction-cached immutable stack/document bounds only. Exact retained-storage indexes remain H3.
-    [[nodiscard]] std::uint64_t RetirementMemoryBytes(const std::optional<CanvasDocument>& current,
-                                                      const Raster& additional = {}) const noexcept;
+    [[nodiscard]] std::uint64_t RetirementMemoryBytes(const std::optional<CanvasDocument>& current, const Raster& additional = {}) const noexcept;
     [[nodiscard]] int EntryLimit() const noexcept
     {
         return _entryLimit;
@@ -2155,7 +2196,7 @@ class DocumentHistory
         return _retainedByteLimit;
     }
 
-  private:
+private:
     struct Entry
     {
         std::wstring name;
@@ -2165,14 +2206,12 @@ class DocumentHistory
     };
 
     void Trim(const std::optional<CanvasDocument>& current);
-    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> CurrentStorageTopology(
-        const StateView& state) noexcept;
-    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> PrepareTopology(
-        const std::optional<CanvasDocument>& document, const StateView& state, CancelToken cancellation);
-    [[nodiscard]] static std::shared_ptr<const Snapshot> SealSnapshot(Snapshot snapshot, const StateView& state,
-                                                                      CancelToken cancellation = {});
-    [[nodiscard]] static bool TrimPrepared(StateView& state, const std::optional<CanvasDocument>& current,
-                                           CancelToken cancellation, PrepareObserver observer);
+    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> CurrentStorageTopology(const StateView& state) noexcept;
+    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> PrepareTopology(const std::optional<CanvasDocument>& document,
+                                                                                       const StateView& state,
+                                                                                       CancelToken cancellation);
+    [[nodiscard]] static std::shared_ptr<const Snapshot> SealSnapshot(Snapshot snapshot, const StateView& state, CancelToken cancellation = {});
+    [[nodiscard]] static bool TrimPrepared(StateView& state, const std::optional<CanvasDocument>& current, CancelToken cancellation, PrepareObserver observer);
 
     struct Pending
     {
@@ -2186,17 +2225,16 @@ class DocumentHistory
     Guid _savedRevision;
     std::shared_ptr<const Pending> _pending;
     std::shared_ptr<const StorageIndex> _storageIndex;
-    std::uint64_t _stateEpoch = 1;
-    int _depth = 0;
-    int _entryLimit = kHistoryEntryLimit;
+    std::uint64_t _stateEpoch        = 1;
+    int _depth                       = 0;
+    int _entryLimit                  = kHistoryEntryLimit;
     std::uint64_t _retainedByteLimit = kHistoryRetainedByteLimit;
 };
 
 class DocumentSession
 {
-  public:
-    explicit DocumentSession(std::uint64_t retainedByteLimit = kHistoryRetainedByteLimit)
-        : history(kHistoryEntryLimit, retainedByteLimit)
+public:
+    explicit DocumentSession(std::uint64_t retainedByteLimit = kHistoryRetainedByteLimit) : history(kHistoryEntryLimit, retainedByteLimit)
     {
     }
 
@@ -2209,9 +2247,8 @@ class DocumentSession
     void ToggleVisibility(const Guid& id);
     // `above` inserts just after that sibling (visually above it in the top-first list). `before` inserts just
     // in front of that sibling instead (visually below it). `atBottom` is the root's bottom when `above` is empty.
-    [[nodiscard]] bool PlaceLayer(const Guid& id, const std::optional<Guid>& parent,
-                                  const std::optional<Guid>& above = std::nullopt, bool atBottom = false,
-                                  bool before = false);
+    [[nodiscard]] bool PlaceLayer(
+        const Guid& id, const std::optional<Guid>& parent, const std::optional<Guid>& above = std::nullopt, bool atBottom = false, bool before = false);
     void MoveActiveLayerOutOfGroup();
     // C16 (Specs/Document/Document_Model.md "Session edits"): the Layer menu's ordering, grouping and clipping
     // toggle, and the empty state after Close Project.
@@ -2234,28 +2271,40 @@ class DocumentSession
     [[nodiscard]] std::uint64_t DocumentSizeRetirementMemoryBytes() const noexcept;
     // Installs a validated import assembled from this document as one entry. A different document or invalid
     // graph/budget is refused before any session state changes. The synchronous host prepares this copy today.
-    [[nodiscard]] bool ApplyImportedDocument(CanvasDocument document, const std::optional<Guid>& active,
-                                             std::wstring name);
-    [[nodiscard]] static std::optional<PreparedImageImport> PrepareImageImportPublication(
-        ImageImportAuthority authority, std::optional<CanvasDocument> source, std::optional<Guid> sourceActive,
-        DocumentHistory::StateView history, ImageImportBatchResult imported, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool ApplyImportedDocument(CanvasDocument document, const std::optional<Guid>& active, std::wstring name);
+    [[nodiscard]] static std::optional<PreparedImageImport> PrepareImageImportPublication(ImageImportAuthority authority,
+                                                                                          std::optional<CanvasDocument> source,
+                                                                                          std::optional<Guid> sourceActive,
+                                                                                          DocumentHistory::StateView history,
+                                                                                          ImageImportBatchResult imported,
+                                                                                          CancelToken cancellation                  = {},
+                                                                                          DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool ApplyPreparedImageImportIfCurrent(PreparedImageImport& prepared) noexcept;
-    [[nodiscard]] static std::optional<PreparedImageImport> PrepareDocumentReplacementPublication(
-        ImageImportAuthority authority, std::optional<CanvasDocument> source, DocumentHistory::StateView history,
-        CanvasDocument replacement, std::optional<Guid> active, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<PreparedImageImport> PrepareDocumentReplacementPublication(ImageImportAuthority authority,
+                                                                                                  std::optional<CanvasDocument> source,
+                                                                                                  DocumentHistory::StateView history,
+                                                                                                  CanvasDocument replacement,
+                                                                                                  std::optional<Guid> active,
+                                                                                                  CancelToken cancellation                  = {},
+                                                                                                  DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] std::uint64_t ImageImportRetirementMemoryBytes() const noexcept;
-    [[nodiscard]] static std::optional<PreparedImageImport> PrepareDocumentLifecyclePublication(
-        ImageImportAuthority authority, std::optional<CanvasDocument> source, DocumentHistory::StateView history,
-        std::optional<CanvasDocument> replacement, std::optional<Guid> active, std::wstring name,
-        CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<PreparedImageImport> PrepareDocumentLifecyclePublication(ImageImportAuthority authority,
+                                                                                                std::optional<CanvasDocument> source,
+                                                                                                DocumentHistory::StateView history,
+                                                                                                std::optional<CanvasDocument> replacement,
+                                                                                                std::optional<Guid> active,
+                                                                                                std::wstring name,
+                                                                                                CancelToken cancellation                  = {},
+                                                                                                DocumentHistory::PrepareObserver observer = {});
     // Lifecycle preparation depends only on sealed lifetime authority, history roots and the new state.
     // Publication itself transfers the actual old document into retirement without an owner-side record copy.
-    [[nodiscard]] static std::optional<PreparedImageImport> PrepareDocumentLifecyclePublication(
-        ImageImportAuthority authority, DocumentHistory::StateView history, std::optional<CanvasDocument> replacement,
-        std::optional<Guid> active, std::wstring name, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<PreparedImageImport> PrepareDocumentLifecyclePublication(ImageImportAuthority authority,
+                                                                                                DocumentHistory::StateView history,
+                                                                                                std::optional<CanvasDocument> replacement,
+                                                                                                std::optional<Guid> active,
+                                                                                                std::wstring name,
+                                                                                                CancelToken cancellation                  = {},
+                                                                                                DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] ImageImportAuthority CaptureImageImportAuthority() const noexcept;
     [[nodiscard]] bool CanApplyImageImport(const ImageImportAuthority& authority) const noexcept;
     // Crop tool (C16, legacy Crop.swift): the frame lives in the session until Apply Crop resizes the canvas to
@@ -2293,7 +2342,7 @@ class DocumentSession
     // handles they own refer to immutable storage. Canvas dimensions let the UI thread reject stale results.
     class PreparedMerge
     {
-      public:
+    public:
         [[nodiscard]] const ImageLayer& Layer() const noexcept
         {
             return _layer;
@@ -2307,9 +2356,12 @@ class DocumentSession
             return _canvasHeight;
         }
 
-      private:
+    private:
         PreparedMerge(ImageLayer mergedLayer, int width, int height, MergePlan sourcePlan)
-            : _layer(std::move(mergedLayer)), _canvasWidth(width), _canvasHeight(height), _plan(std::move(sourcePlan))
+            : _layer(std::move(mergedLayer)),
+              _canvasWidth(width),
+              _canvasHeight(height),
+              _plan(std::move(sourcePlan))
         {
         }
         ImageLayer _layer;
@@ -2330,9 +2382,10 @@ class DocumentSession
     // PrepareMerge is worker-safe and owns all pixel trimming and thumbnail work. ApplyPreparedMerge is the
     // session-owned validation/history step; MergeLayers remains the synchronous compatibility wrapper.
     [[nodiscard]] static std::optional<PreparedMerge> PrepareMerge(const MergePlan& plan, const Raster& composite);
-    [[nodiscard]] static std::optional<PreparedMerge> PrepareMerge(
-        const MergePlan& plan, const Raster& composite, const class CancelToken& cancellation,
-        const std::shared_ptr<const void>& outputLifetime = {});
+    [[nodiscard]] static std::optional<PreparedMerge> PrepareMerge(const MergePlan& plan,
+                                                                   const Raster& composite,
+                                                                   const class CancelToken& cancellation,
+                                                                   const std::shared_ptr<const void>& outputLifetime = {});
     [[nodiscard]] bool ApplyPreparedMerge(const MergePlan& plan, const PreparedMerge& prepared);
     enum class MergePublicationStatus : std::uint8_t
     {
@@ -2345,18 +2398,26 @@ class DocumentSession
     // replaced owners into this candidate; no caller can substitute pixels or history independently.
     class PreparedMergePublication final
     {
-      public:
-        PreparedMergePublication(const PreparedMergePublication&) = delete;
-        PreparedMergePublication& operator=(const PreparedMergePublication&) = delete;
-        PreparedMergePublication(PreparedMergePublication&&) noexcept = default;
+    public:
+        PreparedMergePublication(const PreparedMergePublication&)                = delete;
+        PreparedMergePublication& operator=(const PreparedMergePublication&)     = delete;
+        PreparedMergePublication(PreparedMergePublication&&) noexcept            = default;
         PreparedMergePublication& operator=(PreparedMergePublication&&) noexcept = default;
 
-      private:
+    private:
         friend class DocumentSession;
-        PreparedMergePublication(JobToken token, std::optional<Guid> beforeActive, Guid merged, CanvasDocument document,
-                                 DocumentHistory::Publication history, std::unordered_set<Guid> selected)
-            : _token(std::move(token)), _beforeActive(std::move(beforeActive)), _active(merged),
-              _document(std::move(document)), _history(std::move(history)), _selected(std::move(selected))
+        PreparedMergePublication(JobToken token,
+                                 std::optional<Guid> beforeActive,
+                                 Guid merged,
+                                 CanvasDocument document,
+                                 DocumentHistory::Publication history,
+                                 std::unordered_set<Guid> selected)
+            : _token(std::move(token)),
+              _beforeActive(std::move(beforeActive)),
+              _active(merged),
+              _document(std::move(document)),
+              _history(std::move(history)),
+              _selected(std::move(selected))
         {
         }
         JobToken _token;
@@ -2367,11 +2428,16 @@ class DocumentSession
         std::unordered_set<Guid> _selected;
         std::optional<CanvasDocument> _retiredDisplay;
     };
-    [[nodiscard]] static std::optional<PreparedMergePublication> PrepareMergePublication(
-        const std::optional<CanvasDocument>& source, const std::optional<Guid>& active, JobToken token,
-        DocumentHistory::StateView history, const MergePlan& plan, const Raster& composite,
-        MergePublicationStatus& status, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
-        const std::shared_ptr<const void>& outputLifetime = {});
+    [[nodiscard]] static std::optional<PreparedMergePublication> PrepareMergePublication(const std::optional<CanvasDocument>& source,
+                                                                                         const std::optional<Guid>& active,
+                                                                                         JobToken token,
+                                                                                         DocumentHistory::StateView history,
+                                                                                         const MergePlan& plan,
+                                                                                         const Raster& composite,
+                                                                                         MergePublicationStatus& status,
+                                                                                         CancelToken cancellation                          = {},
+                                                                                         DocumentHistory::PrepareObserver observer         = {},
+                                                                                         const std::shared_ptr<const void>& outputLifetime = {});
     [[nodiscard]] bool ApplyPreparedMergeIfCurrent(PreparedMergePublication& prepared) noexcept;
     [[nodiscard]] std::uint64_t MergeRetirementMemoryBytes() const noexcept;
     // `composite`: the plan's layers flattened as the canvas shows them (document-sized BGRA from the composition).
@@ -2410,20 +2476,17 @@ class DocumentSession
     }
     [[nodiscard]] std::optional<DocumentReadAuthority> CaptureDocumentReadAuthority() const noexcept
     {
-        if (!_document)
+        if (! _document)
             return std::nullopt;
-        return DocumentReadAuthority{_tokenIdentity.value, _documentSerial,  _generation,
-                                     _restoreSerial,       _document->width, _document->height};
+        return DocumentReadAuthority{_tokenIdentity.value, _documentSerial, _generation, _restoreSerial, _document->width, _document->height};
     }
     [[nodiscard]] bool IsDocumentReadCurrent(const DocumentReadAuthority& authority) const noexcept
     {
-        return _document && authority.sessionIdentity == _tokenIdentity.value &&
-               authority.documentSerial == _documentSerial && authority.generation == _generation &&
-               authority.restoreSerial == _restoreSerial && authority.canvasWidth == _document->width &&
+        return _document && authority.sessionIdentity == _tokenIdentity.value && authority.documentSerial == _documentSerial &&
+               authority.generation == _generation && authority.restoreSerial == _restoreSerial && authority.canvasWidth == _document->width &&
                authority.canvasHeight == _document->height;
     }
-    [[nodiscard]] std::optional<JobToken> CaptureJobToken(const std::optional<Guid>& target = std::nullopt,
-                                                          std::uint64_t sequence = 0) const;
+    [[nodiscard]] std::optional<JobToken> CaptureJobToken(const std::optional<Guid>& target = std::nullopt, std::uint64_t sequence = 0) const;
     // UI-thread apply check. The caller supplies its current sequence and separately checks cancellation and
     // whether a preview's edit remains open. A token is valid only in the session that captured it.
     [[nodiscard]] bool CanApplyJobResult(const JobToken& token, std::uint64_t latestSequence) const noexcept;
@@ -2479,41 +2542,41 @@ class DocumentSession
     void CommitTransform();
     [[nodiscard]] std::uint64_t DuplicateOpeningPreparationMemoryBytes() const;
     [[nodiscard]] std::optional<DuplicateOpeningInput> PrepareDuplicateOpeningInput() const;
-    [[nodiscard]] static DuplicateOpeningResult PrepareDuplicateOpeningPublication(
-        DuplicateOpeningInput input, Executor& executor, CancelToken cancellation,
-        DocumentHistory::PrepareObserver historyObserver, DuplicateOpeningObserver observer);
+    [[nodiscard]] static DuplicateOpeningResult PrepareDuplicateOpeningPublication(DuplicateOpeningInput input,
+                                                                                   Executor& executor,
+                                                                                   CancelToken cancellation,
+                                                                                   DocumentHistory::PrepareObserver historyObserver,
+                                                                                   DuplicateOpeningObserver observer);
     [[nodiscard]] bool ApplyPreparedDuplicateOpeningIfCurrent(PreparedDuplicateOpening& prepared) noexcept;
     [[nodiscard]] bool IsDuplicateRestoreCurrent(const PreparedDuplicateRestore& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedDuplicateRestoreIfCurrent(PreparedDuplicateRestore& prepared) noexcept;
     [[nodiscard]] std::uint64_t FloatingOpeningPreparationMemoryBytes() const noexcept;
     [[nodiscard]] std::optional<FloatingOpeningInput> PrepareFloatingOpeningInput() const;
-    [[nodiscard]] static FloatingOpeningResult PrepareFloatingOpeningPublication(
-        FloatingOpeningInput input, Executor& executor, CancelToken cancellation,
-        DocumentHistory::PrepareObserver observer, FloatingOpeningObserver openingObserver);
+    [[nodiscard]] static FloatingOpeningResult PrepareFloatingOpeningPublication(FloatingOpeningInput input,
+                                                                                 Executor& executor,
+                                                                                 CancelToken cancellation,
+                                                                                 DocumentHistory::PrepareObserver observer,
+                                                                                 FloatingOpeningObserver openingObserver);
     [[nodiscard]] bool ApplyPreparedFloatingOpeningIfCurrent(PreparedFloatingOpening& prepared) noexcept;
     [[nodiscard]] bool ApplyPreparedFloatingRestoreIfCurrent(PreparedFloatingRestore& prepared) noexcept;
     [[nodiscard]] bool IsFloatingRestoreCurrent(const PreparedFloatingRestore& prepared) const noexcept;
-    [[nodiscard]] std::uint64_t FloatingMergePreparationMemoryBytes(
-        const PreparedFloatingRestore& restore) const noexcept;
-    [[nodiscard]] std::optional<FloatingMergeInput> PrepareFloatingMergeInput(
-        std::shared_ptr<PreparedFloatingRestore> restore) const;
-    [[nodiscard]] static FloatingMergeResult PrepareFloatingMergePublication(FloatingMergeInput input,
-                                                                             Executor& executor,
-                                                                             CancelToken cancellation,
-                                                                             DocumentHistory::PrepareObserver observer,
-                                                                             FloatingMergeObserver mergeObserver);
+    [[nodiscard]] std::uint64_t FloatingMergePreparationMemoryBytes(const PreparedFloatingRestore& restore) const noexcept;
+    [[nodiscard]] std::optional<FloatingMergeInput> PrepareFloatingMergeInput(std::shared_ptr<PreparedFloatingRestore> restore) const;
+    [[nodiscard]] static FloatingMergeResult PrepareFloatingMergePublication(
+        FloatingMergeInput input, Executor& executor, CancelToken cancellation, DocumentHistory::PrepareObserver observer, FloatingMergeObserver mergeObserver);
     [[nodiscard]] bool ApplyPreparedFloatingMergeIfCurrent(PreparedFloatingMerge& prepared) noexcept;
     [[nodiscard]] std::uint64_t TransformCommitPreparationMemoryBytes() const noexcept;
     [[nodiscard]] std::optional<TransformCommitInput> PrepareTransformCommitInput() const;
-    [[nodiscard]] static TransformCommitResult PrepareTransformCommitPublication(
-        TransformCommitInput input, Executor& executor, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] static TransformCommitResult PrepareTransformCommitPublication(TransformCommitInput input,
+                                                                                 Executor& executor,
+                                                                                 CancelToken cancellation                  = {},
+                                                                                 DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool ApplyPreparedTransformCommitIfCurrent(PreparedTransformCommit& prepared) noexcept;
     [[nodiscard]] std::uint64_t TransformCancellationPreparationMemoryBytes() const noexcept;
     [[nodiscard]] std::optional<TransformCancellationInput> PrepareTransformCancellationInput() const;
-    [[nodiscard]] static std::optional<PreparedTransformCancellation> PrepareTransformCancellationPublication(
-        TransformCancellationInput input, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<PreparedTransformCancellation> PrepareTransformCancellationPublication(TransformCancellationInput input,
+                                                                                                              CancelToken cancellation                  = {},
+                                                                                                              DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool ApplyPreparedTransformCancellationIfCurrent(PreparedTransformCancellation& prepared) noexcept;
     [[nodiscard]] std::uint64_t TransformDraftRevision() const noexcept
     {
@@ -2542,8 +2605,7 @@ class DocumentSession
     [[nodiscard]] SnapTargets TransformSnapTargets(const std::unordered_set<Guid>& excluding) const;
     // `draft` nudged so the layer lines up with a nearby target within `tolerance` document pixels; the guides it
     // met stay in LastSnapGuides until cleared.
-    [[nodiscard]] LayerTransform SnappedMove(const LayerTransform& draft, const std::unordered_set<Guid>& moving,
-                                             double tolerance);
+    [[nodiscard]] LayerTransform SnappedMove(const LayerTransform& draft, const std::unordered_set<Guid>& moving, double tolerance);
     [[nodiscard]] const SnapGuides& LastSnapGuides() const noexcept
     {
         return _snapGuides;
@@ -2588,14 +2650,14 @@ class DocumentSession
         return _lassoDraft;
     }
     // The Marquee starts at a whole-pixel anchor in the current marquee kind; the Lasso in the current lasso kind.
-    [[nodiscard]] std::optional<LassoOpeningInput> PrepareLassoOpeningInput(Vec2 point, SelectionMode mode,
-                                                                            bool marquee);
+    [[nodiscard]] std::optional<LassoOpeningInput> PrepareLassoOpeningInput(Vec2 point, SelectionMode mode, bool marquee);
     // A queued physical descriptor owns these settings. Later header changes cannot replace its kind/AA.
-    [[nodiscard]] std::optional<LassoOpeningInput> PrepareLassoOpeningInput(Vec2 point, SelectionMode mode,
-                                                                            LassoOpeningSettings settings);
-    [[nodiscard]] static std::optional<PreparedLassoOpening> PrepareLassoOpening(
-        LassoOpeningInput input, std::uint32_t blocks, CancelToken cancellation,
-        std::shared_ptr<const SharedPublicationMemory> memory, bool retainOwnGesture = false);
+    [[nodiscard]] std::optional<LassoOpeningInput> PrepareLassoOpeningInput(Vec2 point, SelectionMode mode, LassoOpeningSettings settings);
+    [[nodiscard]] static std::optional<PreparedLassoOpening> PrepareLassoOpening(LassoOpeningInput input,
+                                                                                 std::uint32_t blocks,
+                                                                                 CancelToken cancellation,
+                                                                                 std::shared_ptr<const SharedPublicationMemory> memory,
+                                                                                 bool retainOwnGesture = false);
     [[nodiscard]] bool IsPreparedLassoOpeningCurrent(const PreparedLassoOpening& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedLassoOpeningIfCurrent(PreparedLassoOpening& prepared) noexcept;
     // Opaque own-writer authority: a foreign editor/history or direct writer mutation refuses.
@@ -2608,23 +2670,16 @@ class DocumentSession
     // Original writer only; true changes one bounded chunk, false is a quarter-pixel no-op, null refuses.
     // Exact own-key point/cursor/pop metadata. Polygon removal of the last corner ends that exact
     // draft without publishing selection/history; the prepared owner retains its writer for retirement.
-    [[nodiscard]] std::optional<bool> ExtendPreparedLassoPointIfCurrent(PreparedLassoOpening& prepared,
-                                                                        Vec2 point) noexcept;
-    [[nodiscard]] std::optional<bool> MovePreparedPolygonCursorIfCurrent(PreparedLassoOpening& prepared,
-                                                                         std::optional<Vec2> point) noexcept;
-    [[nodiscard]] std::optional<PreparedLassoRemoval> RemovePreparedPolygonPointIfCurrent(
-        PreparedLassoOpening& prepared) noexcept;
-    [[nodiscard]] std::optional<bool> ExtendPreparedFreehandIfCurrent(PreparedLassoOpening& prepared,
-                                                                      Vec2 point) noexcept;
-    [[nodiscard]] bool DragPreparedMarqueeIfCurrent(PreparedLassoOpening& prepared, Vec2 point, bool square,
-                                                    bool fromCenter) noexcept;
+    [[nodiscard]] std::optional<bool> ExtendPreparedLassoPointIfCurrent(PreparedLassoOpening& prepared, Vec2 point) noexcept;
+    [[nodiscard]] std::optional<bool> MovePreparedPolygonCursorIfCurrent(PreparedLassoOpening& prepared, std::optional<Vec2> point) noexcept;
+    [[nodiscard]] std::optional<PreparedLassoRemoval> RemovePreparedPolygonPointIfCurrent(PreparedLassoOpening& prepared) noexcept;
+    [[nodiscard]] std::optional<bool> ExtendPreparedFreehandIfCurrent(PreparedLassoOpening& prepared, Vec2 point) noexcept;
+    [[nodiscard]] bool DragPreparedMarqueeIfCurrent(PreparedLassoOpening& prepared, Vec2 point, bool square, bool fromCenter) noexcept;
     [[nodiscard]] bool AbortPreparedLassoGestureIfCurrent(PreparedLassoOpening& prepared) noexcept;
-    [[nodiscard]] std::optional<LassoFinishTerminal> ClosePreparedLassoGestureForWork(
-        PreparedLassoOpening& prepared, bool terminalAntialiased) noexcept;
+    [[nodiscard]] std::optional<LassoFinishTerminal> ClosePreparedLassoGestureForWork(PreparedLassoOpening& prepared, bool terminalAntialiased) noexcept;
     // Display capture follows complete display admission; close follows complete finish admission.
     [[nodiscard]] std::optional<LassoFinishTerminal> CaptureBoundedLassoDisplayForWork() const noexcept;
-    [[nodiscard]] std::optional<LassoFinishTerminal> CloseBoundedLassoForWork(
-        std::optional<bool> finishAntialiased = std::nullopt) noexcept;
+    [[nodiscard]] std::optional<LassoFinishTerminal> CloseBoundedLassoForWork(std::optional<bool> finishAntialiased = std::nullopt) noexcept;
     [[nodiscard]] std::optional<LassoFinishInput> PrepareClosedBoundedLassoFinishInput(LassoFinishTerminal terminal);
     [[nodiscard]] bool ExtendBoundedLasso(Vec2 point) noexcept;
     [[nodiscard]] bool MoveBoundedLassoCursor(std::optional<Vec2> point) noexcept;
@@ -2652,8 +2707,7 @@ class DocumentSession
     [[nodiscard]] bool CanMoveSelection(Vec2 point) const;
     // Cached descriptor first; immutable geometry is captured only after the caller admits its job.
     [[nodiscard]] std::optional<SelectionCursorProbePlan> DescribeSelectionCursorProbe() const noexcept;
-    [[nodiscard]] std::optional<SelectionDisplayValue> CaptureSelectionCursorProbe(
-        const SelectionCursorProbePlan& admitted) const noexcept;
+    [[nodiscard]] std::optional<SelectionDisplayValue> CaptureSelectionCursorProbe(const SelectionCursorProbePlan& admitted) const noexcept;
     // Moves the outline only (never pixels); the whole drag is one `Move Selection` entry.
     [[nodiscard]] bool BeginSelectionMove();
     // Explicit worker-mode prototype: document geometry stays immutable until prepared End/Cancel.
@@ -2662,18 +2716,17 @@ class DocumentSession
     // Selected owner path: worker prepares Begin history; publication only validates and swaps roots.
     [[nodiscard]] std::optional<SelectionMoveOpeningInput> PrepareDeferredSelectionMoveOpeningInput() const;
     [[nodiscard]] static std::optional<PreparedSelectionMoveOpening> PrepareDeferredSelectionMoveOpening(
-        SelectionMoveOpeningInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
-        std::shared_ptr<const SharedPublicationMemory> memory = {}, bool prepareAbort = false);
-    [[nodiscard]] bool IsPreparedDeferredSelectionMoveOpeningCurrent(
-        const PreparedSelectionMoveOpening& prepared) const noexcept;
-    [[nodiscard]] bool ApplyPreparedDeferredSelectionMoveOpeningIfCurrent(
-        PreparedSelectionMoveOpening& prepared) noexcept;
+        SelectionMoveOpeningInput input,
+        CancelToken cancellation                              = {},
+        DocumentHistory::PrepareObserver observer             = {},
+        std::shared_ptr<const SharedPublicationMemory> memory = {},
+        bool prepareAbort                                     = false);
+    [[nodiscard]] bool IsPreparedDeferredSelectionMoveOpeningCurrent(const PreparedSelectionMoveOpening& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedDeferredSelectionMoveOpeningIfCurrent(PreparedSelectionMoveOpening& prepared) noexcept;
     // Opaque ownership of the exact published deferred gesture. Only this route renews authority after its
     // own scalar moves. A foreign mutation or history publication refuses both movement and cleanup.
-    [[nodiscard]] bool IsPreparedDeferredSelectionMoveGestureCurrent(
-        const PreparedSelectionMoveOpening& prepared) const noexcept;
-    [[nodiscard]] bool MovePreparedDeferredSelectionMoveIfCurrent(PreparedSelectionMoveOpening& prepared, double dx,
-                                                                  double dy) noexcept;
+    [[nodiscard]] bool IsPreparedDeferredSelectionMoveGestureCurrent(const PreparedSelectionMoveOpening& prepared) const noexcept;
+    [[nodiscard]] bool MovePreparedDeferredSelectionMoveIfCurrent(PreparedSelectionMoveOpening& prepared, double dx, double dy) noexcept;
     // Cleanup of an already published opening: uses the worker-prepared no-op End, allocates nothing and
     // restores the reference Cancel generation semantics. It never publishes cancelled worker output.
     [[nodiscard]] bool AbortPreparedDeferredSelectionMoveIfCurrent(PreparedSelectionMoveOpening& prepared) noexcept;
@@ -2700,9 +2753,10 @@ class DocumentSession
     // Arrow keys: 1 px, or 10 with Shift; each press is one entry.
     void NudgeSelection(double dx, double dy);
     [[nodiscard]] std::optional<SelectionNudgeInput> PrepareSelectionNudgeInput(int dx, int dy) const;
-    [[nodiscard]] static std::optional<PreparedSelectionNudge> PrepareSelectionNudgePublication(
-        SelectionNudgeInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
-        const SelectionNudgeObserver* geometryObserver = nullptr);
+    [[nodiscard]] static std::optional<PreparedSelectionNudge> PrepareSelectionNudgePublication(SelectionNudgeInput input,
+                                                                                                CancelToken cancellation                       = {},
+                                                                                                DocumentHistory::PrepareObserver observer      = {},
+                                                                                                const SelectionNudgeObserver* geometryObserver = nullptr);
     [[nodiscard]] bool IsPreparedSelectionNudgeCurrent(const PreparedSelectionNudge& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionNudgeIfCurrent(PreparedSelectionNudge& prepared) noexcept;
     [[nodiscard]] std::uint64_t SelectionNudgeMemoryBytes() const noexcept;
@@ -2712,54 +2766,53 @@ class DocumentSession
     void ContractSelection(int amount);
     // Admitted owner capture; these sealed preparation APIs leave the direct selection reference routes intact.
     [[nodiscard]] std::optional<SelectionCommandInput> PrepareSelectionCommandInput(SelectionCommandKind kind) const;
-    [[nodiscard]] std::optional<SelectionCommandInput> PreparePreservingSelectionCommandInput(
-        SelectionCommandKind kind) const;
-    [[nodiscard]] static std::optional<PreparedSelectionCommand> PrepareSelectionCommandPublication(
-        SelectionCommandInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
-        std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] std::optional<SelectionCommandInput> PreparePreservingSelectionCommandInput(SelectionCommandKind kind) const;
+    [[nodiscard]] static std::optional<PreparedSelectionCommand> PrepareSelectionCommandPublication(SelectionCommandInput input,
+                                                                                                    CancelToken cancellation                              = {},
+                                                                                                    DocumentHistory::PrepareObserver observer             = {},
+                                                                                                    std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool IsPreparedSelectionCommandCurrent(const PreparedSelectionCommand& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionCommandIfCurrent(PreparedSelectionCommand& prepared) noexcept;
     [[nodiscard]] std::uint64_t SelectionCommandMemoryBytes(SelectionCommandKind kind) const noexcept;
     // Settled metadata capture follows full graph admission. Worker preparation owns the record draft,
     // validation and complete undo publication; owner application only checks authority and swaps owners.
     [[nodiscard]] std::optional<LayerMetadataInput> PrepareLayerMetadataInput(
-        LayerMetadataKind kind, Guid target, std::wstring_view name = {}, double opacity = 1.0,
-        LayerBlendMode blendMode = LayerBlendMode::Normal) const;
+        LayerMetadataKind kind, Guid target, std::wstring_view name = {}, double opacity = 1.0, LayerBlendMode blendMode = LayerBlendMode::Normal) const;
     // Preserves these gesture openings and any outer history transaction; never permits Undo over a live edit.
     [[nodiscard]] LayerMetadataAuthority CaptureLayerMetadataAuthority(bool preserve = false) const noexcept;
     [[nodiscard]] bool CanApplyLayerMetadataAuthority(const LayerMetadataAuthority& authority) const noexcept;
     [[nodiscard]] std::optional<LayerMetadataInput> PreparePreservedLayerMetadataInput(
-        LayerMetadataKind kind, Guid target, std::wstring_view name = {}, double opacity = 1.0,
-        LayerBlendMode blendMode = LayerBlendMode::Normal) const;
+        LayerMetadataKind kind, Guid target, std::wstring_view name = {}, double opacity = 1.0, LayerBlendMode blendMode = LayerBlendMode::Normal) const;
     // Owner-only after full admission. Preview/restore edits no history; typed closure records opening -> final.
     // The caller retains and validates the typed opening/sequence before capture and owner publication.
     [[nodiscard]] std::optional<LayerMetadataInput> PrepareLayerOpacityPreviewInput(Guid target, double value) const;
-    [[nodiscard]] std::optional<LayerMetadataInput> PrepareTypedLayerOpacityInput(Guid target, double opening,
-                                                                                  double value) const;
-    [[nodiscard]] static std::optional<PreparedLayerMetadata> PrepareLayerMetadataPublication(
-        LayerMetadataInput input, CancelToken cancellation, DocumentHistory::PrepareObserver historyObserver,
-        LayerMetadataPrepareObserver observer, std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] std::optional<LayerMetadataInput> PrepareTypedLayerOpacityInput(Guid target, double opening, double value) const;
+    [[nodiscard]] static std::optional<PreparedLayerMetadata> PrepareLayerMetadataPublication(LayerMetadataInput input,
+                                                                                              CancelToken cancellation,
+                                                                                              DocumentHistory::PrepareObserver historyObserver,
+                                                                                              LayerMetadataPrepareObserver observer,
+                                                                                              std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool IsPreparedLayerMetadataCurrent(const PreparedLayerMetadata& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedLayerMetadataIfCurrent(PreparedLayerMetadata& prepared) noexcept;
-    [[nodiscard]] std::uint64_t LayerMetadataMemoryBytes(LayerMetadataKind kind,
-                                                         std::size_t nameUnits = 0) const noexcept;
-    [[nodiscard]] std::uint64_t PreservedLayerMetadataMemoryBytes(LayerMetadataKind kind,
-                                                                  std::size_t nameUnits = 0) const noexcept;
+    [[nodiscard]] std::uint64_t LayerMetadataMemoryBytes(LayerMetadataKind kind, std::size_t nameUnits = 0) const noexcept;
+    [[nodiscard]] std::uint64_t PreservedLayerMetadataMemoryBytes(LayerMetadataKind kind, std::size_t nameUnits = 0) const noexcept;
     [[nodiscard]] std::optional<SelectionOffsetMemoryPlan> PlanSelectionOffsetMemory(int amount) const noexcept;
     [[nodiscard]] std::optional<SelectionOffsetInput> PrepareSelectionOffsetInput(int amount) const;
-    [[nodiscard]] static std::optional<PreparedSelectionOffset> PrepareSelectionOffsetPublication(
-        SelectionOffsetInput captured, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
-        std::shared_ptr<const SharedPublicationMemory> memory = {},
-        const SelectionOffsetObserver* diagnostic = nullptr);
+    [[nodiscard]] static std::optional<PreparedSelectionOffset> PrepareSelectionOffsetPublication(SelectionOffsetInput captured,
+                                                                                                  CancelToken cancellation                              = {},
+                                                                                                  DocumentHistory::PrepareObserver observer             = {},
+                                                                                                  std::shared_ptr<const SharedPublicationMemory> memory = {},
+                                                                                                  const SelectionOffsetObserver* diagnostic = nullptr);
     [[nodiscard]] bool IsPreparedSelectionOffsetCurrent(const PreparedSelectionOffset& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionOffsetIfCurrent(PreparedSelectionOffset& prepared) noexcept;
 
     [[nodiscard]] std::optional<InverseSelectionMemoryPlan> PlanInverseSelectionMemory() const noexcept;
     [[nodiscard]] std::optional<InverseSelectionInput> PrepareInverseSelectionInput() const;
-    [[nodiscard]] static std::optional<PreparedInverseSelection> PrepareInverseSelectionPublication(
-        InverseSelectionInput captured, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver historyObserver = {},
-        std::shared_ptr<const SharedPublicationMemory> memory = {}, const InverseSelectionObserver* observer = nullptr);
+    [[nodiscard]] static std::optional<PreparedInverseSelection> PrepareInverseSelectionPublication(InverseSelectionInput captured,
+                                                                                                    CancelToken cancellation                              = {},
+                                                                                                    DocumentHistory::PrepareObserver historyObserver      = {},
+                                                                                                    std::shared_ptr<const SharedPublicationMemory> memory = {},
+                                                                                                    const InverseSelectionObserver* observer = nullptr);
     [[nodiscard]] bool IsPreparedInverseSelectionCurrent(const PreparedInverseSelection& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedInverseSelectionIfCurrent(PreparedInverseSelection& prepared) noexcept;
 
@@ -2768,53 +2821,76 @@ class DocumentSession
         return _lassoOpening;
     }
     [[nodiscard]] std::optional<LassoFinishInput> PrepareLassoFinishInput(LassoFinishTerminal terminal);
-    [[nodiscard]] static std::optional<PreparedLassoFinish> PrepareLassoFinishPublication(
-        LassoFinishInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver historyObserver = {},
-        const LassoFinishObserver* observer = nullptr, std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] static std::optional<PreparedLassoFinish> PrepareLassoFinishPublication(LassoFinishInput input,
+                                                                                          CancelToken cancellation                              = {},
+                                                                                          DocumentHistory::PrepareObserver historyObserver      = {},
+                                                                                          const LassoFinishObserver* observer                   = nullptr,
+                                                                                          std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool IsPreparedLassoFinishCurrent(const PreparedLassoFinish& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedLassoFinishIfCurrent(PreparedLassoFinish& prepared) noexcept;
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareLoadedLayerSelectionInput(bool mask) const;
     [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanLoadedLayerSelectionMemory(bool mask) const noexcept;
-    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(
-        Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
-    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandCompositeSelectionInput(
-        Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(Vec2 point,
+                                                                                        WandSettings settings,
+                                                                                        bool antialiased,
+                                                                                        SelectionMode mode = SelectionMode::New) const;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandCompositeSelectionInput(Vec2 point,
+                                                                                            WandSettings settings,
+                                                                                            bool antialiased,
+                                                                                            SelectionMode mode = SelectionMode::New) const;
     [[nodiscard]] std::optional<PanelWandOpening> CapturePanelWandOpening() const noexcept;
     [[nodiscard]] bool IsPanelWandOpeningCurrent(const PanelWandOpening& opening) const noexcept;
     [[nodiscard]] std::optional<PanelWandAuthority> CapturePanelWandAuthority() const noexcept;
     [[nodiscard]] bool IsPanelWandAuthorityCurrent(const PanelWandAuthority& authority) const noexcept;
     // Explicit live-panel selection route. Every other unresolved edit retains its original refusal.
     // The captured panel opening/sequence survives unchanged; ordinary history restore remains strict.
-    [[nodiscard]] std::optional<WandLayerSelectionInput> PreparePanelWandLayerSelectionInput(
-        Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
-    [[nodiscard]] std::optional<WandLayerSelectionInput> PreparePanelWandCompositeSelectionInput(
-        Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PreparePanelWandLayerSelectionInput(Vec2 point,
+                                                                                             WandSettings settings,
+                                                                                             bool antialiased,
+                                                                                             SelectionMode mode = SelectionMode::New) const;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PreparePanelWandCompositeSelectionInput(Vec2 point,
+                                                                                                 WandSettings settings,
+                                                                                                 bool antialiased,
+                                                                                                 SelectionMode mode = SelectionMode::New) const;
     [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandLayerSelectionPublication(
-        WandLayerSelectionInput input, WandFailure* failure = nullptr, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr,
+        WandLayerSelectionInput input,
+        WandFailure* failure                                  = nullptr,
+        CancelToken cancellation                              = {},
+        DocumentHistory::PrepareObserver historyObserver      = {},
+        const WandLayerSelectionObserver* observer            = nullptr,
         std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandCompositeSelectionPublication(
-        WandLayerSelectionInput input, Raster composite, WandFailure* failure = nullptr, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr,
+        WandLayerSelectionInput input,
+        Raster composite,
+        WandFailure* failure                                  = nullptr,
+        CancelToken cancellation                              = {},
+        DocumentHistory::PrepareObserver historyObserver      = {},
+        const WandLayerSelectionObserver* observer            = nullptr,
         std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool IsPreparedWandLayerSelectionCurrent(const PreparedWandLayerSelection& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedWandLayerSelectionIfCurrent(PreparedWandLayerSelection& prepared) noexcept;
-    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandLayerSelectionMemory(
-        Vec2 point, WandSettings settings, SelectionMode mode = SelectionMode::New) const noexcept;
-    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandCompositeSelectionMemory(
-        Vec2 point, WandSettings settings, SelectionMode mode = SelectionMode::New) const noexcept;
-    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanPanelWandLayerSelectionMemory(
-        Vec2 point, WandSettings settings, SelectionMode mode = SelectionMode::New) const noexcept;
-    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanPanelWandCompositeSelectionMemory(
-        Vec2 point, WandSettings settings, SelectionMode mode = SelectionMode::New) const noexcept;
-    [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(
-        bool cancel, std::optional<std::uint64_t> expectedOpening = std::nullopt) const;
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandLayerSelectionMemory(Vec2 point,
+                                                                                           WandSettings settings,
+                                                                                           SelectionMode mode = SelectionMode::New) const noexcept;
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandCompositeSelectionMemory(Vec2 point,
+                                                                                               WandSettings settings,
+                                                                                               SelectionMode mode = SelectionMode::New) const noexcept;
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanPanelWandLayerSelectionMemory(Vec2 point,
+                                                                                                WandSettings settings,
+                                                                                                SelectionMode mode = SelectionMode::New) const noexcept;
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanPanelWandCompositeSelectionMemory(Vec2 point,
+                                                                                                    WandSettings settings,
+                                                                                                    SelectionMode mode = SelectionMode::New) const noexcept;
+    [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(bool cancel,
+                                                                                            std::optional<std::uint64_t> expectedOpening = std::nullopt) const;
     [[nodiscard]] static std::optional<PreparedSelectionMoveClosure> PrepareSelectionMoveClosurePublication(
-        SelectionMoveClosureInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
-        const SelectionNudgeObserver* geometryObserver = nullptr, std::shared_ptr<const void> geometryLifetime = {},
+        SelectionMoveClosureInput input,
+        CancelToken cancellation                                     = {},
+        DocumentHistory::PrepareObserver observer                    = {},
+        const SelectionNudgeObserver* geometryObserver               = nullptr,
+        std::shared_ptr<const void> geometryLifetime                 = {},
         std::shared_ptr<const SharedPublicationMemory> historyMemory = {});
-    [[nodiscard]] bool IsPreparedSelectionMoveClosureCurrent(
-        const PreparedSelectionMoveClosure& prepared) const noexcept;
+    [[nodiscard]] bool IsPreparedSelectionMoveClosureCurrent(const PreparedSelectionMoveClosure& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionMoveClosureIfCurrent(PreparedSelectionMoveClosure& prepared) noexcept;
     [[nodiscard]] std::uint64_t SelectionMoveClosureMemoryBytes() const noexcept;
     [[nodiscard]] std::uint64_t SelectionMoveClosureRetirementMemoryBytes() const noexcept;
@@ -2833,8 +2909,8 @@ class DocumentSession
     // What the wand reads at document size: the composite, or the active layer's pixels without its mask; a
     // folder or blank layer reads as transparent.
     [[nodiscard]] Raster WandSample(const Raster* composite) const;
-    LassoKind lassoKind = LassoKind::Freehand;
-    LassoKind marqueeKind = LassoKind::Rectangle;
+    LassoKind lassoKind               = LassoKind::Freehand;
+    LassoKind marqueeKind             = LassoKind::Rectangle;
     SelectionMode selectionModeChoice = SelectionMode::New;
     std::optional<SelectionMode> heldSelectionMode;
     bool selectionAntialiased = true;
@@ -2861,8 +2937,7 @@ class DocumentSession
     bool BeginBrush(Vec2 point, bool erase = false);
     // Capture handles/scalars only after whole opening admission. Worker prepares selection/sample/CPU draft;
     // current owner application attaches the real graphics engine and never reconstructs these pixels.
-    [[nodiscard]] std::optional<StrokeOpeningInput> PrepareStrokeOpeningInput(
-        StrokeOpeningOptions options) const noexcept;
+    [[nodiscard]] std::optional<StrokeOpeningInput> PrepareStrokeOpeningInput(StrokeOpeningOptions options) const noexcept;
     [[nodiscard]] static StrokeOpeningResult PrepareStrokeOpeningPublication(StrokeOpeningInput input,
                                                                              CancelToken cancellation,
                                                                              StrokeOpeningObserver observer);
@@ -2875,8 +2950,8 @@ class DocumentSession
     bool BeginBrush(Vec2 point, BrushKind kind, const Raster* composite = nullptr);
     // A captured clone offset selects exactly the supplied committed BGRA canvas, without consulting later
     // clone source/alignment/sample settings. Invalid captured input refuses before any live edit is resolved.
-    bool BeginBrush(Vec2 point, BrushKind kind, const Raster* composite, BrushSettings settings, bool maskWhite,
-                    std::optional<Vec2> capturedCloneOffset = std::nullopt);
+    bool BeginBrush(
+        Vec2 point, BrushKind kind, const Raster* composite, BrushSettings settings, bool maskWhite, std::optional<Vec2> capturedCloneOffset = std::nullopt);
     // Alt-click: where Clone Stamp copies from. A new source starts a new alignment.
     void SetCloneSource(Vec2 point) noexcept;
     // The whole-pixel offset a stroke starting at `point` would copy with: aligned strokes keep the first
@@ -2897,20 +2972,20 @@ class DocumentSession
     // Whole-graph admission precedes immutable owner capture. Useful construction and first sample are worker-only.
     [[nodiscard]] std::uint64_t WarpOpeningMemoryBytes(const WarpOpeningOptions& options) const noexcept;
     [[nodiscard]] std::optional<WarpOpeningInput> PrepareWarpOpeningInput(WarpOpeningOptions options) const noexcept;
-    [[nodiscard]] static WarpOpeningResult PrepareWarpOpeningPublication(
-        WarpOpeningInput input, CancelToken cancellation, WarpOpeningObserver observer,
-        std::shared_ptr<const SharedPublicationMemory> memory);
+    [[nodiscard]] static WarpOpeningResult PrepareWarpOpeningPublication(WarpOpeningInput input,
+                                                                         CancelToken cancellation,
+                                                                         WarpOpeningObserver observer,
+                                                                         std::shared_ptr<const SharedPublicationMemory> memory);
     [[nodiscard]] bool IsPreparedWarpOpeningCurrent(const PreparedWarpOpening& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedWarpOpeningIfCurrent(PreparedWarpOpening& prepared) noexcept;
     // Original complete admission precedes capture. Only a joined original worker may mutate this input.
-    [[nodiscard]] std::optional<WarpSampleInput> TakeWarpSampleInput(std::uint64_t opening,
-                                                                     const WarpSampleMemoryPlan& plan) noexcept;
+    [[nodiscard]] std::optional<WarpSampleInput> TakeWarpSampleInput(std::uint64_t opening, const WarpSampleMemoryPlan& plan) noexcept;
     [[nodiscard]] bool IsWarpSampleCurrent(const WarpSampleInput& input) const noexcept;
     [[nodiscard]] bool ApplyWarpSampleIfCurrent(WarpSampleInput& input) noexcept;
     [[nodiscard]] bool DiscardWarpSampleIfCurrent(std::uint64_t opening, std::uint64_t sequence) noexcept;
     // Joined original owner captures whole live/update handles for destruction only, never useful publication.
-    [[nodiscard]] std::optional<WarpRetirementInput> TakeWarpRetirementInput(
-        std::uint64_t opening, std::optional<std::uint64_t> sampleSequence = std::nullopt) noexcept;
+    [[nodiscard]] std::optional<WarpRetirementInput> TakeWarpRetirementInput(std::uint64_t opening,
+                                                                             std::optional<std::uint64_t> sampleSequence = std::nullopt) noexcept;
     // Capture only after original whole-graph admission. Exclusive worker replay retains this exact Warp kind.
     [[nodiscard]] std::optional<WarpFinishInput> TakeWarpFinishInput(std::uint64_t opening) noexcept;
     [[nodiscard]] std::optional<WarpFinishMemoryPlan> PlanWarpFinishMemory(bool computeCoverage) const noexcept;
@@ -2921,8 +2996,7 @@ class DocumentSession
     }
     [[nodiscard]] std::optional<std::uint64_t> PendingWarpOpening() const noexcept
     {
-        return _warp ? std::optional(_warpOpening)
-                     : (_warpUpdatingOpening ? _warpUpdatingOpening : _warpFinishingOpening);
+        return _warp ? std::optional(_warpOpening) : (_warpUpdatingOpening ? _warpUpdatingOpening : _warpFinishingOpening);
     }
     bool BeginWarp(Vec2 point);
     void ContinueWarp(Vec2 point);
@@ -2952,13 +3026,13 @@ class DocumentSession
     // Metadata-only opening; the host prepares/publishes its private preview and settles before mutations.
     [[nodiscard]] bool BeginDeferredGradient(Vec2 point);
     [[nodiscard]] bool BeginDeferredGradient(Vec2 point, GradientEdit::CapturedInputs inputs);
-    [[nodiscard]] bool PublishGradientPreview(std::shared_ptr<BrushStroke>&& raster, const JobToken& token,
-                                              std::uint64_t opening, std::uint64_t sequence,
+    [[nodiscard]] bool PublishGradientPreview(std::shared_ptr<BrushStroke>&& raster,
+                                              const JobToken& token,
+                                              std::uint64_t opening,
+                                              std::uint64_t sequence,
                                               std::shared_ptr<const PreparedRasterPreview> display = {}) noexcept;
-    [[nodiscard]] bool ApplyGradientIfCurrent(ImageLayer&& prepared, const JobToken& token, std::uint64_t opening,
-                                              std::uint64_t sequence);
-    [[nodiscard]] bool ApplyPreparedGradientIfCurrent(PreparedRasterEdit& prepared, std::uint64_t opening,
-                                                      std::uint64_t sequence) noexcept;
+    [[nodiscard]] bool ApplyGradientIfCurrent(ImageLayer&& prepared, const JobToken& token, std::uint64_t opening, std::uint64_t sequence);
+    [[nodiscard]] bool ApplyPreparedGradientIfCurrent(PreparedRasterEdit& prepared, std::uint64_t opening, std::uint64_t sequence) noexcept;
     void MoveGradient(std::optional<Vec2> start, std::optional<Vec2> end);
     // Re-renders the pending gradient from the current endpoints, settings and palette.
     void RefreshGradient(bool useLiveInputs = true);
@@ -2994,11 +3068,9 @@ class DocumentSession
     void FinishShape();
     void CommitShape(const ShapeDraft& draft, std::uint32_t foregroundArgb);
     [[nodiscard]] std::uint64_t ShapeEditPreparationMemoryBytes(const ShapeDraft& draft) const noexcept;
-    [[nodiscard]] std::optional<ShapeEditInput> PrepareShapeEditInput(const ShapeDraft& draft,
-                                                                      std::uint32_t foregroundArgb) const;
+    [[nodiscard]] std::optional<ShapeEditInput> PrepareShapeEditInput(const ShapeDraft& draft, std::uint32_t foregroundArgb) const;
     [[nodiscard]] static ShapeEditResult PrepareShapeEditPublication(
-        ShapeEditInput input, Executor& executor, CancelToken cancellation, ShapeWorkObserver observer,
-        DocumentHistory::PrepareObserver historyObserver = {});
+        ShapeEditInput input, Executor& executor, CancelToken cancellation, ShapeWorkObserver observer, DocumentHistory::PrepareObserver historyObserver = {});
     [[nodiscard]] bool ApplyPreparedShapeEditIfCurrent(PreparedShapeEdit& prepared) noexcept;
     [[nodiscard]] const std::optional<ShapeDraft>& PendingShape() const noexcept
     {
@@ -3024,8 +3096,7 @@ class DocumentSession
     bool ClearSelectedPixels();
     // Owner-only publication of a complete worker-prepared target. Refusal leaves prepared ownership with the
     // caller, so an aggregate release owner can retire a large sparse result off-thread.
-    [[nodiscard]] bool ApplyRasterEditIfCurrent(ImageLayer&& prepared, bool mask, std::wstring name,
-                                                const JobToken& token);
+    [[nodiscard]] bool ApplyRasterEditIfCurrent(ImageLayer&& prepared, bool mask, std::wstring name, const JobToken& token);
     [[nodiscard]] bool ApplyPreparedRasterEditIfCurrent(PreparedRasterEdit& prepared) noexcept;
     [[nodiscard]] std::uint64_t RasterEditRetirementMemoryBytes() const noexcept
     {
@@ -3043,37 +3114,33 @@ class DocumentSession
     // `Duplicate Pixels`); false when there is nothing to move (no selection, a mask target, no pixels).
     bool BeginPixelMove(bool duplicate = false);
     // Complete original admission precedes capture. All source metadata/coverage/lift preparation is worker-only.
-    [[nodiscard]] std::optional<PixelMoveOpeningInput> PrepareDeferredPixelMoveOpeningInput(
-        bool duplicate = false) const;
-    [[nodiscard]] static PreparedPixelMoveOpeningResult PrepareDeferredPixelMoveOpening(
-        PixelMoveOpeningInput input, CancelToken cancellation = {},
-        std::shared_ptr<const SharedPublicationMemory> memory = {});
-    [[nodiscard]] bool IsPreparedDeferredPixelMoveOpeningCurrent(
-        const PreparedPixelMoveOpening& prepared) const noexcept;
+    [[nodiscard]] std::optional<PixelMoveOpeningInput> PrepareDeferredPixelMoveOpeningInput(bool duplicate = false) const;
+    [[nodiscard]] static PreparedPixelMoveOpeningResult PrepareDeferredPixelMoveOpening(PixelMoveOpeningInput input,
+                                                                                        CancelToken cancellation                              = {},
+                                                                                        std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] bool IsPreparedDeferredPixelMoveOpeningCurrent(const PreparedPixelMoveOpening& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedDeferredPixelMoveOpeningIfCurrent(PreparedPixelMoveOpening& prepared) noexcept;
-    [[nodiscard]] bool IsPreparedDeferredPixelMoveGestureCurrent(
-        const PreparedPixelMoveOpening& prepared) const noexcept;
-    [[nodiscard]] bool MovePreparedDeferredPixelMoveIfCurrent(PreparedPixelMoveOpening& prepared, double dx,
-                                                              double dy) noexcept;
+    [[nodiscard]] bool IsPreparedDeferredPixelMoveGestureCurrent(const PreparedPixelMoveOpening& prepared) const noexcept;
+    [[nodiscard]] bool MovePreparedDeferredPixelMoveIfCurrent(PreparedPixelMoveOpening& prepared, double dx, double dy) noexcept;
     [[nodiscard]] bool AbortPreparedDeferredPixelMoveIfCurrent(PreparedPixelMoveOpening& prepared) noexcept;
-    [[nodiscard]] std::optional<PixelMoveClosureInput> PrepareDeferredPixelMoveClosureInput(
-        const PreparedPixelMoveOpening& opening) const;
-    [[nodiscard]] static std::optional<PreparedPixelMoveClosure> PrepareDeferredPixelMoveClosure(
-        PixelMoveClosureInput input, CancelToken cancellation = {},
-        std::shared_ptr<const SharedPublicationMemory> memory = {}, DocumentHistory::PrepareObserver observer = {});
-    [[nodiscard]] bool IsPreparedDeferredPixelMoveClosureCurrent(
-        const PreparedPixelMoveClosure& prepared) const noexcept;
+    [[nodiscard]] std::optional<PixelMoveClosureInput> PrepareDeferredPixelMoveClosureInput(const PreparedPixelMoveOpening& opening) const;
+    [[nodiscard]] static std::optional<PreparedPixelMoveClosure> PrepareDeferredPixelMoveClosure(PixelMoveClosureInput input,
+                                                                                                 CancelToken cancellation                              = {},
+                                                                                                 std::shared_ptr<const SharedPublicationMemory> memory = {},
+                                                                                                 DocumentHistory::PrepareObserver observer             = {});
+    [[nodiscard]] bool IsPreparedDeferredPixelMoveClosureCurrent(const PreparedPixelMoveClosure& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedDeferredPixelMoveClosureIfCurrent(PreparedPixelMoveClosure& prepared) noexcept;
 
     // Metadata-only production opening. Its workers own all lifted pixels/coverage and prepared previews.
     [[nodiscard]] bool BeginDeferredPixelMove(bool duplicate = false);
-    [[nodiscard]] bool PublishPixelMovePreview(std::shared_ptr<BrushStroke>&& stroke, const JobToken& token,
-                                               std::uint64_t opening, std::uint64_t sequence,
+    [[nodiscard]] bool PublishPixelMovePreview(std::shared_ptr<BrushStroke>&& stroke,
+                                               const JobToken& token,
+                                               std::uint64_t opening,
+                                               std::uint64_t sequence,
                                                std::shared_ptr<const PreparedRasterPreview> display = {}) noexcept;
-    [[nodiscard]] bool ApplyPixelMoveIfCurrent(ImageLayer&& prepared, DocumentSelection&& movedSelection,
-                                               const JobToken& token, std::uint64_t opening, std::uint64_t sequence);
-    [[nodiscard]] bool ApplyPreparedPixelMoveIfCurrent(PreparedRasterEdit& prepared, std::uint64_t opening,
-                                                       std::uint64_t sequence) noexcept;
+    [[nodiscard]] bool ApplyPixelMoveIfCurrent(
+        ImageLayer&& prepared, DocumentSelection&& movedSelection, const JobToken& token, std::uint64_t opening, std::uint64_t sequence);
+    [[nodiscard]] bool ApplyPreparedPixelMoveIfCurrent(PreparedRasterEdit& prepared, std::uint64_t opening, std::uint64_t sequence) noexcept;
     // Previews the pixels `offset` whole document pixels away; the stored selection stays put until commit.
     void MovePixels(double dx, double dy);
     void FinishPixelMove();
@@ -3098,8 +3165,7 @@ class DocumentSession
     [[nodiscard]] std::uint64_t MaskEditPreparationMemoryBytes() const noexcept;
     [[nodiscard]] std::optional<MaskEditInput> PrepareMaskEditInput(bool revealing) const;
     [[nodiscard]] static MaskEditResult PrepareMaskEditPublication(
-        MaskEditInput input, Executor& executor, CancelToken cancellation, MaskWorkObserver observer,
-        DocumentHistory::PrepareObserver historyObserver = {});
+        MaskEditInput input, Executor& executor, CancelToken cancellation, MaskWorkObserver observer, DocumentHistory::PrepareObserver historyObserver = {});
     [[nodiscard]] bool ApplyPreparedMaskEditIfCurrent(PreparedMaskEdit& prepared) noexcept;
     // Ctrl+T with a selection transforms the selected pixels on a floating layer; without one, the layer.
     [[nodiscard]] bool CanTransformSelection() const noexcept;
@@ -3117,24 +3183,25 @@ class DocumentSession
     [[nodiscard]] std::optional<PixelClipboard> RenderMergedPixels(const Raster& composite) const;
     // Sealed immutable Copy/Cut preparation. Callers reserve complete capture/pixels/history/encoding/transfer
     // before capture. Copy Merged requires the full-document token captured before utility composition.
-    [[nodiscard]] std::optional<ClipboardCommandInput> PrepareClipboardCommandInput(
-        ClipboardCommandKind kind, const Raster& composite = {}, const std::optional<JobToken>& compositeAuthority = {},
-        const std::shared_ptr<const void>& outputLifetime = {}) const;
-    [[nodiscard]] static std::optional<PreparedClipboardCommand> PrepareClipboardCommandPublication(
-        ClipboardCommandInput input, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver historyObserver = {});
+    [[nodiscard]] std::optional<ClipboardCommandInput> PrepareClipboardCommandInput(ClipboardCommandKind kind,
+                                                                                    const Raster& composite                           = {},
+                                                                                    const std::optional<JobToken>& compositeAuthority = {},
+                                                                                    const std::shared_ptr<const void>& outputLifetime = {}) const;
+    [[nodiscard]] static std::optional<PreparedClipboardCommand> PrepareClipboardCommandPublication(ClipboardCommandInput input,
+                                                                                                    CancelToken cancellation                         = {},
+                                                                                                    DocumentHistory::PrepareObserver historyObserver = {});
     [[nodiscard]] bool IsPreparedClipboardCommandCurrent(const PreparedClipboardCommand& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedClipboardCommandIfCurrent(PreparedClipboardCommand& prepared) noexcept;
-    [[nodiscard]] std::uint64_t ClipboardCommandMemoryBytes(ClipboardCommandKind kind,
-                                                            const Raster& composite = {}) const;
-    [[nodiscard]] std::uint64_t ClipboardCommandRetirementMemoryBytes(ClipboardCommandKind kind,
-                                                                      const Raster& composite = {}) const;
+    [[nodiscard]] std::uint64_t ClipboardCommandMemoryBytes(ClipboardCommandKind kind, const Raster& composite = {}) const;
+    [[nodiscard]] std::uint64_t ClipboardCommandRetirementMemoryBytes(ClipboardCommandKind kind, const Raster& composite = {}) const;
     // Admitted owner capture after gradient/pixel-move settlement. Workers own the snapshot and never
     // consult the live private clipboard. Private origin uses its sealed serial; foreign pixels are centered.
     [[nodiscard]] std::optional<ClipboardPasteInput> PrepareClipboardPasteInput() const;
-    [[nodiscard]] static std::optional<PreparedClipboardPaste> PrepareClipboardPastePublication(
-        ClipboardPasteInput input, bool privateOrigin, const Raster& foreignImage = {}, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<PreparedClipboardPaste> PrepareClipboardPastePublication(ClipboardPasteInput input,
+                                                                                                bool privateOrigin,
+                                                                                                const Raster& foreignImage                = {},
+                                                                                                CancelToken cancellation                  = {},
+                                                                                                DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool ApplyPreparedClipboardPasteIfCurrent(PreparedClipboardPaste& prepared) noexcept;
     [[nodiscard]] std::int64_t ClipboardPastePixelLimit() const noexcept;
     [[nodiscard]] std::uint64_t ClipboardPastePreparationMemoryBytes(std::int64_t additionalPixels) const noexcept;
@@ -3161,8 +3228,7 @@ class DocumentSession
     [[nodiscard]] std::uint64_t LayerCopyPreparationMemoryBytes() const;
     [[nodiscard]] std::optional<LayerCopyInput> PrepareLayerCopyInput() const;
     [[nodiscard]] static LayerCopyResult PrepareLayerCopyPublication(
-        LayerCopyInput input, Executor& executor, CancelToken cancellation, LayerCopyObserver observer,
-        DocumentHistory::PrepareObserver historyObserver = {});
+        LayerCopyInput input, Executor& executor, CancelToken cancellation, LayerCopyObserver observer, DocumentHistory::PrepareObserver historyObserver = {});
     [[nodiscard]] bool ApplyPreparedLayerCopyIfCurrent(PreparedLayerCopy& prepared) noexcept;
     [[nodiscard]] const std::optional<PixelClipboard>& Clipboard() const noexcept
     {
@@ -3203,21 +3269,26 @@ class DocumentSession
     // Metadata-only adjustment transactions: capture under complete admission, construct history on a worker,
     // validate authority before nonthrowing publication, and retain replaced owners for aggregate retirement.
     [[nodiscard]] std::optional<AdjustmentClosureInput> PrepareAdjustmentClosureInput(bool commit) const;
-    [[nodiscard]] static std::optional<PreparedAdjustmentClosure> PrepareAdjustmentClosurePublication(
-        AdjustmentClosureInput input, const std::optional<CanvasDocument>& source, DocumentHistory::StateView history,
-        CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<PreparedAdjustmentClosure> PrepareAdjustmentClosurePublication(AdjustmentClosureInput input,
+                                                                                                      const std::optional<CanvasDocument>& source,
+                                                                                                      DocumentHistory::StateView history,
+                                                                                                      CancelToken cancellation                  = {},
+                                                                                                      DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool IsPreparedAdjustmentClosureCurrent(const PreparedAdjustmentClosure& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedAdjustmentClosureIfCurrent(PreparedAdjustmentClosure& prepared) noexcept;
     [[nodiscard]] std::optional<AdjustmentOpeningInput> PrepareAdjustmentOpeningInput() const;
-    [[nodiscard]] static std::optional<PreparedAdjustmentOpening> PrepareAdjustmentOpeningPublication(
-        AdjustmentOpeningInput input, const std::optional<CanvasDocument>& source, Raster below,
-        DocumentHistory::StateView history, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<PreparedAdjustmentOpening> PrepareAdjustmentOpeningPublication(AdjustmentOpeningInput input,
+                                                                                                      const std::optional<CanvasDocument>& source,
+                                                                                                      Raster below,
+                                                                                                      DocumentHistory::StateView history,
+                                                                                                      CancelToken cancellation                  = {},
+                                                                                                      DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool IsPreparedAdjustmentOpeningCurrent(const PreparedAdjustmentOpening& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedAdjustmentOpeningIfCurrent(PreparedAdjustmentOpening& prepared) noexcept;
     [[nodiscard]] std::optional<ColorDismissalInput> PrepareColorDismissalInput() const;
-    [[nodiscard]] static std::optional<PreparedColorDismissal> PrepareColorDismissalPublication(
-        ColorDismissalInput input, DocumentHistory::StateView history, CancelToken cancellation = {});
+    [[nodiscard]] static std::optional<PreparedColorDismissal> PrepareColorDismissalPublication(ColorDismissalInput input,
+                                                                                                DocumentHistory::StateView history,
+                                                                                                CancelToken cancellation = {});
     [[nodiscard]] bool IsPreparedColorDismissalCurrent(const PreparedColorDismissal& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedColorDismissalIfCurrent(PreparedColorDismissal& prepared) noexcept;
     [[nodiscard]] std::optional<ColorEditJobInput> PrepareColorEditPreview() const;
@@ -3230,22 +3301,19 @@ class DocumentSession
     [[nodiscard]] bool ColorLookupPreviewReady() const noexcept;
     [[nodiscard]] std::optional<ColorDisplayPreviewInput> PrepareColorDisplayPreviewInput(bool lookupPreview) const;
     // Requires an empty admitted destination; a populated slot preserves its captured owners.
-    void PrepareColorDisplayPreviewInputInto(std::optional<ColorDisplayPreviewInput>& destination,
-                                             bool lookupPreview) const;
-    [[nodiscard]] std::optional<ColorDisplayPreviewMemory> ColorDisplayPreviewMemoryBytes(
-        bool lookupPreview) const noexcept;
+    void PrepareColorDisplayPreviewInputInto(std::optional<ColorDisplayPreviewInput>& destination, bool lookupPreview) const;
+    [[nodiscard]] std::optional<ColorDisplayPreviewMemory> ColorDisplayPreviewMemoryBytes(bool lookupPreview) const noexcept;
     [[nodiscard]] static ColorDisplayPreviewResult PrepareColorDisplayPreviewPublication(ColorDisplayPreviewInput input,
                                                                                          Executor& executor,
                                                                                          CancelToken cancellation,
                                                                                          ColorDisplayObserver observer);
     // Worker-only, already allocated destination; consumes input on every outcome without a large stack result.
-    static void PrepareColorDisplayPreviewPublicationInto(ColorDisplayPreviewInput&& input,
-                                                          ColorDisplayPreviewResult& output, Executor& executor,
-                                                          CancelToken cancellation, ColorDisplayObserver observer);
+    static void PrepareColorDisplayPreviewPublicationInto(
+        ColorDisplayPreviewInput&& input, ColorDisplayPreviewResult& output, Executor& executor, CancelToken cancellation, ColorDisplayObserver observer);
     // The scheduler's named allocation-failure boundary can return captured owners without copying them.
     // This only prepares invalidation; ordinary authority checks still decide whether it may change the view.
-    [[nodiscard]] static PreparedColorDisplayPreview PrepareFailedColorDisplayPreviewPublication(
-        ColorDisplayPreviewInput input, ColorEditJobStatus status) noexcept;
+    [[nodiscard]] static PreparedColorDisplayPreview PrepareFailedColorDisplayPreviewPublication(ColorDisplayPreviewInput input,
+                                                                                                 ColorEditJobStatus status) noexcept;
     // Requires an empty admitted destination; a populated slot preserves it and the supplied input.
     static void PrepareFailedColorDisplayPreviewPublicationInto(ColorDisplayPreviewInput&& input,
                                                                 std::optional<PreparedColorDisplayPreview>& destination,
@@ -3303,23 +3371,20 @@ class DocumentSession
     // Shift+= / Shift+-: the active layer's blend mode, forward or back, wrapping (one entry each).
     void StepBlendMode(bool forward);
     // The shape filling its box, anti-aliased where it curves, premultiplied BGRA; empty over the pixel budget.
-    [[nodiscard]] static Raster ShapeImage(ShapeKind kind, int width, int height, std::uint32_t argb,
-                                           double cornerRadius);
+    [[nodiscard]] static Raster ShapeImage(ShapeKind kind, int width, int height, std::uint32_t argb, double cornerRadius);
     // Inserts pixels as a new layer above the active one (inside its folder), all in one entry. Pasting drops the
     // selection, as in Photoshop; a drawn shape keeps it.
-    void AddPixelLayer(const Raster& image, Vec2 origin, std::wstring name, const std::wstring& editName,
-                       bool dropsSelection, std::optional<LayerShapeStyle> shape);
+    void AddPixelLayer(
+        const Raster& image, Vec2 origin, std::wstring name, const std::wstring& editName, bool dropsSelection, std::optional<LayerShapeStyle> shape);
 
     // Eyedropper (C11): the straight sRGB color of the visible canvas at one document pixel, read from the host's
     // composite (document-size premultiplied BGRA). Nullopt outside the canvas or over a fully transparent pixel.
-    [[nodiscard]] static std::optional<std::uint32_t> SampleCompositeColor(const Raster& composite,
-                                                                           Vec2 point) noexcept;
+    [[nodiscard]] static std::optional<std::uint32_t> SampleCompositeColor(const Raster& composite, Vec2 point) noexcept;
     // The accepted first/next sample also records its exact layer/mask endpoint for later Shift lines.
     // A worker-prepared opening does not fabricate a pointer sample during publication.
     void ContinueBrush(Vec2 point);
     // Exclusive sample capture after admission. Only scalar opening metadata remains visible while it runs.
-    [[nodiscard]] std::optional<StrokeSampleInput> TakeStrokeSampleInput(std::uint64_t opening, Vec2 point,
-                                                                         BrushCoverageEngine*& ownerEngine) noexcept;
+    [[nodiscard]] std::optional<StrokeSampleInput> TakeStrokeSampleInput(std::uint64_t opening, Vec2 point, BrushCoverageEngine*& ownerEngine) noexcept;
     [[nodiscard]] bool IsStrokeSampleCurrent(const StrokeSampleInput& input) const noexcept;
     [[nodiscard]] bool ApplyStrokeSampleIfCurrent(StrokeSampleInput& input, BrushCoverageEngine* ownerEngine) noexcept;
     [[nodiscard]] bool DiscardStrokeSampleIfCurrent(std::uint64_t opening) noexcept;
@@ -3327,12 +3392,12 @@ class DocumentSession
     // `Erase`, `Paint Mask`); nothing is recorded when no pixel changed.
     void FinishBrush();
     // Staged P1 closure: the caller must admit the complete original job before exclusive capture.
-    [[nodiscard]] std::optional<StrokeFinishInput> TakeStrokeFinishInput(std::uint64_t opening,
-                                                                         BrushCoverageEngine*& ownerEngine) noexcept;
+    [[nodiscard]] std::optional<StrokeFinishInput> TakeStrokeFinishInput(std::uint64_t opening, BrushCoverageEngine*& ownerEngine) noexcept;
     [[nodiscard]] bool DiscardStrokeFinishIfCurrent(std::uint64_t opening) noexcept;
-    [[nodiscard]] static StrokeFinishResult PrepareStrokeFinishPublication(
-        StrokeFinishInput input, CancelToken cancellation, StrokeFinishObserver observer,
-        DocumentHistory::PrepareObserver historyObserver = {});
+    [[nodiscard]] static StrokeFinishResult PrepareStrokeFinishPublication(StrokeFinishInput input,
+                                                                           CancelToken cancellation,
+                                                                           StrokeFinishObserver observer,
+                                                                           DocumentHistory::PrepareObserver historyObserver = {});
     [[nodiscard]] bool IsPreparedStrokeFinishCurrent(const PreparedStrokeFinish& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedStrokeFinishIfCurrent(PreparedStrokeFinish& prepared) noexcept;
     void CancelBrush() noexcept;
@@ -3342,8 +3407,7 @@ class DocumentSession
     }
     [[nodiscard]] std::optional<std::uint64_t> PendingBrushOpening() const noexcept
     {
-        return _brush ? std::optional(_brushOpening)
-                      : (_brushUpdatingOpening ? _brushUpdatingOpening : _brushFinishingOpening);
+        return _brush ? std::optional(_brushOpening) : (_brushUpdatingOpening ? _brushUpdatingOpening : _brushFinishingOpening);
     }
     // Owner-only harness observation; the weak handle retains no draft or borrowed graphics owner.
     [[nodiscard]] std::weak_ptr<BrushStroke> WeakPendingBrushForTest() const noexcept
@@ -3390,12 +3454,12 @@ class DocumentSession
     [[nodiscard]] bool TakeBudgetRefusal() noexcept
     {
         const bool refused = _budgetRefused;
-        _budgetRefused = false;
+        _budgetRefused     = false;
         return refused;
     }
     BrushSettings brushSettings;
-    BrushToolMode brushMode = BrushToolMode::Paint;
-    bool maskPaintWhite = false;
+    BrushToolMode brushMode         = BrushToolMode::Paint;
+    bool maskPaintWhite             = false;
     SpotHealingMode spotHealingMode = SpotHealingMode::ContentAware;
     CloneSettings cloneSettings;
     std::optional<Vec2> cloneSource;
@@ -3421,13 +3485,13 @@ class DocumentSession
     struct PaletteSampleAuthority final
     {
         Guid session;
-        std::uint64_t revision = 0;
+        std::uint64_t revision                                        = 0;
         bool operator==(const PaletteSampleAuthority&) const noexcept = default;
     };
     struct PaletteIntentAuthority final
     {
         Guid session;
-        std::uint64_t revision = 0;
+        std::uint64_t revision                                        = 0;
         bool operator==(const PaletteIntentAuthority&) const noexcept = default;
     };
     [[nodiscard]] PaletteSampleAuthority CapturePaletteSampleAuthority() const noexcept
@@ -3448,7 +3512,7 @@ class DocumentSession
     // session copy/move, swap or reset prevents an older asynchronous sample from publishing.
     [[nodiscard]] bool ApplySampledForegroundColor(PaletteSampleAuthority& authority, uint32_t argb) noexcept
     {
-        if (authority.session != _tokenIdentity.value || !_paletteRevision.Matches(authority.revision))
+        if (authority.session != _tokenIdentity.value || ! _paletteRevision.Matches(authority.revision))
             return false;
         _paletteRevision.Advance();
         _foregroundArgb = argb | 0xFF000000u;
@@ -3459,7 +3523,7 @@ class DocumentSession
     }
     [[nodiscard]] bool ApplySampledBackgroundColor(PaletteSampleAuthority& authority, uint32_t argb) noexcept
     {
-        if (authority.session != _tokenIdentity.value || !_paletteRevision.Matches(authority.revision))
+        if (authority.session != _tokenIdentity.value || ! _paletteRevision.Matches(authority.revision))
             return false;
         _paletteRevision.Advance();
         _backgroundArgb = argb | 0xFF000000u;
@@ -3488,7 +3552,7 @@ class DocumentSession
         _paletteRevision.Advance();
         if (_maskSelected)
         {
-            maskPaintWhite = !maskPaintWhite;
+            maskPaintWhite = ! maskPaintWhite;
         }
         else
         {
@@ -3514,16 +3578,27 @@ class DocumentSession
         RefreshGradient();
     }
 
-  private:
-    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandSelectionInput(
-        Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode, bool composite,
-        bool preservePanel = false, LayerSelectionSource source = LayerSelectionSource::ColorMatch) const;
-    [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandSelectionPublication(
-        WandLayerSelectionInput input, Raster composite, WandFailure* failure, CancelToken cancellation,
-        DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer,
-        std::shared_ptr<const SharedPublicationMemory> memory);
+private:
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandSelectionInput(Vec2 point,
+                                                                                   WandSettings settings,
+                                                                                   bool antialiased,
+                                                                                   SelectionMode mode,
+                                                                                   bool composite,
+                                                                                   bool preservePanel          = false,
+                                                                                   LayerSelectionSource source = LayerSelectionSource::ColorMatch) const;
+    [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandSelectionPublication(WandLayerSelectionInput input,
+                                                                                                   Raster composite,
+                                                                                                   WandFailure* failure,
+                                                                                                   CancelToken cancellation,
+                                                                                                   DocumentHistory::PrepareObserver historyObserver,
+                                                                                                   const WandLayerSelectionObserver* observer,
+                                                                                                   std::shared_ptr<const SharedPublicationMemory> memory);
     [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandSelectionMemory(
-        Vec2 point, WandSettings settings, bool composite, SelectionMode mode, bool preservePanel = false,
+        Vec2 point,
+        WandSettings settings,
+        bool composite,
+        SelectionMode mode,
+        bool preservePanel          = false,
         LayerSelectionSource source = LayerSelectionSource::ColorMatch) const noexcept;
     [[nodiscard]] bool PanelWandEligible() const noexcept;
 
@@ -3537,9 +3612,11 @@ class DocumentSession
     // source identity because a moved-from optional document can remain engaged with moved-out layer storage.
     struct TokenIdentity
     {
-        Guid value = Guid::Generate();
+        Guid value      = Guid::Generate();
         TokenIdentity() = default;
-        TokenIdentity(const TokenIdentity&) noexcept {}
+        TokenIdentity(const TokenIdentity&) noexcept
+        {
+        }
         TokenIdentity(TokenIdentity&& source) noexcept
         {
             source.value = Guid::Generate();
@@ -3551,7 +3628,7 @@ class DocumentSession
         }
         TokenIdentity& operator=(TokenIdentity&& source) noexcept
         {
-            value = Guid::Generate();
+            value        = Guid::Generate();
             source.value = Guid::Generate();
             return *this;
         }
@@ -3559,9 +3636,9 @@ class DocumentSession
     // The brush paints these channels. The palette foreground is that color, as in the legacy session.
     void ApplyForegroundToBrush() noexcept
     {
-        brushSettings.red = static_cast<double>((_foregroundArgb >> 16) & 0xFFu) / 255.0;
+        brushSettings.red   = static_cast<double>((_foregroundArgb >> 16) & 0xFFu) / 255.0;
         brushSettings.green = static_cast<double>((_foregroundArgb >> 8) & 0xFFu) / 255.0;
-        brushSettings.blue = static_cast<double>(_foregroundArgb & 0xFFu) / 255.0;
+        brushSettings.blue  = static_cast<double>(_foregroundArgb & 0xFFu) / 255.0;
     }
     // True when Undo/Redo should not move history: an open color panel, or a pending edit that this call drops.
     [[nodiscard]] bool CancelPendingEdit();
@@ -3579,18 +3656,18 @@ class DocumentSession
         ++_editRevision;
     }
     [[nodiscard]] bool BeginGradientImpl(Vec2 point, bool deferred);
-    [[nodiscard]] std::optional<LayerMetadataInput> PrepareLayerMetadataInputImpl(LayerMetadataKind kind, Guid target,
-                                                                                  std::wstring_view name,
-                                                                                  double opacity,
-                                                                                  LayerBlendMode blendMode,
-                                                                                  bool preserve) const;
-    [[nodiscard]] std::uint64_t LayerMetadataMemoryBytesImpl(LayerMetadataKind kind, std::size_t nameUnits,
-                                                             bool preserve) const noexcept;
+    [[nodiscard]] std::optional<LayerMetadataInput> PrepareLayerMetadataInputImpl(
+        LayerMetadataKind kind, Guid target, std::wstring_view name, double opacity, LayerBlendMode blendMode, bool preserve) const;
+    [[nodiscard]] std::uint64_t LayerMetadataMemoryBytesImpl(LayerMetadataKind kind, std::size_t nameUnits, bool preserve) const noexcept;
     [[nodiscard]] bool BeginPixelMoveImpl(bool duplicate, bool deferred);
-    [[nodiscard]] bool ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std::wstring name, const JobToken& token,
-                                           bool gradientCommit, bool pixelMoveCommit = false,
+    [[nodiscard]] bool ApplyRasterEditImpl(ImageLayer&& prepared,
+                                           bool mask,
+                                           std::wstring name,
+                                           const JobToken& token,
+                                           bool gradientCommit,
+                                           bool pixelMoveCommit              = false,
                                            DocumentSelection* movedSelection = nullptr,
-                                           PreparedRasterEdit* publication = nullptr);
+                                           PreparedRasterEdit* publication   = nullptr);
     [[nodiscard]] bool ApplyColorEditResultImpl(const ColorEditJobResult& result, PreparedColorEdit* prepared);
 
     TokenIdentity _tokenIdentity;
@@ -3607,19 +3684,19 @@ class DocumentSession
     std::optional<std::pair<Guid, Guid>> _transformDuplicate; // copy, source
     std::optional<CropRect> _cropRect;
     SnapGuides _snapGuides;
-    bool _maskSelected = false;
-    std::uint64_t _generation = 0;
-    std::uint64_t _documentSerial = 0;
-    std::uint64_t _restoreSerial = 0;
-    std::uint64_t _editRevision = 0;
-    mutable std::uint64_t _displayRevision = 0;
+    bool _maskSelected                             = false;
+    std::uint64_t _generation                      = 0;
+    std::uint64_t _documentSerial                  = 0;
+    std::uint64_t _restoreSerial                   = 0;
+    std::uint64_t _editRevision                    = 0;
+    mutable std::uint64_t _displayRevision         = 0;
     mutable std::uint64_t _displayTransformOpening = 0, _displaySourceGeneration = 0;
-    bool _colorDisplayJobsEnabled = false;
+    bool _colorDisplayJobsEnabled              = false;
     mutable std::uint64_t _displayColorOpening = 0, _displayColorSequence = 0;
     mutable std::optional<CanvasDocument> _displayCopy;
     std::optional<LassoDraft> _lassoDraft;
-    std::uint64_t _lassoOpening = 0;
-    std::uint64_t _lassoOpeningIntentSerial = 0;
+    std::uint64_t _lassoOpening              = 0;
+    std::uint64_t _lassoOpeningIntentSerial  = 0;
     std::uint64_t _lassoOpeningPendingSerial = 0;
     std::uint64_t _lassoClosedOpening = 0, _lassoClosedRevision = 0;
     const void* _lassoClosedArenaIdentity = nullptr;
@@ -3631,10 +3708,9 @@ class DocumentSession
     std::optional<DocumentHistory::StateView> _lassoClosedHistory;
     void InvalidateLassoPendingIntents() noexcept;
     [[nodiscard]] bool CanApplyHistoryRestoreWithoutLasso(const HistoryRestoreAuthority& authority) const noexcept;
-    [[nodiscard]] std::optional<LassoOpeningInput> CaptureLassoOpeningInput(Vec2 point, SelectionMode mode,
-                                                                            LassoKind kind, bool marquee,
-                                                                            std::optional<bool> capturedAntialiased);
-    std::uint64_t _lassoFinishSerial = 0;
+    [[nodiscard]] std::optional<LassoOpeningInput> CaptureLassoOpeningInput(
+        Vec2 point, SelectionMode mode, LassoKind kind, bool marquee, std::optional<bool> capturedAntialiased);
+    std::uint64_t _lassoFinishSerial        = 0;
     std::uint64_t _lassoFinishPendingSerial = 0;
     std::optional<DocumentSelection> _selectionMoveOrigin;
     std::optional<Vec2> _selectionMoveOffset;
@@ -3678,11 +3754,10 @@ class DocumentSession
     std::optional<PixelClipboard> _clipboard;
     std::uint64_t _clipboardSerial = 1;
     [[nodiscard]] bool CanPrepareClipboardCommand(ClipboardCommandKind kind) const noexcept;
-    [[nodiscard]] std::optional<CopyPixelsInput> ClipboardPixelsInput(ClipboardCommandKind kind,
-                                                                      const Raster& composite) const;
+    [[nodiscard]] std::optional<CopyPixelsInput> ClipboardPixelsInput(ClipboardCommandKind kind, const Raster& composite) const;
     std::optional<ColorEdit> _colorEdit;
     std::uint64_t _colorEditSequence = 0;
-    bool _budgetRefused = false;
+    bool _budgetRefused              = false;
     std::optional<Guid> _adjustmentEditingID;
     std::optional<LayerAdjustment> _adjustmentOriginal;
     struct PreviewLayer
@@ -3702,8 +3777,7 @@ class DocumentSession
     bool GrowFilterGrid(int left, int top, int right, int bottom);
     void RenderColorEditInline();
     void MeasureColorEditHistogramInline();
-    [[nodiscard]] bool ColorEditOpeningMatches(const JobToken& token, std::uint64_t opening,
-                                               const Raster& original) const noexcept;
+    [[nodiscard]] bool ColorEditOpeningMatches(const JobToken& token, std::uint64_t opening, const Raster& original) const noexcept;
     [[nodiscard]] bool HasCurrentDeferredSelectionMoveSource() const noexcept;
     [[nodiscard]] bool HasCurrentWandColorSelectionBinding() const noexcept;
     void NormalizeWandColorSelectionToken(JobToken& token) const noexcept;
@@ -3713,9 +3787,10 @@ class DocumentSession
     // document. `settings` is the brush the caller paints with; edits that only need a raster to write into (a
     // gradient, Invert, a pixel move) leave it default. `kind` becomes the stroke's own BrushKind (Erasing() /
     // Healing()); the current spotHealingMode always travels with it.
-    [[nodiscard]] std::shared_ptr<BrushStroke> MakeRasterEdit(const ImageLayer& layer, bool mask,
+    [[nodiscard]] std::shared_ptr<BrushStroke> MakeRasterEdit(const ImageLayer& layer,
+                                                              bool mask,
                                                               const BrushSettings& settings = {},
-                                                              BrushKind kind = BrushKind::Paint) const;
+                                                              BrushKind kind                = BrushKind::Paint) const;
     // What Clone Stamp and the Wand each read at document size: `allLayers` reads `composite` (null or wrongly
     // sized reads nothing), else the active layer's own pixels at its displayed transform; a folder or blank layer
     // reads as transparent.
@@ -3731,8 +3806,7 @@ class DocumentSession
     void RedrawShape(ImageLayer& layer, std::span<const ImageLayer> records);
     // Installs a raster edit as one entry; `selectionAfterCommit` replaces the selection inside the same entry (a
     // moved selection). False when nothing was installed (no pixels, or the layer changed under the edit).
-    bool CommitStroke(const std::shared_ptr<BrushStroke>& stroke,
-                      const std::optional<DocumentSelection>& selectionAfterCommit = std::nullopt);
+    bool CommitStroke(const std::shared_ptr<BrushStroke>& stroke, const std::optional<DocumentSelection>& selectionAfterCommit = std::nullopt);
     [[nodiscard]] std::uint32_t NextHealSeed() noexcept
     {
         _healSeed = _healSeed * 1664525u + 1013904223u;

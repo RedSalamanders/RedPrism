@@ -33,7 +33,7 @@ namespace
 {
 constexpr LPARAM kKeyAltContext = static_cast<LPARAM>(1) << 29; // a system key pressed with Alt held
 constexpr LPARAM kKeyRepeatFlag = static_cast<LPARAM>(1) << 30; // the key was already down
-constexpr LPARAM kKeyUpFlags = (static_cast<LPARAM>(1) << 30) | (static_cast<LPARAM>(1) << 31);
+constexpr LPARAM kKeyUpFlags    = (static_cast<LPARAM>(1) << 30) | (static_cast<LPARAM>(1) << 31);
 
 // Whether the active layout types a character for the key with the keyboard state as it is: with Ctrl and Alt held,
 // AltGr text (€, @, Polish ż) rather than a chord. Flag bit 2 leaves the keyboard state, dead keys included, as it
@@ -41,13 +41,12 @@ constexpr LPARAM kKeyUpFlags = (static_cast<LPARAM>(1) << 30) | (static_cast<LPA
 [[nodiscard]] bool KeyTypesCharacter(UINT virtualKey, UINT scanCode) noexcept
 {
     std::array<BYTE, 256> state{};
-    if (!KeyboardState::Read(state))
+    if (! KeyboardState::Read(state))
     {
         return false;
     }
     std::array<wchar_t, 8> buffer{};
-    const int count = ToUnicodeEx(virtualKey, scanCode, state.data(), buffer.data(), static_cast<int>(buffer.size()),
-                                  1u << 2, GetKeyboardLayout(0));
+    const int count = ToUnicodeEx(virtualKey, scanCode, state.data(), buffer.data(), static_cast<int>(buffer.size()), 1u << 2, GetKeyboardLayout(0));
     if (count < 0)
     {
         return true; // a dead key: it types the accent of the next key
@@ -69,25 +68,25 @@ constexpr LPARAM kKeyUpFlags = (static_cast<LPARAM>(1) << 30) | (static_cast<LPA
 {
     KeyPress press;
     press.virtualKey = static_cast<std::uint16_t>(wParam & 0xFFFFu);
-    UINT scanCode = (static_cast<UINT>(lParam) >> 16) & 0xFFu;
-    bool extended = (static_cast<UINT>(lParam) & (1u << 24)) != 0;
+    UINT scanCode    = (static_cast<UINT>(lParam) >> 16) & 0xFFu;
+    bool extended    = (static_cast<UINT>(lParam) & (1u << 24)) != 0;
     if (scanCode == 0)
     {
         // A message without a scan code (a macro pad, SendInput with a virtual key only): the key the active layout
         // gives that virtual key, so [ ], the number-row plus and minus keys and the rest keep their position.
         const UINT mapped = MapVirtualKeyW(press.virtualKey, MAPVK_VK_TO_VSC_EX);
-        scanCode = mapped & 0xFFu;
-        extended = (mapped & 0xFF00u) != 0;
+        scanCode          = mapped & 0xFFu;
+        extended          = (mapped & 0xFF00u) != 0;
     }
     press.position = KeyPositionFromScanCode(scanCode, extended);
-    press.ctrl = KeyboardState::Held(VK_CONTROL);
-    press.alt = KeyboardState::Held(VK_MENU);
-    press.shift = KeyboardState::Held(VK_SHIFT);
-    press.repeat = (lParam & kKeyRepeatFlag) != 0;
+    press.ctrl     = KeyboardState::Held(VK_CONTROL);
+    press.alt      = KeyboardState::Held(VK_MENU);
+    press.shift    = KeyboardState::Held(VK_SHIFT);
+    press.repeat   = (lParam & kKeyRepeatFlag) != 0;
     // Ctrl and Alt are text only from AltGr (the right Alt without the left one) or in a text input, and only for a
     // key the layout types a character for. Left Ctrl with left Alt stays a chord where AltGr would type: Ctrl+Alt+G
     // still toggles the clipping mask on Czech, Slovak or Hungarian, where AltGr+G is "]".
-    const bool altGr = KeyboardState::Held(VK_RMENU) && !KeyboardState::Held(VK_LMENU);
+    const bool altGr = KeyboardState::Held(VK_RMENU) && ! KeyboardState::Held(VK_LMENU);
     if (press.ctrl && press.alt && (altGr || textInput))
     {
         press.typesCharacter = KeyTypesCharacter(press.virtualKey, scanCode);
@@ -105,7 +104,7 @@ constexpr LPARAM kKeyUpFlags = (static_cast<LPARAM>(1) << 30) | (static_cast<LPA
 [[nodiscard]] UINT ChromeKeyModifiers(const KeyPress& press) noexcept
 {
     UINT modifiers = press.shift ? MK_SHIFT : 0u;
-    if (press.ctrl && !(press.alt && press.typesCharacter))
+    if (press.ctrl && ! (press.alt && press.typesCharacter))
     {
         modifiers |= MK_CONTROL;
     }
@@ -117,8 +116,8 @@ constexpr LPARAM kKeyUpFlags = (static_cast<LPARAM>(1) << 30) | (static_cast<LPA
 [[nodiscard]] bool IsWindowManagerKey(const KeyPress& press) noexcept
 {
     return press.virtualKey == VK_MENU || press.virtualKey == VK_LMENU || press.virtualKey == VK_RMENU ||
-           (press.virtualKey == VK_F10 && !press.ctrl && !press.alt) ||
-           (press.alt && !press.ctrl && (press.virtualKey == VK_F4 || press.virtualKey == VK_SPACE));
+           (press.virtualKey == VK_F10 && ! press.ctrl && ! press.alt) ||
+           (press.alt && ! press.ctrl && (press.virtualKey == VK_F4 || press.virtualKey == VK_SPACE));
 }
 
 // Keys that move the keyboard by design: holding one keeps moving it.
@@ -129,13 +128,13 @@ constexpr LPARAM kKeyUpFlags = (static_cast<LPARAM>(1) << 30) | (static_cast<LPA
 
 #if defined(REDPRISM_ENABLE_TESTS)
 constexpr UINT_PTR kMenuLoopGuardTimerId = 9;
-bool gMenuLoopGuardFired = false;
-bool gMenuLoopGuardArmed = false;
+bool gMenuLoopGuardFired                 = false;
+bool gMenuLoopGuardArmed                 = false;
 
 // Self-test guard: a modal system-menu loop would wait forever for input a hidden window never gets.
 void CALLBACK EndMenuLoopForTest(HWND, UINT, UINT_PTR, DWORD) noexcept
 {
-    if (!gMenuLoopGuardArmed)
+    if (! gMenuLoopGuardArmed)
         return;
     gMenuLoopGuardFired = true;
     (void)EndMenu();
@@ -143,18 +142,17 @@ void CALLBACK EndMenuLoopForTest(HWND, UINT, UINT_PTR, DWORD) noexcept
 
 [[nodiscard]] auto GuardMenuLoopForTest(HWND window) noexcept
 {
-    if (!SetTimer(window, kMenuLoopGuardTimerId, 3000, &EndMenuLoopForTest))
+    if (! SetTimer(window, kMenuLoopGuardTimerId, 3000, &EndMenuLoopForTest))
     {
         SelfTestFailure(L"The keyboard harness could not arm its menu-loop guard.\n");
         std::_Exit(5);
     }
     gMenuLoopGuardArmed = true;
-    return wil::scope_exit(
-        [window]() noexcept
-        {
-            gMenuLoopGuardArmed = false;
-            (void)KillTimer(window, kMenuLoopGuardTimerId);
-        });
+    return wil::scope_exit([window]() noexcept
+    {
+        gMenuLoopGuardArmed = false;
+        (void)KillTimer(window, kMenuLoopGuardTimerId);
+    });
 }
 #endif
 } // namespace
@@ -163,15 +161,14 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
 {
     if (_uiBenchmark)
         BeginUiCancellationKey(message, wParam, lParam);
-    const auto endCancellationDispatch = wil::scope_exit(
-        [this]() noexcept
-        {
-            if (_uiBenchmark)
-                EndUiCancellationKey();
-        });
-    const KeyPress press = KeyPressFromMessage(wParam, lParam, _chrome && _chrome->TextInputFocused());
-    _suppressCharacter = false;
-    _lastKeyHandled = false;
+    const auto endCancellationDispatch = wil::scope_exit([this]() noexcept
+    {
+        if (_uiBenchmark)
+            EndUiCancellationKey();
+    });
+    const KeyPress press               = KeyPressFromMessage(wParam, lParam, _chrome && _chrome->TextInputFocused());
+    _suppressCharacter                 = false;
+    _lastKeyHandled                    = false;
     UpdateSelectionModifiers();
     if (press.virtualKey == VK_MENU)
     {
@@ -189,13 +186,13 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
         _suppressCharacter = true;
         return message == WM_SYSKEYDOWN ? DefWindowProcW(window, message, wParam, lParam) : 0;
     }
-    if (!press.repeat)
+    if (! press.repeat)
     {
         _keyMovedFocus = 0;
     }
     if (_chrome && _chrome->MenuKeyboardActive())
     {
-        if (!press.ctrl && !press.alt)
+        if (! press.ctrl && ! press.alt)
         {
             // The menu bar has the keyboard: arrows move, Enter, Space or Down open, Escape leaves, and a letter
             // (its WM_CHAR) opens that menu. A key the bar used types nothing where the keyboard goes next.
@@ -214,16 +211,15 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
     }
     // A key down that moved the keyboard (Tab, a button or a row that opened a card, a command that closed one) types
     // nothing where it landed, and its repeats go nowhere; Tab and the arrows keep moving it while held.
-    const ChromeHost::KeyboardFocusMark focusBefore =
-        _chrome ? _chrome->KeyboardFocus() : ChromeHost::KeyboardFocusMark{};
-    const auto movedKeyboard = [this, &press, &focusBefore]() noexcept
+    const ChromeHost::KeyboardFocusMark focusBefore = _chrome ? _chrome->KeyboardFocus() : ChromeHost::KeyboardFocusMark{};
+    const auto movedKeyboard                        = [this, &press, &focusBefore]() noexcept
     {
         const bool navigation = IsNavigationKey(press.virtualKey);
-        if (!_chrome || !_chrome->NoteKeyFocusMove(focusBefore, navigation))
+        if (! _chrome || ! _chrome->NoteKeyFocusMove(focusBefore, navigation))
         {
             return false;
         }
-        if (!navigation)
+        if (! navigation)
         {
             _keyMovedFocus = press.virtualKey;
         }
@@ -231,21 +227,17 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
     };
     if (HandleKey(press))
     {
-        _lastKeyHandled = true;
+        _lastKeyHandled    = true;
         _suppressCharacter = true;
         InvalidateFrame();
         (void)movedKeyboard();
         // DefWindowProc still sees an Alt chord a command took (its character stays dropped), so it knows Alt was
         // not tapped alone: releasing Alt, before or after the chord's key, gives the menu bar nothing.
-        return message == WM_SYSKEYDOWN && (lParam & kKeyAltContext) != 0
-                   ? DefWindowProcW(window, message, wParam, lParam)
-                   : 0;
+        return message == WM_SYSKEYDOWN && (lParam & kKeyAltContext) != 0 ? DefWindowProcW(window, message, wParam, lParam) : 0;
     }
     // A held Space or Enter presses a chrome control (or runs a list row) once, not at the key's repeat rate.
-    const bool heldPress = press.repeat && (press.virtualKey == VK_SPACE || press.virtualKey == VK_RETURN) &&
-                           !(_chrome && _chrome->TextInputFocused());
-    const bool chromeHandled =
-        !heldPress && _chrome && _chrome->DispatchKey(press.virtualKey, true, ChromeKeyModifiers(press));
+    const bool heldPress     = press.repeat && (press.virtualKey == VK_SPACE || press.virtualKey == VK_RETURN) && ! (_chrome && _chrome->TextInputFocused());
+    const bool chromeHandled = ! heldPress && _chrome && _chrome->DispatchKey(press.virtualKey, true, ChromeKeyModifiers(press));
     if (chromeHandled)
     {
         InvalidateFrame();
@@ -286,8 +278,7 @@ LRESULT Application::OnKeyUp(HWND window, UINT message, WPARAM wParam, LPARAM lP
         // chrome, which may have taken the key down.
         _spacePan = false;
     }
-    else if (virtualKey != VK_MENU && virtualKey != VK_F10 && _chrome &&
-             _chrome->DispatchKey(virtualKey, false, HeldModifiers()))
+    else if (virtualKey != VK_MENU && virtualKey != VK_F10 && _chrome && _chrome->DispatchKey(virtualKey, false, HeldModifiers()))
     {
         InvalidateFrame();
     }
@@ -334,12 +325,12 @@ KeyChord Application::NormalizeLayoutChord(KeyChord chord) noexcept
     {
         return chord; // a position already, or a letter or digit, which follows the layout's legend by design
     }
-    const UINT mapped = MapVirtualKeyW(key, MAPVK_VK_TO_VSC_EX);
+    const UINT mapped          = MapVirtualKeyW(key, MAPVK_VK_TO_VSC_EX);
     const KeyPosition position = KeyPositionFromScanCode(mapped & 0xFFu, (mapped & 0xFF00u) != 0);
     if (position != KeyPosition::None)
     {
         chord.virtualKey = 0;
-        chord.position = position;
+        chord.position   = position;
     }
     return chord;
 }
@@ -364,7 +355,7 @@ void Application::DispatchQueuedMessage(MSG& message) noexcept
         // flag is left behind to drop a later character.
         _suppressCharacter = false;
         (void)DispatchMessageW(&message);
-        if (!std::exchange(_suppressCharacter, false))
+        if (! std::exchange(_suppressCharacter, false))
         {
             (void)TranslateMessage(&message);
         }
@@ -376,7 +367,7 @@ void Application::DispatchQueuedMessage(MSG& message) noexcept
 
 void Application::OnKeyMenu(wchar_t character) noexcept
 {
-    if (!_chrome)
+    if (! _chrome)
     {
         return;
     }
@@ -394,44 +385,41 @@ void Application::OnKeyMenu(wchar_t character) noexcept
 KeyState Application::CurrentKeyState() const noexcept
 {
     KeyState state;
-    state.focus = _chrome == nullptr || _chrome->CanvasFocused() ? KeyFocus::Canvas
-                  : _chrome->TextInputFocused()                  ? KeyFocus::TextInput
-                                                                 : KeyFocus::Chrome;
-    state.tool = _tool;
-    state.selection = _session.Selection().has_value() && !_session.Selection()->IsEmpty();
+    state.focus      = _chrome == nullptr || _chrome->CanvasFocused() ? KeyFocus::Canvas : _chrome->TextInputFocused() ? KeyFocus::TextInput : KeyFocus::Chrome;
+    state.tool       = _tool;
+    state.selection  = _session.Selection().has_value() && ! _session.Selection()->IsEmpty();
     state.lassoDraft = _session.PendingLasso().has_value() || _lassoInput.Busy() || _polygonalPressInput.Busy();
     return state;
 }
 
 bool Application::HandleKey(const KeyPress& press) noexcept
 {
-    if (!_chrome)
+    if (! _chrome)
     {
         return false;
     }
     // Escape closes the floating card on top, wherever the focus is: More tools, the notice, the Command List.
-    if (press.virtualKey == VK_ESCAPE && !press.ctrl && _chrome->EscapeFloatingCard())
+    if (press.virtualKey == VK_ESCAPE && ! press.ctrl && _chrome->EscapeFloatingCard())
     {
         SealSamplerForBoundary();
         return true;
     }
-    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && CanvasBrushSealedStrokePending())
+    if (press.virtualKey == VK_ESCAPE && ! press.ctrl && ! press.alt && CanvasBrushSealedStrokePending())
     {
         CancelHostContinuations(true); // The accepted terminal and original worker retain their authority.
         return true;
     }
-    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt &&
+    if (press.virtualKey == VK_ESCAPE && ! press.ctrl && ! press.alt &&
         (_samplerHostTicket || (std::get_if<ColorSampling>(&_drag) && std::get<ColorSampling>(_drag).opening)))
     {
         SealSamplerForBoundary();  // Release the gesture/capture even while memory admission awaits cancellation.
         CancelHostContinuations(); // Retain published color; acknowledge cancellation of the remaining prefix.
         return true;
     }
-    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && CancelCanvasBrush(true))
+    if (press.virtualKey == VK_ESCAPE && ! press.ctrl && ! press.alt && CancelCanvasBrush(true))
         return true;
-    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt &&
-        (_documentLifecycleTicket || _sizingTicket || _pathClassificationTicket || _rasterEditTicket ||
-         _gradientCommitTicket || _pixelMoveCommitTicket))
+    if (press.virtualKey == VK_ESCAPE && ! press.ctrl && ! press.alt &&
+        (_documentLifecycleTicket || _sizingTicket || _pathClassificationTicket || _rasterEditTicket || _gradientCommitTicket || _pixelMoveCommitTicket))
     {
         CancelHostContinuations(); // retain the selected request until worker acknowledgement
         return true;
@@ -441,9 +429,9 @@ bool Application::HandleKey(const KeyPress& press) noexcept
     // control a click focused: a clicked header button is not pressed again by the Enter that applies the transform,
     // and Escape still cancels it (legacy Apply and Cancel are the default and cancel buttons). A control the keyboard
     // reached, a text input, an open dropdown and a card that took the keyboard keep both keys.
-    const bool clickedEditKey = (press.virtualKey == VK_RETURN || press.virtualKey == VK_ESCAPE) &&
-                                state.focus == KeyFocus::Chrome && !_chrome->FocusTakesEnterAndEscape();
-    if ((state.focus == KeyFocus::Canvas || clickedEditKey) && !press.ctrl && HandleEditGesture(press))
+    const bool clickedEditKey =
+        (press.virtualKey == VK_RETURN || press.virtualKey == VK_ESCAPE) && state.focus == KeyFocus::Chrome && ! _chrome->FocusTakesEnterAndEscape();
+    if ((state.focus == KeyFocus::Canvas || clickedEditKey) && ! press.ctrl && HandleEditGesture(press))
     {
         return true;
     }
@@ -452,7 +440,7 @@ bool Application::HandleKey(const KeyPress& press) noexcept
     {
         // A nudge steps by ten while it runs when Shift was added to its chord (Shift+Right), never when the chord
         // itself holds Shift (a replacement on Shift+J).
-        _acceleratorShift = match.shiftAdded;
+        _acceleratorShift                = match.shiftAdded;
         const auto clearAcceleratorShift = wil::scope_exit([this]() noexcept { _acceleratorShift = false; });
         OnCommand(match.command);
         return true;
@@ -464,8 +452,8 @@ bool Application::HandleKey(const KeyPress& press) noexcept
     // Space pans while held, over any tool, wherever the keyboard is but in a chrome text input and on a chrome
     // control the keyboard reached (Tab), which takes Space as its press. A click leaves a control focused, and Space
     // after it still pans: the clicked layer row does not open its Rename card, a clicked button does not run again.
-    if (press.virtualKey == VK_SPACE && !press.ctrl && !press.alt &&
-        (state.focus == KeyFocus::Canvas || (state.focus == KeyFocus::Chrome && !_chrome->FocusFromKeyboard())))
+    if (press.virtualKey == VK_SPACE && ! press.ctrl && ! press.alt &&
+        (state.focus == KeyFocus::Canvas || (state.focus == KeyFocus::Chrome && ! _chrome->FocusFromKeyboard())))
     {
         _spacePan = true;
         return true;
@@ -476,7 +464,7 @@ bool Application::HandleKey(const KeyPress& press) noexcept
 bool Application::HandleEditGesture(const KeyPress& press) noexcept
 {
     const UINT key = press.virtualKey;
-    if (_polygonalPressInput.Busy() && !SizeCardOpen() && !_session.HasColorEdit())
+    if (_polygonalPressInput.Busy() && ! SizeCardOpen() && ! _session.HasColorEdit())
     {
         if (key == VK_RETURN)
             return QueuePolygonalKeyOwner(HostPolygonalInputJournal::Action::Enter);
@@ -517,10 +505,9 @@ bool Application::HandleCanvasKey(const KeyPress& press) noexcept
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return true;
     }
-    const UINT key = press.virtualKey;
-    const bool plain = !press.ctrl && !press.alt && !press.shift;
-    if (plain && key >= '0' && key <= '9' &&
-        (EditorToolIsBrush(_tool) || _tool == EditorTool::Move || _tool == EditorTool::Gradient))
+    const UINT key   = press.virtualKey;
+    const bool plain = ! press.ctrl && ! press.alt && ! press.shift;
+    if (plain && key >= '0' && key <= '9' && (EditorToolIsBrush(_tool) || _tool == EditorTool::Move || _tool == EditorTool::Gradient))
     {
         // Photoshop's opacity keys (legacy typeOpacityDigit): 1–9 are 10–90 %, 0 is 100 %, two digits within 0.6 s
         // an exact percent. The brush's opacity, the gradient's, or with the Move tool the active layer's: one
@@ -530,7 +517,7 @@ bool Application::HandleCanvasKey(const KeyPress& press) noexcept
         {
             return true;
         }
-        const int digit = static_cast<int>(key - '0');
+        const int digit  = static_cast<int>(key - '0');
         const double now = static_cast<double>(GetTickCount64()) / 1000.0;
         if (EditorToolIsBrush(_tool))
         {
@@ -562,30 +549,21 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
         return false;
     }
     const bool altGr = (modifiers & kKeyAltGr) != 0;
-    const bool ctrl = (modifiers & MK_CONTROL) != 0 || altGr;
+    const bool ctrl  = (modifiers & MK_CONTROL) != 0 || altGr;
     const bool shift = (modifiers & MK_SHIFT) != 0;
-    const bool alt = (modifiers & kKeyAlt) != 0 || altGr;
+    const bool alt   = (modifiers & kKeyAlt) != 0 || altGr;
     // The self-tests name the bracket and number-row keys by their US virtual keys. The message carries that
     // physical key's scan code and the virtual key the active layout gives it; any other key its layout scan code.
     UINT scanCode = 0;
     switch (virtualKey)
     {
-    case VK_OEM_MINUS:
-        scanCode = KeyPositionScanCode(KeyPosition::NumberRowMinus);
-        break;
-    case VK_OEM_PLUS:
-        scanCode = KeyPositionScanCode(KeyPosition::NumberRowPlus);
-        break;
-    case VK_OEM_4:
-        scanCode = KeyPositionScanCode(KeyPosition::BracketLeft);
-        break;
-    case VK_OEM_6:
-        scanCode = KeyPositionScanCode(KeyPosition::BracketRight);
-        break;
-    default:
-        break;
+        case VK_OEM_MINUS: scanCode = KeyPositionScanCode(KeyPosition::NumberRowMinus); break;
+        case VK_OEM_PLUS: scanCode = KeyPositionScanCode(KeyPosition::NumberRowPlus); break;
+        case VK_OEM_4: scanCode = KeyPositionScanCode(KeyPosition::BracketLeft); break;
+        case VK_OEM_6: scanCode = KeyPositionScanCode(KeyPosition::BracketRight); break;
+        default: break;
     }
-    UINT key = virtualKey;
+    UINT key      = virtualKey;
     bool extended = false;
     if (scanCode != 0)
     {
@@ -597,19 +575,18 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     else
     {
         const UINT mapped = MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC_EX);
-        scanCode = mapped & 0xFFu;
-        extended = (mapped & 0xFF00u) != 0 || IsExtendedNavigationKey(static_cast<std::uint16_t>(virtualKey));
+        scanCode          = mapped & 0xFFu;
+        extended          = (mapped & 0xFF00u) != 0 || IsExtendedNavigationKey(static_cast<std::uint16_t>(virtualKey));
     }
     std::array<BYTE, 256> saved{};
-    const bool restore = KeyboardState::Read(saved);
+    const bool restore          = KeyboardState::Read(saved);
     std::array<BYTE, 256> state = saved;
-    const auto hold = [&state](UINT which, bool down) noexcept
-    { state[which & 0xFFu] = down ? static_cast<BYTE>(0x80) : static_cast<BYTE>(0x00); };
+    const auto hold             = [&state](UINT which, bool down) noexcept { state[which & 0xFFu] = down ? static_cast<BYTE>(0x80) : static_cast<BYTE>(0x00); };
     hold(VK_CONTROL, ctrl);
     hold(VK_LCONTROL, ctrl);
     hold(VK_RCONTROL, false);
     hold(VK_MENU, alt);
-    hold(VK_LMENU, alt && !altGr);
+    hold(VK_LMENU, alt && ! altGr);
     hold(VK_RMENU, altGr);
     hold(VK_SHIFT, shift);
     hold(VK_LSHIFT, shift);
@@ -617,10 +594,10 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     hold(key, true);
     KeyboardState::Write(state);
     // As Windows sends them: a system key with Alt (not with Ctrl too) or F10.
-    const bool system = (alt && !ctrl) || key == VK_F10;
-    const LPARAM down = 1 | (static_cast<LPARAM>(scanCode) << 16) | (extended ? static_cast<LPARAM>(1) << 24 : 0) |
-                        (alt ? static_cast<LPARAM>(1) << 29 : 0) | (repeat ? kKeyRepeatFlag : 0);
-    _lastKeyHandled = false;
+    const bool system = (alt && ! ctrl) || key == VK_F10;
+    const LPARAM down = 1 | (static_cast<LPARAM>(scanCode) << 16) | (extended ? static_cast<LPARAM>(1) << 24 : 0) | (alt ? static_cast<LPARAM>(1) << 29 : 0) |
+                        (repeat ? kKeyRepeatFlag : 0);
+    _lastKeyHandled   = false;
     (void)SendMessageW(window, system ? WM_SYSKEYDOWN : WM_KEYDOWN, key, down);
     const bool handled = _lastKeyHandled;
     // The characters TranslateMessage would post for this key, as the message loop translates it: only when the key
@@ -628,8 +605,7 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     std::array<wchar_t, 4> characters{};
     const int count = std::exchange(_suppressCharacter, false)
                           ? 0
-                          : ToUnicodeEx(key, scanCode, state.data(), characters.data(),
-                                        static_cast<int>(characters.size()), 1u << 2, GetKeyboardLayout(0));
+                          : ToUnicodeEx(key, scanCode, state.data(), characters.data(), static_cast<int>(characters.size()), 1u << 2, GetKeyboardLayout(0));
     for (int index = 0; index < count; ++index)
     {
         (void)SendMessageW(window, system ? WM_SYSCHAR : WM_CHAR, characters[static_cast<std::size_t>(index)], down);
@@ -648,7 +624,7 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
 #if defined(REDPRISM_ENABLE_TESTS)
 int Application::RunKeyboardSelfTest() noexcept
 {
-    if (!_chrome || !_window)
+    if (! _chrome || ! _window)
     {
         SelfTestFailure(L"The keyboard self-test needs the chrome and the window.\n");
         return 5;
@@ -679,23 +655,23 @@ int Application::RunKeyboardSelfTest() noexcept
             // Only a nested system-menu loop needs the timer. Worker acknowledgement and frames may take
             // longer under load; pumping them with the guard armed would report an unrelated timeout.
             const auto guard = GuardMenuLoopForTest(_window.get());
-            handled = HandleAccelerator(virtualKey, modifiers, repeat);
+            handled          = HandleAccelerator(virtualKey, modifiers, repeat);
         }
         settle();
         return handled;
     };
     const AppSettings original = _settings;
-    const auto replace = [this, &original](std::initializer_list<ShortcutBinding> bindings)
+    const auto replace         = [this, &original](std::initializer_list<ShortcutBinding> bindings)
     {
         AppSettings changed = original;
-        changed.shortcuts = bindings;
+        changed.shortcuts   = bindings;
         ApplySettings(changed);
     };
     const auto binding = [](const wchar_t* commandId, KeyChord chord) { return ShortcutBinding{commandId, chord}; };
-    const auto undoTo = [this, &settle](int count)
+    const auto undoTo  = [this, &settle](int count)
     {
         const int allowance = (std::max)(0, _session.history.UndoCount() - count) + 2;
-        int attempts = 0;
+        int attempts        = 0;
         while (_session.history.CanUndo() && _session.history.UndoCount() > count)
         {
             if (attempts++ >= allowance)
@@ -733,18 +709,16 @@ int Application::RunKeyboardSelfTest() noexcept
         const int length = GetKeyNameTextW(param, name, static_cast<int>(std::size(name)));
         return length > 0 ? std::wstring(name, static_cast<std::size_t>(length)) : std::wstring{};
     };
-    const auto join = [](const std::wstring& left, const std::wstring& right)
-    { return FormatStringResource(nullptr, IDS_KEY_JOIN, left, right); };
-    const std::wstring ctrlName = LoadStringResource(nullptr, IDS_KEY_CTRL);
+    const auto join              = [](const std::wstring& left, const std::wstring& right) { return FormatStringResource(nullptr, IDS_KEY_JOIN, left, right); };
+    const std::wstring ctrlName  = LoadStringResource(nullptr, IDS_KEY_CTRL);
     const std::wstring shiftName = LoadStringResource(nullptr, IDS_KEY_SHIFT);
     _chrome->SetMenusRecordOnlyForTest(true);
-    const auto restoreSettings = wil::scope_exit(
-        [this, &original]() noexcept
-        {
-            ApplySettings(original);
-            _chrome->SetMenusRecordOnlyForTest(false);
-        });
-    const int historyStart = _session.history.UndoCount();
+    const auto restoreSettings = wil::scope_exit([this, &original]() noexcept
+    {
+        ApplySettings(original);
+        _chrome->SetMenusRecordOnlyForTest(false);
+    });
+    const int historyStart     = _session.history.UndoCount();
     OnTool(EditorTool::Move);
     _chrome->SetCanvasFocused(true);
 
@@ -758,20 +732,17 @@ int Application::RunKeyboardSelfTest() noexcept
     {
         return fail(L"X still swapped the palette after its chord was replaced.\n");
     }
-    if (!key('Q', 0) || _session.ForegroundColor() == foreground || !key('Q', MK_SHIFT) ||
-        _session.ForegroundColor() != foreground)
+    if (! key('Q', 0) || _session.ForegroundColor() == foreground || ! key('Q', MK_SHIFT) || _session.ForegroundColor() != foreground)
     {
         return fail(L"The replacement chord Q (and Shift+Q) did not swap the palette.\n");
     }
     // Two entries for one command: the later one wins, and the chrome shows it.
     replace({binding(swapId.c_str(), Key('Q')), binding(swapId.c_str(), Key('K'))});
     _chrome->SetCanvasFocused(true);
-    if (key('Q', 0) || _session.ForegroundColor() != foreground || !key('K', 0) ||
-        _session.ForegroundColor() == foreground || !key('K', 0) ||
+    if (key('Q', 0) || _session.ForegroundColor() != foreground || ! key('K', 0) || _session.ForegroundColor() == foreground || ! key('K', 0) ||
         _chrome->CommandChordText(ChromeHost::kCommandSwapPalette) != L"K" ||
-        _chrome->PaletteSwapTooltipForTest() != FormatStringResource(nullptr, IDS_TOOL_TOOLTIP,
-                                                                     LoadStringResource(nullptr, IDS_PALETTE_SWAP),
-                                                                     std::wstring(L"K")))
+        _chrome->PaletteSwapTooltipForTest() !=
+            FormatStringResource(nullptr, IDS_TOOL_TOOLTIP, LoadStringResource(nullptr, IDS_PALETTE_SWAP), std::wstring(L"K")))
     {
         return fail(std::format(L"The later of two entries for Swap did not win (chord '{}', tooltip '{}').\n",
                                 _chrome->CommandChordText(ChromeHost::kCommandSwapPalette),
@@ -779,7 +750,7 @@ int Application::RunKeyboardSelfTest() noexcept
     }
 
     // A replacement takes every default chord of its command, aliases and Shift variants included.
-    const double zoom = _viewport.zoom;
+    const double zoom      = _viewport.zoom;
     const auto restoreZoom = [this, zoom]()
     {
         _viewport.SetZoom(zoom, _viewport.Center(), DocumentSize());
@@ -787,15 +758,15 @@ int Application::RunKeyboardSelfTest() noexcept
     };
     replace({});
     _chrome->SetCanvasFocused(true);
-    if (!key(VK_OEM_PLUS, MK_CONTROL | MK_SHIFT) || !(_viewport.zoom > zoom))
+    if (! key(VK_OEM_PLUS, MK_CONTROL | MK_SHIFT) || ! (_viewport.zoom > zoom))
     {
         return fail(L"Ctrl+Shift with the number-row plus key did not zoom in.\n");
     }
     restoreZoom();
     replace({binding(L"cmd/view/zoomIn", Ctrl(Key('K')))});
     _chrome->SetCanvasFocused(true);
-    if (key(VK_OEM_PLUS, MK_CONTROL) || key(VK_OEM_PLUS, MK_CONTROL | MK_SHIFT) || key(VK_ADD, MK_CONTROL) ||
-        _viewport.zoom != zoom || !key('K', MK_CONTROL) || !(_viewport.zoom > zoom))
+    if (key(VK_OEM_PLUS, MK_CONTROL) || key(VK_OEM_PLUS, MK_CONTROL | MK_SHIFT) || key(VK_ADD, MK_CONTROL) || _viewport.zoom != zoom ||
+        ! key('K', MK_CONTROL) || ! (_viewport.zoom > zoom))
     {
         return fail(L"Replacing Zoom In left a default chord or an alias live, or Ctrl+K did not zoom.\n");
     }
@@ -803,23 +774,22 @@ int Application::RunKeyboardSelfTest() noexcept
     // A replacement written by virtual key for a position key (vk VK_BB, the US =) takes that key's default: Zoom In
     // no longer shows the chord it lost, Zoom Out shows it, and the key zooms out.
     {
-        const auto plusKey = static_cast<std::uint16_t>(
-            MapVirtualKeyW(KeyPositionScanCode(KeyPosition::NumberRowPlus), MAPVK_VSC_TO_VK));
+        const auto plusKey = static_cast<std::uint16_t>(MapVirtualKeyW(KeyPositionScanCode(KeyPosition::NumberRowPlus), MAPVK_VSC_TO_VK));
         replace({binding(L"cmd/view/zoomOut", Ctrl(Key(plusKey)))});
         _chrome->SetCanvasFocused(true);
-        const std::wstring lost = L"\t" + ChromeHost::ChordDisplayText(Ctrl(At(KeyPosition::NumberRowPlus)));
+        const std::wstring lost       = L"\t" + ChromeHost::ChordDisplayText(Ctrl(At(KeyPosition::NumberRowPlus)));
         const std::wstring zoomInMenu = _chrome->MenuItemCaption(ChromeHost::kCommandZoomIn);
-        const bool menusFollow =
-            !zoomInMenu.ends_with(lost) && _chrome->MenuItemCaption(ChromeHost::kCommandZoomOut).ends_with(lost);
-        const bool zoomsOut = key(VK_OEM_PLUS, MK_CONTROL) && _viewport.zoom < zoom;
+        const bool menusFollow        = ! zoomInMenu.ends_with(lost) && _chrome->MenuItemCaption(ChromeHost::kCommandZoomOut).ends_with(lost);
+        const bool zoomsOut           = key(VK_OEM_PLUS, MK_CONTROL) && _viewport.zoom < zoom;
         restoreZoom();
         replace({});
         _chrome->SetCanvasFocused(true);
-        if (!menusFollow || !zoomsOut)
+        if (! menusFollow || ! zoomsOut)
         {
             return fail(std::format(L"A replacement on the number-row plus key's virtual key left Zoom In showing it "
                                     L"(Zoom In '{}', key zooms out {}).\n",
-                                    zoomInMenu, zoomsOut));
+                                    zoomInMenu,
+                                    zoomsOut));
         }
     }
 
@@ -833,8 +803,7 @@ int Application::RunKeyboardSelfTest() noexcept
     _chrome->SetCanvasFocused(true);
     const int beforeDelete = _session.history.UndoCount();
     if (key(VK_DELETE, 0) || _session.history.UndoCount() != beforeDelete ||
-        _chrome->MenuItemCaption(ChromeHost::kCommandDeleteLayer).find(L'\t') != std::wstring::npos || !key('Q', 0) ||
-        _session.history.UndoName() != L"Clear")
+        _chrome->MenuItemCaption(ChromeHost::kCommandDeleteLayer).find(L'\t') != std::wstring::npos || ! key('Q', 0) || _session.history.UndoName() != L"Clear")
     {
         return fail(std::format(L"The Delete key's replacement did not take over (undo '{}', Delete Layer '{}').\n",
                                 _session.history.UndoName(),
@@ -842,10 +811,11 @@ int Application::RunKeyboardSelfTest() noexcept
     }
     replace({});
     const std::wstring deleteName = keyName(0x53, true);
-    if (!deleteName.empty() && !_chrome->MenuItemCaption(ChromeHost::kCommandDeleteLayer).ends_with(L"\t" + deleteName))
+    if (! deleteName.empty() && ! _chrome->MenuItemCaption(ChromeHost::kCommandDeleteLayer).ends_with(L"\t" + deleteName))
     {
         return fail(std::format(L"Delete Layer did not show the layout's Delete key again ('{}', key '{}').\n",
-                                _chrome->MenuItemCaption(ChromeHost::kCommandDeleteLayer), deleteName));
+                                _chrome->MenuItemCaption(ChromeHost::kCommandDeleteLayer),
+                                deleteName));
     }
     undoTo(historyStart);
 
@@ -853,22 +823,29 @@ int Application::RunKeyboardSelfTest() noexcept
     replace({binding(L"cmd/tool/toggleMarquee", Key('Q'))});
     OnTool(EditorTool::Marquee);
     _chrome->SetCanvasFocused(true);
-    const LassoKind marquee = _session.marqueeKind;
-    const bool firstTaken = key('Q', 0);
+    const LassoKind marquee  = _session.marqueeKind;
+    const bool firstTaken    = key('Q', 0);
     const bool firstSwitched = _session.marqueeKind != marquee;
-    const bool heldTaken = key('Q', 0, true);
-    const bool heldKept = _session.marqueeKind != marquee;
-    const bool secondTaken = key('Q', 0);
-    const bool secondBack = _session.marqueeKind == marquee;
-    const bool toolTaken = key('M', 0);
-    const bool toolKept = _session.marqueeKind == marquee;
-    if (!firstTaken || !firstSwitched || !heldTaken || !heldKept || !secondTaken || !secondBack || !toolTaken ||
-        !toolKept)
+    const bool heldTaken     = key('Q', 0, true);
+    const bool heldKept      = _session.marqueeKind != marquee;
+    const bool secondTaken   = key('Q', 0);
+    const bool secondBack    = _session.marqueeKind == marquee;
+    const bool toolTaken     = key('M', 0);
+    const bool toolKept      = _session.marqueeKind == marquee;
+    if (! firstTaken || ! firstSwitched || ! heldTaken || ! heldKept || ! secondTaken || ! secondBack || ! toolTaken || ! toolKept)
     {
         return fail(std::format(L"The replaced Marquee switch did not run once per press, or M still switched it "
                                 L"(Q {}/{}, held {}/{}, Q {}/{}, M {}/{}, tool {}, canvas {}).\n",
-                                firstTaken, firstSwitched, heldTaken, heldKept, secondTaken, secondBack, toolTaken,
-                                toolKept, static_cast<int>(_tool), _chrome->CanvasFocused()));
+                                firstTaken,
+                                firstSwitched,
+                                heldTaken,
+                                heldKept,
+                                secondTaken,
+                                secondBack,
+                                toolTaken,
+                                toolKept,
+                                static_cast<int>(_tool),
+                                _chrome->CanvasFocused()));
     }
     OnTool(EditorTool::Move);
 
@@ -882,20 +859,20 @@ int Application::RunKeyboardSelfTest() noexcept
         settle();
         _session.Deselect();
         _chrome->SetCanvasFocused(true);
-        const auto originX = [this]()
-        { return _session.ActiveLayer() != nullptr ? _session.ActiveLayer()->transform.origin.x : 0.0; };
+        const auto originX = [this]() { return _session.ActiveLayer() != nullptr ? _session.ActiveLayer()->transform.origin.x : 0.0; };
         const double start = originX();
-        const bool one = key('J', MK_SHIFT) && std::fabs(originX() - (start - 1.0)) < 1e-9;
+        const bool one     = key('J', MK_SHIFT) && std::fabs(originX() - (start - 1.0)) < 1e-9;
         replace({});
         _chrome->SetCanvasFocused(true);
         const bool ten = key(VK_LEFT, MK_SHIFT) && std::fabs(originX() - (start - 11.0)) < 1e-9;
         undoTo(historyStart);
         _chrome->SetCanvasFocused(true);
-        if (!one || !ten)
+        if (! one || ! ten)
         {
             return fail(std::format(L"Shift on a nudge whose chord holds Shift stepped by ten, or Shift+Left did not "
                                     L"(Shift+J one pixel {}, Shift+Left ten {}).\n",
-                                    one, ten));
+                                    one,
+                                    ten));
         }
     }
 
@@ -903,22 +880,20 @@ int Application::RunKeyboardSelfTest() noexcept
     replace({binding(swapId.c_str(), Key('Q'))});
     OnCommand(ChromeHost::kCommandKeyboardShortcuts);
     const int beforeTyping = _session.history.UndoCount();
-    if (!_chrome->ShortcutsOpen() || !_chrome->TextInputFocused() || key('Q', 0) ||
-        _session.ForegroundColor() != foreground || _chrome->ShortcutSearchTextForTest() != L"q" ||
-        key('A', MK_CONTROL) || _session.Selection().has_value() || key(VK_BACK, MK_CONTROL) || key('Z', MK_CONTROL) ||
-        key(VK_DELETE, 0) || _session.history.UndoCount() != beforeTyping)
+    if (! _chrome->ShortcutsOpen() || ! _chrome->TextInputFocused() || key('Q', 0) || _session.ForegroundColor() != foreground ||
+        _chrome->ShortcutSearchTextForTest() != L"q" || key('A', MK_CONTROL) || _session.Selection().has_value() || key(VK_BACK, MK_CONTROL) ||
+        key('Z', MK_CONTROL) || key(VK_DELETE, 0) || _session.history.UndoCount() != beforeTyping)
     {
-        return fail(std::format(L"Keys in the Command List's search field ran document commands (text '{}').\n",
-                                _chrome->ShortcutSearchTextForTest()));
+        return fail(std::format(L"Keys in the Command List's search field ran document commands (text '{}').\n", _chrome->ShortcutSearchTextForTest()));
     }
-    if (!key(VK_ESCAPE, 0) || _chrome->ShortcutsOpen() || !_chrome->CanvasFocused())
+    if (! key(VK_ESCAPE, 0) || _chrome->ShortcutsOpen() || ! _chrome->CanvasFocused())
     {
         return fail(L"Escape did not close the Command List and give the keyboard back to the canvas.\n");
     }
 
     // AltGr arrives as Ctrl+Alt: it never runs a Ctrl chord (AZERTY @ is AltGr+0, € AltGr+E, Polish ż AltGr+Z).
-    if (key('E', MK_CONTROL | kKeyAlt) || key('0', MK_CONTROL | kKeyAlt) || key('Z', MK_CONTROL | kKeyAlt) ||
-        _session.history.UndoCount() != beforeTyping || _viewport.zoom != zoom)
+    if (key('E', MK_CONTROL | kKeyAlt) || key('0', MK_CONTROL | kKeyAlt) || key('Z', MK_CONTROL | kKeyAlt) || _session.history.UndoCount() != beforeTyping ||
+        _viewport.zoom != zoom)
     {
         return fail(L"Ctrl+Alt (AltGr) ran a Ctrl chord.\n");
     }
@@ -931,13 +906,13 @@ int Application::RunKeyboardSelfTest() noexcept
         for (std::uint16_t letter = 'A'; letter <= 'Z' && altGrLetter == 0; ++letter)
         {
             std::array<BYTE, 256> altGr{};
-            altGr[VK_CONTROL] = 0x80;
+            altGr[VK_CONTROL]  = 0x80;
             altGr[VK_LCONTROL] = 0x80;
-            altGr[VK_MENU] = 0x80;
-            altGr[VK_RMENU] = 0x80;
+            altGr[VK_MENU]     = 0x80;
+            altGr[VK_RMENU]    = 0x80;
             std::array<wchar_t, 4> typed{};
-            const int count = ToUnicodeEx(letter, MapVirtualKeyW(letter, MAPVK_VK_TO_VSC), altGr.data(), typed.data(),
-                                          static_cast<int>(typed.size()), 1u << 2, GetKeyboardLayout(0));
+            const int count = ToUnicodeEx(
+                letter, MapVirtualKeyW(letter, MAPVK_VK_TO_VSC), altGr.data(), typed.data(), static_cast<int>(typed.size()), 1u << 2, GetKeyboardLayout(0));
             if (count > 0 && typed[0] >= L' ')
             {
                 altGrLetter = letter;
@@ -948,20 +923,22 @@ int Application::RunKeyboardSelfTest() noexcept
             replace({binding(swapId.c_str(), Ctrl(Alt(Key(altGrLetter))))});
             _chrome->SetCanvasFocused(true);
             const std::uint32_t unswapped = _session.ForegroundColor();
-            const bool leftKeys = key(altGrLetter, MK_CONTROL | kKeyAlt) && _session.ForegroundColor() != unswapped;
-            const std::uint32_t swapped = _session.ForegroundColor();
-            const bool altGrText = !key(altGrLetter, kKeyAltGr) && _session.ForegroundColor() == swapped;
+            const bool leftKeys           = key(altGrLetter, MK_CONTROL | kKeyAlt) && _session.ForegroundColor() != unswapped;
+            const std::uint32_t swapped   = _session.ForegroundColor();
+            const bool altGrText          = ! key(altGrLetter, kKeyAltGr) && _session.ForegroundColor() == swapped;
             if (_session.ForegroundColor() != unswapped)
             {
                 OnCommand(ChromeHost::kCommandSwapPalette);
             }
             replace({});
             _chrome->SetCanvasFocused(true);
-            if (!leftKeys || !altGrText)
+            if (! leftKeys || ! altGrText)
             {
                 return fail(std::format(L"Ctrl+Alt+{} was not a chord from the left keys and text from AltGr (left "
                                         L"{}, AltGr {}).\n",
-                                        static_cast<wchar_t>(altGrLetter), leftKeys, altGrText));
+                                        static_cast<wchar_t>(altGrLetter),
+                                        leftKeys,
+                                        altGrText));
             }
         }
     }
@@ -982,7 +959,7 @@ int Application::RunKeyboardSelfTest() noexcept
             }
             if (shift)
             {
-                altGr[VK_SHIFT] = 0x80;
+                altGr[VK_SHIFT]  = 0x80;
                 altGr[VK_LSHIFT] = 0x80;
             }
             KeyboardState::Write(altGr);
@@ -1003,13 +980,13 @@ int Application::RunKeyboardSelfTest() noexcept
             }
             return opened;
         };
-        const bool canvasCard = opensCard('C', MK_CONTROL | kKeyAlt, SizeCardKind::CanvasSize);
-        const bool imageCard = opensCard('I', MK_CONTROL | kKeyAlt, SizeCardKind::ImageSize);
+        const bool canvasCard  = opensCard('C', MK_CONTROL | kKeyAlt, SizeCardKind::CanvasSize);
+        const bool imageCard   = opensCard('I', MK_CONTROL | kKeyAlt, SizeCardKind::ImageSize);
         const bool altGrCanvas = opensCard('C', kKeyAltGr, SizeCardKind::CanvasSize) != altGrTypes('C', false);
-        const bool altGrImage = opensCard('I', kKeyAltGr, SizeCardKind::ImageSize) != altGrTypes('I', false);
+        const bool altGrImage  = opensCard('I', kKeyAltGr, SizeCardKind::ImageSize) != altGrTypes('I', false);
         _chrome->SetCanvasFocused(true);
         const bool exportsRan = key('E', MK_CONTROL | MK_SHIFT) && key('S', MK_CONTROL | MK_SHIFT | kKeyAlt);
-        const bool altGrJpeg = key('S', MK_SHIFT | kKeyAltGr) != altGrTypes('S', true);
+        const bool altGrJpeg  = key('S', MK_SHIFT | kKeyAltGr) != altGrTypes('S', true);
         const std::array<std::pair<int, KeyChord>, 4> legacy{{
             {ChromeHost::kCommandExportPng, Ctrl(Shift(Key('E')))},
             {ChromeHost::kCommandExportJpeg, Ctrl(Alt(Shift(Key('S'))))},
@@ -1026,16 +1003,21 @@ int Application::RunKeyboardSelfTest() noexcept
                 ++row;
             }
             const std::wstring text = ChromeHost::ChordDisplayText(chord);
-            shown = shown && _chrome->ShortcutChordAt(row) == text &&
-                    _chrome->MenuItemCaption(command).ends_with(L"\t" + text);
+            shown                   = shown && _chrome->ShortcutChordAt(row) == text && _chrome->MenuItemCaption(command).ends_with(L"\t" + text);
         }
         _chrome->CloseShortcuts();
         _chrome->SetCanvasFocused(true);
-        if (!canvasCard || !imageCard || !altGrCanvas || !altGrImage || !exportsRan || !altGrJpeg || !shown)
+        if (! canvasCard || ! imageCard || ! altGrCanvas || ! altGrImage || ! exportsRan || ! altGrJpeg || ! shown)
         {
             return fail(std::format(L"The legacy File and Image chords did not run or show (Canvas Size {}, Image Size "
                                     L"{}, AltGr {}/{}/{}, exports {}, shown {}).\n",
-                                    canvasCard, imageCard, altGrCanvas, altGrImage, altGrJpeg, exportsRan, shown));
+                                    canvasCard,
+                                    imageCard,
+                                    altGrCanvas,
+                                    altGrImage,
+                                    altGrJpeg,
+                                    exportsRan,
+                                    shown));
         }
     }
 
@@ -1043,11 +1025,9 @@ int Application::RunKeyboardSelfTest() noexcept
     const bool sampleRing = _settings.sampleRing;
     OnCommand(ChromeHost::kCommandKeyboardShortcuts);
     typeText(PlainCommandName(LoadStringResource(nullptr, IDS_CMD_SAMPLE_RING)));
-    if (_spacePan || _chrome->ShortcutRowCountForTest() != 1 ||
-        _chrome->ShortcutCommandAtForTest(0) != ChromeHost::kCommandSampleRing)
+    if (_spacePan || _chrome->ShortcutRowCountForTest() != 1 || _chrome->ShortcutCommandAtForTest(0) != ChromeHost::kCommandSampleRing)
     {
-        return fail(std::format(L"Typing a name did not filter the Command List to it ({} rows, pan {}).\n",
-                                _chrome->ShortcutRowCountForTest(), _spacePan));
+        return fail(std::format(L"Typing a name did not filter the Command List to it ({} rows, pan {}).\n", _chrome->ShortcutRowCountForTest(), _spacePan));
     }
     (void)key(VK_RETURN, 0);
     if (_chrome->ShortcutsOpen() || _settings.sampleRing == sampleRing)
@@ -1062,14 +1042,15 @@ int Application::RunKeyboardSelfTest() noexcept
     (void)key(VK_DOWN, 0);
     const int firstZoom = _chrome->SelectedShortcutForTest();
     typeText(L" out");
-    if (firstZoom != ChromeHost::kCommandZoomIn || _chrome->SelectedShortcutForTest() != 0 ||
-        _chrome->ShortcutRowCountForTest() != 1)
+    if (firstZoom != ChromeHost::kCommandZoomIn || _chrome->SelectedShortcutForTest() != 0 || _chrome->ShortcutRowCountForTest() != 1)
     {
         return fail(std::format(L"The Command List selection moved with the filter (first {}, then {}, rows {}).\n",
-                                firstZoom, _chrome->SelectedShortcutForTest(), _chrome->ShortcutRowCountForTest()));
+                                firstZoom,
+                                _chrome->SelectedShortcutForTest(),
+                                _chrome->ShortcutRowCountForTest()));
     }
     (void)key(VK_RETURN, 0);
-    if (_chrome->ShortcutsOpen() || !(_viewport.zoom < zoom))
+    if (_chrome->ShortcutsOpen() || ! (_viewport.zoom < zoom))
     {
         return fail(L"Enter with no selection did not run the first match.\n");
     }
@@ -1090,23 +1071,22 @@ int Application::RunKeyboardSelfTest() noexcept
     typeText(L"zoom");
     (void)key(VK_TAB, 0);
     (void)key(VK_RETURN, 0);
-    const bool enterSelects = _chrome->ShortcutsOpen() &&
-                              _chrome->SelectedShortcutForTest() == ChromeHost::kCommandZoomIn &&
-                              _viewport.zoom == zoom;
+    const bool enterSelects = _chrome->ShortcutsOpen() && _chrome->SelectedShortcutForTest() == ChromeHost::kCommandZoomIn && _viewport.zoom == zoom;
     _chrome->SelectShortcutForTest(0);
     (void)key(VK_SPACE, 0);
-    const bool spaceSelects = _chrome->ShortcutsOpen() &&
-                              _chrome->SelectedShortcutForTest() == ChromeHost::kCommandZoomIn &&
-                              _viewport.zoom == zoom && !_spacePan;
+    const bool spaceSelects =
+        _chrome->ShortcutsOpen() && _chrome->SelectedShortcutForTest() == ChromeHost::kCommandZoomIn && _viewport.zoom == zoom && ! _spacePan;
     (void)key(VK_RETURN, 0);
-    const bool enterRuns = !_chrome->ShortcutsOpen() && _viewport.zoom > zoom;
+    const bool enterRuns = ! _chrome->ShortcutsOpen() && _viewport.zoom > zoom;
     restoreZoom();
     _chrome->CloseShortcuts();
-    if (!enterSelects || !spaceSelects || !enterRuns)
+    if (! enterSelects || ! spaceSelects || ! enterRuns)
     {
         return fail(std::format(L"Enter or Space on the Command List with no row selected ran a row (Enter selects {}, "
                                 L"Space selects {}, next Enter runs {}).\n",
-                                enterSelects, spaceSelects, enterRuns));
+                                enterSelects,
+                                spaceSelects,
+                                enterRuns));
     }
     // A repaint of the open list allocates nothing per row: the model assigns into the item DxUi reuses for every
     // row (as the layers tree does, RF-506).
@@ -1114,7 +1094,7 @@ int Application::RunKeyboardSelfTest() noexcept
     const bool rowsKeepBuffers = _chrome->ShortcutRowsKeepBuffersForTest();
     _chrome->CloseShortcuts();
     _chrome->SetCanvasFocused(true);
-    if (!rowsKeepBuffers)
+    if (! rowsKeepBuffers)
     {
         return fail(L"The Command List's model dropped the item's text buffer for every row it filled.\n");
     }
@@ -1128,11 +1108,12 @@ int Application::RunKeyboardSelfTest() noexcept
     typeText(L"x");
     (void)key(VK_RETURN, 0);
     const ImageLayer* renamed = _session.ActiveLayer();
-    if (!_session.Document().has_value() || _session.Document()->layers.size() != layerCount || renamed == nullptr ||
-        renamed->name != L"x" || _chrome->RenameCardOpen() || !_chrome->ShortcutsOpen())
+    if (! _session.Document().has_value() || _session.Document()->layers.size() != layerCount || renamed == nullptr || renamed->name != L"x" ||
+        _chrome->RenameCardOpen() || ! _chrome->ShortcutsOpen())
     {
         return fail(std::format(L"Enter in the Rename card ran the Command List row (layers {} of {}, name '{}').\n",
-                                _session.Document().has_value() ? _session.Document()->layers.size() : 0, layerCount,
+                                _session.Document().has_value() ? _session.Document()->layers.size() : 0,
+                                layerCount,
                                 renamed != nullptr ? renamed->name : std::wstring{}));
     }
     (void)key(VK_ESCAPE, 0);
@@ -1144,12 +1125,13 @@ int Application::RunKeyboardSelfTest() noexcept
     typeText(L"y");
     (void)key(VK_RETURN, 0);
     renamed = _session.ActiveLayer();
-    if (_chrome->ShortcutsOpen() || focusedName != LoadStringResource(nullptr, IDS_RENAME_NAME) || renamed == nullptr ||
-        !renamed->name.ends_with(L"y") || _chrome->RenameCardOpen())
+    if (_chrome->ShortcutsOpen() || focusedName != LoadStringResource(nullptr, IDS_RENAME_NAME) || renamed == nullptr || ! renamed->name.ends_with(L"y") ||
+        _chrome->RenameCardOpen())
     {
         return fail(std::format(L"Closing the Command List did not give the keyboard back to the Rename card "
                                 L"(focus '{}', name '{}').\n",
-                                focusedName, renamed != nullptr ? renamed->name : std::wstring{}));
+                                focusedName,
+                                renamed != nullptr ? renamed->name : std::wstring{}));
     }
     undoTo(historyStart);
     _chrome->SetCanvasFocused(true);
@@ -1158,24 +1140,29 @@ int Application::RunKeyboardSelfTest() noexcept
     // F2 return it to the canvas. An Escape the focused control leaves is the top card's Cancel (DxUi's embedded host
     // routes no cancel button): on the layers panel it closes the Canvas Size card, and the panel keeps the keyboard.
     _chrome->ShowNotice(L"Notice");
-    const bool noticeHeld = _chrome->NoticeOpen() && !_chrome->CanvasFocused();
+    const bool noticeHeld = _chrome->NoticeOpen() && ! _chrome->CanvasFocused();
     (void)key(VK_ESCAPE, 0);
-    const bool noticeReturned = !_chrome->NoticeOpen() && _chrome->CanvasFocused();
+    const bool noticeReturned = ! _chrome->NoticeOpen() && _chrome->CanvasFocused();
     OnCommand(ChromeHost::kCommandRenameLayer);
     const bool renameHeld = _chrome->RenameCardOpen() && _chrome->TextInputFocused();
     (void)key(VK_ESCAPE, 0);
-    const bool renameReturned = !_chrome->RenameCardOpen() && _chrome->CanvasFocused();
+    const bool renameReturned = ! _chrome->RenameCardOpen() && _chrome->CanvasFocused();
     OnCommand(ChromeHost::kCommandCanvasSize);
     const bool sizeOpened = SizeCardOpen() && _chrome->SizeCardOpen() && _chrome->CanvasFocused();
     _chrome->FocusLayersForTest();
     (void)key(VK_ESCAPE, 0);
-    const bool sizeCancelled = !SizeCardOpen() && !_chrome->SizeCardOpen() && !_chrome->CanvasFocused() &&
+    const bool sizeCancelled = ! SizeCardOpen() && ! _chrome->SizeCardOpen() && ! _chrome->CanvasFocused() &&
                                _chrome->FocusedControlNameForTest() == LoadStringResource(nullptr, IDS_A11Y_LAYERS);
-    if (!noticeHeld || !noticeReturned || !renameHeld || !renameReturned || !sizeOpened || !sizeCancelled)
+    if (! noticeHeld || ! noticeReturned || ! renameHeld || ! renameReturned || ! sizeOpened || ! sizeCancelled)
     {
         return fail(std::format(L"A card did not give the keyboard back or take the Escape its focused control left "
                                 L"(notice {}/{}, rename {}/{}, Canvas Size {}/{}).\n",
-                                noticeHeld, noticeReturned, renameHeld, renameReturned, sizeOpened, sizeCancelled));
+                                noticeHeld,
+                                noticeReturned,
+                                renameHeld,
+                                renameReturned,
+                                sizeOpened,
+                                sizeCancelled));
     }
     _chrome->SetCanvasFocused(true);
 
@@ -1190,10 +1177,9 @@ int Application::RunKeyboardSelfTest() noexcept
     spaceMessage(WM_KEYDOWN);
     const bool panning = _lastKeyHandled && _spacePan;
     spaceMessage(WM_KEYUP);
-    if (!panning || _spacePan)
+    if (! panning || _spacePan)
     {
-        return fail(std::format(L"Space on the canvas did not pan until its key up (held {}, after {}).\n", panning,
-                                _spacePan));
+        return fail(std::format(L"Space on the canvas did not pan until its key up (held {}, after {}).\n", panning, _spacePan));
     }
 
     // Space pans wherever the keyboard is but in a text input or on a chrome control the keyboard reached: after a
@@ -1202,7 +1188,7 @@ int Application::RunKeyboardSelfTest() noexcept
     // nothing), and a key down that moves the keyboard types nothing where it lands (the Rename card a row opens).
     {
         const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
-        const auto click = [this, scale](const D2D1_RECT_F& bounds)
+        const auto click  = [this, scale](const D2D1_RECT_F& bounds)
         {
             const LPARAM at = MAKELPARAM(static_cast<int>(std::lround((bounds.left + bounds.right) * 0.5f * scale)),
                                          static_cast<int>(std::lround((bounds.top + bounds.bottom) * 0.5f * scale)));
@@ -1219,43 +1205,44 @@ int Application::RunKeyboardSelfTest() noexcept
         OnCommand(ChromeHost::kCommandNewLayer);
         settle();
         click(_chrome->LayerRowBoundsDip(0));
-        const bool rowFocused = !_chrome->CanvasFocused() && !_chrome->FocusFromKeyboard();
-        const bool rowPans = spaceDown() && !_chrome->RenameCardOpen();
+        const bool rowFocused = ! _chrome->CanvasFocused() && ! _chrome->FocusFromKeyboard();
+        const bool rowPans    = spaceDown() && ! _chrome->RenameCardOpen();
         spaceMessage(WM_KEYUP);
-        const bool rowReleased = !_spacePan;
+        const bool rowReleased = ! _spacePan;
         settle();
         const std::uint32_t unswapped = _session.ForegroundColor();
         click(_chrome->PaletteHotBoundsDip(false));
         const std::uint32_t swapped = _session.ForegroundColor();
-        const bool zonePans = swapped != unswapped && spaceDown() && _session.ForegroundColor() == swapped;
+        const bool zonePans         = swapped != unswapped && spaceDown() && _session.ForegroundColor() == swapped;
         spaceMessage(WM_KEYUP);
         OnCommand(ChromeHost::kCommandSwapPalette);
         _chrome->CloseRenameCard(false);
-        if (!rowFocused || !rowPans || !rowReleased || !zonePans || _session.ForegroundColor() != unswapped)
+        if (! rowFocused || ! rowPans || ! rowReleased || ! zonePans || _session.ForegroundColor() != unswapped)
         {
             return fail(std::format(L"Space after a click in the chrome pressed the clicked control instead of panning "
                                     L"(row focus {}, row pans {}, released {}, swap zone pans {}).\n",
-                                    rowFocused, rowPans, rowReleased, zonePans));
+                                    rowFocused,
+                                    rowPans,
+                                    rowReleased,
+                                    zonePans));
         }
         const bool ring = _settings.sampleRing;
         OnCommand(ChromeHost::kCommandKeyboardShortcuts);
         _chrome->SelectShortcutForTest(ChromeHost::kCommandSampleRing);
         (void)key(VK_TAB, 0);
-        const bool listReached = _chrome->FocusFromKeyboard() && _chrome->FocusedControlNameForTest() ==
-                                                                     LoadStringResource(nullptr, IDS_SHORTCUTS_TITLE);
+        const bool listReached = _chrome->FocusFromKeyboard() && _chrome->FocusedControlNameForTest() == LoadStringResource(nullptr, IDS_SHORTCUTS_TITLE);
         (void)key(VK_SPACE, 0, true);
-        const bool heldNothing = _chrome->ShortcutsOpen() && _settings.sampleRing == ring && !_spacePan;
+        const bool heldNothing = _chrome->ShortcutsOpen() && _settings.sampleRing == ring && ! _spacePan;
         (void)key(VK_SPACE, 0);
-        const bool pressed = !_chrome->ShortcutsOpen() && _settings.sampleRing != ring && !_spacePan;
+        const bool pressed = ! _chrome->ShortcutsOpen() && _settings.sampleRing != ring && ! _spacePan;
         OnCommand(ChromeHost::kCommandSampleRing);
         // Space held on the Rename Layer row: its press opens the card, and with the card laid out (a frame) the
         // repeats type nothing into its field.
         const auto spaceStroke = [this](bool repeat)
         {
-            const LPARAM lParam = 1 | (static_cast<LPARAM>(MapVirtualKeyW(VK_SPACE, MAPVK_VK_TO_VSC)) << 16) |
-                                  (repeat ? kKeyRepeatFlag : 0);
+            const LPARAM lParam = 1 | (static_cast<LPARAM>(MapVirtualKeyW(VK_SPACE, MAPVK_VK_TO_VSC)) << 16) | (repeat ? kKeyRepeatFlag : 0);
             (void)SendMessageW(_window.get(), WM_KEYDOWN, VK_SPACE, lParam);
-            if (!std::exchange(_suppressCharacter, false)) // as the message loop translates it
+            if (! std::exchange(_suppressCharacter, false)) // as the message loop translates it
             {
                 (void)SendMessageW(_window.get(), WM_CHAR, L' ', lParam);
             }
@@ -1271,17 +1258,20 @@ int Application::RunKeyboardSelfTest() noexcept
         const std::wstring held = _chrome->FocusedTextForTest();
         spaceMessage(WM_KEYUP);
         const ImageLayer* layer = _session.ActiveLayer();
-        const bool nameKept =
-            _chrome->RenameCardOpen() && layer != nullptr && opened == layer->name && held == layer->name;
+        const bool nameKept     = _chrome->RenameCardOpen() && layer != nullptr && opened == layer->name && held == layer->name;
         _chrome->CloseRenameCard(false);
         undoTo(historyStart);
         _chrome->SetCanvasFocused(true);
-        if (!listReached || !heldNothing || !pressed || !nameKept)
+        if (! listReached || ! heldNothing || ! pressed || ! nameKept)
         {
             return fail(std::format(L"Space on a control the keyboard reached did not press it once per press, or it "
                                     L"typed into the card it opened (Tab {}, held {}, pressed {}, field '{}' then "
                                     L"'{}').\n",
-                                    listReached, heldNothing, pressed, opened, held));
+                                    listReached,
+                                    heldNothing,
+                                    pressed,
+                                    opened,
+                                    held));
         }
     }
 
@@ -1293,7 +1283,7 @@ int Application::RunKeyboardSelfTest() noexcept
     // self-test focused keeps the Enter or Escape that closes its open list; the next one is the card's OK or Cancel.
     {
         const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
-        const auto click = [this, scale](const D2D1_RECT_F& bounds)
+        const auto click  = [this, scale](const D2D1_RECT_F& bounds)
         {
             const LPARAM at = MAKELPARAM(static_cast<int>(std::lround((bounds.left + bounds.right) * 0.5f * scale)),
                                          static_cast<int>(std::lround((bounds.top + bounds.bottom) * 0.5f * scale)));
@@ -1317,21 +1307,18 @@ int Application::RunKeyboardSelfTest() noexcept
         settle();
         const D2D1_RECT_F flip = _chrome->FlipHorizontalBoundsDipForTest();
         click(flip);
-        const bool escapeClicked =
-            pendingFlip() == std::optional<bool>(true) && !_chrome->CanvasFocused() && !_chrome->FocusFromKeyboard();
+        const bool escapeClicked = pendingFlip() == std::optional<bool>(true) && ! _chrome->CanvasFocused() && ! _chrome->FocusFromKeyboard();
         (void)key(VK_ESCAPE, 0);
         const ImageLayer* const unflipped = _session.ActiveLayer();
-        const bool cancelled = !pendingFlip().has_value() && unflipped != nullptr && unflipped->id == painted &&
-                               !unflipped->transform.flipX && _session.history.UndoCount() == entries;
+        const bool cancelled              = ! pendingFlip().has_value() && unflipped != nullptr && unflipped->id == painted && ! unflipped->transform.flipX &&
+                                            _session.history.UndoCount() == entries;
         (void)key('T', MK_CONTROL);
         settle();
         click(flip);
-        const bool clicked =
-            pendingFlip() == std::optional<bool>(true) && !_chrome->CanvasFocused() && !_chrome->FocusFromKeyboard();
+        const bool clicked = pendingFlip() == std::optional<bool>(true) && ! _chrome->CanvasFocused() && ! _chrome->FocusFromKeyboard();
         (void)key(VK_RETURN, 0);
         const ImageLayer* const active = _session.ActiveLayer();
-        const bool applied =
-            !pendingFlip().has_value() && active != nullptr && active->id == painted && active->transform.flipX;
+        const bool applied             = ! pendingFlip().has_value() && active != nullptr && active->id == painted && active->transform.flipX;
         // No key has moved the keyboard since the click: the dropdown's focus is not the keyboard's either.
         const auto sizeCardRound = [&](UINT closeKey)
         {
@@ -1341,16 +1328,16 @@ int Application::RunKeyboardSelfTest() noexcept
             (void)key(VK_F4, 0);
             const bool listOpen = _chrome->FocusTakesEnterAndEscape();
             (void)key(closeKey, 0);
-            const bool listClosed = SizeCardOpen() && !_chrome->FocusTakesEnterAndEscape();
+            const bool listClosed = SizeCardOpen() && ! _chrome->FocusTakesEnterAndEscape();
             (void)key(closeKey, 0);
-            const bool cardClosed = !SizeCardOpen();
+            const bool cardClosed = ! SizeCardOpen();
             if (SizeCardOpen())
             {
                 CancelSizeCard();
             }
             return unitFocused && listOpen && listClosed && cardClosed;
         };
-        const bool cardApplied = sizeCardRound(VK_RETURN);
+        const bool cardApplied   = sizeCardRound(VK_RETURN);
         const bool cardCancelled = sizeCardRound(VK_ESCAPE);
         _chrome->SetCanvasFocused(true);
         (void)key('T', MK_CONTROL);
@@ -1371,15 +1358,23 @@ int Application::RunKeyboardSelfTest() noexcept
         _chrome->SetLayersWidth(static_cast<float>(_settings.layersPanelWidth));
         undoTo(historyStart);
         _chrome->SetCanvasFocused(true);
-        if (!escapeClicked || !cancelled || !clicked || !applied || !reached || !buttonPressed || !fieldKept ||
-            !cardApplied || !cardCancelled)
+        if (! escapeClicked || ! cancelled || ! clicked || ! applied || ! reached || ! buttonPressed || ! fieldKept || ! cardApplied || ! cardCancelled)
         {
             return fail(std::format(L"Enter or Escape on a clicked control did not apply or cancel the edit under way, "
                                     L"or a control that keeps them lost one (Flip Horizontal at {},{} clicked {}/{}, "
                                     L"cancelled {}, applied {}, reached {}, pressed {}, field {}, size card OK {}, "
                                     L"Cancel {}).\n",
-                                    flip.left, flip.top, escapeClicked, clicked, cancelled, applied, reached,
-                                    buttonPressed, fieldKept, cardApplied, cardCancelled));
+                                    flip.left,
+                                    flip.top,
+                                    escapeClicked,
+                                    clicked,
+                                    cancelled,
+                                    applied,
+                                    reached,
+                                    buttonPressed,
+                                    fieldKept,
+                                    cardApplied,
+                                    cardCancelled));
         }
     }
 
@@ -1387,9 +1382,9 @@ int Application::RunKeyboardSelfTest() noexcept
     // Alt+letter opens that menu; a handled Alt chord opens nothing.
     gMenuLoopGuardFired = false;
     (void)key(VK_MENU, kKeyAlt);
-    const bool altTapped = _chrome->MenuKeyboardActive() && !_chrome->CanvasFocused();
+    const bool altTapped = _chrome->MenuKeyboardActive() && ! _chrome->CanvasFocused();
     (void)key(VK_ESCAPE, 0);
-    const bool altLeft = !_chrome->MenuKeyboardActive() && _chrome->CanvasFocused();
+    const bool altLeft = ! _chrome->MenuKeyboardActive() && _chrome->CanvasFocused();
     (void)key(VK_F10, 0);
     const bool f10Pressed = _chrome->MenuKeyboardActive();
     (void)key(VK_ESCAPE, 0);
@@ -1402,26 +1397,32 @@ int Application::RunKeyboardSelfTest() noexcept
         const auto guard = GuardMenuLoopForTest(_window.get());
         (void)SendMessageW(_window.get(), WM_SYSCOMMAND, SC_KEYMENU, 0);
     }
-    const bool keyMenuLeft = !_chrome->MenuKeyboardActive() && _chrome->CanvasFocused();
-    if (gMenuLoopGuardFired || !altTapped || !altLeft || !f10Pressed || !keyMenu || !keyMenuLeft)
+    const bool keyMenuLeft = ! _chrome->MenuKeyboardActive() && _chrome->CanvasFocused();
+    if (gMenuLoopGuardFired || ! altTapped || ! altLeft || ! f10Pressed || ! keyMenu || ! keyMenuLeft)
     {
         return fail(std::format(L"The menu bar did not take the keyboard from a tapped Alt or F10 (loop {}, Alt {}, "
                                 L"left {}, F10 {}, SC_KEYMENU {}/{}).\n",
-                                gMenuLoopGuardFired, altTapped, altLeft, f10Pressed, keyMenu, keyMenuLeft));
+                                gMenuLoopGuardFired,
+                                altTapped,
+                                altLeft,
+                                f10Pressed,
+                                keyMenu,
+                                keyMenuLeft));
     }
     (void)_chrome->TakeRecordedMenuForTest();
     (void)key('F', kKeyAlt);
     const std::optional<std::size_t> fileMenu = _chrome->TakeRecordedMenuForTest();
     replace({binding(swapId.c_str(), Alt(Key('F')))});
     _chrome->SetCanvasFocused(true);
-    const bool altChord = key('F', kKeyAlt) && _session.ForegroundColor() != foreground;
+    const bool altChord                        = key('F', kKeyAlt) && _session.ForegroundColor() != foreground;
     const std::optional<std::size_t> chordMenu = _chrome->TakeRecordedMenuForTest();
     (void)key('F', kKeyAlt);
-    if (fileMenu != std::optional<std::size_t>(0) || !altChord || chordMenu.has_value() || !_chrome->CanvasFocused())
+    if (fileMenu != std::optional<std::size_t>(0) || ! altChord || chordMenu.has_value() || ! _chrome->CanvasFocused())
     {
         return fail(std::format(L"Alt+F did not open the File menu, or a handled Alt chord opened one too (menu {}, "
                                 L"chord {}).\n",
-                                fileMenu.has_value() ? static_cast<int>(fileMenu.value()) : -1, altChord));
+                                fileMenu.has_value() ? static_cast<int>(fileMenu.value()) : -1,
+                                altChord));
     }
 
     // A press on the canvas takes the keyboard back from the menu bar a tapped Alt gave it (the canvas's keys work
@@ -1434,22 +1435,21 @@ int Application::RunKeyboardSelfTest() noexcept
     const bool pressArmed = _chrome->MenuKeyboardActive();
     {
         const CanvasHole hole = _chrome->HolePixels();
-        const LPARAM center = MAKELPARAM(static_cast<int>(hole.left + hole.width / 2.0f),
-                                         static_cast<int>(hole.top + hole.height / 2.0f));
+        const LPARAM center   = MAKELPARAM(static_cast<int>(hole.left + hole.width / 2.0f), static_cast<int>(hole.top + hole.height / 2.0f));
         OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, center);
         OnPointer(WM_LBUTTONUP, 0, center);
     }
-    const bool pressLeft = !_chrome->MenuKeyboardActive() && _chrome->CanvasFocused() &&
-                           _chrome->FocusedControlNameForTest() != LoadStringResource(nullptr, IDS_A11Y_MENU_BAR);
+    const bool pressLeft =
+        ! _chrome->MenuKeyboardActive() && _chrome->CanvasFocused() && _chrome->FocusedControlNameForTest() != LoadStringResource(nullptr, IDS_A11Y_MENU_BAR);
     const bool brushKey = key('B', 0) && _tool == EditorTool::Brush;
     (void)key(VK_MENU, kKeyAlt);
     const bool killArmed = _chrome->MenuKeyboardActive();
     (void)SendMessageW(_window.get(), WM_KILLFOCUS, 0, 0);
-    const bool killLeft = !_chrome->MenuKeyboardActive();
+    const bool killLeft = ! _chrome->MenuKeyboardActive();
     (void)key(VK_MENU, kKeyAlt);
     const bool activateArmed = _chrome->MenuKeyboardActive();
     (void)SendMessageW(_window.get(), WM_ACTIVATEAPP, FALSE, 0);
-    const bool activateLeft = !_chrome->MenuKeyboardActive();
+    const bool activateLeft = ! _chrome->MenuKeyboardActive();
     // A bar that lost DxUi's focus to nothing (DxUi prunes a hidden or disabled control) gives the keyboard back to
     // the canvas on the next key: B chooses the Brush.
     OnTool(EditorTool::Hand);
@@ -1460,13 +1460,21 @@ int Application::RunKeyboardSelfTest() noexcept
     const bool dropBrush = key('B', 0) && _tool == EditorTool::Brush && _chrome->CanvasFocused();
     OnTool(EditorTool::Move);
     _chrome->SetCanvasFocused(true);
-    if (gMenuLoopGuardFired || !pressArmed || !pressLeft || !brushKey || !killArmed || !killLeft || !activateArmed ||
-        !activateLeft || !dropArmed || !dropBrush)
+    if (gMenuLoopGuardFired || ! pressArmed || ! pressLeft || ! brushKey || ! killArmed || ! killLeft || ! activateArmed || ! activateLeft || ! dropArmed ||
+        ! dropBrush)
     {
         return fail(std::format(L"The menu bar kept the keyboard after a canvas press or a focus loss (loop {}, press "
                                 L"{}/{}, B {}, WM_KILLFOCUS {}/{}, WM_ACTIVATEAPP {}/{}, focus dropped {}/{}).\n",
-                                gMenuLoopGuardFired, pressArmed, pressLeft, brushKey, killArmed, killLeft,
-                                activateArmed, activateLeft, dropArmed, dropBrush));
+                                gMenuLoopGuardFired,
+                                pressArmed,
+                                pressLeft,
+                                brushKey,
+                                killArmed,
+                                killLeft,
+                                activateArmed,
+                                activateLeft,
+                                dropArmed,
+                                dropBrush));
     }
 
     // Releasing Alt after an Alt chord a command took is no tap: Alt down, Backspace down and up (Fill with
@@ -1481,9 +1489,9 @@ int Application::RunKeyboardSelfTest() noexcept
         }
         KeyboardState::Write(state);
         const bool system = message == WM_SYSKEYDOWN || message == WM_SYSKEYUP;
-        const bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
-        const LPARAM lParam = 1 | (static_cast<LPARAM>(MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC)) << 16) |
-                              (system ? kKeyAltContext : 0) | (up ? kKeyUpFlags : 0);
+        const bool up     = message == WM_KEYUP || message == WM_SYSKEYUP;
+        const LPARAM lParam =
+            1 | (static_cast<LPARAM>(MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC)) << 16) | (system ? kKeyAltContext : 0) | (up ? kKeyUpFlags : 0);
         const auto guard = GuardMenuLoopForTest(_window.get());
         (void)SendMessageW(_window.get(), message, virtualKey, lParam);
     };
@@ -1493,13 +1501,13 @@ int Application::RunKeyboardSelfTest() noexcept
         OnCommand(ChromeHost::kCommandNewLayer);
         _session.ApplySelection(SelectionGeometry::Rect(12, 12, 20, 20), SelectionMode::New, L"Select");
         _chrome->SetCanvasFocused(true);
-        gMenuLoopGuardFired = false;
+        gMenuLoopGuardFired  = false;
         const int beforeFill = _session.history.UndoCount();
         keyMessage(WM_SYSKEYDOWN, VK_MENU, {VK_MENU, VK_LMENU});
         keyMessage(WM_SYSKEYDOWN, VK_BACK, {VK_MENU, VK_LMENU, VK_BACK});
         keyMessage(WM_SYSKEYUP, VK_BACK, {VK_MENU, VK_LMENU});
         keyMessage(WM_KEYUP, VK_MENU, {});
-        const bool chordQuiet = !_chrome->MenuKeyboardActive();
+        const bool chordQuiet = ! _chrome->MenuKeyboardActive();
         settle(); // retain the immediate Alt/menu assertion; observe pixels/history after worker acknowledgement
         const bool filled = _session.history.UndoCount() == beforeFill + 1;
         _chrome->LeaveMenuKeyboard();
@@ -1508,7 +1516,7 @@ int Application::RunKeyboardSelfTest() noexcept
         keyMessage(WM_SYSKEYDOWN, VK_BACK, {VK_MENU, VK_LMENU, VK_BACK});
         keyMessage(WM_KEYUP, VK_MENU, {VK_BACK});
         keyMessage(WM_KEYUP, VK_BACK, {});
-        const bool altFirstQuiet = !_chrome->MenuKeyboardActive();
+        const bool altFirstQuiet = ! _chrome->MenuKeyboardActive();
         settle();
         const bool filledAgain = _session.history.UndoCount() == beforeFill + 2;
         _chrome->LeaveMenuKeyboard();
@@ -1518,11 +1526,15 @@ int Application::RunKeyboardSelfTest() noexcept
         }
         undoTo(historyStart);
         _chrome->SetCanvasFocused(true);
-        if (gMenuLoopGuardFired || !filled || !chordQuiet || !filledAgain || !altFirstQuiet)
+        if (gMenuLoopGuardFired || ! filled || ! chordQuiet || ! filledAgain || ! altFirstQuiet)
         {
             return fail(std::format(L"Releasing Alt after Alt+Backspace gave the menu bar the keyboard (loop {}, fill "
                                     L"{}/{}, Backspace released first {}, Alt released first {}).\n",
-                                    gMenuLoopGuardFired, filled, filledAgain, chordQuiet, altFirstQuiet));
+                                    gMenuLoopGuardFired,
+                                    filled,
+                                    filledAgain,
+                                    chordQuiet,
+                                    altFirstQuiet));
         }
     }
 
@@ -1534,11 +1546,9 @@ int Application::RunKeyboardSelfTest() noexcept
     _chrome->SetCanvasFocused(true);
     const int beforeDigits = _session.history.UndoCount();
     _session.ClearPendingOpacityDigit();
-    const auto opacity = [this]()
-    { return _session.ActiveLayer() != nullptr ? _session.ActiveLayer()->opacity : -1.0; };
-    const bool fifty = key('5', 0) && std::fabs(opacity() - 0.5) < 1e-9 &&
-                       _session.history.UndoCount() == beforeDigits + 1 &&
-                       _session.history.UndoName() == L"Layer Opacity";
+    const auto opacity = [this]() { return _session.ActiveLayer() != nullptr ? _session.ActiveLayer()->opacity : -1.0; };
+    const bool fifty =
+        key('5', 0) && std::fabs(opacity() - 0.5) < 1e-9 && _session.history.UndoCount() == beforeDigits + 1 && _session.history.UndoName() == L"Layer Opacity";
     _session.ClearPendingOpacityDigit(); // as if the 0.6 s window had passed
     const bool hundred = key('0', 0) && std::fabs(opacity() - 1.0) < 1e-9;
     _session.Undo();
@@ -1562,11 +1572,16 @@ int Application::RunKeyboardSelfTest() noexcept
     (void)key('3', 0);
     const bool brushOnly = std::fabs(opacity() - 0.5) < 1e-9 && std::fabs(_session.brushSettings.opacity - 0.3) < 1e-9;
     OnTool(EditorTool::Move);
-    if (!fifty || !hundred || !undone || !twoDigits || !heldOnce || !brushOnly)
+    if (! fifty || ! hundred || ! undone || ! twoDigits || ! heldOnce || ! brushOnly)
     {
         return fail(std::format(L"The Move tool's digit keys did not follow the two-digit rule (50 % {}, 100 % {}, "
                                 L"undo {}, 45 % {}, held 5 once {}, brush {}).\n",
-                                fifty, hundred, undone, twoDigits, heldOnce, brushOnly));
+                                fifty,
+                                hundred,
+                                undone,
+                                twoDigits,
+                                heldOnce,
+                                brushOnly));
     }
     undoTo(historyStart);
 
@@ -1577,8 +1592,7 @@ int Application::RunKeyboardSelfTest() noexcept
         const auto pressCanvas = [this]()
         {
             const CanvasHole hole = _chrome->HolePixels();
-            const LPARAM center = MAKELPARAM(static_cast<int>(hole.left + hole.width / 2.0f),
-                                             static_cast<int>(hole.top + hole.height / 2.0f));
+            const LPARAM center   = MAKELPARAM(static_cast<int>(hole.left + hole.width / 2.0f), static_cast<int>(hole.top + hole.height / 2.0f));
             OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, center);
             OnPointer(WM_LBUTTONUP, 0, center);
         };
@@ -1597,15 +1611,18 @@ int Application::RunKeyboardSelfTest() noexcept
         pressCanvas();
         (void)key('3', 0);
         const std::wstring fieldAfter = _chrome->FocusedTextForTest();
-        const bool marqueeDigit = fieldAfter == fieldShown && std::fabs(opacity() - 0.7) < 1e-9;
+        const bool marqueeDigit       = fieldAfter == fieldShown && std::fabs(opacity() - 0.7) < 1e-9;
         OnTool(EditorTool::Move);
         undoTo(historyStart);
         _chrome->SetCanvasFocused(true);
-        if (!fieldFocused || !moveDigit || !marqueeDigit)
+        if (! fieldFocused || ! moveDigit || ! marqueeDigit)
         {
             return fail(std::format(L"A digit after a canvas press reached the focused opacity field (field focused "
                                     L"{}, Move 7 is 70 % {}, field '{}' then '{}').\n",
-                                    fieldFocused, moveDigit, fieldShown, fieldAfter));
+                                    fieldFocused,
+                                    moveDigit,
+                                    fieldShown,
+                                    fieldAfter));
         }
     }
     // RF-1109: while a panel owns the document (an adjustment layer's Levels), the layer opacity waits, as legacy
@@ -1617,23 +1634,27 @@ int Application::RunKeyboardSelfTest() noexcept
         settle(); // harness observes the acknowledged asynchronous opening
         _chrome->SetCanvasFocused(true);
         const bool panelOpen = _session.HasColorEdit();
-        const double start = opacity();
+        const double start   = opacity();
         _session.ClearPendingOpacityDigit();
         (void)key('5', 0);
-        const bool digitWaits = std::fabs(opacity() - start) < 1e-9;
-        const bool stepperWaits = !_chrome->RequestLayerOpacity(40.0) && std::fabs(opacity() - start) < 1e-9;
+        const bool digitWaits   = std::fabs(opacity() - start) < 1e-9;
+        const bool stepperWaits = ! _chrome->RequestLayerOpacity(40.0) && std::fabs(opacity() - start) < 1e-9;
         OnLayerOpacity(0.4, ChromeEditPhase::Preview); // a typed value that reached the host all the same
         const bool previewWaits = std::fabs(opacity() - start) < 1e-9;
         OnLayerOpacity(0.4, ChromeEditPhase::Cancel);
         CancelColorEditForTest();
-        const bool cancelKeeps = !_session.HasColorEdit() && std::fabs(opacity() - start) < 1e-9;
+        const bool cancelKeeps = ! _session.HasColorEdit() && std::fabs(opacity() - start) < 1e-9;
         undoTo(historyStart);
         _chrome->SetCanvasFocused(true);
-        if (!panelOpen || !digitWaits || !stepperWaits || !previewWaits || !cancelKeeps)
+        if (! panelOpen || ! digitWaits || ! stepperWaits || ! previewWaits || ! cancelKeeps)
         {
             return fail(std::format(L"The layer opacity changed under an open adjustment panel (panel {}, digit {}, "
                                     L"stepper {}, typed preview {}, after Cancel {}).\n",
-                                    panelOpen, digitWaits, stepperWaits, previewWaits, cancelKeeps));
+                                    panelOpen,
+                                    digitWaits,
+                                    stepperWaits,
+                                    previewWaits,
+                                    cancelKeeps));
         }
     }
 
@@ -1646,13 +1667,13 @@ int Application::RunKeyboardSelfTest() noexcept
             std::array<BYTE, 256> saved{};
             const bool restore = KeyboardState::Read(saved);
             std::array<BYTE, 256> state{};
-            state[VK_CONTROL] = ctrl ? 0x80 : 0;
-            state[VK_LCONTROL] = ctrl ? 0x80 : 0;
+            state[VK_CONTROL]         = ctrl ? 0x80 : 0;
+            state[VK_LCONTROL]        = ctrl ? 0x80 : 0;
             state[virtualKey & 0xFFu] = 0x80;
             KeyboardState::Write(state);
             _lastKeyHandled = false;
             (void)SendMessageW(_window.get(), WM_KEYDOWN, virtualKey, 1);
-            const bool handled = _lastKeyHandled;
+            const bool handled        = _lastKeyHandled;
             state[virtualKey & 0xFFu] = 0;
             KeyboardState::Write(state);
             (void)SendMessageW(_window.get(), WM_KEYUP, virtualKey, 1 | kKeyUpFlags);
@@ -1667,21 +1688,19 @@ int Application::RunKeyboardSelfTest() noexcept
         settle();
         const double size = _session.brushSettings.diameter;
         const bool larger =
-            scanless(MapVirtualKeyW(KeyPositionScanCode(KeyPosition::BracketRight), MAPVK_VSC_TO_VK), false) &&
-            _session.brushSettings.diameter > size;
+            scanless(MapVirtualKeyW(KeyPositionScanCode(KeyPosition::BracketRight), MAPVK_VSC_TO_VK), false) && _session.brushSettings.diameter > size;
         _session.brushSettings.diameter = size;
         OnTool(EditorTool::Move);
         _chrome->SetCanvasFocused(true);
         settle();
-        const bool zoomed =
-            scanless(MapVirtualKeyW(KeyPositionScanCode(KeyPosition::NumberRowPlus), MAPVK_VSC_TO_VK), true) &&
-            _viewport.zoom > zoom;
+        const bool zoomed = scanless(MapVirtualKeyW(KeyPositionScanCode(KeyPosition::NumberRowPlus), MAPVK_VSC_TO_VK), true) && _viewport.zoom > zoom;
         restoreZoom();
-        if (!larger || !zoomed)
+        if (! larger || ! zoomed)
         {
             return fail(std::format(L"A key message without a scan code lost its position (bracket {}, Ctrl with the "
                                     L"number-row plus key {}).\n",
-                                    larger, zoomed));
+                                    larger,
+                                    zoomed));
         }
     }
 
@@ -1728,14 +1747,13 @@ int Application::RunKeyboardSelfTest() noexcept
         const bool commandTyped = characterQueued();
         queueKey(WM_KEYUP, 'X');
         drain();
-        const bool swapped = _session.ForegroundColor() != unswapped && !_suppressCharacter;
+        const bool swapped = _session.ForegroundColor() != unswapped && ! _suppressCharacter;
         OnCommand(ChromeHost::kCommandSwapPalette);
         // A dead key's accent would join the next letter: E would type ê instead of e.
         const UINT bracket = MapVirtualKeyW(KeyPositionScanCode(KeyPosition::BracketLeft), MAPVK_VSC_TO_VK);
         std::array<wchar_t, 4> probe{};
         bool deadQuiet = true;
-        if (ToUnicodeEx(bracket, KeyPositionScanCode(KeyPosition::BracketLeft), none.data(), probe.data(),
-                        static_cast<int>(probe.size()), 1u << 2, layout) < 0)
+        if (ToUnicodeEx(bracket, KeyPositionScanCode(KeyPosition::BracketLeft), none.data(), probe.data(), static_cast<int>(probe.size()), 1u << 2, layout) < 0)
         {
             OnTool(EditorTool::Brush);
             _chrome->SetCanvasFocused(true);
@@ -1746,16 +1764,15 @@ int Application::RunKeyboardSelfTest() noexcept
             const bool deadQueued = characterQueued();
             queueKey(WM_KEYUP, bracket);
             drain();
-            const int count = ToUnicodeEx('E', MapVirtualKeyW('E', MAPVK_VK_TO_VSC), none.data(), probe.data(),
-                                          static_cast<int>(probe.size()), 1u << 2, layout);
+            const int count =
+                ToUnicodeEx('E', MapVirtualKeyW('E', MAPVK_VK_TO_VSC), none.data(), probe.data(), static_cast<int>(probe.size()), 1u << 2, layout);
             const bool accented = count != 1 || probe[0] != L'e';
             if (accented)
             {
                 // Consume the armed accent so the steps after this one type plainly.
-                (void)ToUnicodeEx(VK_SPACE, MapVirtualKeyW(VK_SPACE, MAPVK_VK_TO_VSC), none.data(), probe.data(),
-                                  static_cast<int>(probe.size()), 0, layout);
+                (void)ToUnicodeEx(VK_SPACE, MapVirtualKeyW(VK_SPACE, MAPVK_VK_TO_VSC), none.data(), probe.data(), static_cast<int>(probe.size()), 0, layout);
             }
-            deadQuiet = _session.brushSettings.diameter < size && !deadQueued && !accented;
+            deadQuiet                       = _session.brushSettings.diameter < size && ! deadQueued && ! accented;
             _session.brushSettings.diameter = size;
             OnTool(EditorTool::Move);
             _chrome->SetCanvasFocused(true);
@@ -1768,12 +1785,14 @@ int Application::RunKeyboardSelfTest() noexcept
         const bool plainTranslated = characterQueued();
         queueKey(WM_KEYUP, 'Q');
         drain();
-        if (commandTyped || !swapped || !deadQuiet || !plainTranslated)
+        if (commandTyped || ! swapped || ! deadQuiet || ! plainTranslated)
         {
-            return fail(
-                std::format(L"The message loop translated a key a command took, or not a key nothing took "
-                            L"(character after X {}, swapped {}, dead bracket quiet {}, character after Q {}).\n",
-                            commandTyped, swapped, deadQuiet, plainTranslated));
+            return fail(std::format(L"The message loop translated a key a command took, or not a key nothing took "
+                                    L"(character after X {}, swapped {}, dead bracket quiet {}, character after Q {}).\n",
+                                    commandTyped,
+                                    swapped,
+                                    deadQuiet,
+                                    plainTranslated));
         }
     }
 
@@ -1789,8 +1808,7 @@ int Application::RunKeyboardSelfTest() noexcept
     // A key the layout has no name for (VK_E7) shows the table's name for it, never an English one from code.
     if (ChromeHost::ChordDisplayText(Key(0xE7)) != FormatStringResource(nullptr, IDS_KEY_VIRTUAL, 0xE7u))
     {
-        return fail(
-            std::format(L"A key without a layout name showed '{}'.\n", ChromeHost::ChordDisplayText(Key(0xE7))));
+        return fail(std::format(L"A key without a layout name showed '{}'.\n", ChromeHost::ChordDisplayText(Key(0xE7))));
     }
     if (ChromeHost::ChordDisplayText(Key(VK_ADD)) == ChromeHost::ChordDisplayText(At(KeyPosition::NumberRowPlus)) ||
         ChromeHost::ChordDisplayText(Key(VK_SUBTRACT)) == ChromeHost::ChordDisplayText(At(KeyPosition::NumberRowMinus)))
@@ -1800,15 +1818,14 @@ int Application::RunKeyboardSelfTest() noexcept
     replace({binding(L"cmd/view/sampleRing", Key(VK_F5))});
     OnCommand(ChromeHost::kCommandKeyboardShortcuts);
     std::size_t ringRow = 0;
-    while (ringRow < _chrome->ShortcutRowCountForTest() &&
-           _chrome->ShortcutCommandAtForTest(ringRow) != ChromeHost::kCommandSampleRing)
+    while (ringRow < _chrome->ShortcutRowCountForTest() && _chrome->ShortcutCommandAtForTest(ringRow) != ChromeHost::kCommandSampleRing)
     {
         ++ringRow;
     }
     const std::wstring ringShown = _chrome->ShortcutChordAt(ringRow);
     _chrome->CloseShortcuts();
     if (ringShown.empty() || ringShown != ChromeHost::ChordDisplayText(Key(VK_F5)) ||
-        !_chrome->MenuItemCaption(ChromeHost::kCommandSampleRing).ends_with(L"\t" + ringShown))
+        ! _chrome->MenuItemCaption(ChromeHost::kCommandSampleRing).ends_with(L"\t" + ringShown))
     {
         return fail(std::format(L"A replacement on F5 did not show ('{}').\n", ringShown));
     }
@@ -1819,42 +1836,40 @@ int Application::RunKeyboardSelfTest() noexcept
     replace({});
     OnCommand(ChromeHost::kCommandKeyboardShortcuts);
     std::size_t zoomRow = 0;
-    while (zoomRow < _chrome->ShortcutRowCountForTest() &&
-           _chrome->ShortcutCommandAtForTest(zoomRow) != ChromeHost::kCommandZoomIn)
+    while (zoomRow < _chrome->ShortcutRowCountForTest() && _chrome->ShortcutCommandAtForTest(zoomRow) != ChromeHost::kCommandZoomIn)
     {
         ++zoomRow;
     }
-    const std::wstring plusName = keyName(KeyPositionScanCode(KeyPosition::NumberRowPlus), false);
-    const std::wstring bracketName = keyName(KeyPositionScanCode(KeyPosition::BracketLeft), false);
-    const std::wstring zoomExpected =
-        join(ctrlName, plusName.empty() ? LoadStringResource(nullptr, IDS_KEY_NUMBER_ROW_PLUS) : plusName);
-    const std::wstring layerExpected =
-        join(ctrlName, bracketName.empty() ? LoadStringResource(nullptr, IDS_KEY_BRACKET_LEFT) : bracketName);
-    const std::wstring zoomShown = _chrome->ShortcutChordAt(zoomRow);
-    const std::wstring zoomMenu = _chrome->MenuItemCaption(ChromeHost::kCommandZoomIn);
-    const std::wstring layerMenu = _chrome->MenuItemCaption(ChromeHost::kCommandMoveLayerDown);
+    const std::wstring plusName      = keyName(KeyPositionScanCode(KeyPosition::NumberRowPlus), false);
+    const std::wstring bracketName   = keyName(KeyPositionScanCode(KeyPosition::BracketLeft), false);
+    const std::wstring zoomExpected  = join(ctrlName, plusName.empty() ? LoadStringResource(nullptr, IDS_KEY_NUMBER_ROW_PLUS) : plusName);
+    const std::wstring layerExpected = join(ctrlName, bracketName.empty() ? LoadStringResource(nullptr, IDS_KEY_BRACKET_LEFT) : bracketName);
+    const std::wstring zoomShown     = _chrome->ShortcutChordAt(zoomRow);
+    const std::wstring zoomMenu      = _chrome->MenuItemCaption(ChromeHost::kCommandZoomIn);
+    const std::wstring layerMenu     = _chrome->MenuItemCaption(ChromeHost::kCommandMoveLayerDown);
     _chrome->CloseShortcuts();
-    if (zoomShown != zoomExpected || !zoomMenu.ends_with(L"\t" + zoomExpected) ||
-        !layerMenu.ends_with(L"\t" + layerExpected))
+    if (zoomShown != zoomExpected || ! zoomMenu.ends_with(L"\t" + zoomExpected) || ! layerMenu.ends_with(L"\t" + layerExpected))
     {
         return fail(std::format(L"Keyboard shortcut display did not follow the layout. Zoom badge '{}' expected '{}', "
                                 L"zoom menu '{}', layer menu '{}'.\n",
-                                zoomShown, zoomExpected, zoomMenu, layerMenu));
+                                zoomShown,
+                                zoomExpected,
+                                zoomMenu,
+                                layerMenu));
     }
-    replace({binding(L"cmd/edit/undo", Ctrl(Key('K'))), binding(L"cmd/edit/invert", Ctrl(Shift(Key('K')))),
-             binding(L"cmd/tool/brush", Key('K'))});
+    replace({binding(L"cmd/edit/undo", Ctrl(Key('K'))), binding(L"cmd/edit/invert", Ctrl(Shift(Key('K')))), binding(L"cmd/tool/brush", Key('K'))});
     SyncChrome();
-    const std::wstring undoMenu = _chrome->MenuItemCaption(ChromeHost::kCommandUndo);
+    const std::wstring undoMenu   = _chrome->MenuItemCaption(ChromeHost::kCommandUndo);
     const std::wstring invertMenu = _chrome->MenuItemCaption(ChromeHost::kCommandInvert);
-    const std::wstring brushTip = _chrome->ToolTooltipForTest(EditorTool::Brush);
-    if (!undoMenu.ends_with(L"\t" + join(ctrlName, L"K")) ||
-        !invertMenu.ends_with(L"\t" + join(ctrlName, join(shiftName, L"K"))) ||
-        brushTip != FormatStringResource(nullptr, IDS_TOOL_TOOLTIP, LoadStringResource(nullptr, IDS_TOOL_BRUSH),
-                                         std::wstring(L"K")))
+    const std::wstring brushTip   = _chrome->ToolTooltipForTest(EditorTool::Brush);
+    if (! undoMenu.ends_with(L"\t" + join(ctrlName, L"K")) || ! invertMenu.ends_with(L"\t" + join(ctrlName, join(shiftName, L"K"))) ||
+        brushTip != FormatStringResource(nullptr, IDS_TOOL_TOOLTIP, LoadStringResource(nullptr, IDS_TOOL_BRUSH), std::wstring(L"K")))
     {
         return fail(std::format(L"A replacement did not show in the menus and tooltips (Undo '{}', Invert '{}', "
                                 L"Brush '{}').\n",
-                                undoMenu, invertMenu, brushTip));
+                                undoMenu,
+                                invertMenu,
+                                brushTip));
     }
     replace({});
     SyncChrome();

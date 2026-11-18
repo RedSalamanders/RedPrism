@@ -35,7 +35,9 @@ std::uint64_t AllocateUploadQueueIdentity() noexcept
 #pragma warning(disable : 4625 4626 5026 5027)
 struct GpuUploadQueue::Impl final
 {
-    explicit Impl(GpuUploadQueue& uploadQueue) noexcept : queue(uploadQueue) {}
+    explicit Impl(GpuUploadQueue& uploadQueue) noexcept : queue(uploadQueue)
+    {
+    }
     enum class State : std::uint8_t
     {
         Free,
@@ -44,10 +46,10 @@ struct GpuUploadQueue::Impl final
         Lent,
         CopyBarrier,
     };
-    static constexpr std::uint64_t kLent = 1;
-    static constexpr std::uint64_t kFilled = 2;
-    static constexpr std::uint64_t kCancelled = 3;
-    static constexpr std::uint64_t kFailed = 4;
+    static constexpr std::uint64_t kLent            = 1;
+    static constexpr std::uint64_t kFilled          = 2;
+    static constexpr std::uint64_t kCancelled       = 3;
+    static constexpr std::uint64_t kFailed          = 4;
     static constexpr std::uint64_t kGenerationLimit = std::numeric_limits<std::uint64_t>::max() >> 3;
 
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -56,17 +58,17 @@ struct GpuUploadQueue::Impl final
 #pragma warning(disable : 4625 4626 5026 5027)
     struct Slot final
     {
-        Impl* owner = nullptr;
-        State state = State::Free;
-        std::uint64_t generation = 0;
+        Impl* owner                    = nullptr;
+        State state                    = State::Free;
+        std::uint64_t generation       = 0;
         std::uint64_t deviceGeneration = 0;
         // Generation and result share one atomic so a delayed duplicate cannot race reuse into a new loan.
         std::atomic<std::uint64_t> publication{0};
         std::atomic<bool> signalled{false};
         bool cancelled = false;
-        bool retired = false;
-        bool poisoned = false;
-        bool retry = false;
+        bool retired   = false;
+        bool poisoned  = false;
+        bool retry     = false;
         wil::unique_handle event;
         JobEventTicket wait;
         GpuResidencyReservation retirementReservation; // last release after retained graphics storage
@@ -79,18 +81,18 @@ struct GpuUploadQueue::Impl final
         wil::com_ptr_nothrow<ID3D11SamplerState> mipSampler;
         wil::com_ptr_nothrow<ID3D11RasterizerState> mipRasterizer;
         wil::com_ptr_nothrow<ID3D11DepthStencilState> mipDepth;
-        unsigned int mipWidth = 0;
+        unsigned int mipWidth  = 0;
         unsigned int mipHeight = 0;
         wil::com_ptr_nothrow<ID3D11Texture2D> staging;
         wil::com_ptr_nothrow<ID3D11DeviceContext> context;
         wil::com_ptr_nothrow<ID3D11Fence> completionFence;
         unsigned int subresource = 0;
-        unsigned int x = 0;
-        unsigned int y = 0;
-        unsigned int width = 0;
-        unsigned int height = 0;
-        DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-        std::uint64_t bytes = 0;
+        unsigned int x           = 0;
+        unsigned int y           = 0;
+        unsigned int width       = 0;
+        unsigned int height      = 0;
+        DXGI_FORMAT format       = DXGI_FORMAT_UNKNOWN;
+        std::uint64_t bytes      = 0;
         JobTicket ticket;
         GpuUploadReceiver* receiver = nullptr;
     };
@@ -99,7 +101,7 @@ struct GpuUploadQueue::Impl final
     DWORD ownerThread = GetCurrentThreadId();
     GpuUploadQueue& queue;
     const std::uint64_t identity = AllocateUploadQueueIdentity();
-    JobScheduler* scheduler = nullptr;
+    JobScheduler* scheduler      = nullptr;
     OwnerWorkMultiplexer* routes = nullptr;
     GpuResidencyReservation persistentReservation; // survives every reusable/retired staging allocation
     std::array<Slot, kCapacity> slots;
@@ -109,16 +111,16 @@ struct GpuUploadQueue::Impl final
     wil::com_ptr_nothrow<IDXGIDevice2> dxgiDevice2;
     wil::com_ptr_nothrow<ID3D11Fence> fence;
     GpuCapabilities::CompletionRoute route = GpuCapabilities::CompletionRoute::None;
-    std::uint64_t deviceGeneration = 0;
-    std::uint64_t fenceValue = 0;
-    std::uint64_t stagingBytes = 0;
-    std::uint64_t mipSlices = 0;
-    std::size_t inFlight = 0;
-    std::size_t next = 0;
-    bool registered = false;
-    bool stopped = false;
-    unsigned int busyMaps = 0;
-    unsigned int mapAttempts = 0;
+    std::uint64_t deviceGeneration         = 0;
+    std::uint64_t fenceValue               = 0;
+    std::uint64_t stagingBytes             = 0;
+    std::uint64_t mipSlices                = 0;
+    std::size_t inFlight                   = 0;
+    std::size_t next                       = 0;
+    bool registered                        = false;
+    bool stopped                           = false;
+    unsigned int busyMaps                  = 0;
+    unsigned int mapAttempts               = 0;
 
     void CheckOwner() const noexcept
     {
@@ -159,7 +161,7 @@ struct GpuUploadQueue::Impl final
     }
     void Finish(Slot& slot, HRESULT result) noexcept
     {
-        auto* receiver = slot.receiver;
+        auto* receiver    = slot.receiver;
         const auto ticket = slot.ticket;
         if (slot.state != State::Pending)
         {
@@ -170,18 +172,18 @@ struct GpuUploadQueue::Impl final
         slot.publication.store(0, std::memory_order_release);
         slot.receiver = nullptr;
         slot.destination.reset();
-        if (!slot.poisoned)
+        if (! slot.poisoned)
         {
             DropMipState(slot);
             slot.completionFence.reset();
         }
-        if (slot.retired && !slot.poisoned)
+        if (slot.retired && ! slot.poisoned)
             DropStorage(slot);
         receiver->UploadFinished(ticket, result);
     }
     HRESULT PrepareStorage(Slot& slot) noexcept
     {
-        const auto width = std::bit_ceil(slot.width);
+        const auto width  = std::bit_ceil(slot.width);
         const auto height = std::bit_ceil(slot.height);
         if (slot.staging)
         {
@@ -195,22 +197,22 @@ struct GpuUploadQueue::Impl final
         if (required > kStagingCapBytes - stagingBytes)
         {
             for (auto& candidate : slots)
-                if (candidate.state == State::Free && !candidate.poisoned)
+                if (candidate.state == State::Free && ! candidate.poisoned)
                     DropStorage(candidate);
         }
         if (required > kStagingCapBytes - stagingBytes)
             return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
         D3D11_TEXTURE2D_DESC desc{};
-        desc.Width = width;
-        desc.Height = height;
-        desc.MipLevels = 1;
-        desc.ArraySize = 1;
-        desc.Format = slot.format;
+        desc.Width            = width;
+        desc.Height           = height;
+        desc.MipLevels        = 1;
+        desc.ArraySize        = 1;
+        desc.Format           = slot.format;
         desc.SampleDesc.Count = 1;
-        desc.Usage = D3D11_USAGE_STAGING;
-        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        HRESULT result = S_OK;
-        if (!queue.FailAt(GpuUploadFailurePoint::StagingCreation, result))
+        desc.Usage            = D3D11_USAGE_STAGING;
+        desc.CPUAccessFlags   = D3D11_CPU_ACCESS_WRITE;
+        HRESULT result        = S_OK;
+        if (! queue.FailAt(GpuUploadFailurePoint::StagingCreation, result))
             result = device->CreateTexture2D(&desc, nullptr, slot.staging.put());
         if (SUCCEEDED(result))
         {
@@ -225,12 +227,12 @@ struct GpuUploadQueue::Impl final
     {
         slot.signalled.store(false, std::memory_order_relaxed);
         slot.completionFence = fence;
-        HRESULT injected = E_FAIL;
-        if (!alreadyRearmed)
+        HRESULT injected     = E_FAIL;
+        if (! alreadyRearmed)
         {
             if (queue.FailAt(GpuUploadFailurePoint::WaitRearm, injected))
                 return injected;
-            if (!scheduler->RearmEventWait(slot.wait))
+            if (! scheduler->RearmEventWait(slot.wait))
                 return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         }
         const auto signalPoint = recovery       ? GpuUploadFailurePoint::RecoverySignal
@@ -266,7 +268,7 @@ struct GpuUploadQueue::Impl final
             Finish(slot, result);
             return;
         }
-        if (!scheduler->RearmEventWait(slot.wait))
+        if (! scheduler->RearmEventWait(slot.wait))
         {
             Finish(slot, HRESULT_FROM_WIN32(ERROR_INVALID_STATE));
             return;
@@ -276,11 +278,10 @@ struct GpuUploadQueue::Impl final
         slot.state = State::CopyBarrier;
         {
             const ScopedUiTiming timing{UiTimingKind::MipGeneration};
-            auto* source = slot.mipView.get();
-            auto* target = slot.mipTarget.get();
+            auto* source  = slot.mipView.get();
+            auto* target  = slot.mipTarget.get();
             auto* sampler = slot.mipSampler.get();
-            const D3D11_VIEWPORT viewport{0, 0, static_cast<float>(slot.mipWidth), static_cast<float>(slot.mipHeight),
-                                          0, 1};
+            const D3D11_VIEWPORT viewport{0, 0, static_cast<float>(slot.mipWidth), static_cast<float>(slot.mipHeight), 0, 1};
             slot.context->IASetInputLayout(nullptr);
             slot.context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             slot.context->VSSetShader(slot.mipVertex.get(), nullptr, 0);
@@ -297,7 +298,7 @@ struct GpuUploadQueue::Impl final
             slot.context->PSSetSamplers(0, 1, &sampler);
             slot.context->Draw(3, 0);
             // Remove persistent context references; the admitted queue/creator holds objects until the fence.
-            source = nullptr;
+            source  = nullptr;
             sampler = nullptr;
             slot.context->PSSetShaderResources(0, 1, &source);
             slot.context->PSSetSamplers(0, 1, &sampler);
@@ -326,7 +327,7 @@ struct GpuUploadQueue::Impl final
         }
         if (slot.state == State::Pending)
             ++inFlight;
-        slot.state = State::MapBarrier; // charged even if this map fails
+        slot.state   = State::MapBarrier; // charged even if this map fails
         slot.context = context;
         if (mapAttempts != std::numeric_limits<unsigned int>::max())
             ++mapAttempts;
@@ -336,12 +337,12 @@ struct GpuUploadQueue::Impl final
             --busyMaps;
             result = DXGI_ERROR_WAS_STILL_DRAWING;
         }
-        else if (!queue.FailAt(GpuUploadFailurePoint::Map, result))
+        else if (! queue.FailAt(GpuUploadFailurePoint::Map, result))
             result = slot.context->Map(slot.staging.get(), 0, D3D11_MAP_WRITE, D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
-        if (result == DXGI_ERROR_WAS_STILL_DRAWING && !slot.retry)
+        if (result == DXGI_ERROR_WAS_STILL_DRAWING && ! slot.retry)
         {
             slot.retry = true;
-            result = Arm(slot, true);
+            result     = Arm(slot, true);
             if (SUCCEEDED(result))
                 return;
             slot.poisoned = true; // A failed signal may leave an old event producer; never reuse its wait class.
@@ -357,9 +358,9 @@ struct GpuUploadQueue::Impl final
         if (queue.FailAt(GpuUploadFailurePoint::MappedPitch, pitchFailure))
             mapped.RowPitch = static_cast<UINT>(kMaxRowBytes + 1);
         const std::uint64_t actualBytes = static_cast<std::uint64_t>(mapped.RowPitch) * desc.Height;
-        const std::uint64_t retained = stagingBytes - slot.bytes;
-        if (!mapped.pData || mapped.RowPitch < static_cast<std::uint64_t>(slot.width) * Channels(slot.format) ||
-            mapped.RowPitch > kMaxRowBytes || actualBytes > kStagingCapBytes - retained)
+        const std::uint64_t retained    = stagingBytes - slot.bytes;
+        if (! mapped.pData || mapped.RowPitch < static_cast<std::uint64_t>(slot.width) * Channels(slot.format) || mapped.RowPitch > kMaxRowBytes ||
+            actualBytes > kStagingCapBytes - retained)
         {
             slot.context->Unmap(slot.staging.get(), 0);
             DropStorage(slot); // An oversized/invalid driver pitch must not remain in the idle cache.
@@ -367,8 +368,8 @@ struct GpuUploadQueue::Impl final
             return;
         }
         stagingBytes = retained + actualBytes;
-        slot.bytes = actualBytes;
-        slot.state = State::Lent;
+        slot.bytes   = actualBytes;
+        slot.state   = State::Lent;
         slot.publication.store((slot.generation << 3) | kLent, std::memory_order_release);
         const GpuUploadRows rows{static_cast<std::uint8_t*>(mapped.pData),
                                  static_cast<std::size_t>(mapped.RowPitch) * slot.height,
@@ -383,16 +384,11 @@ struct GpuUploadQueue::Impl final
     {
         switch (slot.state)
         {
-        case State::Free:
-            return false;
-        case State::Pending:
-            return slot.retired || slot.cancelled || (slot.mipView && slot.mipCancellation.IsCancelled()) ||
-                   inFlight < kMaxInFlight;
-        case State::MapBarrier:
-        case State::CopyBarrier:
-            return slot.retired || slot.signalled.load(std::memory_order_acquire);
-        case State::Lent:
-            return (slot.publication.load(std::memory_order_acquire) & 7U) != kLent;
+            case State::Free: return false;
+            case State::Pending: return slot.retired || slot.cancelled || (slot.mipView && slot.mipCancellation.IsCancelled()) || inFlight < kMaxInFlight;
+            case State::MapBarrier:
+            case State::CopyBarrier: return slot.retired || slot.signalled.load(std::memory_order_acquire);
+            case State::Lent: return (slot.publication.load(std::memory_order_acquire) & 7U) != kLent;
         }
         return false;
     }
@@ -412,7 +408,7 @@ GpuUploadQueue::~GpuUploadQueue()
 
 HRESULT GpuUploadQueue::Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer* routes) noexcept
 {
-    if (_impl || !scheduler.WakeHandle() || scheduler.InUiCallback())
+    if (_impl || ! scheduler.WakeHandle() || scheduler.InUiCallback())
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     try
     {
@@ -425,22 +421,22 @@ HRESULT GpuUploadQueue::Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer
     {
         return E_OUTOFMEMORY;
     }
-    auto& self = *_impl;
+    auto& self     = *_impl;
     self.scheduler = &scheduler;
-    self.routes = routes;
+    self.routes    = routes;
     if (self.identity == 0)
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     for (auto& slot : self.slots)
     {
-        slot.owner = &self;
+        slot.owner       = &self;
         HRESULT injected = E_FAIL;
         if (FailAt(GpuUploadFailurePoint::EventCreation, injected))
             return injected;
         slot.event.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
-        if (!slot.event)
+        if (! slot.event)
             return HRESULT_FROM_WIN32(GetLastError());
         HRESULT result = S_OK;
-        if (!FailAt(GpuUploadFailurePoint::WaitRegistration, result))
+        if (! FailAt(GpuUploadFailurePoint::WaitRegistration, result))
             result = scheduler.RegisterEventWait(slot.event.get(), Impl::Signalled, &slot, slot.wait);
         if (FAILED(result))
             return result;
@@ -448,7 +444,7 @@ HRESULT GpuUploadQueue::Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer
     HRESULT injected = E_FAIL;
     if (FailAt(GpuUploadFailurePoint::OwnerRegistration, injected))
         return injected;
-    if (!(routes ? routes->Attach(*this) : scheduler.RegisterOwnerWork(*this)))
+    if (! (routes ? routes->Attach(*this) : scheduler.RegisterOwnerWork(*this)))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     self.registered = true;
     return S_OK;
@@ -456,7 +452,7 @@ HRESULT GpuUploadQueue::Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer
 
 HRESULT GpuUploadQueue::Bind(ID3D11Device* device, ID3D11DeviceContext* context, bool forceEventForTest) noexcept
 {
-    if (!_impl || _impl->stopped)
+    if (! _impl || _impl->stopped)
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     auto& self = *_impl;
     self.CheckOwner();
@@ -488,25 +484,24 @@ HRESULT GpuUploadQueue::Bind(ID3D11Device* device, ID3D11DeviceContext* context,
             return result;
     }
     RetireDevice();
-    self.device = device;
-    self.context = context;
-    self.context4 = std::move(context4);
-    self.fence = std::move(fence);
+    self.device      = device;
+    self.context     = context;
+    self.context4    = std::move(context4);
+    self.fence       = std::move(fence);
     self.dxgiDevice2 = std::move(dxgiDevice2);
-    self.route = route;
-    self.fenceValue = 0;
+    self.route       = route;
+    self.fenceValue  = 0;
     ++self.deviceGeneration;
     return S_OK;
 }
 
 bool GpuUploadQueue::AdmitPersistentResidency(GpuResidencyReservation& reservation) noexcept
 {
-    if (!_impl || !reservation)
+    if (! _impl || ! reservation)
         return false;
     auto& self = *_impl;
     self.CheckOwner();
-    if (self.stopped || self.stagingBytes || self.inFlight || HasPending() ||
-        reservation.DeviceGeneration() != self.deviceGeneration ||
+    if (self.stopped || self.stagingBytes || self.inFlight || HasPending() || reservation.DeviceGeneration() != self.deviceGeneration ||
         reservation.Bytes() < kStagingCapBytes + GpuResidencyBudget::kMinimumHeadroom)
         return false;
     self.persistentReservation = std::move(reservation);
@@ -515,22 +510,26 @@ bool GpuUploadQueue::AdmitPersistentResidency(GpuResidencyReservation& reservati
 
 bool GpuUploadQueue::HasAdmittedPersistentResidency() const noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return false;
     _impl->CheckOwner();
-    return !_impl->stopped && _impl->persistentReservation &&
-           _impl->persistentReservation.DeviceGeneration() == _impl->deviceGeneration;
+    return ! _impl->stopped && _impl->persistentReservation && _impl->persistentReservation.DeviceGeneration() == _impl->deviceGeneration;
 }
 
-HRESULT GpuUploadQueue::Enqueue(ID3D11Texture2D* destination, unsigned int subresource, unsigned int x, unsigned int y,
-                                unsigned int width, unsigned int height, JobTicket ticket,
+HRESULT GpuUploadQueue::Enqueue(ID3D11Texture2D* destination,
+                                unsigned int subresource,
+                                unsigned int x,
+                                unsigned int y,
+                                unsigned int width,
+                                unsigned int height,
+                                JobTicket ticket,
                                 GpuUploadReceiver& receiver) noexcept
 {
-    if (!_impl || _impl->stopped || !_impl->device)
+    if (! _impl || _impl->stopped || ! _impl->device)
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     auto& self = *_impl;
     self.CheckOwner();
-    if (!destination || width == 0 || height == 0 || ticket.slot >= JobScheduler::kCapacity || ticket.generation == 0)
+    if (! destination || width == 0 || height == 0 || ticket.slot >= JobScheduler::kCapacity || ticket.generation == 0)
         return E_INVALIDARG;
     D3D11_TEXTURE2D_DESC desc{};
     destination->GetDesc(&desc);
@@ -538,12 +537,11 @@ HRESULT GpuUploadQueue::Enqueue(ID3D11Texture2D* destination, unsigned int subre
         (desc.Format != DXGI_FORMAT_R8_UNORM && desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM) ||
         subresource >= static_cast<std::uint64_t>(desc.MipLevels) * desc.ArraySize)
         return E_INVALIDARG;
-    const auto mip = subresource % desc.MipLevels;
-    const auto mipWidth = mip < 32 ? std::max(1U, desc.Width >> mip) : 1U;
+    const auto mip       = subresource % desc.MipLevels;
+    const auto mipWidth  = mip < 32 ? std::max(1U, desc.Width >> mip) : 1U;
     const auto mipHeight = mip < 32 ? std::max(1U, desc.Height >> mip) : 1U;
-    const auto rowBytes = static_cast<std::uint64_t>(width) * Impl::Channels(desc.Format);
-    if (x > mipWidth || y > mipHeight || width > mipWidth - x || height > mipHeight - y || rowBytes > kMaxRowBytes ||
-        rowBytes * height > kChunkBytes)
+    const auto rowBytes  = static_cast<std::uint64_t>(width) * Impl::Channels(desc.Format);
+    if (x > mipWidth || y > mipHeight || width > mipWidth - x || height > mipHeight - y || rowBytes > kMaxRowBytes || rowBytes * height > kChunkBytes)
         return E_INVALIDARG;
     wil::com_ptr_nothrow<ID3D11Device> destinationDevice;
     destination->GetDevice(destinationDevice.put());
@@ -555,17 +553,17 @@ HRESULT GpuUploadQueue::Enqueue(ID3D11Texture2D* destination, unsigned int subre
             continue;
         slot.destination = destination;
         slot.mipView.reset();
-        slot.subresource = subresource;
-        slot.x = x;
-        slot.y = y;
-        slot.width = width;
-        slot.height = height;
-        slot.format = desc.Format;
-        slot.ticket = ticket;
-        slot.receiver = &receiver;
-        slot.cancelled = false;
-        slot.retired = false;
-        slot.retry = false;
+        slot.subresource      = subresource;
+        slot.x                = x;
+        slot.y                = y;
+        slot.width            = width;
+        slot.height           = height;
+        slot.format           = desc.Format;
+        slot.ticket           = ticket;
+        slot.receiver         = &receiver;
+        slot.cancelled        = false;
+        slot.retired          = false;
+        slot.retry            = false;
         slot.deviceGeneration = self.deviceGeneration;
         ++slot.generation;
         slot.state = Impl::State::Pending;
@@ -575,15 +573,14 @@ HRESULT GpuUploadQueue::Enqueue(ID3D11Texture2D* destination, unsigned int subre
     return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
 }
 
-HRESULT GpuUploadQueue::EnqueueMipSlice(GpuMipSlice slice, JobTicket ticket, GpuUploadReceiver& receiver,
-                                        CancelToken cancellation) noexcept
+HRESULT GpuUploadQueue::EnqueueMipSlice(GpuMipSlice slice, JobTicket ticket, GpuUploadReceiver& receiver, CancelToken cancellation) noexcept
 {
-    if (!_impl || _impl->stopped || !_impl->device || !HasAdmittedPersistentResidency())
+    if (! _impl || _impl->stopped || ! _impl->device || ! HasAdmittedPersistentResidency())
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     auto& self = *_impl;
     self.CheckOwner();
-    if (!slice.source || !slice.destination || !slice.vertex || !slice.pixel || !slice.sampler || !slice.rasterizer ||
-        !slice.depth || !slice.width || !slice.height || ticket.slot >= JobScheduler::kCapacity || !ticket.generation)
+    if (! slice.source || ! slice.destination || ! slice.vertex || ! slice.pixel || ! slice.sampler || ! slice.rasterizer || ! slice.depth || ! slice.width ||
+        ! slice.height || ticket.slot >= JobScheduler::kCapacity || ! ticket.generation)
         return E_INVALIDARG;
     if (slice.deviceGeneration != self.deviceGeneration)
         return E_ABORT;
@@ -591,15 +588,14 @@ HRESULT GpuUploadQueue::EnqueueMipSlice(GpuMipSlice slice, JobTicket ticket, Gpu
     slice.source->GetDesc(&view);
     D3D11_RENDER_TARGET_VIEW_DESC target{};
     slice.destination->GetDesc(&target);
-    if (view.ViewDimension != D3D11_SRV_DIMENSION_TEXTURE2D || view.Texture2D.MipLevels != 1 ||
-        target.ViewDimension != D3D11_RTV_DIMENSION_TEXTURE2D ||
+    if (view.ViewDimension != D3D11_SRV_DIMENSION_TEXTURE2D || view.Texture2D.MipLevels != 1 || target.ViewDimension != D3D11_RTV_DIMENSION_TEXTURE2D ||
         target.Texture2D.MipSlice != view.Texture2D.MostDetailedMip + 1 || target.Format != view.Format)
         return E_INVALIDARG;
     wil::com_ptr_nothrow<ID3D11Resource> sourceResource;
     wil::com_ptr_nothrow<ID3D11Resource> targetResource;
     slice.source->GetResource(sourceResource.put());
     slice.destination->GetResource(targetResource.put());
-    if (!sourceResource || sourceResource.get() != targetResource.get())
+    if (! sourceResource || sourceResource.get() != targetResource.get())
         return E_INVALIDARG;
     wil::com_ptr_nothrow<ID3D11Texture2D> texture;
     if (FAILED(sourceResource->QueryInterface(IID_PPV_ARGS(texture.put()))))
@@ -607,16 +603,14 @@ HRESULT GpuUploadQueue::EnqueueMipSlice(GpuMipSlice slice, JobTicket ticket, Gpu
     D3D11_TEXTURE2D_DESC description{};
     texture->GetDesc(&description);
     const auto first = view.Texture2D.MostDetailedMip;
-    if (description.Usage != D3D11_USAGE_DEFAULT || description.SampleDesc.Count != 1 || description.ArraySize != 1 ||
-        description.MipLevels < 2 || first >= description.MipLevels - 1 || first >= 31 ||
-        (std::max)(1U, description.Width >> (first + 1)) != slice.width ||
+    if (description.Usage != D3D11_USAGE_DEFAULT || description.SampleDesc.Count != 1 || description.ArraySize != 1 || description.MipLevels < 2 ||
+        first >= description.MipLevels - 1 || first >= 31 || (std::max)(1U, description.Width >> (first + 1)) != slice.width ||
         (std::max)(1U, description.Height >> (first + 1)) != slice.height || view.Format != description.Format ||
         (description.Format != DXGI_FORMAT_R8_UNORM && description.Format != DXGI_FORMAT_B8G8R8A8_UNORM) ||
-        (description.BindFlags & (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE)) !=
-            (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE))
+        (description.BindFlags & (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE)) != (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE))
         return E_INVALIDARG;
-    const std::array<ID3D11DeviceChild*, 8> children{texture.get(), slice.source,  slice.destination, slice.vertex,
-                                                     slice.pixel,   slice.sampler, slice.rasterizer,  slice.depth};
+    const std::array<ID3D11DeviceChild*, 8> children{
+        texture.get(), slice.source, slice.destination, slice.vertex, slice.pixel, slice.sampler, slice.rasterizer, slice.depth};
     for (auto* child : children)
     {
         wil::com_ptr_nothrow<ID3D11Device> device;
@@ -628,22 +622,22 @@ HRESULT GpuUploadQueue::EnqueueMipSlice(GpuMipSlice slice, JobTicket ticket, Gpu
     {
         if (slot.state != Impl::State::Free || slot.poisoned || slot.generation == Impl::kGenerationLimit)
             continue;
-        slot.destination = texture.get();
-        slot.mipView = slice.source;
-        slot.mipTarget = slice.destination;
-        slot.mipVertex = slice.vertex;
-        slot.mipPixel = slice.pixel;
-        slot.mipSampler = slice.sampler;
-        slot.mipRasterizer = slice.rasterizer;
-        slot.mipDepth = slice.depth;
-        slot.mipWidth = slice.width;
-        slot.mipHeight = slice.height;
-        slot.mipCancellation = std::move(cancellation);
-        slot.ticket = ticket;
-        slot.receiver = &receiver;
-        slot.cancelled = false;
-        slot.retired = false;
-        slot.retry = false;
+        slot.destination      = texture.get();
+        slot.mipView          = slice.source;
+        slot.mipTarget        = slice.destination;
+        slot.mipVertex        = slice.vertex;
+        slot.mipPixel         = slice.pixel;
+        slot.mipSampler       = slice.sampler;
+        slot.mipRasterizer    = slice.rasterizer;
+        slot.mipDepth         = slice.depth;
+        slot.mipWidth         = slice.width;
+        slot.mipHeight        = slice.height;
+        slot.mipCancellation  = std::move(cancellation);
+        slot.ticket           = ticket;
+        slot.receiver         = &receiver;
+        slot.cancelled        = false;
+        slot.retired          = false;
+        slot.retry            = false;
         slot.deviceGeneration = self.deviceGeneration;
         ++slot.generation;
         slot.state = Impl::State::Pending;
@@ -655,17 +649,13 @@ HRESULT GpuUploadQueue::EnqueueMipSlice(GpuMipSlice slice, JobTicket ticket, Gpu
 
 bool GpuUploadQueue::PublishFilled(GpuUploadLease lease, GpuUploadFill result) noexcept
 {
-    if (!_impl || lease.queueIdentity != _impl->identity || lease.slot >= kCapacity || lease.generation == 0 ||
-        lease.generation > Impl::kGenerationLimit ||
+    if (! _impl || lease.queueIdentity != _impl->identity || lease.slot >= kCapacity || lease.generation == 0 || lease.generation > Impl::kGenerationLimit ||
         (result != GpuUploadFill::Ready && result != GpuUploadFill::Cancelled && result != GpuUploadFill::Failed))
         return false;
-    auto& slot = _impl->slots[lease.slot];
-    const auto status = result == GpuUploadFill::Ready       ? Impl::kFilled
-                        : result == GpuUploadFill::Cancelled ? Impl::kCancelled
-                                                             : Impl::kFailed;
+    auto& slot             = _impl->slots[lease.slot];
+    const auto status      = result == GpuUploadFill::Ready ? Impl::kFilled : result == GpuUploadFill::Cancelled ? Impl::kCancelled : Impl::kFailed;
     std::uint64_t expected = (lease.generation << 3) | Impl::kLent;
-    if (!slot.publication.compare_exchange_strong(expected, (lease.generation << 3) | status, std::memory_order_acq_rel,
-                                                  std::memory_order_relaxed))
+    if (! slot.publication.compare_exchange_strong(expected, (lease.generation << 3) | status, std::memory_order_acq_rel, std::memory_order_relaxed))
         return false;
     _impl->scheduler->NotifyOwnerWork();
     return true;
@@ -673,7 +663,7 @@ bool GpuUploadQueue::PublishFilled(GpuUploadLease lease, GpuUploadFill result) n
 
 void GpuUploadQueue::Cancel(JobTicket ticket) noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return;
     _impl->CheckOwner();
     for (auto& slot : _impl->slots)
@@ -684,13 +674,13 @@ void GpuUploadQueue::Cancel(JobTicket ticket) noexcept
 
 bool GpuUploadQueue::RetainRetiredResidency(JobTicket ticket, GpuResidencyReservation& reservation) noexcept
 {
-    if (!_impl || !reservation || ticket.slot >= JobScheduler::kCapacity || !ticket.generation)
+    if (! _impl || ! reservation || ticket.slot >= JobScheduler::kCapacity || ! ticket.generation)
         return false;
     _impl->CheckOwner();
     for (auto& slot : _impl->slots)
     {
         if (slot.ticket == ticket && slot.deviceGeneration == reservation.DeviceGeneration() &&
-            (slot.poisoned || (_impl->stopped && slot.state != Impl::State::Free)) && !slot.retirementReservation)
+            (slot.poisoned || (_impl->stopped && slot.state != Impl::State::Free)) && ! slot.retirementReservation)
         {
             slot.retirementReservation = std::move(reservation);
             return true;
@@ -701,14 +691,14 @@ bool GpuUploadQueue::RetainRetiredResidency(JobTicket ticket, GpuResidencyReserv
 
 void GpuUploadQueue::RetireDevice() noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return;
     auto& self = *_impl;
     self.CheckOwner();
     for (auto& slot : self.slots)
     {
         slot.retired = true;
-        if (slot.state == Impl::State::Free && !slot.poisoned)
+        if (slot.state == Impl::State::Free && ! slot.poisoned)
             self.DropStorage(slot);
     }
     self.device.reset();
@@ -722,7 +712,7 @@ void GpuUploadQueue::RetireDevice() noexcept
 
 void GpuUploadQueue::StopNotifications() noexcept
 {
-    if (!_impl || _impl->stopped)
+    if (! _impl || _impl->stopped)
         return;
     _impl->CheckOwner();
     _impl->stopped = true;
@@ -733,7 +723,7 @@ void GpuUploadQueue::StopNotifications() noexcept
 
 void GpuUploadQueue::CloseAfterWorkers() noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return;
     auto& self = *_impl;
     self.CheckOwner();
@@ -742,7 +732,7 @@ void GpuUploadQueue::CloseAfterWorkers() noexcept
     {
         if (slot.state == Impl::State::Lent)
             slot.context->Unmap(slot.staging.get(), 0);
-        slot.state = Impl::State::Free;
+        slot.state    = Impl::State::Free;
         slot.receiver = nullptr;
         slot.destination.reset();
         self.DropStorage(slot);
@@ -754,32 +744,30 @@ void GpuUploadQueue::CloseAfterWorkers() noexcept
 
 bool GpuUploadQueue::HasPending() const noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return false;
     _impl->CheckOwner();
-    return std::any_of(_impl->slots.begin(), _impl->slots.end(),
-                       [](const Impl::Slot& slot) noexcept { return slot.state != Impl::State::Free; });
+    return std::any_of(_impl->slots.begin(), _impl->slots.end(), [](const Impl::Slot& slot) noexcept { return slot.state != Impl::State::Free; });
 }
 bool GpuUploadQueue::HasReady() const noexcept
 {
-    if (!_impl || _impl->stopped)
+    if (! _impl || _impl->stopped)
         return false;
     _impl->CheckOwner();
-    return std::any_of(_impl->slots.begin(), _impl->slots.end(),
-                       [this](const Impl::Slot& slot) noexcept { return _impl->Ready(slot); });
+    return std::any_of(_impl->slots.begin(), _impl->slots.end(), [this](const Impl::Slot& slot) noexcept { return _impl->Ready(slot); });
 }
 
 void GpuUploadQueue::Pump() noexcept
 {
-    if (!_impl || _impl->stopped)
+    if (! _impl || _impl->stopped)
         return;
     auto& self = *_impl;
     self.CheckOwner();
     for (std::size_t offset = 0; offset < kCapacity; ++offset)
     {
         const auto index = (self.next + offset) % kCapacity;
-        auto& slot = self.slots[index];
-        if (!self.Ready(slot))
+        auto& slot       = self.slots[index];
+        if (! self.Ready(slot))
             continue;
         self.next = (index + 1) % kCapacity;
         if (slot.state == Impl::State::Lent)
@@ -799,13 +787,12 @@ void GpuUploadQueue::Pump() noexcept
                     HRESULT rearmFailure = E_FAIL;
                     if (self.queue.FailAt(GpuUploadFailurePoint::WaitRearm, rearmFailure))
                         self.Finish(slot, rearmFailure);
-                    else if (!self.scheduler->RearmEventWait(slot.wait))
+                    else if (! self.scheduler->RearmEventWait(slot.wait))
                         self.Finish(slot, HRESULT_FROM_WIN32(ERROR_INVALID_STATE));
                     else
                     {
                         const D3D11_BOX box{0, 0, 0, slot.width, slot.height, 1};
-                        slot.context->CopySubresourceRegion(slot.destination.get(), slot.subresource, slot.x, slot.y, 0,
-                                                            slot.staging.get(), 0, &box);
+                        slot.context->CopySubresourceRegion(slot.destination.get(), slot.subresource, slot.x, slot.y, 0, slot.staging.get(), 0, &box);
                         const HRESULT result = self.Arm(slot, false, true);
                         if (FAILED(result))
                         {
@@ -859,14 +846,14 @@ std::uint64_t GpuUploadQueue::StagingBytes() const noexcept
 }
 std::uint64_t GpuUploadQueue::RecordedMipSlices() const noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return 0;
     _impl->CheckOwner();
     return _impl->mipSlices;
 }
 std::uint64_t GpuUploadQueue::RetiredResidencyBytes() const noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return 0;
     _impl->CheckOwner();
     std::uint64_t bytes = 0;
@@ -885,9 +872,8 @@ std::size_t GpuUploadQueue::InFlightCount() const noexcept
 }
 std::size_t GpuUploadQueue::LentCount() const noexcept
 {
-    return _impl ? static_cast<std::size_t>(std::count_if(_impl->slots.begin(), _impl->slots.end(),
-                                                          [](const Impl::Slot& slot) noexcept
-                                                          { return slot.state == Impl::State::Lent; }))
+    return _impl ? static_cast<std::size_t>(
+                       std::count_if(_impl->slots.begin(), _impl->slots.end(), [](const Impl::Slot& slot) noexcept { return slot.state == Impl::State::Lent; }))
                  : 0;
 }
 std::uint64_t GpuUploadQueue::DeviceGeneration() const noexcept
@@ -900,10 +886,10 @@ GpuCapabilities::CompletionRoute GpuUploadQueue::CompletionRoute() const noexcep
 }
 void GpuUploadQueue::SetMapBusyForTest(unsigned int attempts) noexcept
 {
-    if (!_impl)
+    if (! _impl)
         return;
     _impl->CheckOwner();
-    _impl->busyMaps = attempts;
+    _impl->busyMaps    = attempts;
     _impl->mapAttempts = 0;
 }
 unsigned int GpuUploadQueue::MapAttemptsForTest() const noexcept
@@ -916,10 +902,10 @@ void GpuUploadQueue::SetFailureForTest(GpuUploadFailurePoint point, HRESULT erro
     if (_impl)
         _impl->CheckOwner();
     assert(FAILED(error));
-    _failurePoint = point;
+    _failurePoint  = point;
     _failureResult = FAILED(error) ? error : E_FAIL;
-    _failureSkip = skip;
-    _failureHits = 0;
+    _failureSkip   = skip;
+    _failureHits   = 0;
 }
 
 bool GpuUploadQueue::FailAt(GpuUploadFailurePoint point, HRESULT& result) noexcept
@@ -933,7 +919,7 @@ bool GpuUploadQueue::FailAt(GpuUploadFailurePoint point, HRESULT& result) noexce
     }
     ++_failureHits;
     _failurePoint = GpuUploadFailurePoint::None;
-    result = _failureResult;
+    result        = _failureResult;
     return true;
 }
 

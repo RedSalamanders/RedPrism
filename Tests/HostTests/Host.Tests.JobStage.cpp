@@ -29,7 +29,7 @@ void Expect(bool condition, const char* name) noexcept
 wil::unique_handle Event()
 {
     wil::unique_handle event{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    if (!event)
+    if (! event)
     {
         std::printf("FAIL job-stage.create-event\n");
         std::fflush(stdout);
@@ -60,8 +60,7 @@ void WaitForSuspension(JobScheduler& scheduler, HANDLE deferred) noexcept
         if (WaitForSingleObject(deferred, 0) == WAIT_OBJECT_0)
             return;
         const auto now = GetTickCount64();
-        if (now >= deadline ||
-            WaitForSingleObject(scheduler.WakeHandle(), static_cast<DWORD>(deadline - now)) != WAIT_OBJECT_0)
+        if (now >= deadline || WaitForSingleObject(scheduler.WakeHandle(), static_cast<DWORD>(deadline - now)) != WAIT_OBJECT_0)
         {
             std::printf("FAIL job-stage.suspension-timeout\n");
             std::fflush(stdout);
@@ -73,7 +72,7 @@ void WaitForSuspension(JobScheduler& scheduler, HANDLE deferred) noexcept
 bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
 {
     constexpr std::uint64_t available = 8ULL * 1024 * 1024 * 1024;
-    snapshot = {available, available};
+    snapshot                          = {available, available};
     return true;
 }
 
@@ -85,15 +84,15 @@ constexpr UINT kReleaseMessage = WM_APP + 0x451;
 #pragma warning(disable : 4625 4626 5026 5027)
 struct StageState final
 {
-    HANDLE entered = nullptr;
-    HANDLE release = nullptr;
+    HANDLE entered  = nullptr;
+    HANDLE release  = nullptr;
     HANDLE deferred = nullptr;
     std::atomic<unsigned int> runs{0};
-    unsigned int deferrals = 0;
+    unsigned int deferrals   = 0;
     unsigned int completions = 0;
-    JobStatus status = JobStatus::Failed;
+    JobStatus status         = JobStatus::Failed;
     JobTicket ticket{};
-    bool waitOnFirstRun = false;
+    bool waitOnFirstRun              = false;
     std::atomic<unsigned int>* order = nullptr;
     std::atomic<unsigned int> firstRunOrder{0};
     std::atomic<unsigned int> completionOrder{0};
@@ -107,16 +106,17 @@ struct StageState final
 #pragma warning(disable : 4626 5027)
 class TwoStageJob final : public Job
 {
-  public:
-    explicit TwoStageJob(StageState& state) noexcept : _state(state) {}
+public:
+    explicit TwoStageJob(StageState& state) noexcept : _state(state)
+    {
+    }
 
     JobResult Run(JobContext& context) override
     {
         const unsigned int ordinal = _state.runs.fetch_add(1, std::memory_order_relaxed);
         if (ordinal == 0 && _state.order)
         {
-            _state.firstRunOrder.store(_state.order->fetch_add(1, std::memory_order_relaxed) + 1,
-                                       std::memory_order_relaxed);
+            _state.firstRunOrder.store(_state.order->fetch_add(1, std::memory_order_relaxed) + 1, std::memory_order_relaxed);
         }
         if (ordinal == 0)
         {
@@ -141,7 +141,7 @@ class TwoStageJob final : public Job
 
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (!_state.deferred || _state.deferrals != 0 || result.status != JobStatus::Finished)
+        if (! _state.deferred || _state.deferrals != 0 || result.status != JobStatus::Finished)
         {
             return false;
         }
@@ -157,12 +157,11 @@ class TwoStageJob final : public Job
         _state.status = result.status;
         if (_state.order)
         {
-            _state.completionOrder.store(_state.order->fetch_add(1, std::memory_order_relaxed) + 1,
-                                         std::memory_order_relaxed);
+            _state.completionOrder.store(_state.order->fetch_add(1, std::memory_order_relaxed) + 1, std::memory_order_relaxed);
         }
     }
 
-  private:
+private:
     StageState& _state;
 };
 #pragma warning(pop)
@@ -189,8 +188,10 @@ struct HookResumeState final
 #pragma warning(disable : 4626 5027)
 class HookResumeJob final : public Job
 {
-  public:
-    explicit HookResumeJob(HookResumeState& state) noexcept : _state(state) {}
+public:
+    explicit HookResumeJob(HookResumeState& state) noexcept : _state(state)
+    {
+    }
     JobResult Run(JobContext&) override
     {
         if (_state.runs.fetch_add(1, std::memory_order_relaxed) == 1)
@@ -205,8 +206,7 @@ class HookResumeJob final : public Job
             return false;
         _state.firstResume.store(_state.scheduler->Resume(ticket), std::memory_order_relaxed);
         _state.duplicateResume.store(_state.scheduler->Resume(ticket), std::memory_order_relaxed);
-        _state.secondRunObservedInsideHook.store(WaitForSingleObject(_state.secondRunEntered, 0) == WAIT_OBJECT_0,
-                                                 std::memory_order_relaxed);
+        _state.secondRunObservedInsideHook.store(WaitForSingleObject(_state.secondRunEntered, 0) == WAIT_OBJECT_0, std::memory_order_relaxed);
         return true;
     }
     void Completed(JobResult) noexcept override
@@ -214,7 +214,7 @@ class HookResumeJob final : public Job
         _state.completions.fetch_add(1, std::memory_order_relaxed);
     }
 
-  private:
+private:
     HookResumeState& _state;
 };
 #pragma warning(pop)
@@ -230,7 +230,7 @@ struct FalseDeferState final
     std::atomic<unsigned int> completions{0};
     std::atomic<bool> resumeAccepted{false};
     bool cancelBeforeFinalize = false;
-    JobStatus finalStatus = JobStatus::Failed;
+    JobStatus finalStatus     = JobStatus::Failed;
 };
 #pragma warning(pop)
 
@@ -240,8 +240,10 @@ struct FalseDeferState final
 #pragma warning(disable : 4626 5027)
 class ResumeThenFinalizeJob final : public Job
 {
-  public:
-    explicit ResumeThenFinalizeJob(FalseDeferState& state) noexcept : _state(state) {}
+public:
+    explicit ResumeThenFinalizeJob(FalseDeferState& state) noexcept : _state(state)
+    {
+    }
     JobResult Run(JobContext&) override
     {
         _state.runs.fetch_add(1, std::memory_order_relaxed);
@@ -260,7 +262,7 @@ class ResumeThenFinalizeJob final : public Job
         _state.completions.fetch_add(1, std::memory_order_relaxed);
     }
 
-  private:
+private:
     FalseDeferState& _state;
 };
 #pragma warning(pop)
@@ -273,14 +275,16 @@ struct OwnerPump final : OwnerWorkPump
 {
     JobScheduler& scheduler;
     JobTicket ticket{};
-    bool pending = false;
-    bool ready = false;
-    unsigned int pumps = 0;
-    bool resumeResult = false;
+    bool pending         = false;
+    bool ready           = false;
+    unsigned int pumps   = 0;
+    bool resumeResult    = false;
     bool duplicateResult = true;
-    bool* destroyed = nullptr;
+    bool* destroyed      = nullptr;
 
-    explicit OwnerPump(JobScheduler& owner) noexcept : scheduler(owner) {}
+    explicit OwnerPump(JobScheduler& owner) noexcept : scheduler(owner)
+    {
+    }
     ~OwnerPump() override
     {
         if (destroyed)
@@ -302,9 +306,9 @@ struct OwnerPump final : OwnerWorkPump
     void Pump() noexcept override
     {
         ++pumps;
-        ready = false;
-        pending = false;
-        resumeResult = scheduler.Resume(ticket);
+        ready           = false;
+        pending         = false;
+        resumeResult    = scheduler.Resume(ticket);
         duplicateResult = scheduler.Resume(ticket);
     }
 };
@@ -312,14 +316,14 @@ struct OwnerPump final : OwnerWorkPump
 
 struct ReleaseDispatch final
 {
-    OwnerPump* pump = nullptr;
+    OwnerPump* pump         = nullptr;
     JobScheduler* scheduler = nullptr;
-    unsigned int handled = 0;
+    unsigned int handled    = 0;
 };
 
 void DispatchRelease(void* context, void* nativeMessage) noexcept
 {
-    auto& state = *static_cast<ReleaseDispatch*>(context);
+    auto& state         = *static_cast<ReleaseDispatch*>(context);
     const auto& message = *static_cast<MSG*>(nativeMessage);
     if (message.message == kReleaseMessage)
     {
@@ -336,29 +340,28 @@ void TestDeferResumeFifoAndReadiness()
 {
     JobScheduler scheduler;
     Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK, "resume.initialize");
-    auto entered = Event();
+    auto entered       = Event();
     auto releaseWorker = Event();
-    auto deferred = Event();
+    auto deferred      = Event();
     std::atomic<unsigned int> order{0};
     StageState firstState{entered.get(), releaseWorker.get(), deferred.get()};
     firstState.waitOnFirstRun = true;
-    firstState.order = &order;
+    firstState.order          = &order;
     OwnerPump pump{scheduler};
     pump.pending = true;
     Expect(scheduler.RegisterOwnerWork(pump), "resume.register-source");
     OwnerPump duplicate{scheduler};
-    Expect(!scheduler.RegisterOwnerWork(duplicate), "resume.duplicate-source-refused");
+    Expect(! scheduler.RegisterOwnerWork(duplicate), "resume.duplicate-source-refused");
     std::unique_ptr<Job> firstJob = std::make_unique<TwoStageJob>(firstState);
     JobTicket firstTicket;
     Expect(scheduler.Submit(firstJob, {JobClass::Commit, 0x51, 4096}, firstTicket) == S_OK, "resume.first-submit");
     Wait(entered.get());
 
     StageState secondState{};
-    secondState.order = &order;
+    secondState.order              = &order;
     std::unique_ptr<Job> secondJob = std::make_unique<TwoStageJob>(secondState);
     JobTicket secondTicket;
-    Expect(scheduler.Submit(secondJob, {JobClass::Commit, 0x51, 0}, secondTicket) == S_OK,
-           "resume.serial-younger-submit");
+    Expect(scheduler.Submit(secondJob, {JobClass::Commit, 0x51, 0}, secondTicket) == S_OK, "resume.serial-younger-submit");
 
     // Consume submit readiness; later memory notifications can still precede the worker's result.
     (void)DrainCompletions(scheduler);
@@ -368,32 +371,27 @@ void TestDeferResumeFifoAndReadiness()
     WaitForSuspension(scheduler, deferred.get());
 
     pump.ticket = firstState.ticket;
-    Expect(!scheduler.UnregisterOwnerWork(pump), "resume.unregister-pending-refused");
+    Expect(! scheduler.UnregisterOwnerWork(pump), "resume.unregister-pending-refused");
     Expect(firstState.ticket == firstTicket && firstState.deferrals == 1, "resume.ticket-retained");
     Expect(scheduler.ReservedMemoryBytes() == 4096, "resume.peak-reservation-retained");
     Expect(firstState.reservedInSecondRun.load(std::memory_order_relaxed) == 0, "resume.second-stage-not-yet-run");
-    Expect(!scheduler.IsIdle() && !scheduler.HasUiWork(), "resume.suspended-is-pending-not-ui-work");
+    Expect(! scheduler.IsIdle() && ! scheduler.HasUiWork(), "resume.suspended-is-pending-not-ui-work");
     Expect(pump.pumps == 0, "resume.source-not-pumped-before-ready");
 
     MSG message{};
     (void)PeekMessageW(&message, nullptr, 0, 0, PM_NOREMOVE);
     ReleaseDispatch dispatch{&pump, &scheduler};
-    Expect(PostThreadMessageW(GetCurrentThreadId(), kReleaseMessage, 0, 0) != FALSE,
-           "resume.post-owner-release-message");
+    Expect(PostThreadMessageW(GetCurrentThreadId(), kReleaseMessage, 0, 0) != FALSE, "resume.post-owner-release-message");
     const SettleResult settled = SettleJobs(scheduler, 10000, DispatchRelease, &dispatch);
     Expect(settled == SettleResult::Settled, "resume.settle-waits-for-and-dispatches-release");
     Expect(dispatch.handled == 1 && pump.pumps == 1 && pump.resumeResult, "resume.ready-source-resumed-on-owner");
-    Expect(!pump.duplicateResult && !scheduler.Resume(firstTicket), "resume.duplicate-and-stale-refused");
-    Expect(firstState.runs.load(std::memory_order_relaxed) == 2 && firstState.completions == 1 &&
-               firstState.status == JobStatus::Finished,
+    Expect(! pump.duplicateResult && ! scheduler.Resume(firstTicket), "resume.duplicate-and-stale-refused");
+    Expect(firstState.runs.load(std::memory_order_relaxed) == 2 && firstState.completions == 1 && firstState.status == JobStatus::Finished,
            "resume.two-runs-one-final-completion");
-    Expect(secondState.runs.load(std::memory_order_relaxed) == 1 && secondState.completions == 1,
-           "resume.younger-serial-runs-after-final-apply");
-    Expect(secondState.firstRunOrder.load(std::memory_order_relaxed) >
-               firstState.completionOrder.load(std::memory_order_relaxed),
+    Expect(secondState.runs.load(std::memory_order_relaxed) == 1 && secondState.completions == 1, "resume.younger-serial-runs-after-final-apply");
+    Expect(secondState.firstRunOrder.load(std::memory_order_relaxed) > firstState.completionOrder.load(std::memory_order_relaxed),
            "resume.serial-younger-starts-after-predecessor-apply");
-    Expect(firstState.reservedInSecondRun.load(std::memory_order_relaxed) == 4096,
-           "resume.original-peak-borrowed-by-next-stage");
+    Expect(firstState.reservedInSecondRun.load(std::memory_order_relaxed) == 4096, "resume.original-peak-borrowed-by-next-stage");
     Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.IsIdle(), "resume.reservation-released-at-retirement");
     Expect(scheduler.UnregisterOwnerWork(pump), "resume.unregister-after-retirement");
     scheduler.Close();
@@ -403,11 +401,11 @@ void TestCancellationBeforeResume()
 {
     JobScheduler scheduler;
     Expect(scheduler.Initialize(1) == S_OK, "cancel.initialize");
-    auto entered = Event();
+    auto entered       = Event();
     auto releaseWorker = Event();
-    auto deferred = Event();
+    auto deferred      = Event();
     StageState state{entered.get(), releaseWorker.get(), deferred.get()};
-    state.waitOnFirstRun = true;
+    state.waitOnFirstRun     = true;
     std::unique_ptr<Job> job = std::make_unique<TwoStageJob>(state);
     JobTicket ticket;
     Expect(scheduler.Submit(job, {JobClass::Background}, ticket) == S_OK, "cancel.submit");
@@ -419,7 +417,7 @@ void TestCancellationBeforeResume()
     WaitForSuspension(scheduler, deferred.get());
 
     OwnerPump pump{scheduler};
-    pump.ticket = ticket;
+    pump.ticket  = ticket;
     pump.pending = true;
     Expect(scheduler.RegisterOwnerWork(pump), "cancel.register-source");
     Expect(scheduler.Cancel(ticket), "cancel.suspended-accepted");
@@ -427,8 +425,7 @@ void TestCancellationBeforeResume()
     scheduler.NotifyOwnerWork();
     const SettleResult settled = SettleJobs(scheduler, 10000);
     Expect(settled == SettleResult::Settled, "cancel.settle");
-    Expect(state.runs.load(std::memory_order_relaxed) == 1 && state.completions == 1 &&
-               state.status == JobStatus::Cancelled,
+    Expect(state.runs.load(std::memory_order_relaxed) == 1 && state.completions == 1 && state.status == JobStatus::Cancelled,
            "cancel.before-resume-skips-stage-and-completes-once");
     Expect(scheduler.UnregisterOwnerWork(pump), "cancel.unregister");
     scheduler.Close();
@@ -436,10 +433,10 @@ void TestCancellationBeforeResume()
 
 struct FailureState final
 {
-    unsigned int runs = 0;
-    unsigned int deferCalls = 0;
+    unsigned int runs        = 0;
+    unsigned int deferCalls  = 0;
     unsigned int completions = 0;
-    JobStatus status = JobStatus::Finished;
+    JobStatus status         = JobStatus::Finished;
 };
 
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -448,8 +445,10 @@ struct FailureState final
 #pragma warning(disable : 4626 5027)
 class FailureJob final : public Job
 {
-  public:
-    explicit FailureJob(FailureState& state) noexcept : _state(state) {}
+public:
+    explicit FailureJob(FailureState& state) noexcept : _state(state)
+    {
+    }
     JobResult Run(JobContext&) override
     {
         ++_state.runs;
@@ -466,7 +465,7 @@ class FailureJob final : public Job
         _state.status = result.status;
     }
 
-  private:
+private:
     FailureState& _state;
 };
 #pragma warning(pop)
@@ -480,8 +479,7 @@ void TestFailureWithoutDeferReleasesReservation()
     JobTicket ticket;
     Expect(scheduler.Submit(job, {JobClass::Background, 0, 1024}, ticket) == S_OK, "failure.submit");
     Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "failure.settle");
-    Expect(state.runs == 1 && state.deferCalls == 0 && state.completions == 1 && state.status == JobStatus::Failed,
-           "failure.no-defer-finalizes-once");
+    Expect(state.runs == 1 && state.deferCalls == 0 && state.completions == 1 && state.status == JobStatus::Failed, "failure.no-defer-finalizes-once");
     Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.IsIdle(), "failure.no-defer-cleans-reservation");
     scheduler.Close();
 }
@@ -492,18 +490,16 @@ void TestResumeInsideDeferredHookWaitsForHookReturn()
     Expect(scheduler.Initialize(1) == S_OK, "hook-resume.initialize");
     auto secondRunEntered = Event();
     HookResumeState state;
-    state.scheduler = &scheduler;
-    state.secondRunEntered = secondRunEntered.get();
+    state.scheduler          = &scheduler;
+    state.secondRunEntered   = secondRunEntered.get();
     std::unique_ptr<Job> job = std::make_unique<HookResumeJob>(state);
     JobTicket ticket;
     Expect(scheduler.Submit(job, {}, ticket) == S_OK, "hook-resume.submit");
     Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "hook-resume.settle");
-    Expect(state.firstResume.load(std::memory_order_relaxed) && !state.duplicateResume.load(std::memory_order_relaxed),
+    Expect(state.firstResume.load(std::memory_order_relaxed) && ! state.duplicateResume.load(std::memory_order_relaxed),
            "hook-resume.exactly-one-resume-accepted-inside-hook");
-    Expect(!state.secondRunObservedInsideHook.load(std::memory_order_relaxed),
-           "hook-resume.second-worker-stage-not-entered-during-hook");
-    Expect(WaitForSingleObject(secondRunEntered.get(), 0) == WAIT_OBJECT_0 &&
-               state.runs.load(std::memory_order_relaxed) == 2 &&
+    Expect(! state.secondRunObservedInsideHook.load(std::memory_order_relaxed), "hook-resume.second-worker-stage-not-entered-during-hook");
+    Expect(WaitForSingleObject(secondRunEntered.get(), 0) == WAIT_OBJECT_0 && state.runs.load(std::memory_order_relaxed) == 2 &&
                state.completions.load(std::memory_order_relaxed) == 1,
            "hook-resume.stage-starts-after-hook-and-finalizes-once");
     scheduler.Close();
@@ -514,23 +510,20 @@ void TestResumeThenFalseDeferFinalizesWithoutAnotherStage(bool cancel)
     JobScheduler scheduler;
     Expect(scheduler.Initialize(1) == S_OK, "false-defer.initialize");
     FalseDeferState state;
-    state.scheduler = &scheduler;
+    state.scheduler            = &scheduler;
     state.cancelBeforeFinalize = cancel;
-    std::unique_ptr<Job> job = std::make_unique<ResumeThenFinalizeJob>(state);
+    std::unique_ptr<Job> job   = std::make_unique<ResumeThenFinalizeJob>(state);
     JobTicket ticket;
     Expect(scheduler.Submit(job, {}, ticket) == S_OK, "false-defer.submit");
     Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "false-defer.settle");
     Expect(state.resumeAccepted.load(std::memory_order_relaxed), "false-defer.resume-request-accepted-in-hook");
-    Expect(state.runs.load(std::memory_order_relaxed) == 1 && state.completions.load(std::memory_order_relaxed) == 1 &&
-               !scheduler.Resume(ticket),
+    Expect(state.runs.load(std::memory_order_relaxed) == 1 && state.completions.load(std::memory_order_relaxed) == 1 && ! scheduler.Resume(ticket),
            "false-defer.finalizes-once-and-never-runs-resumed-stage");
-    Expect(state.finalStatus == (cancel ? JobStatus::Cancelled : JobStatus::Finished),
-           "false-defer.hook-cancellation-respected-before-final-apply");
+    Expect(state.finalStatus == (cancel ? JobStatus::Cancelled : JobStatus::Finished), "false-defer.hook-cancellation-respected-before-final-apply");
     scheduler.Close();
 }
 
-void CompleteFirstStageAsSuspended(JobScheduler& scheduler, StageState& state, JobTicket& ticket,
-                                   std::unique_ptr<Job>& job, const char* submitName)
+void CompleteFirstStageAsSuspended(JobScheduler& scheduler, StageState& state, JobTicket& ticket, std::unique_ptr<Job>& job, const char* submitName)
 {
     Expect(scheduler.Submit(job, {JobClass::Background}, ticket) == S_OK, submitName);
     Wait(state.entered, submitName);
@@ -540,8 +533,7 @@ void CompleteFirstStageAsSuspended(JobScheduler& scheduler, StageState& state, J
     scheduler.NotifyMemoryChanged();
     Wait(static_cast<HANDLE>(scheduler.WakeHandle()), "generation.unrelated-memory-wake");
     (void)DrainCompletions(scheduler);
-    Expect(WaitForSingleObject(state.deferred, 0) == WAIT_TIMEOUT && state.deferrals == 0 &&
-               state.runs.load(std::memory_order_relaxed) == 1,
+    Expect(WaitForSingleObject(state.deferred, 0) == WAIT_TIMEOUT && state.deferrals == 0 && state.runs.load(std::memory_order_relaxed) == 1,
            "generation.unrelated-wake-does-not-prove-suspension");
     (void)SetEvent(state.release);
     WaitForSuspension(scheduler, state.deferred);
@@ -551,32 +543,29 @@ void TestReusedSlotRejectsOlderGenerationResume()
 {
     JobScheduler scheduler;
     Expect(scheduler.Initialize(1) == S_OK, "generation.initialize");
-    auto oldEntered = Event();
-    auto oldRelease = Event();
+    auto oldEntered  = Event();
+    auto oldRelease  = Event();
     auto oldDeferred = Event();
     StageState oldState{oldEntered.get(), oldRelease.get(), oldDeferred.get()};
-    oldState.waitOnFirstRun = true;
+    oldState.waitOnFirstRun     = true;
     std::unique_ptr<Job> oldJob = std::make_unique<TwoStageJob>(oldState);
     JobTicket oldTicket;
     CompleteFirstStageAsSuspended(scheduler, oldState, oldTicket, oldJob, "generation.old-submit");
     Expect(scheduler.Cancel(oldTicket) && scheduler.Resume(oldTicket), "generation.old-cancel-and-promote");
     Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "generation.old-retire");
 
-    auto newEntered = Event();
-    auto newRelease = Event();
+    auto newEntered  = Event();
+    auto newRelease  = Event();
     auto newDeferred = Event();
     StageState newState{newEntered.get(), newRelease.get(), newDeferred.get()};
-    newState.waitOnFirstRun = true;
+    newState.waitOnFirstRun     = true;
     std::unique_ptr<Job> newJob = std::make_unique<TwoStageJob>(newState);
     JobTicket newTicket;
     CompleteFirstStageAsSuspended(scheduler, newState, newTicket, newJob, "generation.new-submit");
-    Expect(newTicket.slot == oldTicket.slot && newTicket.generation != oldTicket.generation,
-           "generation.same-slot-new-generation");
-    Expect(!scheduler.Resume(oldTicket) && scheduler.Resume(newTicket),
-           "generation.old-ticket-refused-replacement-resumed");
+    Expect(newTicket.slot == oldTicket.slot && newTicket.generation != oldTicket.generation, "generation.same-slot-new-generation");
+    Expect(! scheduler.Resume(oldTicket) && scheduler.Resume(newTicket), "generation.old-ticket-refused-replacement-resumed");
     Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "generation.new-retire");
-    Expect(newState.runs.load(std::memory_order_relaxed) == 2 && newState.completions == 1,
-           "generation.replacement-stage-completes-once");
+    Expect(newState.runs.load(std::memory_order_relaxed) == 2 && newState.completions == 1, "generation.replacement-stage-completes-once");
     scheduler.Close();
 }
 
@@ -604,8 +593,10 @@ struct ExternalOwnerState final
 #pragma warning(disable : 4626 5027)
 class ExternalOwnerPump final : public OwnerWorkPump
 {
-  public:
-    explicit ExternalOwnerPump(ExternalOwnerState& state) noexcept : _state(state) {}
+public:
+    explicit ExternalOwnerPump(ExternalOwnerState& state) noexcept : _state(state)
+    {
+    }
     bool HasPending() const noexcept override
     {
         return _state.pending.load(std::memory_order_acquire);
@@ -620,13 +611,12 @@ class ExternalOwnerPump final : public OwnerWorkPump
         _state.ready.store(false, std::memory_order_release);
         _state.pending.store(false, std::memory_order_release);
         _state.reentrantDrainIgnored.store(DrainCompletions(*_state.scheduler) == 0, std::memory_order_relaxed);
-        _state.reentrantActionIgnored.store(!RunUiActions(*_state.scheduler), std::memory_order_relaxed);
-        _state.unregisterRefused.store(!_state.scheduler->UnregisterOwnerWork(*this), std::memory_order_relaxed);
-        _state.registerRefused.store(!_state.scheduler->RegisterOwnerWork(*_state.replacement),
-                                     std::memory_order_relaxed);
+        _state.reentrantActionIgnored.store(! RunUiActions(*_state.scheduler), std::memory_order_relaxed);
+        _state.unregisterRefused.store(! _state.scheduler->UnregisterOwnerWork(*this), std::memory_order_relaxed);
+        _state.registerRefused.store(! _state.scheduler->RegisterOwnerWork(*_state.replacement), std::memory_order_relaxed);
     }
 
-  private:
+private:
     ExternalOwnerState& _state;
 };
 #pragma warning(pop)
@@ -634,8 +624,8 @@ class ExternalOwnerPump final : public OwnerWorkPump
 struct WaitNotifyState final
 {
     ExternalOwnerState* state = nullptr;
-    JobScheduler* scheduler = nullptr;
-    HANDLE callbackDone = nullptr;
+    JobScheduler* scheduler   = nullptr;
+    HANDLE callbackDone       = nullptr;
 };
 
 void PublishExternalOwnerReady(void* context) noexcept
@@ -659,32 +649,26 @@ void TestExternalOwnerReadinessAndCallbackReentrancy()
     ExternalOwnerPump replacement{state};
     state.replacement = &replacement;
     Expect(scheduler.RegisterOwnerWork(source), "external-owner.register");
-    Expect(!scheduler.IsIdle() && !scheduler.HasUiWork(), "external-owner.pending-is-idle-blocker-not-ui-work");
+    Expect(! scheduler.IsIdle() && ! scheduler.HasUiWork(), "external-owner.pending-is-idle-blocker-not-ui-work");
     scheduler.NotifyMemoryChanged();
     Expect(scheduler.HasUiWork() && state.pumps.load() == 0, "external-owner.memory-wake-is-separate-ready-work");
     (void)DrainCompletions(scheduler);
-    Expect(!scheduler.IsIdle() && !scheduler.HasUiWork() && state.pumps.load() == 0,
-           "external-owner.memory-drain-does-not-pump-unready-source");
+    Expect(! scheduler.IsIdle() && ! scheduler.HasUiWork() && state.pumps.load() == 0, "external-owner.memory-drain-does-not-pump-unready-source");
 
     auto signal = Event();
     JobEventTicket waitTicket;
     WaitNotifyState notify{&state, &scheduler, callbackDone.get()};
-    Expect(scheduler.RegisterEventWait(signal.get(), &PublishExternalOwnerReady, &notify, waitTicket) == S_OK,
-           "external-owner.wait-registration");
+    Expect(scheduler.RegisterEventWait(signal.get(), &PublishExternalOwnerReady, &notify, waitTicket) == S_OK, "external-owner.wait-registration");
     (void)SetEvent(signal.get());
     Wait(callbackDone.get());
     Expect(scheduler.RemoveEventWait(waitTicket), "external-owner.shared-wait-removed-and-joined");
-    Expect(!scheduler.RearmEventWait(waitTicket) && !scheduler.RemoveEventWait(waitTicket),
-           "external-owner.stale-wait-ticket-refused");
+    Expect(! scheduler.RearmEventWait(waitTicket) && ! scheduler.RemoveEventWait(waitTicket), "external-owner.stale-wait-ticket-refused");
     Expect(scheduler.HasUiWork(), "external-owner.external-notify-requests-owner-pass");
     (void)DrainCompletions(scheduler);
-    Expect(state.pumps.load(std::memory_order_relaxed) == 1 && scheduler.IsIdle(),
-           "external-owner.ready-pumped-and-pending-cleared");
-    Expect(state.reentrantDrainIgnored.load(std::memory_order_relaxed) &&
-               state.reentrantActionIgnored.load(std::memory_order_relaxed),
+    Expect(state.pumps.load(std::memory_order_relaxed) == 1 && scheduler.IsIdle(), "external-owner.ready-pumped-and-pending-cleared");
+    Expect(state.reentrantDrainIgnored.load(std::memory_order_relaxed) && state.reentrantActionIgnored.load(std::memory_order_relaxed),
            "external-owner.reentrant-drain-and-actions-ignored");
-    Expect(state.unregisterRefused.load(std::memory_order_relaxed) &&
-               state.registerRefused.load(std::memory_order_relaxed),
+    Expect(state.unregisterRefused.load(std::memory_order_relaxed) && state.registerRefused.load(std::memory_order_relaxed),
            "external-owner.registration-changes-refused-inside-pump");
     Expect(scheduler.UnregisterOwnerWork(source), "external-owner.unregister-after-callback-joined");
     scheduler.Close();
@@ -707,8 +691,10 @@ struct SuspendedCloseState final
 #pragma warning(disable : 4626)
 class SuspendedCloseJob final : public Job
 {
-  public:
-    SuspendedCloseJob(StageState& stage, SuspendedCloseState& state) noexcept : _stage(stage), _state(state) {}
+public:
+    SuspendedCloseJob(StageState& stage, SuspendedCloseState& state) noexcept : _stage(stage), _state(state)
+    {
+    }
     ~SuspendedCloseJob() override
     {
         _state.destructions.fetch_add(1, std::memory_order_relaxed);
@@ -734,7 +720,7 @@ class SuspendedCloseJob final : public Job
         _state.completions.fetch_add(1, std::memory_order_relaxed);
     }
 
-  private:
+private:
     StageState& _stage;
     SuspendedCloseState& _state;
 };
@@ -744,8 +730,8 @@ void TestCloseSuspendedDropsCallbacksAndDestroysOnce()
 {
     JobScheduler scheduler;
     Expect(scheduler.Initialize(1) == S_OK, "suspended-close.initialize");
-    auto entered = Event();
-    auto release = Event();
+    auto entered  = Event();
+    auto release  = Event();
     auto deferred = Event();
     StageState stage{entered.get(), release.get(), deferred.get()};
     SuspendedCloseState state;
@@ -759,31 +745,29 @@ void TestCloseSuspendedDropsCallbacksAndDestroysOnce()
     scheduler.NotifyMemoryChanged();
     Wait(wake);
     (void)DrainCompletions(scheduler);
-    Expect(WaitForSingleObject(deferred.get(), 0) != WAIT_OBJECT_0 &&
-               state.completions.load(std::memory_order_relaxed) == 0,
+    Expect(WaitForSingleObject(deferred.get(), 0) != WAIT_OBJECT_0 && state.completions.load(std::memory_order_relaxed) == 0,
            "suspended-close.memory-wake-does-not-prove-suspension");
     (void)SetEvent(release.get());
     WaitForSuspension(scheduler, deferred.get());
     scheduler.Close();
-    Expect(state.completions.load(std::memory_order_relaxed) == 0 &&
-               state.destructions.load(std::memory_order_relaxed) == 1,
+    Expect(state.completions.load(std::memory_order_relaxed) == 0 && state.destructions.load(std::memory_order_relaxed) == 1,
            "suspended-close.drops-callback-and-destroys-payload-once");
 }
 
 bool TightSyntheticMemory(void*, MemorySnapshot& snapshot) noexcept
 {
     constexpr std::uint64_t available = kMemoryAdmissionHeadroomBytes + 100;
-    snapshot = {available, available};
+    snapshot                          = {available, available};
     return true;
 }
 
 struct MemoryApplyState final
 {
-    JobScheduler* scheduler = nullptr;
-    Job* firstJob = nullptr;
-    StageState* successor = nullptr;
+    JobScheduler* scheduler     = nullptr;
+    Job* firstJob               = nullptr;
+    StageState* successor       = nullptr;
     bool appliedWithReservation = false;
-    bool successorNotStarted = false;
+    bool successorNotStarted    = false;
 };
 
 void CheckReservationDuringApply(void* context, Job& job, JobResult) noexcept
@@ -794,20 +778,20 @@ void CheckReservationDuringApply(void* context, Job& job, JobResult) noexcept
         return;
     }
     state.appliedWithReservation = state.scheduler->ReservedMemoryBytes() == 100;
-    state.successorNotStarted = state.successor->runs.load(std::memory_order_relaxed) == 0;
+    state.successorNotStarted    = state.successor->runs.load(std::memory_order_relaxed) == 0;
 }
 
 void TestReservationRetainedUntilFinalApplyThenWaitingJobAdmitted()
 {
     JobScheduler scheduler;
     Expect(scheduler.Initialize(1, {}, {&TightSyntheticMemory, nullptr}) == S_OK, "reservation.initialize");
-    auto firstEntered = Event();
-    auto firstRelease = Event();
+    auto firstEntered  = Event();
+    auto firstRelease  = Event();
     auto firstDeferred = Event();
     StageState firstState{firstEntered.get(), firstRelease.get(), firstDeferred.get()};
-    firstState.waitOnFirstRun = true;
+    firstState.waitOnFirstRun     = true;
     std::unique_ptr<Job> firstJob = std::make_unique<TwoStageJob>(firstState);
-    Job* firstJobRaw = firstJob.get();
+    Job* firstJobRaw              = firstJob.get();
     JobTicket firstTicket;
     Expect(scheduler.Submit(firstJob, {JobClass::Background, 0, 100}, firstTicket) == S_OK, "reservation.first-submit");
     Wait(firstEntered.get());
@@ -815,8 +799,7 @@ void TestReservationRetainedUntilFinalApplyThenWaitingJobAdmitted()
     StageState successorState{successorEntered.get()};
     std::unique_ptr<Job> successorJob = std::make_unique<TwoStageJob>(successorState);
     JobTicket successorTicket;
-    Expect(scheduler.Submit(successorJob, {JobClass::Background, 0, 100}, successorTicket) == S_OK,
-           "reservation.successor-submit-waits");
+    Expect(scheduler.Submit(successorJob, {JobClass::Background, 0, 100}, successorTicket) == S_OK, "reservation.successor-submit-waits");
     Expect(scheduler.ReservedMemoryBytes() == 100 && successorState.runs.load(std::memory_order_relaxed) == 0,
            "reservation.successor-blocked-by-first-reservation");
     (void)DrainCompletions(scheduler);
@@ -824,17 +807,13 @@ void TestReservationRetainedUntilFinalApplyThenWaitingJobAdmitted()
     (void)WaitForSingleObject(wake, 0);
     (void)SetEvent(firstRelease.get());
     WaitForSuspension(scheduler, firstDeferred.get());
-    Expect(scheduler.ReservedMemoryBytes() == 100 && successorState.runs.load(std::memory_order_relaxed) == 0,
-           "reservation.suspended-stage-retains-capacity");
+    Expect(scheduler.ReservedMemoryBytes() == 100 && successorState.runs.load(std::memory_order_relaxed) == 0, "reservation.suspended-stage-retains-capacity");
     Expect(scheduler.Resume(firstTicket), "reservation.resume-first");
     MemoryApplyState apply{&scheduler, firstJobRaw, &successorState};
-    Expect(SettleJobs(scheduler, 10000, nullptr, nullptr, &CheckReservationDuringApply, &apply) ==
-               SettleResult::Settled,
-           "reservation.resume-and-settle");
-    Expect(apply.appliedWithReservation && apply.successorNotStarted,
-           "reservation.retained-through-final-apply-before-successor-start");
-    Expect(successorState.runs.load(std::memory_order_relaxed) == 1 &&
-               WaitForSingleObject(successorEntered.get(), 0) == WAIT_OBJECT_0 && scheduler.ReservedMemoryBytes() == 0,
+    Expect(SettleJobs(scheduler, 10000, nullptr, nullptr, &CheckReservationDuringApply, &apply) == SettleResult::Settled, "reservation.resume-and-settle");
+    Expect(apply.appliedWithReservation && apply.successorNotStarted, "reservation.retained-through-final-apply-before-successor-start");
+    Expect(successorState.runs.load(std::memory_order_relaxed) == 1 && WaitForSingleObject(successorEntered.get(), 0) == WAIT_OBJECT_0 &&
+               scheduler.ReservedMemoryBytes() == 0,
            "reservation.successor-admitted-after-final-apply-and-releases");
     scheduler.Close();
 }
@@ -880,8 +859,10 @@ struct CloseState final
 #pragma warning(disable : 4626)
 class CloseJob final : public Job
 {
-  public:
-    explicit CloseJob(CloseState& state) noexcept : _state(state) {}
+public:
+    explicit CloseJob(CloseState& state) noexcept : _state(state)
+    {
+    }
     ~CloseJob() override
     {
         _state.destroyedAfterRun.store(_state.runReturned.load(std::memory_order_acquire), std::memory_order_release);
@@ -898,7 +879,7 @@ class CloseJob final : public Job
         _state.callbacks.fetch_add(1, std::memory_order_relaxed);
     }
 
-  private:
+private:
     CloseState& _state;
 };
 #pragma warning(pop)

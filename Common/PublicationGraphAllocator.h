@@ -14,12 +14,10 @@ template <class T> struct PublicationGraphAllocator final
     using value_type = T;
     std::shared_ptr<const SharedPublicationMemory> memory;
 
-    explicit PublicationGraphAllocator(std::shared_ptr<const SharedPublicationMemory> value) noexcept
-        : memory(std::move(value))
+    explicit PublicationGraphAllocator(std::shared_ptr<const SharedPublicationMemory> value) noexcept : memory(std::move(value))
     {
     }
-    template <class U>
-    PublicationGraphAllocator(const PublicationGraphAllocator<U>& other) noexcept : memory(other.memory)
+    template <class U> PublicationGraphAllocator(const PublicationGraphAllocator<U>& other) noexcept : memory(other.memory)
     {
     }
     [[nodiscard]] T* allocate(std::size_t count)

@@ -36,7 +36,7 @@ void Settle(JobScheduler& scheduler)
 template <typename Predicate> void Until(JobScheduler& scheduler, Predicate done)
 {
     const auto deadline = GetTickCount64() + 10000;
-    while (!done())
+    while (! done())
     {
         if (PumpMessages().quit)
             SetupFailure("unexpected-quit");
@@ -47,21 +47,20 @@ template <typename Predicate> void Until(JobScheduler& scheduler, Predicate done
         if (now >= deadline)
             SetupFailure("event-deadline");
         const HANDLE wake = scheduler.WakeHandle();
-        if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
-                                        MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+        if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
             SetupFailure("event-wait");
     }
 }
 struct Memory final
 {
     unsigned queries = 0;
-    bool scarce = false;
+    bool scarce      = false;
     static bool Sample(void* raw, MemorySnapshot& value) noexcept
     {
         auto& self = *static_cast<Memory*>(raw);
         ++self.queries;
         const auto available = self.scarce ? 0 : kMemoryAdmissionHeadroomBytes + 512ull * 1024 * 1024;
-        value = {available, available};
+        value                = {available, available};
         return true;
     }
 };
@@ -72,9 +71,8 @@ constexpr std::uint64_t kObserverBytes = 8192;
 #pragma warning(disable : 4626 5027)
 class EndpointObserverJob final : public Job
 {
-  public:
-    EndpointObserverJob(JobScheduler& scheduler, std::shared_ptr<SharedPublicationMemory>& output)
-        : _scheduler(scheduler), _output(output)
+public:
+    EndpointObserverJob(JobScheduler& scheduler, std::shared_ptr<SharedPublicationMemory>& output) : _scheduler(scheduler), _output(output)
     {
     }
     JobResult Run(JobContext&) override
@@ -89,12 +87,11 @@ class EndpointObserverJob final : public Job
     }
     void Completed(JobResult result) noexcept override
     {
-        if (result.status == JobStatus::Finished && _memory &&
-            _memory->BindAfterCompletedWork(_scheduler, _ticket) == S_OK)
+        if (result.status == JobStatus::Finished && _memory && _memory->BindAfterCompletedWork(_scheduler, _ticket) == S_OK)
             _output = std::move(_memory);
     }
 
-  private:
+private:
     JobScheduler& _scheduler;
     std::shared_ptr<SharedPublicationMemory>& _output;
     std::shared_ptr<SharedPublicationMemory> _memory;
@@ -108,24 +105,24 @@ class EndpointObserverJob final : public Job
 #pragma warning(disable : 4625 4626)
 class LeaseHolder final
 {
-  public:
+public:
     LeaseHolder()
-        : request(CreateEventW(nullptr, TRUE, FALSE, nullptr)), entered(CreateEventW(nullptr, TRUE, FALSE, nullptr)),
+        : request(CreateEventW(nullptr, TRUE, FALSE, nullptr)),
+          entered(CreateEventW(nullptr, TRUE, FALSE, nullptr)),
           release(CreateEventW(nullptr, TRUE, FALSE, nullptr))
     {
-        if (!request || !entered || !release)
+        if (! request || ! entered || ! release)
             SetupFailure("holder-events");
-        thread = std::jthread(
-            [this]
-            {
-                if (WaitForSingleObject(request.get(), 10000) != WAIT_OBJECT_0 || cancel.Token().IsCancelled())
-                    return;
-                auto lease = Raster::AcquireResidencyLease(cancel.Token());
-                held.store(lease.Held(), std::memory_order_release);
-                (void)SetEvent(entered.get());
-                if (lease.Held() && WaitForSingleObject(release.get(), 10000) != WAIT_OBJECT_0)
-                    expired.store(true, std::memory_order_release);
-            });
+        thread = std::jthread([this]
+        {
+            if (WaitForSingleObject(request.get(), 10000) != WAIT_OBJECT_0 || cancel.Token().IsCancelled())
+                return;
+            auto lease = Raster::AcquireResidencyLease(cancel.Token());
+            held.store(lease.Held(), std::memory_order_release);
+            (void)SetEvent(entered.get());
+            if (lease.Held() && WaitForSingleObject(release.get(), 10000) != WAIT_OBJECT_0)
+                expired.store(true, std::memory_order_release);
+        });
     }
     ~LeaseHolder()
     {
@@ -133,8 +130,7 @@ class LeaseHolder final
     }
     void RequestAndWait() noexcept
     {
-        if (!SetEvent(request.get()) || WaitForSingleObject(entered.get(), 10000) != WAIT_OBJECT_0 ||
-            !held.load(std::memory_order_acquire))
+        if (! SetEvent(request.get()) || WaitForSingleObject(entered.get(), 10000) != WAIT_OBJECT_0 || ! held.load(std::memory_order_acquire))
             SetupFailure("holder-acquisition");
     }
     void ReleaseAndJoin() noexcept
@@ -170,13 +166,13 @@ struct Probe final
 {
     Raster retired;
     LeaseHolder* holder = nullptr;
-    DWORD ownerThread = GetCurrentThreadId();
-    bool click = false;
-    bool grow = false;
+    DWORD ownerThread   = GetCurrentThreadId();
+    bool click          = false;
+    bool grow           = false;
     wil::unique_handle continueRefresh{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     std::atomic<bool> refreshStarted{false};
     std::atomic<unsigned> prepared{0}, growths{0};
-    unsigned terminalCallbacks = 0;
+    unsigned terminalCallbacks  = 0;
     bool terminalLeaseAvailable = false;
     static void Work(void* raw, SelectionOutlineGestureState::WorkStage stage) noexcept
     {
@@ -184,20 +180,19 @@ struct Probe final
         if (stage == SelectionOutlineGestureState::WorkStage::ResidencyRefreshStarted)
         {
             self.refreshStarted.store(true, std::memory_order_release);
-            if (!PostThreadMessageW(self.ownerThread, WM_APP + 0x6a0, 0, 0))
+            if (! PostThreadMessageW(self.ownerThread, WM_APP + 0x6a0, 0, 0))
                 SetupFailure("refresh-owner-wake");
             if (WaitForSingleObject(self.continueRefresh.get(), 10000) != WAIT_OBJECT_0)
                 SetupFailure("refresh-inspection-gate");
             return;
         }
-        const auto wanted = self.click ? SelectionOutlineGestureState::WorkStage::ClickPrepared
-                                       : SelectionOutlineGestureState::WorkStage::ClosePrepared;
+        const auto wanted = self.click ? SelectionOutlineGestureState::WorkStage::ClickPrepared : SelectionOutlineGestureState::WorkStage::ClosePrepared;
         if (stage != wanted)
             return;
         ++self.prepared;
         if (self.grow)
         {
-            if (!self.retired.Data())
+            if (! self.retired.Data())
                 SetupFailure("late-materialization");
             ++self.growths;
         }
@@ -219,26 +214,26 @@ struct Probe final
 
 void Run(Mode mode, const char* name)
 {
-    current = name;
+    current      = name;
     auto session = std::make_unique<DocumentSession>(512);
     DocumentFixture document;
-    document.id = Guid::Generate();
-    document.width = 64;
-    document.height = 64;
+    document.id        = Guid::Generate();
+    document.width     = 64;
+    document.height    = 64;
     document.selection = DocumentSelection{false, SelectionLoops{{{1, 2}, {7, 2}, {7, 6}, {1, 6}}}};
-    auto oldImage = Raster::MakeSparse(64, 64, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
-    auto layer = ImageLayer::Blank(L"Residency source", {64, 64});
-    layer.asset = RasterAsset{oldImage, {}, layer.name};
-    const auto active = layer.id;
+    auto oldImage      = Raster::MakeSparse(64, 64, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
+    auto layer         = ImageLayer::Blank(L"Residency source", {64, 64});
+    layer.asset        = RasterAsset{oldImage, {}, layer.name};
+    const auto active  = layer.id;
     document.layers.push_back(std::move(layer));
     session->ReplaceDocument(std::move(document).Seal(), active);
     session->BeginEdit(L"Seed raster");
     auto draft = CanvasDocumentDraft::Clone(*session->Document(), 1);
-    if (!draft)
+    if (! draft)
         SetupFailure("reference-draft");
     draft->EditLayers()[0].asset->image = Raster::MakeSparse(64, 64, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 1);
-    auto after = draft->Seal();
-    if (!after)
+    auto after                          = draft->Seal();
+    if (! after)
         SetupFailure("reference-seal");
     session->EditForTest([&](CanvasDocument& live) { live = std::move(*after); });
     session->EndEdit();
@@ -247,64 +242,64 @@ void Run(Mode mode, const char* name)
     session->history.MarkSaved();
     if (session->history.CaptureState().PastCount() != 1 || oldImage.IsMaterialized())
         SetupFailure("history-only-sparse-seed");
-    const auto generation = session->Generation();
-    const auto revision = session->history.CurrentRevision();
+    const auto generation  = session->Generation();
+    const auto revision    = session->history.CurrentRevision();
     const auto description = DescribeSelectionOutlineGestureMemory(*session);
-    if (!description)
+    if (! description)
         SetupFailure("complete-original-description");
     auto prefix = std::make_unique<HostSelectionPressInput>();
     HostSelectionPressInput::Context arrival;
-    arrival.document = description->source.document;
-    arrival.active = active;
-    arrival.ordinal = 1;
-    const bool click = mode == Mode::LateClick || mode == Mode::ForeignClick;
+    arrival.document   = description->source.document;
+    arrival.active     = active;
+    arrival.ordinal    = 1;
+    const bool click   = mode == Mode::LateClick || mode == Mode::ForeignClick;
     const bool foreign = mode == Mode::ForeignMove || mode == Mode::ForeignClick;
-    if (!prefix->Begin(29, arrival, {2, 3}, {}, false) ||
-        (!click && prefix->Move(29, {4, 6}, {}, false, 2) != HostSelectionPressInput::Admission::Recorded) ||
+    if (! prefix->Begin(29, arrival, {2, 3}, {}, false) ||
+        (! click && prefix->Move(29, {4, 6}, {}, false, 2) != HostSelectionPressInput::Admission::Recorded) ||
         prefix->Finish(29, false, 3) != HostSelectionPressInput::Admission::Recorded)
         SetupFailure("accepted-prefix");
     std::unique_ptr<LeaseHolder> holder;
     if (mode == Mode::BusyRelease || mode == Mode::BusyCancel || mode == Mode::BusyClose || foreign)
         holder = std::make_unique<LeaseHolder>();
     Probe probe;
-    if (!probe.continueRefresh)
+    if (! probe.continueRefresh)
         SetupFailure("refresh-event");
     probe.retired = oldImage;
-    probe.holder = holder.get();
-    probe.click = click;
-    probe.grow = mode == Mode::LateMove || mode == Mode::LateClick;
+    probe.holder  = holder.get();
+    probe.click   = click;
+    probe.grow    = mode == Mode::LateMove || mode == Mode::LateClick;
     Memory memory;
     JobScheduler scheduler;
-    if (scheduler.Initialize(2, {}, {Memory::Sample, &memory}) != S_OK || !scheduler.EnableDeferredRelease())
+    if (scheduler.Initialize(2, {}, {Memory::Sample, &memory}) != S_OK || ! scheduler.EnableDeferredRelease())
         SetupFailure("scheduler");
     std::shared_ptr<SharedPublicationMemory> endpoint;
     std::unique_ptr<Job> observer = std::make_unique<EndpointObserverJob>(scheduler, endpoint);
     JobTicket observerTicket;
     if (scheduler.Submit(observer,
-                         {.kind = JobClass::Selection,
-                          .memoryBytes = kObserverBytes,
-                          .deferredRetirement = true,
-                          .allowMemoryWaiting = false,
+                         {.kind                  = JobClass::Selection,
+                          .memoryBytes           = kObserverBytes,
+                          .deferredRetirement    = true,
+                          .allowMemoryWaiting    = false,
                           .reserveRetainedMemory = true},
                          observerTicket) != S_OK)
         SetupFailure("independent-endpoint-observer");
     Settle(scheduler);
-    if (!endpoint || endpoint->Bytes() != kObserverBytes)
+    if (! endpoint || endpoint->Bytes() != kObserverBytes)
         SetupFailure("endpoint-observer-publication");
     const auto expectedQueries = memory.queries + 1;
-    auto state = std::make_unique<SelectionOutlineGestureState>(scheduler, *session, *prefix, 29, description->limits);
-    state->admissionSource = description->source;
-    state->workObserver = &probe;
-    state->workCheckpoint = Probe::Work;
-    state->observer = &probe;
-    state->notify = Probe::Owner;
-    std::unique_ptr<Job> job = std::make_unique<SelectionOutlineGestureJob>(*state);
+    auto state                 = std::make_unique<SelectionOutlineGestureState>(scheduler, *session, *prefix, 29, description->limits);
+    state->admissionSource     = description->source;
+    state->workObserver        = &probe;
+    state->workCheckpoint      = Probe::Work;
+    state->observer            = &probe;
+    state->notify              = Probe::Owner;
+    std::unique_ptr<Job> job   = std::make_unique<SelectionOutlineGestureJob>(*state);
     if (scheduler.Submit(job,
-                         {.kind = JobClass::Selection,
-                          .serialKey = session->DocumentSerial(),
-                          .memoryBytes = description->limits.totalBytes,
-                          .deferredRetirement = true,
-                          .allowMemoryWaiting = false,
+                         {.kind                  = JobClass::Selection,
+                          .serialKey             = session->DocumentSerial(),
+                          .memoryBytes           = description->limits.totalBytes,
+                          .deferredRetirement    = true,
+                          .allowMemoryWaiting    = false,
                           .reserveRetainedMemory = true,
                           .continuingOutputLimit = description->limits.continuingOutputBytes},
                          state->original) != S_OK)
@@ -313,114 +308,99 @@ void Run(Mode mode, const char* name)
     Until(scheduler, [&] { return probe.refreshStarted.load(std::memory_order_acquire); });
     Expect(state->captures == 1 && state->hits == 1 && state->closurePrepares == 1 && state->residencyTries >= 1 &&
                scheduler.ReservedMemoryBytes() >= description->limits.totalBytes + kObserverBytes &&
-               state->remainingBudget == description->limits.totalBytes - state->openingBytes &&
-               memory.queries == expectedQueries,
+               state->remainingBudget == description->limits.totalBytes - state->openingBytes && memory.queries == expectedQueries,
            "refresh-keeps-original-source-parent-reservation-and-admission");
     if (foreign)
     {
         const auto beforeGeneration = session->Generation();
-        const auto beforeRevision = session->history.CurrentRevision();
-        const auto beforeDepth = session->history.CaptureState().Depth();
-        const auto beforePast = session->history.CaptureState().PastCount();
-        const auto beforeOpening = session->SelectionMoveOpening();
-        const auto beforeSelection = session->Selection()->loops.Identity();
+        const auto beforeRevision   = session->history.CurrentRevision();
+        const auto beforeDepth      = session->history.CaptureState().Depth();
+        const auto beforePast       = session->history.CaptureState().PastCount();
+        const auto beforeOpening    = session->SelectionMoveOpening();
+        const auto beforeSelection  = session->Selection()->loops.Identity();
         session->BeginTransform(true);
-        const auto& transform = session->PendingTransformEdit();
-        const auto* address = transform ? &transform.value() : nullptr;
+        const auto& transform   = session->PendingTransformEdit();
+        const auto* address     = transform ? &transform.value() : nullptr;
         const auto foreignDraft = transform ? std::optional(transform->draft) : std::optional<LayerTransform>{};
-        Expect(address && foreignDraft && session->Generation() == beforeGeneration &&
-                   session->history.CurrentRevision() == beforeRevision &&
+        Expect(address && foreignDraft && session->Generation() == beforeGeneration && session->history.CurrentRevision() == beforeRevision &&
                    session->history.CaptureState().Depth() == beforeDepth,
                "foreign-transform-opens-during-refresh-without-generation-or-history-change");
-        if (!SetEvent(probe.continueRefresh.get()))
+        if (! SetEvent(probe.continueRefresh.get()))
             SetupFailure("foreign-refresh-release");
         holder->ReleaseAndJoin();
         Settle(scheduler);
         const auto& preserved = session->PendingTransformEdit();
-        Expect(state->completed && state->outcome.status == JobStatus::Failed && state->outcome.error == E_ABORT &&
-                   !state->aborted && state->closed == click && !state->clicked && state->inputAcknowledged &&
-                   !prefix->Busy() && preserved && &preserved.value() == address && foreignDraft &&
-                   preserved->draft == *foreignDraft && session->Generation() == beforeGeneration &&
-                   session->history.CurrentRevision() == beforeRevision &&
-                   session->history.CaptureState().Depth() == beforeDepth &&
-                   session->history.CaptureState().PastCount() == beforePast &&
-                   session->SelectionMoveOpening() == beforeOpening &&
-                   session->Selection()->loops.Identity() == beforeSelection && session->IsMovingSelection() == !click,
+        Expect(state->completed && state->outcome.status == JobStatus::Failed && state->outcome.error == E_ABORT && ! state->aborted &&
+                   state->closed == click && ! state->clicked && state->inputAcknowledged && ! prefix->Busy() && preserved && &preserved.value() == address &&
+                   foreignDraft && preserved->draft == *foreignDraft && session->Generation() == beforeGeneration &&
+                   session->history.CurrentRevision() == beforeRevision && session->history.CaptureState().Depth() == beforeDepth &&
+                   session->history.CaptureState().PastCount() == beforePast && session->SelectionMoveOpening() == beforeOpening &&
+                   session->Selection()->loops.Identity() == beforeSelection && session->IsMovingSelection() == ! click,
                "stale-refresh-refuses-publication-and-preserves-exact-foreign-editor-and-opening");
         {
             Raster::ResidencyLease lease;
-            Expect(state->sameTicket && state->residencyRefreshes == 1 && state->closurePrepares == 1 &&
-                       state->clickPrepares == (click ? 1u : 0u) && state->captures == 1 &&
-                       memory.queries == expectedQueries && probe.terminalCallbacks == 1 &&
-                       probe.terminalLeaseAvailable && lease.TryAcquire() &&
-                       !holder->expired.load(std::memory_order_acquire),
+            Expect(state->sameTicket && state->residencyRefreshes == 1 && state->closurePrepares == 1 && state->clickPrepares == (click ? 1u : 0u) &&
+                       state->captures == 1 && memory.queries == expectedQueries && probe.terminalCallbacks == 1 && probe.terminalLeaseAvailable &&
+                       lease.TryAcquire() && ! holder->expired.load(std::memory_order_acquire),
                    "refusal-keeps-original-ticket-and-releases-permit-before-terminal-callback");
         }
-        Expect(endpoint->ResidentBytes() == kObserverBytes + (click ? 0 : state->openingBytes),
-               "live-foreign-editor-retains-exact-original-opening-charge");
+        Expect(endpoint->ResidentBytes() == kObserverBytes + (click ? 0 : state->openingBytes), "live-foreign-editor-retains-exact-original-opening-charge");
         probe.retired = Raster{};
-        oldImage = Raster{};
+        oldImage      = Raster{};
         state.reset();
         session.reset();
         Settle(scheduler);
-        Expect(endpoint->ResidentBytes() == kObserverBytes,
-               "last-foreign-editor-and-history-readers-refund-all-original-memory");
+        Expect(endpoint->ResidentBytes() == kObserverBytes, "last-foreign-editor-and-history-readers-refund-all-original-memory");
         endpoint.reset();
         Settle(scheduler);
         scheduler.Close();
         return;
     }
-    if (!SetEvent(probe.continueRefresh.get()))
+    if (! SetEvent(probe.continueRefresh.get()))
         SetupFailure("release-refresh-inspection");
     const bool cancelled = mode == Mode::BusyCancel || mode == Mode::BusyClose;
     if (mode == Mode::BusyClose)
         scheduler.Close(); // Holder still owns the global lease; shutdown must cancel the original wait.
     else
     {
-        if (mode == Mode::BusyCancel && !scheduler.Cancel(state->original))
+        if (mode == Mode::BusyCancel && ! scheduler.Cancel(state->original))
             SetupFailure("cancel-original");
         if (mode == Mode::BusyRelease)
             holder->ReleaseAndJoin();
         Settle(scheduler);
     }
-    Expect(state->sameTicket && state->inputAcknowledged && !prefix->Busy() &&
-               (cancelled ? state->outcome.status == JobStatus::Cancelled && state->aborted && !state->closed
-                          : state->completed && state->outcome.status == JobStatus::Finished && state->closed &&
-                                (!click || state->clicked)),
+    Expect(state->sameTicket && state->inputAcknowledged && ! prefix->Busy() &&
+               (cancelled ? state->outcome.status == JobStatus::Cancelled && state->aborted && ! state->closed
+                          : state->completed && state->outcome.status == JobStatus::Finished && state->closed && (! click || state->clicked)),
            "same-original-ticket-finishes-or-cancels-while-residency-is-contended");
     const auto& selection = session->Selection();
-    const bool geometry = click ? !selection
-                                : selection && !selection->antialiased &&
-                                      selection->Bounds() == (cancelled ? std::optional<SelectionBounds>{{1, 2, 7, 6}}
-                                                                        : std::optional<SelectionBounds>{{3, 5, 9, 9}});
+    const bool geometry =
+        click ? ! selection
+              : selection && ! selection->antialiased &&
+                    selection->Bounds() == (cancelled ? std::optional<SelectionBounds>{{1, 2, 7, 6}} : std::optional<SelectionBounds>{{3, 5, 9, 9}});
     const auto expectedPast = cancelled ? 1u : mode == Mode::BusyRelease ? 2u : 1u;
-    Expect(geometry && !session->IsMovingSelection() && session->Generation() == generation + (cancelled ? 3 : 2) &&
-               session->history.CaptureState().Depth() == 0 &&
-               session->history.CaptureState().PastCount() == expectedPast &&
-               (cancelled ? session->history.CurrentRevision() == revision
-                          : session->history.UndoName() == (click ? L"Deselect" : L"Move Selection")),
+    Expect(geometry && ! session->IsMovingSelection() && session->Generation() == generation + (cancelled ? 3 : 2) &&
+               session->history.CaptureState().Depth() == 0 && session->history.CaptureState().PastCount() == expectedPast &&
+               (cancelled ? session->history.CurrentRevision() == revision : session->history.UndoName() == (click ? L"Deselect" : L"Move Selection")),
            "literal-selection-generation-and-exact-oldest-history-trim");
-    Expect(state->residencyRefreshes == 1 && state->closurePrepares == 1 && state->clickPrepares == (click ? 1u : 0u) &&
-               probe.prepared == 1 && probe.growths == (probe.grow ? 1u : 0u) &&
-               (!probe.grow || (oldImage.IsMaterialized() && oldImage.ByteSize() == 16384)) &&
+    Expect(state->residencyRefreshes == 1 && state->closurePrepares == 1 && state->clickPrepares == (click ? 1u : 0u) && probe.prepared == 1 &&
+               probe.growths == (probe.grow ? 1u : 0u) && (! probe.grow || (oldImage.IsMaterialized() && oldImage.ByteSize() == 16384)) &&
                memory.queries == expectedQueries,
            "one-refresh-reuses-prepared-intent-and-observes-exact16384-byte-growth");
     if (holder)
         holder->ReleaseAndJoin();
     {
         Raster::ResidencyLease available;
-        Expect(available.TryAcquire() && (!holder || !holder->expired.load(std::memory_order_acquire)) &&
+        Expect(available.TryAcquire() && (! holder || ! holder->expired.load(std::memory_order_acquire)) &&
                    (mode == Mode::BusyClose    ? probe.terminalCallbacks == 0
                     : mode == Mode::BusyCancel ? probe.terminalCallbacks == 1
                                                : probe.terminalCallbacks == 1 && probe.terminalLeaseAvailable),
                "permits-release-before-host-callbacks-cancel-and-joined-close");
     }
-    const auto liveBytes =
-        cancelled ? kObserverBytes
-                  : kObserverBytes + description->limits.finalOutputBytes + (click ? 0 : state->openingBytes);
+    const auto liveBytes = cancelled ? kObserverBytes : kObserverBytes + description->limits.finalOutputBytes + (click ? 0 : state->openingBytes);
     Expect(endpoint->ResidentBytes() == liveBytes, "live-history-retains-exact-opening-and-final-publication-charges");
     probe.retired = Raster{};
-    oldImage = Raster{};
+    oldImage      = Raster{};
     state.reset();
     session.reset();
     if (mode != Mode::BusyClose)

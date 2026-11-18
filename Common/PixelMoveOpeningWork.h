@@ -12,26 +12,46 @@
 // No layer/mask/name copy, geometry traversal, coverage or history mutation occurs at capture.
 class PixelMoveOpeningInput final
 {
-  public:
-    PixelMoveOpeningInput(const PixelMoveOpeningInput&) = delete;
+public:
+    PixelMoveOpeningInput(const PixelMoveOpeningInput&)            = delete;
     PixelMoveOpeningInput& operator=(const PixelMoveOpeningInput&) = delete;
-    PixelMoveOpeningInput& operator=(PixelMoveOpeningInput&&) = delete;
+    PixelMoveOpeningInput& operator=(PixelMoveOpeningInput&&)      = delete;
     PixelMoveOpeningInput(PixelMoveOpeningInput&& source) noexcept
-        : _editor(source._editor), _read(source._read), _history(source._history),
-          _document(std::move(source._document)), _token(std::move(source._token)), _active(source._active),
-          _opening(source._opening), _pixelLimit(source._pixelLimit), _duplicate(source._duplicate),
-          _owner(source._owner), _valid(std::exchange(source._valid, false))
+        : _editor(source._editor),
+          _read(source._read),
+          _history(source._history),
+          _document(std::move(source._document)),
+          _token(std::move(source._token)),
+          _active(source._active),
+          _opening(source._opening),
+          _pixelLimit(source._pixelLimit),
+          _duplicate(source._duplicate),
+          _owner(source._owner),
+          _valid(std::exchange(source._valid, false))
     {
     }
 
-  private:
+private:
     friend class DocumentSession;
     friend class PreparedPixelMoveOpening;
-    PixelMoveOpeningInput(HistoryRestoreAuthority editor, DocumentReadAuthority read,
-                          DocumentHistory::Authority history, CanvasDocument document, JobToken token, Guid active,
-                          std::uint64_t opening, std::int64_t pixelLimit, bool duplicate) noexcept
-        : _editor(editor), _read(read), _history(history), _document(std::move(document)), _token(std::move(token)),
-          _active(active), _opening(opening), _pixelLimit(pixelLimit), _duplicate(duplicate),
+    PixelMoveOpeningInput(HistoryRestoreAuthority editor,
+                          DocumentReadAuthority read,
+                          DocumentHistory::Authority history,
+                          CanvasDocument document,
+                          JobToken token,
+                          Guid active,
+                          std::uint64_t opening,
+                          std::int64_t pixelLimit,
+                          bool duplicate) noexcept
+        : _editor(editor),
+          _read(read),
+          _history(history),
+          _document(std::move(document)),
+          _token(std::move(token)),
+          _active(active),
+          _opening(opening),
+          _pixelLimit(pixelLimit),
+          _duplicate(duplicate),
           _owner(std::this_thread::get_id())
     {
     }
@@ -53,11 +73,11 @@ class PixelMoveOpeningInput final
 // Applying swaps only the pending record; it opens no history transaction and moves no document pixels.
 class PreparedPixelMoveOpening final
 {
-  public:
-    PreparedPixelMoveOpening(const PreparedPixelMoveOpening&) = delete;
+public:
+    PreparedPixelMoveOpening(const PreparedPixelMoveOpening&)            = delete;
     PreparedPixelMoveOpening& operator=(const PreparedPixelMoveOpening&) = delete;
-    PreparedPixelMoveOpening(PreparedPixelMoveOpening&&) noexcept = default;
-    PreparedPixelMoveOpening& operator=(PreparedPixelMoveOpening&&) = delete;
+    PreparedPixelMoveOpening(PreparedPixelMoveOpening&&) noexcept        = default;
+    PreparedPixelMoveOpening& operator=(PreparedPixelMoveOpening&&)      = delete;
     [[nodiscard]] const JobToken& Token() const noexcept
     {
         return _input._token;
@@ -71,9 +91,11 @@ class PreparedPixelMoveOpening final
         return _input._opening;
     }
 
-  private:
+private:
     friend class DocumentSession;
-    explicit PreparedPixelMoveOpening(PixelMoveOpeningInput input) noexcept : _input(std::move(input)) {}
+    explicit PreparedPixelMoveOpening(PixelMoveOpeningInput input) noexcept : _input(std::move(input))
+    {
+    }
     PixelMoveOpeningInput _input;
     std::shared_ptr<const SharedPublicationMemory> _memory;
     std::shared_ptr<const PixelMoveOpening> _lift;

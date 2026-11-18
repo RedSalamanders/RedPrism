@@ -124,8 +124,7 @@ inline void SelfTestFailure(const std::wstring& message) noexcept
 // A solid premultiplied BGRA raster, and a painted layer added on top as one Import Image history entry then made
 // active (Application.cpp): shared by the self-tests that need a real pixel layer to act on.
 [[nodiscard]] Raster SolidRaster(int width, int height, std::uint32_t argb);
-Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width, int height, Vec2 origin,
-                        double rotation, std::uint32_t argb);
+Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width, int height, Vec2 origin, double rotation, std::uint32_t argb);
 
 // The chrome's events (ChromeEvents) land on the handlers below, marked `override`.
 class Application final : public ChromeEvents,
@@ -134,15 +133,19 @@ class Application final : public ChromeEvents,
                           private LassoDraftDisplayClient,
                           private Renderer::SelectionOutlineFrameSource
 {
-  public:
-    Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
-                const wchar_t* demo = nullptr, const wchar_t* bench = nullptr) noexcept;
+public:
+    Application(HINSTANCE instance,
+                bool forceWarp,
+                const wchar_t* screenshotPath,
+                uint32_t screenshotDpi,
+                const wchar_t* demo  = nullptr,
+                const wchar_t* bench = nullptr) noexcept;
     ~Application();
 
-    Application(const Application&) = delete;
+    Application(const Application&)            = delete;
     Application& operator=(const Application&) = delete;
-    Application(Application&&) = delete;
-    Application& operator=(Application&&) = delete;
+    Application(Application&&)                 = delete;
+    Application& operator=(Application&&)      = delete;
 
     int Run(int showCommand) noexcept;
     int RunSelfTest() noexcept;
@@ -223,13 +226,12 @@ class Application final : public ChromeEvents,
     // Settings (Specs/Core/Core_Settings.md): the file to read, watch and write; empty for a run without one.
     void UseSettings(std::wstring path, const AppSettings& settings) noexcept;
 
-  private:
+private:
     [[nodiscard]] bool EnableSelectionOutlineForTest(bool allowHidden = true) noexcept;
     [[nodiscard]] bool DescribeSelectionOutlineOwner(SelectionOutlineDisplayDescriptor&) noexcept override;
     void SelectionOutlineChangedOwner() noexcept override;
     void SelectionOutlineFailedOwner(SelectionOutlineDisplayKey, HRESULT) noexcept override;
-    [[nodiscard]] Renderer::SelectionOutlineFrame BorrowSelectionOutlineFrameOwner(float, float, float,
-                                                                                   float) noexcept override;
+    [[nodiscard]] Renderer::SelectionOutlineFrame BorrowSelectionOutlineFrameOwner(float, float, float, float) noexcept override;
     void SyncPreparedSelectionOutlineOwner(const SelectionDisplayValue*) noexcept;
     void SyncLassoOverlay() noexcept;
     class LassoOpeningJob;
@@ -265,7 +267,9 @@ class Application final : public ChromeEvents,
 #pragma warning(disable : 4626 5027)
     struct PendingDisplayClient final : CommittedDisplayClient
     {
-        explicit PendingDisplayClient(Application& owner) noexcept : _owner(owner) {}
+        explicit PendingDisplayClient(Application& owner) noexcept : _owner(owner)
+        {
+        }
         Application& _owner;
         bool DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept override;
         void CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) noexcept override;
@@ -273,8 +277,8 @@ class Application final : public ChromeEvents,
     };
 #pragma warning(pop)
 
-    static constexpr wchar_t kWindowClassName[] = L"RedPrism.Window";
-    static constexpr UINT_PTR kScreenshotTimerId = 1;
+    static constexpr wchar_t kWindowClassName[]    = L"RedPrism.Window";
+    static constexpr UINT_PTR kScreenshotTimerId   = 1;
     static constexpr UINT_PTR kJobIndicatorTimerId = 8;
     static LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     static void RequestFrameThunk(void* context) noexcept;
@@ -318,7 +322,7 @@ class Application final : public ChromeEvents,
     bool UiCancellationSourceSelected(RecordedDisplayGraph* graph, const CanvasDocument* direct) const noexcept;
     bool UiCancellationOriginalStateCurrent() const noexcept;
     void NoteUiCancellationPresentation(bool sourceSelected) noexcept;
-    static constexpr UINT kUiBenchmarkMessage = WM_APP + 10;
+    static constexpr UINT kUiBenchmarkMessage     = WM_APP + 10;
     static constexpr UINT_PTR kUiBenchmarkTimerId = 9;
 
     HRESULT RegisterWindowClass() noexcept;
@@ -352,8 +356,7 @@ class Application final : public ChromeEvents,
     void SyncTransformOverlay() noexcept;
     // The selection outline and the lasso draft over the canvas; `shown` null keeps the selection shown last.
     void SyncSelectionOverlay(const SelectionDisplayValue* shown) noexcept;
-    [[nodiscard]] bool AdoptPreparedSelectionOutlineOwner(PreparedSelectionOutline outline,
-                                                          PreparedSelectionOutline::Loops& retired) noexcept;
+    [[nodiscard]] bool AdoptPreparedSelectionOutlineOwner(PreparedSelectionOutline outline, PreparedSelectionOutline::Loops& retired) noexcept;
     [[nodiscard]] float ChromeDpi() const noexcept;
     [[nodiscard]] bool InitializePreparedDisplayOwner(bool allowHidden) noexcept;
     [[nodiscard]] bool InitializeResponsiveSourcesOwner(bool allowHidden, bool includeSelection = false) noexcept;
@@ -401,18 +404,18 @@ class Application final : public ChromeEvents,
         GradientSettings gradient;
         std::uint32_t foreground = 0xFF000000u;
         std::uint32_t background = 0xFFFFFFFFu;
-        ShapeKind shape = ShapeKind::Rectangle;
-        double cornerRadius = 0;
+        ShapeKind shape          = ShapeKind::Rectangle;
+        double cornerRadius      = 0;
         std::optional<Vec2> cloneOffset;
-        bool cloneAllLayers = false;
+        bool cloneAllLayers     = false;
         SpotHealingMode healing = SpotHealingMode::ContentAware;
-        SmearMode smear = SmearMode::Liquify; // mode captured at physical Down, never reread from a later header
+        SmearMode smear         = SmearMode::Liquify; // mode captured at physical Down, never reread from a later header
     };
     struct CanvasBrushSample final
     {
         Vec2 point; // document coordinates at physical event time, including moves after a view change
         unsigned int modifiers;
-        bool alt = false;
+        bool alt             = false;
         bool keepShapeOnLoss = false;
     };
     using CanvasBrushInput = PointerInputStream<CanvasBrushContext, CanvasBrushSample, 512>;
@@ -427,9 +430,8 @@ class Application final : public ChromeEvents,
     [[nodiscard]] bool CancelCanvasBrush(bool physicalOnly = false) noexcept;
     void ReplayCanvasBrush() noexcept;
     void RetireCanvasBrush(ContinuationOutcome outcome, std::uint64_t opening) noexcept;
-    void BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKind kind,
-                            const CanvasBrushContext* captured = nullptr,
-                            const Raster* cloneComposite = nullptr) noexcept;
+    void BeginBrushStrokeAt(
+        Vec2 pixel, unsigned int modifiers, BrushKind kind, const CanvasBrushContext* captured = nullptr, const Raster* cloneComposite = nullptr) noexcept;
     class StrokeFinishJob;
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
@@ -437,8 +439,10 @@ class Application final : public ChromeEvents,
 #pragma warning(disable : 4626 5027)
     class StrokeFinishSource final : public OwnerWorkPump
     {
-      public:
-        explicit StrokeFinishSource(Application& owner) noexcept : _owner(owner) {}
+    public:
+        explicit StrokeFinishSource(Application& owner) noexcept : _owner(owner)
+        {
+        }
         [[nodiscard]] bool Start() noexcept;
         [[nodiscard]] bool HasPending() const noexcept override;
         [[nodiscard]] bool HasReady() const noexcept override;
@@ -447,7 +451,7 @@ class Application final : public ChromeEvents,
         void PrepareDeviceReplacementOwner() noexcept;
         void CloseAfterWorkers() noexcept;
 
-      private:
+    private:
         Application& _owner;
         bool _attached = false;
     };
@@ -457,14 +461,13 @@ class Application final : public ChromeEvents,
     [[nodiscard]] HRESULT StartWarpFinish(std::uint64_t opening) noexcept;
     [[nodiscard]] HRESULT StartWarpLive(std::uint64_t opening) noexcept;
     [[nodiscard]] HRESULT StartStrokeSamples(std::uint64_t opening) noexcept;
-    [[nodiscard]] HRESULT StartStrokeProcessing(std::uint64_t opening, bool processingSamples, bool warpReplay = false,
-                                                bool warpLive = false) noexcept;
+    [[nodiscard]] HRESULT StartStrokeProcessing(std::uint64_t opening, bool processingSamples, bool warpReplay = false, bool warpLive = false) noexcept;
     void PrepareStrokeFinishJoinedShutdownOwner() noexcept;
     StrokeFinishJob* _strokeFinishCurrent = nullptr;
     std::shared_ptr<struct StrokeFinishTestGate> _strokeFinishTestGate;
-    bool _asyncStrokeFinishEnabled = false;
+    bool _asyncStrokeFinishEnabled  = false;
     bool _asyncStrokeSamplesEnabled = false;
-    bool _asyncWarpLiveEnabled = false; // ordinary activation requires actual lifecycle and G1 qualification
+    bool _asyncWarpLiveEnabled      = false; // ordinary activation requires actual lifecycle and G1 qualification
     class StrokeOpeningJob;
     [[nodiscard]] HRESULT StartStrokeOpening(std::uint64_t opening) noexcept;
     void BeginPreparedBrushStrokeAt(Vec2 point, unsigned int modifiers) noexcept;
@@ -497,10 +500,10 @@ class Application final : public ChromeEvents,
     CanvasBrushInput _canvasBrushInput;
     CanvasBrushSample _canvasBrushLastSample{};
     ContinuationReceipt _canvasBrushReceipt;
-    std::uint64_t _canvasBrushOpening = 0;
+    std::uint64_t _canvasBrushOpening          = 0;
     std::uint64_t _canvasBrushCancelledOpening = 0;
     std::optional<std::uint64_t> _canvasBrushSessionOpening;
-    bool _canvasBrushReplayed = false;
+    bool _canvasBrushReplayed               = false;
     std::uint32_t _canvasResolvedForeground = 0xFF000000u;
     // A key, a command or a header button ended what a `Drag` drags: the drag ends with it.
     template <class Drag> void DropDrag() noexcept
@@ -519,8 +522,7 @@ class Application final : public ChromeEvents,
     // selectLayerTarget); `toggleMask` (a Shift press on the badge) also turns the mask off or on.
     void TargetLayer(Guid id, bool mask, bool toggleMask) noexcept;
     void OnLayerExpanded(Guid id, bool expanded) noexcept override;
-    void OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
-                          DxUi::TreeDropPlace place) noexcept override;
+    void OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent, DxUi::TreeDropPlace place) noexcept override;
     void OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint32_t argb) noexcept override;
     void OnChromeLayout() noexcept override;
     // Move tool (C8, Specs/Document/Document_Tools.md): header actions, pointer drags, cursor and the demo document.
@@ -539,8 +541,8 @@ class Application final : public ChromeEvents,
     // `_cursorRevision`, as building it walks every layer).
     struct TransformPressRule
     {
-        bool document = false;
-        bool picks = false; // no pending edit: a press may pick another layer
+        bool document   = false;
+        bool picks      = false; // no pending edit: a press may pick another layer
         bool autoSelect = false;
         std::optional<Guid> active;
         bool group = false; // the selected layers or the active folder transform together
@@ -548,8 +550,7 @@ class Application final : public ChromeEvents,
         std::optional<LayerTransform> activeBox; // the active layer's box, when it can transform alone
     };
     [[nodiscard]] TransformPressRule CurrentTransformPressRule() const;
-    [[nodiscard]] std::optional<std::pair<Guid, bool>> TransformPressLayer(const TransformPressRule& rule, Vec2 pixel,
-                                                                           bool control) const;
+    [[nodiscard]] std::optional<std::pair<Guid, bool>> TransformPressLayer(const TransformPressRule& rule, Vec2 pixel, bool control) const;
     [[nodiscard]] std::optional<std::pair<Guid, bool>> TransformPressLayer(Vec2 pixel, bool control) const
     {
         return TransformPressLayer(CurrentTransformPressRule(), pixel, control);
@@ -577,15 +578,14 @@ class Application final : public ChromeEvents,
     [[nodiscard]] bool RouteSelectionPressOwner(const DxUi::PointerEvent&, UINT message) noexcept;
     void LoseSelectionPressOwner() noexcept;
     void PumpSelectionPressOwner() noexcept;
-    [[nodiscard]] bool AddPixelFinalAdmissionOwner(SelectionOutlineGestureMemory&, std::uint64_t& cpu,
-                                                   std::uint64_t& gpu) const noexcept;
+    [[nodiscard]] bool AddPixelFinalAdmissionOwner(SelectionOutlineGestureMemory&, std::uint64_t& cpu, std::uint64_t& gpu) const noexcept;
     class FinalPublicationJob;
     static std::unique_ptr<Job> MakePixelFinalForWork(void*, SelectionOutlineGestureState&, SelectionPixelFinalWork);
     static std::unique_ptr<Job> MakeSizeFinalForWork(void*, FinalPublicationCallbacks, SizeFinalPublicationWork&&);
     void PumpFinalPublicationOwner() noexcept;
     [[nodiscard]] bool FinalPublicationPendingOwner() const noexcept;
     [[nodiscard]] bool FinalPublicationReadyOwner() const noexcept;
-    bool _selectionPixelFinalPublicationEnabled = false;
+    bool _selectionPixelFinalPublicationEnabled   = false;
     FinalPublicationJob* _finalPublicationCurrent = nullptr;
     void SelectionPressEventOwner(SelectionOutlineGestureState::Event) noexcept;
     [[nodiscard]] HRESULT StartSelectionPressGesture(std::uint64_t opening) noexcept;
@@ -594,14 +594,13 @@ class Application final : public ChromeEvents,
     std::optional<SelectionOutlineGestureState> _selectionPressState;
     std::optional<HistoryWorkStamp> _selectionPressStamp;
     ContinuationReceipt _selectionPressReceipt;
-    std::uint64_t _selectionPressOpening = 0;
+    std::uint64_t _selectionPressOpening           = 0;
     std::uint64_t _selectionPressMovePresentations = 0;
-    bool _selectionPressTestEnabled = false;
+    bool _selectionPressTestEnabled                = false;
 
     // Selected full physical dispatcher candidate. Stable journal outlives every parent/receipt/token.
-    bool _polygonalPressTestEnabled = false;
-    bool _polygonalPixelPressEnabled =
-        false; // Complete pixel admission/typed lineage opt-in; ordinary activation remains gated.
+    bool _polygonalPressTestEnabled  = false;
+    bool _polygonalPixelPressEnabled = false; // Complete pixel admission/typed lineage opt-in; ordinary activation remains gated.
     HostPolygonalInputJournal _polygonalPressInput;
     std::optional<SelectionOutlineGestureState> _polygonalPressState;
     std::optional<HistoryWorkStamp> _polygonalPressStamp;
@@ -611,15 +610,14 @@ class Application final : public ChromeEvents,
     std::uint64_t _polygonalPressParents = 0;
     bool _polygonalPressLeftDown = false, _polygonalPressFailed = false, _polygonalPressStopping = false;
     ContinuationReceipt::Result _polygonalPressFailure{HostOutcome::Failed, E_ABORT};
-    [[nodiscard]] bool QueuePolygonalPressOwner(const DxUi::PointerEvent&, UINT message, Vec2 view,
-                                                POINT client) noexcept;
+    [[nodiscard]] bool QueuePolygonalPressOwner(const DxUi::PointerEvent&, UINT message, Vec2 view, POINT client) noexcept;
     [[nodiscard]] bool RoutePolygonalPressOwner(const DxUi::PointerEvent&, UINT message, POINT client) noexcept;
     [[nodiscard]] bool QueuePolygonalKeyOwner(HostPolygonalInputJournal::Action) noexcept;
-    [[nodiscard]] HostPolygonalInputJournal::Sample PolygonalPhysicalSample(const DxUi::PointerEvent&, Vec2 view,
+    [[nodiscard]] HostPolygonalInputJournal::Sample PolygonalPhysicalSample(const DxUi::PointerEvent&,
+                                                                            Vec2 view,
                                                                             std::uint64_t ordinal,
                                                                             bool doubleClick = false) const noexcept;
-    [[nodiscard]] std::optional<std::uint64_t> QueuePolygonalRecordOwner(HostCanvasInputKind,
-                                                                         std::uint64_t record) noexcept;
+    [[nodiscard]] std::optional<std::uint64_t> QueuePolygonalRecordOwner(HostCanvasInputKind, std::uint64_t record) noexcept;
     [[nodiscard]] HRESULT PreparePolygonalRecordOwner(std::uint64_t ordinal) noexcept;
     [[nodiscard]] HRESULT StartPolygonalPressOwner(std::uint64_t family) noexcept;
     [[nodiscard]] HRESULT StartPolygonalConditionalOwner(std::uint64_t family) noexcept;
@@ -633,9 +631,9 @@ class Application final : public ChromeEvents,
     void RetirePolygonalPressOwner() noexcept;
 
     // Selected private qualification route; ordinary activation retains the P1 gates.
-    bool _polygonalDrawingTestEnabled = false;
-    bool _polygonalDrawingAntialiased = true;
-    bool _polygonalStopForHost = false;
+    bool _polygonalDrawingTestEnabled       = false;
+    bool _polygonalDrawingAntialiased       = true;
+    bool _polygonalStopForHost              = false;
     std::uint64_t _polygonalTerminalOrdinal = 0;
     std::optional<PolygonalDrawingState> _polygonalDrawing;
     std::optional<HistoryWorkStamp> _polygonalStamp;
@@ -681,8 +679,10 @@ class Application final : public ChromeEvents,
     int RunClipboardDelayedSelfTest() noexcept;
     int RunClipboardFaultSelfTest() noexcept;
     int RunClipboardEndSessionSelfTest() noexcept;
-    [[nodiscard]] HRESULT SubmitClipboardPaste(HistoryWorkStamp stamp, ImageImportAuthority authority,
-                                               ClipboardTransfer::Inspection inspection, bool privatePreference,
+    [[nodiscard]] HRESULT SubmitClipboardPaste(HistoryWorkStamp stamp,
+                                               ImageImportAuthority authority,
+                                               ClipboardTransfer::Inspection inspection,
+                                               bool privatePreference,
                                                ClipboardReceipt::Key key,
                                                std::optional<ClipboardFingerprint::Binding> binding,
                                                unsigned int attempts) noexcept;
@@ -702,13 +702,13 @@ class Application final : public ChromeEvents,
     class AdjustmentClosureJob;
     class ColorDismissalJob;
     [[nodiscard]] HostOutcome StartColorCancellation(std::uint64_t ordinal) noexcept;
-    void CompleteColorDismissal(HistoryWorkStamp stamp, bool current, JobResult completion,
-                                PreparedColorDismissal* publication, std::int32_t captureError) noexcept;
+    void CompleteColorDismissal(
+        HistoryWorkStamp stamp, bool current, JobResult completion, PreparedColorDismissal* publication, std::int32_t captureError) noexcept;
     int RunColorCancellationSelfTest() noexcept;
     [[nodiscard]] HostOutcome StartColorCommit(std::uint64_t ordinal) noexcept;
     [[nodiscard]] HostOutcome StartAdjustmentClosure(std::uint64_t ordinal, bool commit) noexcept;
-    void CompleteAdjustmentClosure(HistoryWorkStamp stamp, bool current, JobResult completion,
-                                   PreparedAdjustmentClosure* publication, std::int32_t captureError) noexcept;
+    void CompleteAdjustmentClosure(
+        HistoryWorkStamp stamp, bool current, JobResult completion, PreparedAdjustmentClosure* publication, std::int32_t captureError) noexcept;
     [[nodiscard]] bool ColorCommitBusy() const noexcept
     {
         return _colorCommitStamp.has_value();
@@ -717,20 +717,21 @@ class Application final : public ChromeEvents,
     {
         const auto& panel = _session.PendingColorEdit();
         return _pendingCancelOpening && panel && _pendingCancelOpening.value() == panel->openingSequence &&
-               _pendingCancelDocumentSerial == _session.DocumentSerial() &&
-               _pendingCancelReceipt.Read().outcome == HostOutcome::Pending;
+               _pendingCancelDocumentSerial == _session.DocumentSerial() && _pendingCancelReceipt.Read().outcome == HostOutcome::Pending;
     }
     [[nodiscard]] bool ColorControlsFrozen() const noexcept
     {
         const auto& panel = _session.PendingColorEdit();
         return _hueInput.Busy() || ColorCommitBusy() || PanelWandBusyOwner() ||
-               (_pendingPanelOpening && panel && _pendingPanelOpening.value() == panel->openingSequence) ||
-               ColorCancelPending();
+               (_pendingPanelOpening && panel && _pendingPanelOpening.value() == panel->openingSequence) || ColorCancelPending();
     }
     void CancelColorCommit() noexcept;
-    void CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t opening, ColorEditJobResult& result,
-                             JobResult completion, PreparedColorEdit* publication = nullptr,
-                             std::int32_t captureError = 0) noexcept;
+    void CompleteColorCommit(HistoryWorkStamp stamp,
+                             std::uint64_t opening,
+                             ColorEditJobResult& result,
+                             JobResult completion,
+                             PreparedColorEdit* publication = nullptr,
+                             std::int32_t captureError      = 0) noexcept;
     int RunColorCommitSelfTest() noexcept;
     int RunAdjustmentClosureSelfTest() noexcept;
     using HostRequestQueue = ContinuationQueue<HostRequest>;
@@ -744,7 +745,7 @@ class Application final : public ChromeEvents,
         std::uint64_t brushOpening;
         ContinuationReceipt brushReceipt;
         bool presenting = false;
-        bool save = false;
+        bool save       = false;
         ContinuationReceipt::Result interrupted{HostOutcome::Pending, 0};
     };
 #pragma warning(pop)
@@ -759,11 +760,13 @@ class Application final : public ChromeEvents,
 #pragma warning(disable : 4626 5027)
     class ContinuationAction final : public UiAction
     {
-      public:
-        explicit ContinuationAction(Application& owner) noexcept : _owner(owner) {}
+    public:
+        explicit ContinuationAction(Application& owner) noexcept : _owner(owner)
+        {
+        }
         void Run() noexcept override;
 
-      private:
+    private:
         Application& _owner;
     };
 #pragma warning(pop)
@@ -774,8 +777,10 @@ class Application final : public ChromeEvents,
 #pragma warning(disable : 4625 4626 5026 5027)
     class HistoryResidencySource final : public OwnerWorkPump
     {
-      public:
-        explicit HistoryResidencySource(Application& owner) noexcept : _owner(owner) {}
+    public:
+        explicit HistoryResidencySource(Application& owner) noexcept : _owner(owner)
+        {
+        }
         [[nodiscard]] bool Start() noexcept;
         void StopNotifications() noexcept;
         void CloseAfterWorkers() noexcept;
@@ -784,11 +789,11 @@ class Application final : public ChromeEvents,
         [[nodiscard]] bool HasReady() const noexcept override;
         void Pump() noexcept override;
 
-      private:
+    private:
         Application& _owner;
         Raster::ResidencySubscription _subscription;
         std::atomic<bool> _ready{false};
-        bool _enabled = false;
+        bool _enabled  = false;
         bool _attached = false;
         bool _deferred = false;
     };
@@ -796,11 +801,11 @@ class Application final : public ChromeEvents,
 
     struct LayerRowsKey final
     {
-        std::uint64_t documentSerial = 0;
-        std::uint64_t generation = 0;
+        std::uint64_t documentSerial   = 0;
+        std::uint64_t generation       = 0;
         std::uint64_t collapseRevision = 0;
         std::optional<DocumentReadAuthority> authority;
-        const void* root = nullptr; // descriptor only; capture follows successful original admission
+        const void* root                                                  = nullptr; // descriptor only; capture follows successful original admission
         [[nodiscard]] bool operator==(const LayerRowsKey&) const noexcept = default;
     };
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -809,8 +814,10 @@ class Application final : public ChromeEvents,
 #pragma warning(disable : 4626 5027)
     class LayerRowsSource final : public OwnerWorkPump
     {
-      public:
-        explicit LayerRowsSource(Application& owner) noexcept : _owner(owner) {}
+    public:
+        explicit LayerRowsSource(Application& owner) noexcept : _owner(owner)
+        {
+        }
         [[nodiscard]] bool Start() noexcept;
         void StopNotifications() noexcept;
         void CloseAfterWorkers() noexcept;
@@ -825,11 +832,11 @@ class Application final : public ChromeEvents,
         }
         void Pump() noexcept override;
 
-      private:
+    private:
         Application& _owner;
-        bool _enabled = false;
+        bool _enabled  = false;
         bool _attached = false;
-        bool _ready = false;
+        bool _ready    = false;
     };
 #pragma warning(pop)
 
@@ -856,8 +863,7 @@ class Application final : public ChromeEvents,
     [[nodiscard]] bool CanQueueSelectionSizeOutline() const noexcept;
     [[nodiscard]] bool CanQueueSelectionLifecycleOutline() const noexcept;
     [[nodiscard]] bool SelectionLifecycleOutlineCurrent() const noexcept;
-    [[nodiscard]] static std::optional<std::uint64_t> SelectionLifecycleRequestOpening(
-        const HostRequestInput& input) noexcept;
+    [[nodiscard]] static std::optional<std::uint64_t> SelectionLifecycleRequestOpening(const HostRequestInput& input) noexcept;
     enum class SelectionMoveClosePolicy : std::uint8_t
     {
         Preserve,
@@ -865,13 +871,11 @@ class Application final : public ChromeEvents,
         Cancel
     };
     [[nodiscard]] SelectionMoveClosePolicy SelectionMovePolicy(const HostRequestInput& input) const noexcept;
-    [[nodiscard]] static std::optional<std::uint64_t> SelectionMoveRequestOpening(
-        const HostRequestInput& input) noexcept;
+    [[nodiscard]] static std::optional<std::uint64_t> SelectionMoveRequestOpening(const HostRequestInput& input) noexcept;
     [[nodiscard]] static bool SelectionMoveEndCommand(int command) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostInput(HostRequestInput input) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostRequest(HostRequest request) noexcept;
-    [[nodiscard]] ContinuationReceipt QueueHostPaths(std::span<const std::wstring_view> paths, HostPathAction action,
-                                                     std::optional<Vec2> point = {}) noexcept;
+    [[nodiscard]] ContinuationReceipt QueueHostPaths(std::span<const std::wstring_view> paths, HostPathAction action, std::optional<Vec2> point = {}) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostWrite(HostWriteFormat format, bool saveAs) noexcept;
     void ReportHostAdmission(const ContinuationReceipt& receipt) noexcept;
     void RunHostContinuation() noexcept;
@@ -889,7 +893,9 @@ class Application final : public ChromeEvents,
     int RunPathClassificationSelfTest() noexcept;
     class ProjectOpenJob;
     [[nodiscard]] HRESULT StartProjectOpen(const std::wstring& path) noexcept;
-    [[nodiscard]] HRESULT SubmitProjectOpen(HistoryWorkStamp stamp, std::uint64_t generation, std::wstring path,
+    [[nodiscard]] HRESULT SubmitProjectOpen(HistoryWorkStamp stamp,
+                                            std::uint64_t generation,
+                                            std::wstring path,
                                             std::optional<ProjectLoadLimits> limits) noexcept;
     int RunProjectOpenSelfTest() noexcept;
     [[nodiscard]] Prompts::Answer AskDiscardChanges() noexcept;
@@ -904,11 +910,12 @@ class Application final : public ChromeEvents,
     int RunExportReadbackSelfTest() noexcept;
     [[nodiscard]] bool ExecuteHostInput() noexcept;
     class ImageImportJob;
-    [[nodiscard]] HRESULT StartImageImport(std::span<const std::wstring_view> paths, bool newProject,
-                                           std::optional<Vec2> center) noexcept;
-    [[nodiscard]] HRESULT SubmitImageImport(HistoryWorkStamp stamp, std::uint64_t generation,
+    [[nodiscard]] HRESULT StartImageImport(std::span<const std::wstring_view> paths, bool newProject, std::optional<Vec2> center) noexcept;
+    [[nodiscard]] HRESULT SubmitImageImport(HistoryWorkStamp stamp,
+                                            std::uint64_t generation,
                                             std::vector<std::wstring> paths,
-                                            std::optional<std::vector<ImageImportFilePlan>> files, bool newProject,
+                                            std::optional<std::vector<ImageImportFilePlan>> files,
+                                            bool newProject,
                                             std::optional<Vec2> center) noexcept;
     int RunImageImportSelfTest() noexcept;
     int RunImageImportResidencySelfTest(std::span<const std::wstring_view> paths) noexcept;
@@ -920,10 +927,8 @@ class Application final : public ChromeEvents,
     class MergePlanProbeJob;
     struct MergeProbePayload;
     [[nodiscard]] HRESULT StartMergeReadback() noexcept;
-    [[nodiscard]] HRESULT StartPreparedMergeReadback(HistoryWorkStamp stamp, std::uint64_t generation,
-                                                     std::shared_ptr<MergeProbePayload> source) noexcept;
-    void FinishMergeWork(HistoryWorkStamp stamp, HostOutcome outcome, std::int32_t error,
-                         bool budgetRefusal = false) noexcept;
+    [[nodiscard]] HRESULT StartPreparedMergeReadback(HistoryWorkStamp stamp, std::uint64_t generation, std::shared_ptr<MergeProbePayload> source) noexcept;
+    void FinishMergeWork(HistoryWorkStamp stamp, HostOutcome outcome, std::int32_t error, bool budgetRefusal = false) noexcept;
     [[nodiscard]] HRESULT PrepareUtilityDevice(HRESULT reason) noexcept;
     [[nodiscard]] HRESULT PrepareRecordedUtilityAdmission(const CanvasDocument& source,
                                                           std::uint64_t additionalCpuBytes,
@@ -939,11 +944,11 @@ class Application final : public ChromeEvents,
     struct ColorPreviewRequest final
     {
         std::uint64_t documentSerial = 0;
-        std::uint64_t opening = 0;
-        std::uint64_t sequence = 0;
-        std::uint64_t generation = 0;
-        bool lookupOnly = false;
-        bool lookupPreview = false;
+        std::uint64_t opening        = 0;
+        std::uint64_t sequence       = 0;
+        std::uint64_t generation     = 0;
+        bool lookupOnly              = false;
+        bool lookupPreview           = false;
     };
     [[nodiscard]] std::int32_t SubmitColorPreview(PreviewMailbox<ColorPreviewRequest>::Launch launch) noexcept;
     [[nodiscard]] std::int32_t SubmitColorHistogram() noexcept;
@@ -975,8 +980,7 @@ class Application final : public ChromeEvents,
     class SizingJob;
     class DocumentLifecycleJob;
     [[nodiscard]] static std::optional<std::array<int, 2>> NewCanvasDimensions(const HostSizeDraft& draft) noexcept;
-    [[nodiscard]] HRESULT StartDocumentLifecycle(std::optional<std::array<int, 2>> dimensions,
-                                                 std::optional<std::uint64_t> invocation = {}) noexcept;
+    [[nodiscard]] HRESULT StartDocumentLifecycle(std::optional<std::array<int, 2>> dimensions, std::optional<std::uint64_t> invocation = {}) noexcept;
     int RunDocumentLifecycleSelfTest() noexcept;
     int RunDocumentLifecycleRefusalSelfTest() noexcept;
     int RunDocumentLifecycleCloseSelfTest() noexcept;
@@ -1016,10 +1020,13 @@ class Application final : public ChromeEvents,
     int RunLayerOpacityContextsSelfTest() noexcept;
     bool OpenOpacityEditForTest(double value) noexcept;
     [[nodiscard]] bool MetadataAccountingSettledForTest() noexcept;
-    [[nodiscard]] HRESULT StartLayerMetadata(LayerMetadataKind kind, Guid target, std::wstring_view name = {},
-                                             double opacity = 1.0, LayerBlendMode blendMode = LayerBlendMode::Normal,
-                                             OpacityMetadataIntent intent = OpacityMetadataIntent::Recorded,
-                                             std::optional<double> opening = {},
+    [[nodiscard]] HRESULT StartLayerMetadata(LayerMetadataKind kind,
+                                             Guid target,
+                                             std::wstring_view name                        = {},
+                                             double opacity                                = 1.0,
+                                             LayerBlendMode blendMode                      = LayerBlendMode::Normal,
+                                             OpacityMetadataIntent intent                  = OpacityMetadataIntent::Recorded,
+                                             std::optional<double> opening                 = {},
                                              std::optional<OpacityMetadataContext> context = {}) noexcept;
     class SelectionNudgeJob;
     [[nodiscard]] HRESULT StartSelectionNudge(int dx, int dy) noexcept;
@@ -1064,29 +1071,27 @@ class Application final : public ChromeEvents,
     class HueReadbackHostJob;
     [[nodiscard]] HRESULT StartHueReadbackOwner(std::uint64_t opening) noexcept;
     [[nodiscard]] bool HueInputCurrentOwner(std::uint64_t opening) const noexcept;
-    void CompleteHueReadbackOwner(std::uint64_t opening, HistoryWorkStamp stamp, JobResult result,
-                                  std::optional<double> hue) noexcept;
+    void CompleteHueReadbackOwner(std::uint64_t opening, HistoryWorkStamp stamp, JobResult result, std::optional<double> hue) noexcept;
     void CancelHueReadbackOwner() noexcept;
     [[nodiscard]] bool ReplayHueInputOwner() noexcept;
     void DropHueInputOwner(std::uint64_t opening) noexcept;
-    [[nodiscard]] bool QueueHuePressOwner(Vec2 pixel, double viewX, HostHueInput::Purpose purpose,
-                                          HueSampleMode mode) noexcept;
+    [[nodiscard]] bool QueueHuePressOwner(Vec2 pixel, double viewX, HostHueInput::Purpose purpose, HueSampleMode mode) noexcept;
     void RecordHueMoveOwner(std::uint64_t opening, double viewX, bool adjustsHue) noexcept;
     void SealHueInputOwner(std::uint64_t opening, bool lost) noexcept;
     void SealHueForBoundaryOwner(std::uint64_t ordinal) noexcept;
     HostHueInput _hueInput;
-    std::uint64_t _hueInputOpening = 0;
-    std::uint64_t _huePanelSequence = 0;
+    std::uint64_t _hueInputOpening    = 0;
+    std::uint64_t _huePanelSequence   = 0;
     std::uint64_t _hueAcquiredOpening = 0;
     std::optional<JobTicket> _hueReadbackTicket;
     std::optional<HistoryWorkStamp> _hueReadbackStamp;
-    bool _hueReadbackEnabled = false;
-    bool _hueCloseAfterPrefix = false; // Clock exhaustion drains accepted input before exact caller-owned drop.
+    bool _hueReadbackEnabled  = false;
+    bool _hueCloseAfterPrefix = false;                       // Clock exhaustion drains accepted input before exact caller-owned drop.
     std::shared_ptr<ColorWorkTestGate> _hueReadbackTestGate; // Original descriptor owns the optional harness gate.
     std::uint32_t* _hueCapturesForTest = nullptr;            // Borrowed owner-only, cleared before the fixture exits.
     int RunHueReadbackHostSelfTest() noexcept;
     class SamplerHostJob;
-    HANDLE _samplerAcknowledgedForTest = nullptr; // Owner-only borrowed harness event, cleared before its owner exits.
+    HANDLE _samplerAcknowledgedForTest           = nullptr; // Owner-only borrowed harness event, cleared before its owner exits.
     std::uint32_t* _samplerSourceCapturesForTest = nullptr; // Borrowed owner-only counter; never read by a worker.
     [[nodiscard]] SamplerOpening* FindSamplerOpening(std::uint64_t opening) noexcept;
     [[nodiscard]] const SamplerOpening* FindSamplerOpening(std::uint64_t opening) const noexcept;
@@ -1100,8 +1105,7 @@ class Application final : public ChromeEvents,
     void AdvanceSamplerReadback() noexcept;
     void CancelSamplerReadback() noexcept;
     void RetireSamplerOpening(std::uint64_t opening) noexcept;
-    void PublishSamplerPoint(std::uint64_t opening, const SamplerIntentPoint& point,
-                             std::optional<std::uint32_t> opaqueArgb) noexcept;
+    void PublishSamplerPoint(std::uint64_t opening, const SamplerIntentPoint& point, std::optional<std::uint32_t> opaqueArgb) noexcept;
     [[nodiscard]] std::optional<SamplerColorDependency> CaptureSamplerColorDependency() noexcept;
     [[nodiscard]] std::uint32_t ResolveSamplerColor(const SamplerColorDependency& dependency) const noexcept;
     void ReleaseSamplerColorDependency(const SamplerColorDependency& dependency) noexcept;
@@ -1152,9 +1156,9 @@ class Application final : public ChromeEvents,
     struct GradientRequest final
     {
         Guid target;
-        std::uint64_t opening = 0;
+        std::uint64_t opening  = 0;
         std::uint64_t sequence = 0;
-        bool mask = false;
+        bool mask              = false;
         Vec2 start;
         Vec2 end;
         GradientShape shape = GradientShape::Linear;
@@ -1167,14 +1171,13 @@ class Application final : public ChromeEvents,
     void RefreshGradientJobs() noexcept;
     void CancelGradientJobs() noexcept;
     void LaunchGradientPreview() noexcept;
-    [[nodiscard]] HRESULT SubmitGradientJob(GradientRequest request, std::optional<PreviewStamp> preview,
-                                            std::optional<HistoryWorkStamp> commit) noexcept;
+    [[nodiscard]] HRESULT SubmitGradientJob(GradientRequest request, std::optional<PreviewStamp> preview, std::optional<HistoryWorkStamp> commit) noexcept;
     [[nodiscard]] HRESULT StartGradientCommit(std::uint64_t ordinal) noexcept;
     int RunGradientWorkSelfTest() noexcept;
     struct PixelMoveRequest final
     {
         Guid target;
-        std::uint64_t opening = 0;
+        std::uint64_t opening  = 0;
         std::uint64_t sequence = 0;
         Vec2 offset;
         bool duplicate = false;
@@ -1184,8 +1187,7 @@ class Application final : public ChromeEvents,
     void RefreshPixelMoveJobs() noexcept;
     void CancelPixelMoveJobs(bool keepOpening = false) noexcept;
     void LaunchPixelMovePreview() noexcept;
-    [[nodiscard]] HRESULT SubmitPixelMoveJob(PixelMoveRequest request, std::optional<PreviewStamp> preview,
-                                             std::optional<HistoryWorkStamp> commit) noexcept;
+    [[nodiscard]] HRESULT SubmitPixelMoveJob(PixelMoveRequest request, std::optional<PreviewStamp> preview, std::optional<HistoryWorkStamp> commit) noexcept;
     [[nodiscard]] HRESULT StartPixelMoveCommit(std::uint64_t ordinal) noexcept;
     void ExecutePixelNudge(Vec2 offset) noexcept;
     int RunPixelMoveWorkSelfTest() noexcept;
@@ -1279,7 +1281,7 @@ class Application final : public ChromeEvents,
     // (a system key with Alt), the character TranslateMessage posts, the key up — with the thread's key state
     // holding the modifiers (MK_CONTROL, MK_SHIFT, kKeyAlt, kKeyAltGr) and a real scan code (the US OEM bracket and
     // number-row keys name their physical position). True when the key path took the key down.
-    static constexpr UINT kKeyAlt = 0x0100;
+    static constexpr UINT kKeyAlt   = 0x0100;
     static constexpr UINT kKeyAltGr = 0x0200; // AltGr: the right Alt, with the left Ctrl Windows adds to it
     bool HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat = false) noexcept;
     int RunKeyboardSelfTest() noexcept;
@@ -1291,9 +1293,9 @@ class Application final : public ChromeEvents,
     // ApplicationFiles.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Files" and "Unimplemented functions"): images
     // opened as a layer or a new project, the save prompt, Import Images, Close Project and the notice for a
     // function that has no implementation yet.
-    using ImageOpenChoice = HostImageOpenChoice;
+    using ImageOpenChoice                    = HostImageOpenChoice;
     static constexpr UINT kEndSessionMessage = WM_APP + 8; // the save prompt a refused session end posts
-    static constexpr UINT kNoticeMessage = WM_APP + 9;     // a notice card to show (wParam: its string id)
+    static constexpr UINT kNoticeMessage     = WM_APP + 9; // a notice card to show (wParam: its string id)
     [[nodiscard]] ImageOpenChoice PromptImageOpen(const std::wstring& firstName, std::size_t count) noexcept;
     // Modified history, or a pending edit that Save would record (a live stroke or warp, a pending gradient, a
     // changed transform, a typed opacity).
@@ -1307,7 +1309,8 @@ class Application final : public ChromeEvents,
     void OnEndSession(bool ending) noexcept;
     void ClearEndSessionWriteBlock() noexcept;
     void WaitForEndSessionWriter(const std::shared_ptr<WorkerWriteCompletion>& write,
-                                 const std::optional<JobTicket>& ticket, const std::optional<HistoryWorkStamp>& stamp,
+                                 const std::optional<JobTicket>& ticket,
+                                 const std::optional<HistoryWorkStamp>& stamp,
                                  ULONGLONG deadline) noexcept;
     int RunFileEndSessionSelfTest() noexcept;
     void RunEndSessionPrompt() noexcept;
@@ -1400,13 +1403,13 @@ class Application final : public ChromeEvents,
     // Declared before the session: a pending stroke tells its engine when the session drops it.
     GpuBrushCoverage _brushEngine;
     DocumentSession _session;
-    ApplicationShutdownTestProbe* _shutdownTestProbe = nullptr;
+    ApplicationShutdownTestProbe* _shutdownTestProbe     = nullptr;
     ApplicationProcessingTestProbe* _processingTestProbe = nullptr;
     JobScheduler _jobs;
     OwnerWorkMultiplexer _ownerWork;
     UtilityReadbackOwnerService _utilityReadback;
-    bool _utilityReadbackInitialized = false;
-    bool _recordedCommandsInitialized = false;
+    bool _utilityReadbackInitialized        = false;
+    bool _recordedCommandsInitialized       = false;
     bool _preparedDisplayAcquisitionStarted = false;
     RetryWaitQueue _retryWait;
     PathReadWait _pathReadWait;
@@ -1423,11 +1426,11 @@ class Application final : public ChromeEvents,
     std::array<float, 4> _selectionOutlineHole{};
     std::optional<DocumentReadAuthority> _selectionOutlineDocument;
     std::uint64_t _selectionOutlineViewEpoch = 0;
-    bool _selectionOutlineInitialized = false;
-    bool _lassoDraftDisplayEnabled = false;
-    bool _lassoDraftViewValid = false;
-    bool _lassoDraftEpochExhausted = false;
-    std::uint64_t _lassoDraftViewEpoch = 0;
+    bool _selectionOutlineInitialized        = false;
+    bool _lassoDraftDisplayEnabled           = false;
+    bool _lassoDraftViewValid                = false;
+    bool _lassoDraftEpochExhausted           = false;
+    std::uint64_t _lassoDraftViewEpoch       = 0;
     std::optional<BoundedLassoGesture::Display> _overlayLassoDraft;
     PreparedLassoDraftRaster::GridKey _lassoDraftGrid;
     std::array<float, 4> _lassoDraftHole{};
@@ -1435,20 +1438,20 @@ class Application final : public ChromeEvents,
     HRESULT _lassoDraftDisplayFailure = S_OK;
 
     bool _selectionOutlineAllowHiddenForTest = false;
-    bool _selectionOutlineViewValid = false;
-    bool _selectionOutlineEpochExhausted = false;
-    HRESULT _selectionOutlineFailure = S_OK;
+    bool _selectionOutlineViewValid          = false;
+    bool _selectionOutlineEpochExhausted     = false;
+    HRESULT _selectionOutlineFailure         = S_OK;
     CommittedDisplayController _committedDisplay;
     PendingDisplayClient _pendingDisplayClient{*this};
     CommittedDisplayController _pendingDisplay;
     bool _pendingDisplayInitialized = false;
-    HRESULT _pendingDisplayFailure = S_OK;
+    HRESULT _pendingDisplayFailure  = S_OK;
     std::optional<CommittedDisplayKey> _pendingDisplayFailureKey;
     RecordedDisplayGraph* _acknowledgedCommittedDisplay = nullptr;
-    RecordedDisplayGraph* _acknowledgedStrokePreview = nullptr;
-    bool _committedDisplayInitialized = false;
-    bool _committedDisplayAllowHiddenForTest = false;
-    HRESULT _committedDisplayFailure = S_OK;
+    RecordedDisplayGraph* _acknowledgedStrokePreview    = nullptr;
+    bool _committedDisplayInitialized                   = false;
+    bool _committedDisplayAllowHiddenForTest            = false;
+    HRESULT _committedDisplayFailure                    = S_OK;
     std::optional<CommittedDisplayKey> _committedDisplayFailureKey;
     bool _gpuWorkInitialized = false;
     HRESULT _gpuBindingError = E_PENDING;
@@ -1466,7 +1469,7 @@ class Application final : public ChromeEvents,
     std::optional<JobTicket> _layerRowsTicket;
     std::wstring _layerRowsHiddenPattern;
     bool _preparedLayerRowsEnabled = false;
-    bool _layerRowsRetryAvailable = false;
+    bool _layerRowsRetryAvailable  = false;
     std::shared_ptr<LayerRowsTestGate> _layerRowsTestGate;
 
     std::optional<JobTicket> _historyResidencyTicket;
@@ -1517,7 +1520,7 @@ class Application final : public ChromeEvents,
     std::shared_ptr<SelectionMoveCloseTestGate> _selectionMoveCloseTestGate;
     std::optional<std::uint64_t> _pendingSelectionMoveCloseOpening;
     std::uint64_t _pendingSelectionMoveCloseDocumentSerial = 0;
-    bool _pendingSelectionMoveCloseCancel = false;
+    bool _pendingSelectionMoveCloseCancel                  = false;
     ContinuationReceipt _pendingSelectionMoveCloseReceipt;
     std::optional<HistoryWorkStamp> _wandLayerHostStamp;
     std::optional<JobTicket> _wandLayerHostTicket;
@@ -1538,7 +1541,7 @@ class Application final : public ChromeEvents,
     std::optional<JobTicket> _clipboardTicket;
     std::optional<JobTicket> _clipboardPrefillTicket;
     std::uint64_t _clipboardPrefillInvocation = 0;
-    bool _newCanvasEdited = false;
+    bool _newCanvasEdited                     = false;
     std::optional<ClipboardFingerprint::Binding> _clipboardBinding;
     std::shared_ptr<struct ClipboardWorkTestGate> _clipboardWorkTestGate;
     std::shared_ptr<RasterEditTestGate> _rasterEditTestGate;
@@ -1551,7 +1554,7 @@ class Application final : public ChromeEvents,
     std::shared_ptr<TransformRestoreOwner> _transformRestoreOwner;
     std::shared_ptr<TransformWorkTestGate> _transformWorkTestGate;
     PreviewMailbox<TransformPreviewRequest> _transformPreviews;
-    bool _transformPreviewMailboxOpen = false;
+    bool _transformPreviewMailboxOpen           = false;
     std::uint64_t _transformPreviewSeenRevision = 0, _transformPreviewSerial = 0;
     std::uint64_t _transformPreviewOpening = 0, _transformPreviewGeneration = 0;
     std::optional<JobTicket> _transformPreviewTicket;
@@ -1563,7 +1566,7 @@ class Application final : public ChromeEvents,
     std::shared_ptr<ShapeWorkTestGate> _shapeWorkTestGate;
     std::optional<ShapeDraft> _shapeCommitPreview;
     std::uint64_t _shapePreviewDocumentSerial = 0;
-    std::uint32_t _shapePreviewArgb = DocumentSession::kDefaultForegroundArgb;
+    std::uint32_t _shapePreviewArgb           = DocumentSession::kDefaultForegroundArgb;
     std::optional<JobTicket> _pathClassificationTicket;
     PathClassificationBatch _pathClassifications;
     bool _pathClassificationCancelled = false;
@@ -1584,7 +1587,7 @@ class Application final : public ChromeEvents,
     std::shared_ptr<WorkerWriteCompletion> _exportWrite;
     std::shared_ptr<EndSessionWriteTestGate> _endSessionWriteTestGate;
     ContinuationReceipt::Result _hostPrerequisite{HostOutcome::Pending, 0};
-    bool _hostSourceRegistered = false;
+    bool _hostSourceRegistered                  = false;
     bool _hostAdmissionAllocationFailureForTest = false;
     enum class HostStage : std::uint8_t
     {
@@ -1614,21 +1617,21 @@ class Application final : public ChromeEvents,
         FileComplete,
         Complete
     };
-    HostStage _hostStage = HostStage::Begin;
-    HostStage _hostAfterPrerequisite = HostStage::Execute;
-    HostStage _hostAfterPanelCancel = HostStage::Execute;
-    HostStage _hostAfterOpacity = HostStage::Execute;
-    HostWriteFormat _hostWriteFormat = HostWriteFormat::Project;
-    std::size_t _hostPathIndex = 0;
-    bool _hostSawProject = false;
-    bool _hostImportNewProject = false;
-    bool _hostSaveBeforeAction = false;
-    bool _hostWriteInFlight = false;
-    bool _hostBatchFailed = false;
-    std::int32_t _hostBatchError = S_OK;
-    bool _hostExecuting = false; // only the selected runner can enter an already approved action
-    HRESULT _hostExecutionError = S_OK;
-    std::uint64_t _sizeInvocation = 0;
+    HostStage _hostStage                = HostStage::Begin;
+    HostStage _hostAfterPrerequisite    = HostStage::Execute;
+    HostStage _hostAfterPanelCancel     = HostStage::Execute;
+    HostStage _hostAfterOpacity         = HostStage::Execute;
+    HostWriteFormat _hostWriteFormat    = HostWriteFormat::Project;
+    std::size_t _hostPathIndex          = 0;
+    bool _hostSawProject                = false;
+    bool _hostImportNewProject          = false;
+    bool _hostSaveBeforeAction          = false;
+    bool _hostWriteInFlight             = false;
+    bool _hostBatchFailed               = false;
+    std::int32_t _hostBatchError        = S_OK;
+    bool _hostExecuting                 = false; // only the selected runner can enter an already approved action
+    HRESULT _hostExecutionError         = S_OK;
+    std::uint64_t _sizeInvocation       = 0;
     std::uint64_t _endSessionGeneration = 0;
     std::optional<Prompts::Answer> _forcedDiscardAnswer;
     std::optional<HistoryWorkStamp> _colorCommitStamp;
@@ -1638,39 +1641,39 @@ class Application final : public ChromeEvents,
     ContinuationReceipt _pendingCancelReceipt;
     std::optional<JobTicket> _colorCommitTicket;
     HostOutcome _colorCommitOutcome = HostOutcome::Succeeded;
-    std::int32_t _colorCommitError = 0;
+    std::int32_t _colorCommitError  = 0;
     PreviewMailbox<ColorPreviewRequest> _colorPreviews;
     PreviewMailbox<GradientRequest> _gradientPreviews;
-    bool _gradientMailboxOpen = false;
-    bool _gradientCompleting = false;
-    std::uint64_t _gradientPreviewSerial = 0;
+    bool _gradientMailboxOpen             = false;
+    bool _gradientCompleting              = false;
+    std::uint64_t _gradientPreviewSerial  = 0;
     std::uint64_t _gradientPreviewOpening = 0;
-    std::uint64_t _gradientSeenSequence = 0;
+    std::uint64_t _gradientSeenSequence   = 0;
     std::optional<JobTicket> _gradientPreviewTicket;
     std::optional<JobTicket> _gradientCommitTicket;
     std::optional<HistoryWorkStamp> _gradientCommitStamp;
     std::shared_ptr<GradientWorkTestGate> _gradientWorkTestGate;
     PreviewMailbox<PixelMoveRequest> _pixelMovePreviews;
-    bool _pixelMoveMailboxOpen = false;
-    bool _pixelMoveCompleting = false;
-    std::uint64_t _pixelMovePreviewSerial = 0;
+    bool _pixelMoveMailboxOpen             = false;
+    bool _pixelMoveCompleting              = false;
+    std::uint64_t _pixelMovePreviewSerial  = 0;
     std::uint64_t _pixelMovePreviewOpening = 0;
-    std::uint64_t _pixelMoveSeenSequence = 0;
+    std::uint64_t _pixelMoveSeenSequence   = 0;
     std::optional<JobTicket> _pixelMovePreviewTicket;
     std::optional<JobTicket> _pixelMoveCommitTicket;
     std::optional<HistoryWorkStamp> _pixelMoveCommitStamp;
     std::shared_ptr<PixelMoveWorkTestGate> _pixelMoveWorkTestGate;
     std::shared_ptr<const PixelMoveOpening> _pixelMoveOpening;
-    std::uint64_t _pixelMoveOpeningSerial = 0;
-    std::uint64_t _pixelMoveOpeningId = 0;
+    std::uint64_t _pixelMoveOpeningSerial     = 0;
+    std::uint64_t _pixelMoveOpeningId         = 0;
     std::uint64_t _pixelMoveOpeningGeneration = 0;
-    bool _colorMailboxOpen = false;
-    bool _colorCompleting = false;
-    std::uint64_t _colorDocumentSerial = 0;
-    std::uint64_t _colorOpening = 0;
-    std::uint64_t _colorSeenSequence = 0;
-    std::uint64_t _colorSeenGeneration = 0;
-    bool _colorHistogramAttempted = false;
+    bool _colorMailboxOpen                    = false;
+    bool _colorCompleting                     = false;
+    std::uint64_t _colorDocumentSerial        = 0;
+    std::uint64_t _colorOpening               = 0;
+    std::uint64_t _colorSeenSequence          = 0;
+    std::uint64_t _colorSeenGeneration        = 0;
+    bool _colorHistogramAttempted             = false;
     std::optional<JobTicket> _colorPreviewTicket;
     std::optional<JobTicket> _colorHistogramTicket;
     std::shared_ptr<ColorWorkTestGate> _colorWorkTestGate;
@@ -1682,31 +1685,31 @@ class Application final : public ChromeEvents,
     std::wstring _screenshotPath;
     std::wstring _documentPath;
     uint32_t _screenshotDpi = 0;
-    EditorTool _tool = EditorTool::Move;
+    EditorTool _tool        = EditorTool::Move;
     // The Move tool's and the selection tools' header choices: host state, never the document session's (RF-810).
     // The eyedropper's comparison ring follows the settings (`_settings.sampleRing`).
-    bool _locksTransformRatio = true;
-    bool _transformAutoSelect = false;
+    bool _locksTransformRatio    = true;
+    bool _transformAutoSelect    = false;
     bool _showsTransformControls = true;
-    int _selectionExpandAmount = 1; // 1…DocumentSession::kSelectionModifyLimit
+    int _selectionExpandAmount   = 1; // 1…DocumentSession::kSelectionModifyLimit
     int _selectionContractAmount = 1;
-    bool _spacePan = false;
+    bool _spacePan               = false;
     // A new physical pan may follow a sealed deferred paint path. View points never enter that paint FIFO.
     std::optional<Vec2> _canvasPanLast;
     bool _acceleratorShift = false;
-    CommandBindings _bindings;        // the effective binding table: catalog defaults and the settings' replacements
-    bool _suppressCharacter = false;  // the key down ran a command or a gesture: its WM_CHAR / WM_SYSCHAR types nothing
-    bool _lastKeyHandled = false;     // the last key down went to a command or a gesture (read by the self-test driver)
-    std::uint16_t _keyMovedFocus = 0; // a held key whose press moved the keyboard: its repeats go nowhere
-    bool _releasingCapture = false;   // a button-up releases the capture: not a capture loss
+    CommandBindings _bindings;            // the effective binding table: catalog defaults and the settings' replacements
+    bool _suppressCharacter      = false; // the key down ran a command or a gesture: its WM_CHAR / WM_SYSCHAR types nothing
+    bool _lastKeyHandled         = false; // the last key down went to a command or a gesture (read by the self-test driver)
+    std::uint16_t _keyMovedFocus = 0;     // a held key whose press moved the keyboard: its repeats go nowhere
+    bool _releasingCapture       = false; // a button-up releases the capture: not a capture loss
     // The typed opacity edit: the layer it started on, that layer's opacity before the first preview (what history
     // holds) and the value previewed. Previews change the document outside history; one entry records the edit.
     struct OpacityEdit
     {
         Guid layer;
-        double start = 1.0;
-        double shown = 1.0;
-        std::uint64_t opening = 0;
+        double start                 = 1.0;
+        double shown                 = 1.0;
+        std::uint64_t opening        = 0;
         std::uint64_t documentSerial = 0;
     };
     std::optional<OpacityEdit> _opacityEdit;
@@ -1722,18 +1725,18 @@ class Application final : public ChromeEvents,
     // The value an edit closed from outside recorded while the field kept its text: the field's late commit of that
     // same value is already in history and changes nothing (not even another document's layer).
     std::optional<double> _opacityRecorded;
-    std::optional<Guid> _renameLayer; // the layer the open Rename card renames
-    int _messageDepth = 0;            // window-procedure calls on the stack
-    bool _closeDeferred = false;      // a WM_CLOSE waits for the stack to unwind
-    bool _jobCloseRequested = false;  // a close message during a completion/action waits for the outer loop
-    bool _shutdownDeferred = false;   // an already-confirmed close waits for a completion/action to return
-    bool _shutdownStarted = false;
-    bool _shutdownComplete = false;
-    bool _closeConfirmed = false;    // the session-end prompt already asked: the next WM_CLOSE does not
-    bool _endSessionPending = false; // a session end was refused and its prompt has not answered yet
+    std::optional<Guid> _renameLayer;       // the layer the open Rename card renames
+    int _messageDepth              = 0;     // window-procedure calls on the stack
+    bool _closeDeferred            = false; // a WM_CLOSE waits for the stack to unwind
+    bool _jobCloseRequested        = false; // a close message during a completion/action waits for the outer loop
+    bool _shutdownDeferred         = false; // an already-confirmed close waits for a completion/action to return
+    bool _shutdownStarted          = false;
+    bool _shutdownComplete         = false;
+    bool _closeConfirmed           = false; // the session-end prompt already asked: the next WM_CLOSE does not
+    bool _endSessionPending        = false; // a session end was refused and its prompt has not answered yet
     bool _endSessionPromptDeferred = false;
-    bool _endSessionWriteBlocked = false; // this reason is independent from the posted unsaved prompt
-    bool _layoutDirty = false;
+    bool _endSessionWriteBlocked   = false; // this reason is independent from the posted unsaved prompt
+    bool _layoutDirty              = false;
     // The pointer's one interaction in flight (RF-904). A brush stroke, a warp and a shape draft are the session's own
     // pending edits (PendingBrush, PendingWarp, PendingShape) and keep no state here.
     struct PanDrag
@@ -1744,7 +1747,7 @@ class Application final : public ChromeEvents,
     {
         Vec2 anchor{}; // the Zoom tool's press (view pixels), the zoom then, and whether the drag passed the click slop
         double zoom = 1;
-        bool moved = false;
+        bool moved  = false;
     };
     struct MoveToolDrag
     {
@@ -1760,10 +1763,10 @@ class Application final : public ChromeEvents,
         Vec2 latest;
         UINT modifiers;
         bool alt;
-        bool pointerDown = true;
+        bool pointerDown  = true;
         bool finishQueued = false;
         bool finishCancel = false;
-        bool abandoned = false;
+        bool abandoned    = false;
         std::optional<Guid> copy;
         std::uint64_t copyOpening = 0;
     };
@@ -1799,8 +1802,8 @@ class Application final : public ChromeEvents,
         double startX = 0;                    // view x where a targeted Hue/Saturation drag began
         std::optional<std::uint64_t> opening; // Event-owned async sample/drag; absent for the legacy reference.
     };
-    using PointerDrag = std::variant<std::monostate, PanDrag, ZoomDrag, MoveToolDrag, CropDrag, OutlineDrag, DraftDrag,
-                                     PixelDrag, GradientDrag, ColorSampling, HueTargetDrag>;
+    using PointerDrag =
+        std::variant<std::monostate, PanDrag, ZoomDrag, MoveToolDrag, CropDrag, OutlineDrag, DraftDrag, PixelDrag, GradientDrag, ColorSampling, HueTargetDrag>;
     PointerDrag _drag;
     std::unique_ptr<SamplerState> _samplerState;
     SamplerHostJob* _samplerHostJob = nullptr; // borrowed only until acknowledged job destruction
@@ -1808,9 +1811,9 @@ class Application final : public ChromeEvents,
     std::optional<HistoryWorkStamp> _samplerHostStamp;
     std::optional<TransformOverlayGeometry> _overlayGeometry;
     GradientMapSettings _adjustColorOriginal; // the Gradient Map ends when its color picker opened
-    DWORD _clipboardSequence = 0; // the system clipboard's sequence number right after the last copy was offered to it
-    bool _clipboardWriteSucceeded = false; // observed by failure diagnostics; does not change copy/Paste policy
-    ULONGLONG _lastPressTick = 0;
+    DWORD _clipboardSequence      = 0;        // the system clipboard's sequence number right after the last copy was offered to it
+    bool _clipboardWriteSucceeded = false;    // observed by failure diagnostics; does not change copy/Paste policy
+    ULONGLONG _lastPressTick      = 0;
     POINT _lastPressPoint{};
     std::optional<DocumentSelection> _overlaySelection;
     Vec2 _overlaySelectionTranslation{};
@@ -1820,21 +1823,21 @@ class Application final : public ChromeEvents,
     std::unique_ptr<UiCancellationObservation> _preUiCancellationObservation;
     std::unique_ptr<UiBenchmarkState> _uiBenchmark;
     Vec2 _overlayOrigin{};
-    double _overlayScale = 0.0;
-    double _overlayBacking = 0.0;
-    bool _marchingAnts = false;     // a non-empty selection outline shows (SyncChrome); the frame loop steps its dash
-    std::uint64_t _chromeSyncs = 0; // SyncChrome runs (the self-test counts what a pointer move costs)
-    std::vector<float> _guideXs;    // the snap guides in view pixels, reused between syncs
+    double _overlayScale       = 0.0;
+    double _overlayBacking     = 0.0;
+    bool _marchingAnts         = false; // a non-empty selection outline shows (SyncChrome); the frame loop steps its dash
+    std::uint64_t _chromeSyncs = 0;     // SyncChrome runs (the self-test counts what a pointer move costs)
+    std::vector<float> _guideXs;        // the snap guides in view pixels, reused between syncs
     std::vector<float> _guideYs;
     // What the status bar's texts were formatted from (SyncStatus).
     struct StatusKey
     {
-        int percent = 0;
-        bool document = false;
-        int width = 0;
-        int height = 0;
-        EditorTool tool = EditorTool::Move;
-        std::uint64_t chrome = 0; // ChromeHost::DisplayRevision: rebuilt controls or new chords
+        int percent                                                    = 0;
+        bool document                                                  = false;
+        int width                                                      = 0;
+        int height                                                     = 0;
+        EditorTool tool                                                = EditorTool::Move;
+        std::uint64_t chrome                                           = 0; // ChromeHost::DisplayRevision: rebuilt controls or new chords
         [[nodiscard]] bool operator==(const StatusKey&) const noexcept = default;
     };
     std::optional<StatusKey> _statusKey;
@@ -1843,10 +1846,10 @@ class Application final : public ChromeEvents,
     struct CursorProbe
     {
         Vec2 pixel{};
-        bool control = false;
+        bool control           = false;
         std::uint64_t revision = 0;
-        bool result = false;
-        bool valid = false;
+        bool result            = false;
+        bool valid             = false;
     };
     std::uint64_t _cursorRevision = 1;
     TransformPressRule _pressRule; // the cursor's, as of `_pressRuleRevision`
@@ -1860,21 +1863,21 @@ class Application final : public ChromeEvents,
     SelectionHitObserver _selectionCursorObserver{};
     struct SelectionCursorWorkerProbe final
     {
-        void* context = nullptr;
+        void* context                                    = nullptr;
         void (*ready)(void*, const JobContext&) noexcept = nullptr;
-        void (*retired)(void*) noexcept = nullptr;
+        void (*retired)(void*) noexcept                  = nullptr;
     };
     SelectionCursorWorkerProbe _selectionCursorWorkerProbe{};
-    std::uint64_t _selectionCursorDispatches = 0;
-    std::uint64_t _selectionCursorCaptures = 0;
+    std::uint64_t _selectionCursorDispatches         = 0;
+    std::uint64_t _selectionCursorCaptures           = 0;
     std::uint64_t _selectionCursorCompletedCallbacks = 0;
     std::optional<SelectionBounds> _selectionReach; // the selection's bounds: nothing outside them is inside it
     std::uint64_t _selectionReachRevision = 0;
     // LayerUnderPointer's visible pixel layers top-first (index into the document's layers, id), per `_cursorRevision`.
     mutable std::vector<std::pair<std::size_t, Guid>> _pointerLayers;
     mutable std::uint64_t _pointerLayersRevision = 0;
-    mutable std::uint64_t _pointerLayerScans = 0; // LayerUnderPointer runs (the self-test counts them)
-    std::uint64_t _cursorSelectionTests = 0;      // CanMoveSelection calls the cursor made (the self-test counts them)
+    mutable std::uint64_t _pointerLayerScans     = 0; // LayerUnderPointer runs (the self-test counts them)
+    std::uint64_t _cursorSelectionTests          = 0; // CanMoveSelection calls the cursor made (the self-test counts them)
     // The gradient or pixel-move raster the composition's stroke preview was begun for (never dereferenced: a new
     // raster, or an expired one, restarts the preview).
     std::weak_ptr<const BrushStroke> _previewSource;
@@ -1883,9 +1886,9 @@ class Application final : public ChromeEvents,
     // Real UI by default; the self-test, screenshot and benchmark modes point this at QuietPrompts() wherever they
     // set `_quietUi = true`. Both are stateless singletons (Prompts.h), so this never owns anything.
     const Prompts* _prompts = &RealPrompts();
-    int _errorsShown = 0;                            // ShowError calls; quiet runs count instead of showing them
-    UINT _lastErrorId = 0;                           // the string the last ShowError named
-    int _budgetNotices = 0;                          // budget refusals reported (ReportBudgetRefusal)
+    int _errorsShown        = 0;                     // ShowError calls; quiet runs count instead of showing them
+    UINT _lastErrorId       = 0;                     // the string the last ShowError named
+    int _budgetNotices      = 0;                     // budget refusals reported (ReportBudgetRefusal)
     std::optional<ImageOpenChoice> _forcedImageOpen; // the self-test's answer to the image-open prompt
     std::optional<bool> _forcedDiscard;              // the self-test's answer to the save prompt (true: Don't Save)
     using SizeDialog = HostSizeDraft;
@@ -1895,22 +1898,22 @@ class Application final : public ChromeEvents,
     AppSettings _settings;
     wil::unique_hfind_change _settingsWatch;
     FILETIME _settingsSeenWrite{};
-    std::uint64_t _settingsSeenSize = 0;
-    bool _restoreMaximized = false;
-    bool _classRegistered = false;
-    bool _rendererReady = false;
-    bool _windowVisible = false;
-    bool _displayPoweredOn = true;
-    bool _occlusionStatusChanged = false;
-    bool _frameInvalidated = true;
-    bool _mouseTracked = false;
-    bool _screenshotArmed = false;
-    HRESULT _runtimeFailure = S_OK;
-    HRESULT _screenshotResult = S_OK;
-    HRESULT _frameLoopFailure = S_OK; // drawing stopped; the close it asked for prompts to save (RF-401)
-    HRESULT _lastFrameFailure = S_OK;
-    int _failedFrames = 0;
-    bool _canvasFailureShown = false;
-    int _canvasFailureNotices = 0; // quiet runs count them
+    std::uint64_t _settingsSeenSize      = 0;
+    bool _restoreMaximized               = false;
+    bool _classRegistered                = false;
+    bool _rendererReady                  = false;
+    bool _windowVisible                  = false;
+    bool _displayPoweredOn               = true;
+    bool _occlusionStatusChanged         = false;
+    bool _frameInvalidated               = true;
+    bool _mouseTracked                   = false;
+    bool _screenshotArmed                = false;
+    HRESULT _runtimeFailure              = S_OK;
+    HRESULT _screenshotResult            = S_OK;
+    HRESULT _frameLoopFailure            = S_OK; // drawing stopped; the close it asked for prompts to save (RF-401)
+    HRESULT _lastFrameFailure            = S_OK;
+    int _failedFrames                    = 0;
+    bool _canvasFailureShown             = false;
+    int _canvasFailureNotices            = 0; // quiet runs count them
     std::uint64_t _boundDeviceGeneration = 0;
 };

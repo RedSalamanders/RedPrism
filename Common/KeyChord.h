@@ -14,54 +14,54 @@
 // The physical keys a chord can name by position. The numbers are the settings file's `keyPosition` order.
 enum class KeyPosition : std::uint8_t
 {
-    None = 0,
+    None           = 0,
     NumberRowMinus = 1, // scan 0x0C, the key immediately right of 0 (US - and _)
-    NumberRowPlus = 2,  // scan 0x0D, the key immediately left of Backspace (US = and +)
-    BracketLeft = 3,    // scan 0x1A (US [)
-    BracketRight = 4,   // scan 0x1B (US ])
+    NumberRowPlus  = 2, // scan 0x0D, the key immediately left of Backspace (US = and +)
+    BracketLeft    = 3, // scan 0x1A (US [)
+    BracketRight   = 4, // scan 0x1B (US ])
 };
 
 // The Windows virtual-key codes the catalog and the settings grammar name (winuser.h values).
 namespace VirtualKey
 {
-inline constexpr std::uint16_t kBack = 0x08;
-inline constexpr std::uint16_t kTab = 0x09;
-inline constexpr std::uint16_t kReturn = 0x0D;
-inline constexpr std::uint16_t kShift = 0x10;
-inline constexpr std::uint16_t kControl = 0x11;
-inline constexpr std::uint16_t kMenu = 0x12;
-inline constexpr std::uint16_t kEscape = 0x1B;
-inline constexpr std::uint16_t kSpace = 0x20;
-inline constexpr std::uint16_t kPrior = 0x21;
-inline constexpr std::uint16_t kNext = 0x22;
-inline constexpr std::uint16_t kEnd = 0x23;
-inline constexpr std::uint16_t kHome = 0x24;
-inline constexpr std::uint16_t kLeft = 0x25;
-inline constexpr std::uint16_t kUp = 0x26;
-inline constexpr std::uint16_t kRight = 0x27;
-inline constexpr std::uint16_t kDown = 0x28;
-inline constexpr std::uint16_t kInsert = 0x2D;
-inline constexpr std::uint16_t kDelete = 0x2E;
-inline constexpr std::uint16_t kLeftWindows = 0x5B;
+inline constexpr std::uint16_t kBack         = 0x08;
+inline constexpr std::uint16_t kTab          = 0x09;
+inline constexpr std::uint16_t kReturn       = 0x0D;
+inline constexpr std::uint16_t kShift        = 0x10;
+inline constexpr std::uint16_t kControl      = 0x11;
+inline constexpr std::uint16_t kMenu         = 0x12;
+inline constexpr std::uint16_t kEscape       = 0x1B;
+inline constexpr std::uint16_t kSpace        = 0x20;
+inline constexpr std::uint16_t kPrior        = 0x21;
+inline constexpr std::uint16_t kNext         = 0x22;
+inline constexpr std::uint16_t kEnd          = 0x23;
+inline constexpr std::uint16_t kHome         = 0x24;
+inline constexpr std::uint16_t kLeft         = 0x25;
+inline constexpr std::uint16_t kUp           = 0x26;
+inline constexpr std::uint16_t kRight        = 0x27;
+inline constexpr std::uint16_t kDown         = 0x28;
+inline constexpr std::uint16_t kInsert       = 0x2D;
+inline constexpr std::uint16_t kDelete       = 0x2E;
+inline constexpr std::uint16_t kLeftWindows  = 0x5B;
 inline constexpr std::uint16_t kRightWindows = 0x5C;
-inline constexpr std::uint16_t kAdd = 0x6B;
-inline constexpr std::uint16_t kSubtract = 0x6D;
-inline constexpr std::uint16_t kF1 = 0x70;
-inline constexpr std::uint16_t kF2 = 0x71;
-inline constexpr std::uint16_t kF4 = 0x73;
-inline constexpr std::uint16_t kF10 = 0x79;
-inline constexpr std::uint16_t kF24 = 0x87;
-inline constexpr std::uint16_t kLeftShift = 0xA0;
-inline constexpr std::uint16_t kRightMenu = 0xA5;
+inline constexpr std::uint16_t kAdd          = 0x6B;
+inline constexpr std::uint16_t kSubtract     = 0x6D;
+inline constexpr std::uint16_t kF1           = 0x70;
+inline constexpr std::uint16_t kF2           = 0x71;
+inline constexpr std::uint16_t kF4           = 0x73;
+inline constexpr std::uint16_t kF10          = 0x79;
+inline constexpr std::uint16_t kF24          = 0x87;
+inline constexpr std::uint16_t kLeftShift    = 0xA0;
+inline constexpr std::uint16_t kRightMenu    = 0xA5;
 } // namespace VirtualKey
 
 struct KeyChord
 {
-    std::uint16_t virtualKey = 0;             // the key's virtual key; 0 when `position` names the key
-    KeyPosition position = KeyPosition::None; // the key's physical position; None when `virtualKey` names it
-    bool ctrl = false;
-    bool alt = false;
-    bool shift = false;
+    std::uint16_t virtualKey = 0;                 // the key's virtual key; 0 when `position` names the key
+    KeyPosition position     = KeyPosition::None; // the key's physical position; None when `virtualKey` names it
+    bool ctrl                = false;
+    bool alt                 = false;
+    bool shift               = false;
     [[nodiscard]] constexpr bool IsEmpty() const noexcept
     {
         return virtualKey == 0 && position == KeyPosition::None;
@@ -103,16 +103,11 @@ struct KeyChord
 {
     switch (position)
     {
-    case KeyPosition::NumberRowMinus:
-        return 0x0C;
-    case KeyPosition::NumberRowPlus:
-        return 0x0D;
-    case KeyPosition::BracketLeft:
-        return 0x1A;
-    case KeyPosition::BracketRight:
-        return 0x1B;
-    case KeyPosition::None:
-        break;
+        case KeyPosition::NumberRowMinus: return 0x0C;
+        case KeyPosition::NumberRowPlus: return 0x0D;
+        case KeyPosition::BracketLeft: return 0x1A;
+        case KeyPosition::BracketRight: return 0x1B;
+        case KeyPosition::None: break;
     }
     return 0;
 }
@@ -126,16 +121,11 @@ struct KeyChord
     }
     switch (scanCode & 0xFFu)
     {
-    case 0x0C:
-        return KeyPosition::NumberRowMinus;
-    case 0x0D:
-        return KeyPosition::NumberRowPlus;
-    case 0x1A:
-        return KeyPosition::BracketLeft;
-    case 0x1B:
-        return KeyPosition::BracketRight;
-    default:
-        return KeyPosition::None;
+        case 0x0C: return KeyPosition::NumberRowMinus;
+        case 0x0D: return KeyPosition::NumberRowPlus;
+        case 0x1A: return KeyPosition::BracketLeft;
+        case 0x1B: return KeyPosition::BracketRight;
+        default: return KeyPosition::None;
     }
 }
 
@@ -144,16 +134,15 @@ struct KeyChord
 // them sets it.
 [[nodiscard]] constexpr bool IsExtendedNavigationKey(std::uint16_t virtualKey) noexcept
 {
-    return (virtualKey >= VirtualKey::kPrior && virtualKey <= VirtualKey::kDown) || virtualKey == VirtualKey::kInsert ||
-           virtualKey == VirtualKey::kDelete;
+    return (virtualKey >= VirtualKey::kPrior && virtualKey <= VirtualKey::kDown) || virtualKey == VirtualKey::kInsert || virtualKey == VirtualKey::kDelete;
 }
 
 // Modifier keys (Shift, Ctrl, Alt and their sides, the Windows keys) never name a chord's key.
 [[nodiscard]] constexpr bool IsModifierVirtualKey(std::uint16_t virtualKey) noexcept
 {
     return (virtualKey >= VirtualKey::kShift && virtualKey <= VirtualKey::kMenu) ||
-           (virtualKey >= VirtualKey::kLeftShift && virtualKey <= VirtualKey::kRightMenu) ||
-           virtualKey == VirtualKey::kLeftWindows || virtualKey == VirtualKey::kRightWindows;
+           (virtualKey >= VirtualKey::kLeftShift && virtualKey <= VirtualKey::kRightMenu) || virtualKey == VirtualKey::kLeftWindows ||
+           virtualKey == VirtualKey::kRightWindows;
 }
 
 namespace KeyChordNames
@@ -184,8 +173,7 @@ inline constexpr std::array<NamedKey, 18> kNamedKeys{{
     {"NumpadPlus", VirtualKey::kAdd},
     {"NumpadMinus", VirtualKey::kSubtract},
 }};
-inline constexpr std::array<std::string_view, 5> kPositionNames{"", "numberRowMinus", "numberRowPlus", "bracketLeft",
-                                                                "bracketRight"};
+inline constexpr std::array<std::string_view, 5> kPositionNames{"", "numberRowMinus", "numberRowPlus", "bracketLeft", "bracketRight"};
 
 [[nodiscard]] constexpr char AsciiUpper(char character) noexcept
 {
@@ -272,10 +260,10 @@ inline constexpr std::array<std::string_view, 5> kPositionNames{"", "numberRowMi
         unsigned value = 0;
         for (std::size_t index = 3; index < 5; ++index)
         {
-            const char digit = AsciiUpper(text[index]);
+            const char digit   = AsciiUpper(text[index]);
             const bool decimal = digit >= '0' && digit <= '9';
-            const bool hex = digit >= 'A' && digit <= 'F';
-            if (!decimal && !hex)
+            const bool hex     = digit >= 'A' && digit <= 'F';
+            if (! decimal && ! hex)
             {
                 return false;
             }
@@ -340,16 +328,11 @@ inline constexpr std::array<std::string_view, 5> kPositionNames{"", "numberRowMi
     }
     switch (chord.position)
     {
-    case KeyPosition::NumberRowMinus:
-        return text + L"-";
-    case KeyPosition::NumberRowPlus:
-        return text + (chord.ctrl ? L"+" : L"=");
-    case KeyPosition::BracketLeft:
-        return text + L"[";
-    case KeyPosition::BracketRight:
-        return text + L"]";
-    case KeyPosition::None:
-        break;
+        case KeyPosition::NumberRowMinus: return text + L"-";
+        case KeyPosition::NumberRowPlus: return text + (chord.ctrl ? L"+" : L"=");
+        case KeyPosition::BracketLeft: return text + L"[";
+        case KeyPosition::BracketRight: return text + L"]";
+        case KeyPosition::None: break;
     }
     const std::string name = StableKeyName(chord.virtualKey);
     text.append(name.begin(), name.end());

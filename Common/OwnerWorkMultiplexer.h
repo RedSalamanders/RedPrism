@@ -10,7 +10,7 @@
 // No producer may mutate this list; attach/detach are startup/teardown outside all owner callbacks.
 class OwnerWorkMultiplexer final : public OwnerWorkPump
 {
-  public:
+public:
     static constexpr std::size_t kCapacity = 11;
 
     [[nodiscard]] std::size_t SourceCountForTest() const noexcept
@@ -98,8 +98,8 @@ class OwnerWorkMultiplexer final : public OwnerWorkPump
         _pumping = false;
     }
 
-  private:
+private:
     std::array<OwnerWorkPump*, kCapacity> _sources{};
     std::size_t _next = 0;
-    bool _pumping = false;
+    bool _pumping     = false;
 };

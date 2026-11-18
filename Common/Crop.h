@@ -33,7 +33,7 @@ struct CropDrag
 
     Vec2 start{};
     CropRect original{};
-    Mode mode = Mode::Create;
+    Mode mode  = Mode::Create;
     int handle = -1; // Resize: index into LayerTransform::kHandles
 
     // The frame for the pointer at `point`. `symmetric` (Alt held) keeps the frame's center fixed: the opposite edges
@@ -51,6 +51,5 @@ struct CropSnap
     // Moving the frame snaps its closest edges and keeps its size; creating or resizing snaps only the edges on the
     // side being dragged — mirrored about the center when `symmetric`. With a fixed ratio only moves snap, so the
     // ratio stays exact.
-    [[nodiscard]] CropRect Apply(const CropRect& rect, const CropDrag& drag, Vec2 point, std::optional<double> ratio,
-                                 bool symmetric = false) const noexcept;
+    [[nodiscard]] CropRect Apply(const CropRect& rect, const CropDrag& drag, Vec2 point, std::optional<double> ratio, bool symmetric = false) const noexcept;
 };

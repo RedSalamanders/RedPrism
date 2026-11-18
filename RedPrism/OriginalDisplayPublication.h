@@ -15,7 +15,7 @@
 // This component's bounds are ceilings within that admission, never a substitute for whole-job planning.
 class OriginalDisplayPublication final : public GpuCommandSourceReceiver
 {
-  public:
+public:
     struct Bounds final
     {
         std::uint64_t cpuBytes = 0;
@@ -27,22 +27,24 @@ class OriginalDisplayPublication final : public GpuCommandSourceReceiver
         std::wstring hiddenPattern;
         std::shared_ptr<const PreparedLayerRows> previous;
         std::uint64_t documentSerial = 0;
-        std::uint64_t firstItemId = 0;
+        std::uint64_t firstItemId    = 0;
     };
 
     // Allocate on the admitted worker; its final destruction also belongs to a worker.
     // Optional borrowed readiness signal, invoked only on the owner after real progress/failure/join.
     // It may request the existing application action source; it cannot pump, resume, capture or publish.
     using OwnerReady = void (*)(void*) noexcept;
-    OriginalDisplayPublication(std::uint32_t ownerThread, Bounds bounds, OwnerReady ownerReady = nullptr,
-                               void* context = nullptr) noexcept;
+    OriginalDisplayPublication(std::uint32_t ownerThread, Bounds bounds, OwnerReady ownerReady = nullptr, void* context = nullptr) noexcept;
     ~OriginalDisplayPublication() override;
-    OriginalDisplayPublication(const OriginalDisplayPublication&) = delete;
+    OriginalDisplayPublication(const OriginalDisplayPublication&)            = delete;
     OriginalDisplayPublication& operator=(const OriginalDisplayPublication&) = delete;
 
     // Successful original stage acknowledgement only. The slot and original queue context stay fixed.
-    [[nodiscard]] HRESULT CaptureOwner(JobScheduler& jobs, JobTicket original, GpuWorkQueue& queue,
-                                       GpuCommandPump& commands, CommittedDisplayController& display,
+    [[nodiscard]] HRESULT CaptureOwner(JobScheduler& jobs,
+                                       JobTicket original,
+                                       GpuWorkQueue& queue,
+                                       GpuCommandPump& commands,
+                                       CommittedDisplayController& display,
                                        const CommittedDisplayDescriptor& current) noexcept;
     // Worker only, while the caller retains the exact immutable final closure. This owns no session/UI.
     [[nodiscard]] JobResult PrepareForWork(CanvasDocument final, RowInput rows, CancelToken cancellation);
@@ -61,15 +63,13 @@ class OriginalDisplayPublication final : public GpuCommandSourceReceiver
 
     // After all useful workers and real original GPU uses joined, with memory already bound to original.
     // No document/history mutation. A failure leaves the committed CPU document unchanged.
-    [[nodiscard]] HRESULT PreparePublicationOwner(const std::shared_ptr<const SharedPublicationMemory>& memory,
-                                                  const CanvasDocument& final) noexcept;
+    [[nodiscard]] HRESULT PreparePublicationOwner(const std::shared_ptr<const SharedPublicationMemory>& memory, const CanvasDocument& final) noexcept;
     // Invoke only in the same nonreentrant action, immediately after the checked CPU/history swap.
     // An empty output avoids dropping an old row graph on the owner; RowInput retains its predecessor.
     // Optional hook updates cached row epochs/keys and their warmed prepared chrome consumer before the graph callback.
     // It is nonfailing/nonreentrant: no message pumping, document mutation, source capture or allocation.
     using RowsAdopted = void (*)(void*) noexcept;
-    [[nodiscard]] bool AdoptOwner(std::shared_ptr<const PreparedLayerRows>& empty, RowsAdopted rowsAdopted = nullptr,
-                                  void* context = nullptr) noexcept;
+    [[nodiscard]] bool AdoptOwner(std::shared_ptr<const PreparedLayerRows>& empty, RowsAdopted rowsAdopted = nullptr, void* context = nullptr) noexcept;
 
     // Failure/cancel requests no completion. Wait for TransportReadyOwner before authorizing retirement.
     void StopOwner() noexcept;
@@ -94,7 +94,7 @@ class OriginalDisplayPublication final : public GpuCommandSourceReceiver
     void CommandAcknowledgedOwner(JobTicket source, GpuCommandLease command, HRESULT result) noexcept override;
     void CommandSourceFailedOwner(JobTicket source, HRESULT result) noexcept override;
 
-  private:
+private:
     [[nodiscard]] bool IsOwner() const noexcept;
     [[nodiscard]] bool IsWorker() const noexcept;
     void FailOwner(HRESULT result) noexcept;
@@ -104,9 +104,9 @@ class OriginalDisplayPublication final : public GpuCommandSourceReceiver
     const Bounds _bounds;
     const OwnerReady _ownerReady;
     void* const _ownerReadyContext;
-    JobScheduler* _jobs = nullptr;
-    GpuWorkQueue* _queue = nullptr;
-    GpuCommandPump* _commands = nullptr;
+    JobScheduler* _jobs                  = nullptr;
+    GpuWorkQueue* _queue                 = nullptr;
+    GpuCommandPump* _commands            = nullptr;
     CommittedDisplayController* _display = nullptr;
     JobTicket _original;
     CommittedDisplayPublicationSlot _slot;

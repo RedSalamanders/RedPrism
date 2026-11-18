@@ -12,17 +12,16 @@
 // Four reusable 64-square source windows bound the sparse-read scratch; contiguous sources borrow bytes.
 class PlacedRasterReader final
 {
-  public:
-    static constexpr int kCacheSide = 64;
+public:
+    static constexpr int kCacheSide          = 64;
     static constexpr std::size_t kCacheSlots = 4;
     PlacedRasterReader(Raster source, const LayerTransform& placement) noexcept;
-    PlacedRasterReader(const PlacedRasterReader&) = delete;
+    PlacedRasterReader(const PlacedRasterReader&)            = delete;
     PlacedRasterReader& operator=(const PlacedRasterReader&) = delete;
-    [[nodiscard]] bool Read(GridRect region, std::span<std::uint8_t> output, std::size_t stride,
-                            CancelToken cancellation = {}) noexcept;
+    [[nodiscard]] bool Read(GridRect region, std::span<std::uint8_t> output, std::size_t stride, CancelToken cancellation = {}) noexcept;
     [[nodiscard]] std::uint64_t RetirementMemoryBytes() const noexcept;
 
-  private:
+private:
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
 #pragma warning(push)
@@ -30,8 +29,8 @@ class PlacedRasterReader final
     struct Window final
     {
         PixelBuffer pixels;
-        int x = -1;
-        int y = -1;
+        int x              = -1;
+        int y              = -1;
         std::uint64_t used = 0;
     };
 #pragma warning(pop)
@@ -41,7 +40,7 @@ class PlacedRasterReader final
     Affine2 _toPixel;
     std::array<Window, kCacheSlots> _windows;
     const std::uint8_t* _contiguous = nullptr;
-    std::uint64_t _clock = 0;
-    bool _valid = false;
-    bool _nearest = false;
+    std::uint64_t _clock            = 0;
+    bool _valid                     = false;
+    bool _nearest                   = false;
 };

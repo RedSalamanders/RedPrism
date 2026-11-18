@@ -73,8 +73,8 @@ template <typename T> struct FreeRecord
 struct PixelAllocation : DeferredReleaseNode
 {
     std::unique_ptr<std::uint8_t[], FreeAligned> pixels;
-    std::size_t size = 0;
-    std::size_t capacity = 0;
+    std::size_t size      = 0;
+    std::size_t capacity  = 0;
     std::uint64_t padding = 0;
 };
 #pragma warning(pop)
@@ -98,8 +98,10 @@ void DestroyBuffer(OwnedRecord record) noexcept
 #pragma warning(disable : 4625 4626)
 class RecyclePool final
 {
-  public:
-    explicit RecyclePool(std::uint64_t cap) noexcept : _cap(cap) {}
+public:
+    explicit RecyclePool(std::uint64_t cap) noexcept : _cap(cap)
+    {
+    }
     ~RecyclePool()
     {
         Trim();
@@ -122,7 +124,7 @@ class RecyclePool final
     bool Keep(OwnedRecord& record) noexcept
     {
         const std::lock_guard guard{_mutex};
-        const auto cap = _cap.load(std::memory_order_relaxed);
+        const auto cap   = _cap.load(std::memory_order_relaxed);
         const auto bytes = _bytes.load(std::memory_order_relaxed);
         if (record->capacity < kSizeClass || bytes > cap || record->bytes > cap - bytes)
         {
@@ -130,7 +132,7 @@ class RecyclePool final
         }
         for (auto& slot : _slots)
         {
-            if (!slot)
+            if (! slot)
             {
                 _bytes.fetch_add(record->bytes, std::memory_order_relaxed);
                 slot = std::move(record);
@@ -160,7 +162,7 @@ class RecyclePool final
     std::atomic<std::uint64_t> _cap{0};
     std::atomic<std::uint64_t> _bytes{0};
 
-  private:
+private:
     std::mutex _mutex;
     std::array<OwnedRecord, 32> _slots;
 };
@@ -182,15 +184,15 @@ void RecycleOrDestroy(DeferredReleaseNode* node) noexcept
 }
 } // namespace
 
-PixelBuffer::PixelBuffer() noexcept = default;
-PixelBuffer::~PixelBuffer() = default;
-PixelBuffer::PixelBuffer(PixelBuffer&&) noexcept = default;
+PixelBuffer::PixelBuffer() noexcept                         = default;
+PixelBuffer::~PixelBuffer()                                 = default;
+PixelBuffer::PixelBuffer(PixelBuffer&&) noexcept            = default;
 PixelBuffer& PixelBuffer::operator=(PixelBuffer&&) noexcept = default;
 
 void PixelBuffer::Retire::operator()(PixelAllocation* allocation) const noexcept
 {
     Poison(allocation->pixels.get(), allocation->capacity);
-    if (!TryDeferRelease(*allocation))
+    if (! TryDeferRelease(*allocation))
     {
         RecycleOrDestroy(allocation);
     }
@@ -212,23 +214,22 @@ PixelBuffer PixelBuffer::TryAllocate(std::size_t size) noexcept
             record = pool->Take(capacity);
         }
     }
-    if (!record)
+    if (! record)
     {
-        auto* storage =
-            static_cast<PixelAllocation*>(_aligned_malloc(sizeof(PixelAllocation), alignof(PixelAllocation)));
-        if (!storage)
+        auto* storage = static_cast<PixelAllocation*>(_aligned_malloc(sizeof(PixelAllocation), alignof(PixelAllocation)));
+        if (! storage)
         {
             return buffer;
         }
         record.reset(std::construct_at(storage));
         record->pixels.reset(static_cast<std::uint8_t*>(_aligned_malloc(capacity, kAlignment)));
-        if (!record->pixels)
+        if (! record->pixels)
         {
             return buffer;
         }
         record->capacity = capacity;
-        record->bytes = capacity + sizeof(PixelAllocation);
-        record->destroy = RecycleOrDestroy;
+        record->bytes    = capacity + sizeof(PixelAllocation);
+        record->destroy  = RecycleOrDestroy;
         Poison(record->pixels.get(), capacity);
     }
     record->size = size;

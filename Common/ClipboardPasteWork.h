@@ -10,24 +10,35 @@
 // including after a stale replacement. Origin selection and layer/history construction happen on the worker.
 class ClipboardPasteInput final
 {
-  public:
-    ClipboardPasteInput(const ClipboardPasteInput&) = delete;
+public:
+    ClipboardPasteInput(const ClipboardPasteInput&)            = delete;
     ClipboardPasteInput& operator=(const ClipboardPasteInput&) = delete;
     ClipboardPasteInput(ClipboardPasteInput&& input) noexcept
-        : _authority(std::move(input._authority)), _source(std::move(input._source)), _active(input._active),
-          _history(std::move(input._history)), _clipboard(std::move(input._clipboard)), _serial(input._serial),
+        : _authority(std::move(input._authority)),
+          _source(std::move(input._source)),
+          _active(input._active),
+          _history(std::move(input._history)),
+          _clipboard(std::move(input._clipboard)),
+          _serial(input._serial),
           _valid(std::exchange(input._valid, false))
     {
     }
     ClipboardPasteInput& operator=(ClipboardPasteInput&&) = delete;
 
-  private:
+private:
     friend class DocumentSession;
-    ClipboardPasteInput(ImageImportAuthority authority, CanvasDocument source, std::optional<Guid> active,
-                        DocumentHistory::StateView history, std::optional<PixelClipboard> clipboard,
+    ClipboardPasteInput(ImageImportAuthority authority,
+                        CanvasDocument source,
+                        std::optional<Guid> active,
+                        DocumentHistory::StateView history,
+                        std::optional<PixelClipboard> clipboard,
                         std::uint64_t serial) noexcept
-        : _authority(std::move(authority)), _source(std::move(source)), _active(active), _history(std::move(history)),
-          _clipboard(std::move(clipboard)), _serial(serial)
+        : _authority(std::move(authority)),
+          _source(std::move(source)),
+          _active(active),
+          _history(std::move(history)),
+          _clipboard(std::move(clipboard)),
+          _serial(serial)
     {
     }
     ImageImportAuthority _authority;
@@ -43,17 +54,18 @@ class ClipboardPasteInput final
 // remain in this aggregate for admitted worker retirement. Only the private branch depends on the copy serial.
 class PreparedClipboardPaste final
 {
-  public:
-    PreparedClipboardPaste(const PreparedClipboardPaste&) = delete;
+public:
+    PreparedClipboardPaste(const PreparedClipboardPaste&)            = delete;
     PreparedClipboardPaste& operator=(const PreparedClipboardPaste&) = delete;
-    PreparedClipboardPaste(PreparedClipboardPaste&&) noexcept = default;
-    PreparedClipboardPaste& operator=(PreparedClipboardPaste&&) = delete;
+    PreparedClipboardPaste(PreparedClipboardPaste&&) noexcept        = default;
+    PreparedClipboardPaste& operator=(PreparedClipboardPaste&&)      = delete;
 
-  private:
+private:
     friend class DocumentSession;
-    PreparedClipboardPaste(PreparedImageImport publication, std::optional<Guid> parent,
-                           std::optional<std::uint64_t> privateSerial) noexcept
-        : _publication(std::move(publication)), _parent(parent), _privateSerial(privateSerial)
+    PreparedClipboardPaste(PreparedImageImport publication, std::optional<Guid> parent, std::optional<std::uint64_t> privateSerial) noexcept
+        : _publication(std::move(publication)),
+          _parent(parent),
+          _privateSerial(privateSerial)
     {
     }
     PreparedImageImport _publication;

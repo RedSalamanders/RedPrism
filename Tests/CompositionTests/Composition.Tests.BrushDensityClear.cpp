@@ -43,16 +43,15 @@ void CheckFreshAndExistingTile(GpuBrushCoverage& engine, int side, bool hard)
     const BrushKernelTile reference{19, 0, 0, side, side, density.data(), cpu.data()};
     const std::array<BrushKernelTile, 1> tiles{tile};
     BrushKernelParams params;
-    params.radius = 1000;
-    params.hardness = hard ? 1 : 0;
-    params.canvasWidth = side;
-    params.canvasHeight = side;
+    params.radius         = 1000;
+    params.hardness       = hard ? 1 : 0;
+    params.canvasWidth    = side;
+    params.canvasHeight   = side;
     params.antialiasWidth = 1;
-    params.spacing = 1;
+    params.spacing        = 1;
     const Vec2 center{side / 2.0, side / 2.0};
     const std::array<BrushSegment, 1> dab{BrushSegment{center, center}};
-    const auto zero = [&]() noexcept
-    { return std::all_of(preview.begin(), preview.end(), [](auto value) noexcept { return value == 0; }); };
+    const auto zero = [&]() noexcept { return std::all_of(preview.begin(), preview.end(), [](auto value) noexcept { return value == 0; }); };
 
     engine.BeginStroke();
     const bool empty = engine.Render(tiles, {}, {}, params);
@@ -61,7 +60,7 @@ void CheckFreshAndExistingTile(GpuBrushCoverage& engine, int side, bool hard)
     const bool painted = engine.Render(tiles, dab, {}, params);
     BrushKernel::RenderTile(reference, dab, {}, params);
     ExpectCase(painted, side, hard, "settled-dab-dispatch");
-    bool matches = painted;
+    bool matches  = painted;
     bool positive = false;
     for (std::size_t i = 0; i < count; ++i)
     {
@@ -70,7 +69,7 @@ void CheckFreshAndExistingTile(GpuBrushCoverage& engine, int side, bool hard)
     }
     ExpectCase(matches && positive, side, hard, "hard-literal-255-or-soft-independent-cpu-tolerance-2");
     const std::vector<std::uint8_t> retained = preview;
-    const bool settledOnly = engine.Render(tiles, {}, {}, params);
+    const bool settledOnly                   = engine.Render(tiles, {}, {}, params);
     ExpectCase(settledOnly, side, hard, "existing-tile-empty-dispatch");
     ExpectCase(settledOnly && preview == retained, side, hard, "existing-density-is-preserved");
     engine.EndStroke();
@@ -91,13 +90,10 @@ int RunBrushDensityClearTests()
     wil::com_ptr_nothrow<ID3D11Device> device;
     wil::com_ptr_nothrow<ID3D11DeviceContext> context;
     const D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
-    const auto create = [&](UINT flags) noexcept
-    {
-        return D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, flags, &level, 1, D3D11_SDK_VERSION,
-                                 device.put(), nullptr, context.put());
-    };
+    const auto create             = [&](UINT flags) noexcept
+    { return D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, flags, &level, 1, D3D11_SDK_VERSION, device.put(), nullptr, context.put()); };
     HRESULT result = create(D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_DEBUG);
-    bool debug = SUCCEEDED(result);
+    bool debug     = SUCCEEDED(result);
     if (result == DXGI_ERROR_SDK_COMPONENT_MISSING)
         result = create(D3D11_CREATE_DEVICE_BGRA_SUPPORT);
     Expect(SUCCEEDED(result), "setup.warp-device");
@@ -143,14 +139,12 @@ int RunBrushDensityClearTests()
                 clean = false;
                 break;
             }
-            if (message->Severity == D3D11_MESSAGE_SEVERITY_CORRUPTION ||
-                message->Severity == D3D11_MESSAGE_SEVERITY_ERROR ||
+            if (message->Severity == D3D11_MESSAGE_SEVERITY_CORRUPTION || message->Severity == D3D11_MESSAGE_SEVERITY_ERROR ||
                 message->Severity == D3D11_MESSAGE_SEVERITY_WARNING)
             {
                 clean = false;
                 std::printf("INFO brush-density-clear.debug-message=%.*s\n",
-                            static_cast<int>((std::min)(message->DescriptionByteLength,
-                                                        static_cast<SIZE_T>((std::numeric_limits<int>::max)()))),
+                            static_cast<int>((std::min)(message->DescriptionByteLength, static_cast<SIZE_T>((std::numeric_limits<int>::max)()))),
                             message->pDescription);
             }
         }

@@ -25,15 +25,17 @@ inline constexpr std::uint64_t kClipboardDibEncodedByteLimit = 512ull * 1024ull 
 
 struct ClipboardDibMetadata final
 {
-    int width = 0;
-    int height = 0;
+    int width            = 0;
+    int height           = 0;
     std::uint64_t pixels = 0;
 };
 
-[[nodiscard]] ClipboardDibStatus ProbeClipboardDib(std::span<const std::uint8_t> bytes, std::int64_t pixelBudget,
+[[nodiscard]] ClipboardDibStatus ProbeClipboardDib(std::span<const std::uint8_t> bytes,
+                                                   std::int64_t pixelBudget,
                                                    ClipboardDibMetadata& metadata,
                                                    CancelToken cancellation = {}) noexcept;
-[[nodiscard]] ClipboardDibStatus DecodeClipboardDib(std::span<const std::uint8_t> bytes, std::int64_t pixelBudget,
-                                                    Raster& image, CancelToken cancellation = {});
-[[nodiscard]] ClipboardDibStatus EncodeClipboardDibV5(const Raster& image, std::vector<std::uint8_t>& bytes,
-                                                      CancelToken cancellation = {});
+[[nodiscard]] ClipboardDibStatus DecodeClipboardDib(std::span<const std::uint8_t> bytes,
+                                                    std::int64_t pixelBudget,
+                                                    Raster& image,
+                                                    CancelToken cancellation = {});
+[[nodiscard]] ClipboardDibStatus EncodeClipboardDibV5(const Raster& image, std::vector<std::uint8_t>& bytes, CancelToken cancellation = {});

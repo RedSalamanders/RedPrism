@@ -10,8 +10,8 @@ namespace WorkerResources
 
 enum class WakeLane : std::uint32_t
 {
-    High = 0,
-    Normal = 1,
+    High       = 0,
+    Normal     = 1,
     Background = 2,
 };
 
@@ -21,14 +21,16 @@ enum class WakeLane : std::uint32_t
 #pragma warning(disable : 4625 4626 5026 5027)
 class OwnerWakeCounts final
 {
-  public:
-    static constexpr std::uint32_t kChannelCount = 3;
+public:
+    static constexpr std::uint32_t kChannelCount    = 3;
     static constexpr std::uint32_t kMaximumCapacity = 1024;
 
     static_assert(std::atomic<std::uint32_t>::is_always_lock_free);
     static_assert(std::numeric_limits<std::uint32_t>::max() >= kMaximumCapacity);
 
-    explicit OwnerWakeCounts(std::uint32_t capacity) noexcept : capacity_(capacity) {}
+    explicit OwnerWakeCounts(std::uint32_t capacity) noexcept : capacity_(capacity)
+    {
+    }
 
     [[nodiscard]] bool IsValid() const noexcept
     {
@@ -46,14 +48,14 @@ class OwnerWakeCounts final
     [[nodiscard]] bool Request(WakeLane channel) noexcept
     {
         const std::uint32_t index = static_cast<std::uint32_t>(channel);
-        if (!IsValid() || index >= kChannelCount)
+        if (! IsValid() || index >= kChannelCount)
         {
             return false;
         }
 
         std::atomic<std::uint32_t>& count = counts_[index];
-        std::uint32_t expected = count.load(std::memory_order_relaxed);
-        const std::uint32_t desired = expected < capacity_ ? expected + 1 : capacity_;
+        std::uint32_t expected            = count.load(std::memory_order_relaxed);
+        const std::uint32_t desired       = expected < capacity_ ? expected + 1 : capacity_;
 
         if (count.compare_exchange_strong(expected, desired, std::memory_order_relaxed, std::memory_order_relaxed))
         {
@@ -73,14 +75,14 @@ class OwnerWakeCounts final
     [[nodiscard]] std::uint32_t Take(WakeLane channel) noexcept
     {
         const std::uint32_t index = static_cast<std::uint32_t>(channel);
-        if (!IsValid() || index >= kChannelCount)
+        if (! IsValid() || index >= kChannelCount)
         {
             return 0;
         }
         return counts_[index].exchange(0, std::memory_order_relaxed);
     }
 
-  private:
+private:
     const std::uint32_t capacity_;
     std::array<std::atomic<std::uint32_t>, kChannelCount> counts_{};
 };

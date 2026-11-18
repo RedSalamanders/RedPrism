@@ -23,7 +23,7 @@ struct SelectionPixelFinalWork final
     std::shared_ptr<SharedPublicationMemory> temporaryMemory;
     std::uint64_t remainingCpuBytes;
     std::uint64_t finalOutputBytes;
-    std::uint32_t ownerThread = 0; // Owner-captured scalar, never a worker HWND/session query.
+    std::uint32_t ownerThread     = 0; // Owner-captured scalar, never a worker HWND/session query.
     std::uint64_t displayCpuBytes = 0, displayGpuBytes = 0;
 };
 #pragma warning(pop)
@@ -35,5 +35,4 @@ struct SelectionPixelFinalWork final
 // A null return retires all moved work on the worker and refuses; it never selects the CPU fallback.
 // The returned stage object's Completed writes the state's scalar result without notifying any observer.
 // Its owner-side destructor must not access that state: the parent's terminal observer may retire it first.
-using SelectionPixelFinalFactory = std::unique_ptr<Job> (*)(void* host, SelectionOutlineGestureState& result,
-                                                            SelectionPixelFinalWork work);
+using SelectionPixelFinalFactory = std::unique_ptr<Job> (*)(void* host, SelectionOutlineGestureState& result, SelectionPixelFinalWork work);

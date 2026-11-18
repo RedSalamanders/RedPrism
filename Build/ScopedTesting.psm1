@@ -259,16 +259,10 @@ function Get-ScopedEnvironmentInputs {
     }
     if ($Tooling) {
         $values += 'tooling-runtime=PowerShell'
-        $discovery = Join-Path $PSScriptRoot 'VisualStudioDiscovery.psm1'
-        $formatter = $null
-        if (Test-Path -LiteralPath $discovery) {
-            Import-Module $discovery -Force
-            $formatter = Find-RedPrismClangFormat
-        } else {
-            $command = Get-Command clang-format.exe -CommandType Application -ErrorAction SilentlyContinue
-            if ($command) { $formatter = $command.Source }
-        }
-        $values += 'formatter=' + $(if ($formatter) { $formatter + ':' + (Get-FileHash -LiteralPath $formatter).Hash } else { 'absent' })
+        # format.ps1 formats with the clang-format that the pinned engine's Policy/clang-format.json names by
+        # version and SHA-256 (Install-CiFormatter), so that pin identifies the formatter bytes.
+        $formatterPin = Join-Path (Split-Path $PSScriptRoot -Parent) '.ci-engine/Policy/clang-format.json'
+        $values += 'formatter=' + $(if (Test-Path -LiteralPath $formatterPin -PathType Leaf) { 'ci-engine:' + (Get-FileHash -LiteralPath $formatterPin).Hash } else { 'absent' })
     }
     return $values
 }

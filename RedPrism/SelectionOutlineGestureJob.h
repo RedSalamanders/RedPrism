@@ -37,7 +37,7 @@ class SelectionOutlineGestureJob final : public Job
         PixelFinalDelegate
     };
 
-  public:
+public:
     explicit SelectionOutlineGestureJob(SelectionOutlineGestureState& state);
     JobResult Run(JobContext& context) override;
     void RetireWorkerStage(JobContext&, JobResult result) noexcept override;
@@ -47,7 +47,7 @@ class SelectionOutlineGestureJob final : public Job
     void Completed(JobResult result) noexcept override;
     void RetainJoinedRetirement(JobScheduler&, JobTicket ticket) noexcept override;
 
-  private:
+private:
     JobResult RunCloseForWork(JobContext& context);
     JobResult RunClickForWork(JobContext& context);
     bool NotifyMoves(bool changed) noexcept;
@@ -72,7 +72,7 @@ class SelectionOutlineGestureJob final : public Job
     SelectionDisplayValue _display;
     Vec2 _point{}, _offset{};
     std::uint64_t _geometryEnvelope = 0;
-    std::int32_t _error = 0;
+    std::int32_t _error             = 0;
     bool _click = false, _terminal = false, _control = false;
     std::optional<HostSelectionGestureInput::Event> _lastInput;
     std::uint64_t _lastPolygonalOrdinal = 0, _reportedInputOrdinal = 0;

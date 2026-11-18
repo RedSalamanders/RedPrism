@@ -25,8 +25,7 @@ KernelCapabilities DecodeX64KernelFeatures(const X64KernelFeatures& features) no
 {
     KernelCapabilities result;
     result.sse2 = (features.leaf1Edx & (1u << 26)) != 0;
-    result.avx2 = result.sse2 && (features.leaf1Ecx & kAvxLeaf1) == kAvxLeaf1 &&
-                  (features.leaf7Ebx & kAvxLeaf7) == kAvxLeaf7 && (features.xcr0 & 6) == 6;
+    result.avx2 = result.sse2 && (features.leaf1Ecx & kAvxLeaf1) == kAvxLeaf1 && (features.leaf7Ebx & kAvxLeaf7) == kAvxLeaf7 && (features.xcr0 & 6) == 6;
     // D16 has not selected an AVX-512 instruction subset; no AVX-512 tier is advertised yet.
     return result;
 }
@@ -78,23 +77,15 @@ KernelSelection ValidateKernelIsa(KernelIsa isa, KernelCapabilities capabilities
     bool supported = false;
     switch (isa)
     {
-    case KernelIsa::Sse2:
-        supported = capabilities.sse2;
-        break;
-    case KernelIsa::Avx2:
-        supported = capabilities.avx2;
-        break;
-    case KernelIsa::Avx512:
-        return KernelSelection::NotImplemented;
-    case KernelIsa::Neon:
-        supported = capabilities.neon;
-        break;
-    case ::KernelIsa::Auto:
-    case ::KernelIsa::Scalar:
-    default:
-        return KernelSelection::NotImplemented;
+        case KernelIsa::Sse2: supported = capabilities.sse2; break;
+        case KernelIsa::Avx2: supported = capabilities.avx2; break;
+        case KernelIsa::Avx512: return KernelSelection::NotImplemented;
+        case KernelIsa::Neon: supported = capabilities.neon; break;
+        case ::KernelIsa::Auto:
+        case ::KernelIsa::Scalar:
+        default: return KernelSelection::NotImplemented;
     }
-    if (!supported)
+    if (! supported)
     {
         return KernelSelection::UnsupportedHardware;
     }

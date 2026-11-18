@@ -10,21 +10,21 @@
 // geometry and acknowledges the original ticket before starting the next descriptor.
 class SelectionCursorRequests final
 {
-  public:
+public:
     struct Key final
     {
         std::uint64_t document = 0;
-        std::uint64_t epoch = 0;
-        double x = 0;
-        double y = 0;
+        std::uint64_t epoch    = 0;
+        double x               = 0;
+        double y               = 0;
         // Geometry can change before a coalesced chrome/cursor epoch is published.
-        std::uint64_t generation = 0;
+        std::uint64_t generation                                 = 0;
         [[nodiscard]] bool operator==(const Key&) const noexcept = default;
     };
     struct Request final
     {
         Key key;
-        std::uint64_t serial = 0;
+        std::uint64_t serial                                         = 0;
         [[nodiscard]] bool operator==(const Request&) const noexcept = default;
     };
     enum class State
@@ -39,18 +39,20 @@ class SelectionCursorRequests final
         bool inside = false;
     };
     // A nonzero seed supports deterministic exhaustion controls. Production starts at zero.
-    explicit SelectionCursorRequests(std::uint64_t lastSerial = 0) noexcept : _lastSerial(lastSerial) {}
+    explicit SelectionCursorRequests(std::uint64_t lastSerial = 0) noexcept : _lastSerial(lastSerial)
+    {
+    }
 
     [[nodiscard]] Observation Observe(Key key) noexcept
     {
         if (_closed)
             return {};
-        if (!key.document || !key.epoch || !std::isfinite(key.x) || !std::isfinite(key.y))
+        if (! key.document || ! key.epoch || ! std::isfinite(key.x) || ! std::isfinite(key.y))
         {
             Invalidate();
             return {};
         }
-        if (!_latest || _latest.value().key != key)
+        if (! _latest || _latest.value().key != key)
         {
             if (_lastSerial == (std::numeric_limits<std::uint64_t>::max)())
             {
@@ -70,8 +72,7 @@ class SelectionCursorRequests final
     // nullopt; repeated mouse messages then cannot spin retrying the same unavailable admission.
     [[nodiscard]] std::optional<Request> Begin() noexcept
     {
-        if (_closed || _active || !_latest || _failed == _latest ||
-            (_ready && _ready.value().request == _latest.value()))
+        if (_closed || _active || ! _latest || _failed == _latest || (_ready && _ready.value().request == _latest.value()))
             return std::nullopt;
         _active = _latest;
         return _active;
@@ -81,7 +82,7 @@ class SelectionCursorRequests final
         if (_active != std::optional{request})
             return false; // An old/foreign acknowledgement cannot consume a newer original ticket.
         _active.reset();
-        if (!_closed && _latest == std::optional{request})
+        if (! _closed && _latest == std::optional{request})
         {
             if (inside.has_value())
                 _ready = Reply{request, inside.value()};
@@ -123,7 +124,7 @@ class SelectionCursorRequests final
         Invalidate();
     }
 
-  private:
+private:
     struct Reply final
     {
         Request request;
@@ -134,6 +135,6 @@ class SelectionCursorRequests final
     std::optional<Request> _failed;
     std::optional<Reply> _ready;
     std::uint64_t _lastSerial = 0;
-    bool _closed = false;
+    bool _closed              = false;
 };
 static_assert(sizeof(SelectionCursorRequests) <= 256);

@@ -15,8 +15,7 @@ void ClosePipelineTrace() noexcept;
 void TracePipelineFree(std::uint64_t bytes) noexcept;
 
 // Optional memory accounting event. The event text is payload data; the ETW event name is always "Memory".
-void TracePipelineMemory(const char* event, std::uint64_t requested, std::uint64_t reserved,
-                         std::uint64_t releasing) noexcept;
+void TracePipelineMemory(const char* event, std::uint64_t requested, std::uint64_t reserved, std::uint64_t releasing) noexcept;
 
 // Owner-thread ETW timing: no clock reads while this keyword is disabled. Message/dispatch/drain events emit
 // only above 4 ms; result apply, UI actions and frames emit for every operation while the keyword is enabled.

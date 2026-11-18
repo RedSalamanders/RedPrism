@@ -17,7 +17,7 @@
 
 namespace
 {
-int gFailures = 0;
+int gFailures   = 0;
 int gAssertions = 0;
 
 void Expect(bool condition, const char* name) noexcept
@@ -34,10 +34,10 @@ void ExpectCase(bool condition, const char* group, const char* name) noexcept
     gFailures += condition ? 0 : 1;
 }
 
-static_assert(!std::is_copy_constructible_v<StrokeFinishInput>);
+static_assert(! std::is_copy_constructible_v<StrokeFinishInput>);
 static_assert(std::is_nothrow_move_constructible_v<StrokeFinishInput>);
-static_assert(!std::is_move_assignable_v<StrokeFinishInput>);
-static_assert(!std::is_copy_constructible_v<PreparedStrokeFinish>);
+static_assert(! std::is_move_assignable_v<StrokeFinishInput>);
+static_assert(! std::is_copy_constructible_v<PreparedStrokeFinish>);
 
 constexpr int kSide = 32;
 constexpr std::array<std::uint8_t, 4> kSourceBgra{50, 60, 70, 255};
@@ -65,16 +65,18 @@ Raster MaskRaster()
 
 bool AllBgra(const Raster& raster, const std::array<std::uint8_t, 4>& expected) noexcept
 {
-    if (!raster.HasStorage() || raster.Width() != kSide || raster.Height() != kSide ||
-        raster.Format() != RasterFormat::Bgra8888)
+    if (! raster.HasStorage() || raster.Width() != kSide || raster.Height() != kSide || raster.Format() != RasterFormat::Bgra8888)
         return false;
     std::array<std::uint8_t, kSide * kSide * 4> actual{};
     raster.ReadRegion(0, 0, kSide, kSide, actual.data(), kSide * 4, 0);
     for (std::size_t i = 0; i < actual.size(); ++i)
         if (actual[i] != expected[i % expected.size()])
         {
-            std::printf("DIAG strokefinish-publication pixel=%zu channel=%zu actual=%u expected=%u\n", i / 4, i % 4,
-                        static_cast<unsigned int>(actual[i]), static_cast<unsigned int>(expected[i % 4]));
+            std::printf("DIAG strokefinish-publication pixel=%zu channel=%zu actual=%u expected=%u\n",
+                        i / 4,
+                        i % 4,
+                        static_cast<unsigned int>(actual[i]),
+                        static_cast<unsigned int>(expected[i % 4]));
             return false;
         }
     return true;
@@ -82,16 +84,17 @@ bool AllBgra(const Raster& raster, const std::array<std::uint8_t, 4>& expected) 
 
 bool AllGray(const Raster& raster, std::uint8_t expected) noexcept
 {
-    if (!raster.HasStorage() || raster.Width() != kSide || raster.Height() != kSide ||
-        raster.Format() != RasterFormat::Gray8)
+    if (! raster.HasStorage() || raster.Width() != kSide || raster.Height() != kSide || raster.Format() != RasterFormat::Gray8)
         return false;
     std::array<std::uint8_t, kSide * kSide> actual{};
     raster.ReadRegion(0, 0, kSide, kSide, actual.data(), kSide, 0);
     for (std::size_t i = 0; i < actual.size(); ++i)
         if (actual[i] != expected)
         {
-            std::printf("DIAG strokefinish-publication mask-pixel=%zu actual=%u expected=%u\n", i,
-                        static_cast<unsigned int>(actual[i]), static_cast<unsigned int>(expected));
+            std::printf("DIAG strokefinish-publication mask-pixel=%zu actual=%u expected=%u\n",
+                        i,
+                        static_cast<unsigned int>(actual[i]),
+                        static_cast<unsigned int>(expected));
             return false;
         }
     return true;
@@ -114,16 +117,16 @@ CanvasDocument FixtureDocument(const Raster& source, const Raster& mask = {})
     // This is the current test fixture owner API: mutable fixture vector -> immutable seal.
     // It never writes a published CanvasDocument's RecordRoot or uses EditForTest to invalidate authority.
     DocumentFixture fixture;
-    fixture.id = Guid::Generate();
-    fixture.width = kSide;
-    fixture.height = kSide;
+    fixture.id       = Guid::Generate();
+    fixture.width    = kSide;
+    fixture.height   = kSide;
     ImageLayer layer = ImageLayer::Blank(L"Stroke finish publication fixture", Vec2{kSide, kSide});
-    layer.asset = RasterAsset{source, Raster::MakeThumbnail(source), layer.name};
+    layer.asset      = RasterAsset{source, Raster::MakeThumbnail(source), layer.name};
     if (mask.HasStorage())
     {
         LayerMask ownedMask;
         ownedMask.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"Publication mask"};
-        layer.mask = std::move(ownedMask);
+        layer.mask      = std::move(ownedMask);
     }
     fixture.layers.push_back(std::move(layer));
     return std::move(fixture).Seal();
@@ -140,7 +143,7 @@ struct Fixture final
         if (withMask)
             mask = MaskRaster();
         CanvasDocument document = FixtureDocument(source, mask);
-        const Guid active = document.layers.front().id;
+        const Guid active       = document.layers.front().id;
         session.ReplaceDocument(std::move(document), active);
         session.SetBrushEngine(&CpuBrushCoverage::Shared());
         session.brushSettings = BrushSettings{2000, 1, 1, 0, 0, 1};
@@ -151,7 +154,7 @@ struct Fixture final
 
     [[nodiscard]] bool BeginFullCanvasStroke()
     {
-        if (!session.BeginBrush(Vec2{0, 16}, BrushKind::Paint))
+        if (! session.BeginBrush(Vec2{0, 16}, BrushKind::Paint))
             return false;
         session.ContinueBrush(Vec2{16, 16});
         session.ContinueBrush(Vec2{32, 16});
@@ -173,10 +176,15 @@ struct OwnerState final
     const BrushStroke* pending;
 
     explicit OwnerState(const DocumentSession& session)
-        : document(session.Document()), history(session.history.CaptureState()),
-          revision(session.history.CurrentRevision()), undoCount(session.history.UndoCount()),
-          redoCount(history.FutureCount()), generation(session.Generation()), active(session.ActiveLayerID()),
-          maskSelected(session.IsMaskSelected()), opening(session.PendingBrushOpening()),
+        : document(session.Document()),
+          history(session.history.CaptureState()),
+          revision(session.history.CurrentRevision()),
+          undoCount(session.history.UndoCount()),
+          redoCount(history.FutureCount()),
+          generation(session.Generation()),
+          active(session.ActiveLayerID()),
+          maskSelected(session.IsMaskSelected()),
+          opening(session.PendingBrushOpening()),
           pending(session.PendingBrush())
     {
     }
@@ -185,20 +193,16 @@ struct OwnerState final
 bool SameCommittedOwner(const DocumentSession& session, const OwnerState& before) noexcept
 {
     return session.Document() == before.document && (session.Document().has_value() == before.document.has_value()) &&
-           (!before.document.has_value() ||
-            session.Document().value().layers.Identity() == before.document.value().layers.Identity()) &&
+           (! before.document.has_value() || session.Document().value().layers.Identity() == before.document.value().layers.Identity()) &&
            session.history.IsCurrent(before.history) && session.history.CurrentRevision() == before.revision &&
-           session.history.UndoCount() == before.undoCount &&
-           session.history.CaptureState().FutureCount() == before.redoCount &&
-           session.history.UndoName() == before.history.UndoName() &&
-           session.history.RedoName() == before.history.RedoName() && session.Generation() == before.generation &&
-           session.ActiveLayerID() == before.active && session.IsMaskSelected() == before.maskSelected;
+           session.history.UndoCount() == before.undoCount && session.history.CaptureState().FutureCount() == before.redoCount &&
+           session.history.UndoName() == before.history.UndoName() && session.history.RedoName() == before.history.RedoName() &&
+           session.Generation() == before.generation && session.ActiveLayerID() == before.active && session.IsMaskSelected() == before.maskSelected;
 }
 
 bool SameOwner(const DocumentSession& session, const OwnerState& before) noexcept
 {
-    return SameCommittedOwner(session, before) && session.PendingBrushOpening() == before.opening &&
-           session.PendingBrush() == before.pending;
+    return SameCommittedOwner(session, before) && session.PendingBrushOpening() == before.opening && session.PendingBrush() == before.pending;
 }
 
 std::uint64_t WrongOpening(std::uint64_t opening) noexcept
@@ -213,14 +217,14 @@ struct FinishWork final
     std::optional<StrokeFinishInput> input;
     std::optional<StrokeFinishResult> result;
     bool returnedCpuEngine = false;
-    bool ownerEndedEngine = false;
-    bool preparedCpu = false;
-    bool composed = false;
+    bool ownerEndedEngine  = false;
+    bool preparedCpu       = false;
+    bool composed          = false;
     bool movedInputRefused = false;
-    bool retired = false;
+    bool retired           = false;
 
-    FinishWork() = default;
-    FinishWork(const FinishWork&) = delete;
+    FinishWork()                             = default;
+    FinishWork(const FinishWork&)            = delete;
     FinishWork& operator=(const FinishWork&) = delete;
     ~FinishWork()
     {
@@ -230,9 +234,9 @@ struct FinishWork final
     [[nodiscard]] bool TakeOnOwner(DocumentSession& session, std::uint64_t opening)
     {
         BrushCoverageEngine* ownerEngine = nullptr;
-        auto captured = session.TakeStrokeFinishInput(opening, ownerEngine);
-        returnedCpuEngine = ownerEngine == &CpuBrushCoverage::Shared();
-        if (!captured.has_value())
+        auto captured                    = session.TakeStrokeFinishInput(opening, ownerEngine);
+        returnedCpuEngine                = ownerEngine == &CpuBrushCoverage::Shared();
+        if (! captured.has_value())
             return false;
         input.emplace(std::move(captured.value()));
         if (ownerEngine != nullptr)
@@ -243,42 +247,40 @@ struct FinishWork final
         return true;
     }
 
-    void Prepare(CancelToken cancellation = {}, StrokeFinishObserver observer = {},
-                 DocumentHistory::PrepareObserver historyObserver = {}, bool probeMovedInput = false)
+    void Prepare(CancelToken cancellation                         = {},
+                 StrokeFinishObserver observer                    = {},
+                 DocumentHistory::PrepareObserver historyObserver = {},
+                 bool probeMovedInput                             = false)
     {
-        if (!input.has_value())
+        if (! input.has_value())
             return;
-        std::thread worker(
-            [&]
+        std::thread worker([&]
+        {
             {
-                {
-                    BrushStroke& draft = input.value().DraftForWork();
-                    const auto final = draft.PrepareFinalCoverage(cancellation);
-                    if (!final.has_value())
-                        return;
-                    preparedCpu = !final.value().needsGpu && !final.value().tiles.empty();
-                    composed = draft.ComposeFinalCoverage(final.value());
-                } // FinalCoverage borrows end before the factory consumes or destroys the private input.
-                if (!composed)
+                BrushStroke& draft = input.value().DraftForWork();
+                const auto final   = draft.PrepareFinalCoverage(cancellation);
+                if (! final.has_value())
                     return;
-                // Actual draft declaration: input/cancellation/observer required; history observer explicit too.
-                result.emplace(DocumentSession::PrepareStrokeFinishPublication(std::move(input.value()), cancellation,
-                                                                               observer, historyObserver));
-                if (probeMovedInput)
-                {
-                    // Factory guards moved authority; never borrow DraftForWork from a moved-from input.
-                    const auto reused = DocumentSession::PrepareStrokeFinishPublication(
-                        std::move(input.value()), cancellation, {}, historyObserver);
-                    movedInputRefused = reused.status == StrokeFinishStatus::Invalid && !reused.publication.has_value();
-                }
-            });
+                preparedCpu = ! final.value().needsGpu && ! final.value().tiles.empty();
+                composed    = draft.ComposeFinalCoverage(final.value());
+            } // FinalCoverage borrows end before the factory consumes or destroys the private input.
+            if (! composed)
+                return;
+            // Actual draft declaration: input/cancellation/observer required; history observer explicit too.
+            result.emplace(DocumentSession::PrepareStrokeFinishPublication(std::move(input.value()), cancellation, observer, historyObserver));
+            if (probeMovedInput)
+            {
+                // Factory guards moved authority; never borrow DraftForWork from a moved-from input.
+                const auto reused = DocumentSession::PrepareStrokeFinishPublication(std::move(input.value()), cancellation, {}, historyObserver);
+                movedInputRefused = reused.status == StrokeFinishStatus::Invalid && ! reused.publication.has_value();
+            }
+        });
         worker.join();
     }
 
     [[nodiscard]] bool Ready() const noexcept
     {
-        return preparedCpu && composed && result.has_value() && result.value().status == StrokeFinishStatus::Ready &&
-               result.value().publication.has_value();
+        return preparedCpu && composed && result.has_value() && result.value().status == StrokeFinishStatus::Ready && result.value().publication.has_value();
     }
 
     [[nodiscard]] PreparedStrokeFinish& Publication()
@@ -290,13 +292,12 @@ struct FinishWork final
     {
         if (retired)
             return;
-        std::thread worker(
-            [&]
-            {
-                result.reset();
-                input.reset();
-                retired = true;
-            });
+        std::thread worker([&]
+        {
+            result.reset();
+            input.reset();
+            retired = true;
+        });
         worker.join();
     }
 };
@@ -310,58 +311,51 @@ void SuccessfulPublication(bool withMask)
     ExpectCase(fixture.BeginFullCanvasStroke(), group, "actual-begin-and-two-continuations");
     const auto opening = fixture.session.PendingBrushOpening();
     ExpectCase(opening.has_value(), group, "accepted-opening-present");
-    if (!opening.has_value())
+    if (! opening.has_value())
         return;
     const std::weak_ptr<BrushStroke> draft = fixture.session.WeakPendingBrushForTest();
-    ExpectCase(fixture.session.PendingBrush()->ExpectedFinishCoverageEngine() == &CpuBrushCoverage::Shared(), group,
+    ExpectCase(fixture.session.PendingBrush()->ExpectedFinishCoverageEngine() == &CpuBrushCoverage::Shared(),
+               group,
                "attached-live-draft-preflight-names-original-cpu-engine");
     ExpectCase(work.TakeOnOwner(fixture.session, opening.value()), group, "exact-opening-captured");
     {
         const auto detachedDraft = draft.lock();
-        ExpectCase(detachedDraft && detachedDraft->ExpectedFinishCoverageEngine() == nullptr, group,
-                   "detached-draft-preflight-exposes-no-engine-borrow");
+        ExpectCase(detachedDraft && detachedDraft->ExpectedFinishCoverageEngine() == nullptr, group, "detached-draft-preflight-exposes-no-engine-borrow");
     }
     ExpectCase(work.returnedCpuEngine && work.ownerEndedEngine, group, "cpu-engine-ended-on-owner-after-take");
     ExpectCase(fixture.session.PendingBrush() == nullptr, group, "live-draft-detached");
     ExpectCase(fixture.session.PendingBrushOpening() == opening, group, "exact-opening-retained-while-detached");
     ExpectCase(SameCommittedOwner(fixture.session, original), group, "capture-preserves-original-root-and-history");
     const OwnerState detached(fixture.session);
-    ExpectCase(!fixture.session.BeginBrush(Vec2{8, 8}, BrushKind::Paint), group,
-               "younger-begin-refused-while-detached");
+    ExpectCase(! fixture.session.BeginBrush(Vec2{8, 8}, BrushKind::Paint), group, "younger-begin-refused-while-detached");
     ExpectCase(SameOwner(fixture.session, detached), group, "younger-refusal-preserves-detached-owner");
     work.Prepare({}, {}, {}, true);
     ExpectCase(work.Ready(), group, "worker-final-coverage-and-publication-ready");
     ExpectCase(work.movedInputRefused, group, "moved-input-factory-reuse-invalid-with-no-publication");
     ExpectCase(SameOwner(fixture.session, detached), group, "private-preparation-preserves-owner-root-and-history");
-    if (!work.Ready())
+    if (! work.Ready())
         return;
     const auto* finalDocument = work.Publication().FinalDocument();
-    const auto* commit = work.Publication().CommitInfo();
-    ExpectCase(finalDocument && finalDocument->width == kSide && finalDocument->height == kSide &&
-                   finalDocument->layers.size() == 1 && original.active &&
-                   finalDocument->layers[0].id == original.active.value() && commit && commit->mask == withMask &&
-                   commit->x == 0 && commit->y == 0 && commit->width == kSide && commit->height == kSide &&
-                   (withMask ? AllGray(commit->image, 0) : AllBgra(commit->image, kPaintBgra)),
-               group, "immutable-preparation-views-preserve-literal-final-pixels-and-target");
-    ExpectCase(fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), group,
-               "publication-current-before-apply");
+    const auto* commit        = work.Publication().CommitInfo();
+    ExpectCase(finalDocument && finalDocument->width == kSide && finalDocument->height == kSide && finalDocument->layers.size() == 1 && original.active &&
+                   finalDocument->layers[0].id == original.active.value() && commit && commit->mask == withMask && commit->x == 0 && commit->y == 0 &&
+                   commit->width == kSide && commit->height == kSide && (withMask ? AllGray(commit->image, 0) : AllBgra(commit->image, kPaintBgra)),
+               group,
+               "immutable-preparation-views-preserve-literal-final-pixels-and-target");
+    ExpectCase(fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), group, "publication-current-before-apply");
     DocumentHistory::ResidencyPermit permit;
     const auto residency = work.Publication().TryAcquireHistoryResidency(permit);
     ExpectCase(residency == DocumentHistory::ResidencyValidation::Ready, group, "owner-history-residency-ready");
-    const bool applied = residency == DocumentHistory::ResidencyValidation::Ready &&
-                         fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication());
+    const bool applied = residency == DocumentHistory::ResidencyValidation::Ready && fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication());
     permit.Reset();
     ExpectCase(applied, group, "owner-apply-succeeds");
-    if (!applied)
+    if (! applied)
         return;
-    ExpectCase(!work.Publication().FinalDocument() && !work.Publication().CommitInfo(), group,
-               "applied-preparation-views-are-no-longer-exposed");
+    ExpectCase(! work.Publication().FinalDocument() && ! work.Publication().CommitInfo(), group, "applied-preparation-views-are-no-longer-exposed");
     ExpectCase(fixture.session.history.UndoCount() == original.undoCount + 1, group, "exactly-one-history-entry");
-    ExpectCase(fixture.session.history.UndoName() == (withMask ? L"Paint Mask" : L"Brush Stroke"), group,
-               "history-name-preserved");
-    ExpectCase(!fixture.session.PendingBrushOpening().has_value(), group, "accepted-finish-marker-cleared-after-apply");
-    ExpectCase(ActiveBgra(fixture.session, withMask ? kSourceBgra : kPaintBgra), group,
-               "literal-all-pixel-image-after-apply");
+    ExpectCase(fixture.session.history.UndoName() == (withMask ? L"Paint Mask" : L"Brush Stroke"), group, "history-name-preserved");
+    ExpectCase(! fixture.session.PendingBrushOpening().has_value(), group, "accepted-finish-marker-cleared-after-apply");
+    ExpectCase(ActiveBgra(fixture.session, withMask ? kSourceBgra : kPaintBgra), group, "literal-all-pixel-image-after-apply");
     if (withMask)
     {
         Expect(ActiveMask(fixture.session, 0), "ready.mask.literal-all-mask-pixels-zero");
@@ -371,25 +365,22 @@ void SuccessfulPublication(bool withMask)
                "ready.mask.eager-thumbnail-all-pixels-zero");
     }
     const OwnerState published(fixture.session);
-    ExpectCase(!fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), group,
-               "applied-publication-not-current");
-    ExpectCase(!fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication()), group,
-               "double-publication-refused");
-    ExpectCase(SameOwner(fixture.session, published), group,
-               "double-publication-preserves-root-history-and-generation");
+    ExpectCase(! fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), group, "applied-publication-not-current");
+    ExpectCase(! fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication()), group, "double-publication-refused");
+    ExpectCase(SameOwner(fixture.session, published), group, "double-publication-preserves-root-history-and-generation");
     fixture.session.Undo();
     ExpectCase(ActiveBgra(fixture.session, kSourceBgra), group, "undo-restores-every-literal-source-pixel");
     ExpectCase(fixture.session.Document() == original.document, group, "undo-restores-original-document");
-    ExpectCase(fixture.session.history.UndoCount() == original.undoCount &&
-                   fixture.session.history.CurrentRevision() == original.revision,
-               group, "undo-restores-original-history-revision");
+    ExpectCase(fixture.session.history.UndoCount() == original.undoCount && fixture.session.history.CurrentRevision() == original.revision,
+               group,
+               "undo-restores-original-history-revision");
     if (withMask)
         Expect(ActiveMask(fixture.session, 128), "ready.mask.undo-restores-every-gray128-mask-pixel");
     fixture.session.Redo();
-    ExpectCase(ActiveBgra(fixture.session, withMask ? kSourceBgra : kPaintBgra), group,
-               "redo-restores-every-literal-result-pixel");
-    ExpectCase(fixture.session.history.UndoCount() == original.undoCount + 1 && !fixture.session.history.CanRedo(),
-               group, "redo-restores-single-entry-with-no-extra-redo");
+    ExpectCase(ActiveBgra(fixture.session, withMask ? kSourceBgra : kPaintBgra), group, "redo-restores-every-literal-result-pixel");
+    ExpectCase(fixture.session.history.UndoCount() == original.undoCount + 1 && ! fixture.session.history.CanRedo(),
+               group,
+               "redo-restores-single-entry-with-no-extra-redo");
     if (withMask)
         Expect(ActiveMask(fixture.session, 0), "ready.mask.redo-restores-every-zero-mask-pixel");
     ExpectCase(AllBgra(fixture.source, kSourceBgra), group, "original-raster-remains-all-literal-source-pixels");
@@ -406,29 +397,28 @@ void CaptureRefusalsPreserveLiveDraft()
     Expect(fixture.BeginFullCanvasStroke(), "capture.actual-begin");
     const auto opening = fixture.session.PendingBrushOpening();
     Expect(opening.has_value(), "capture.opening-present");
-    if (!opening.has_value())
+    if (! opening.has_value())
         return;
     const OwnerState live(fixture.session);
     BrushCoverageEngine* empty = nullptr;
-    auto wrong = fixture.session.TakeStrokeFinishInput(WrongOpening(opening.value()), empty);
-    Expect(!wrong.has_value(), "capture.wrong-opening-refused");
+    auto wrong                 = fixture.session.TakeStrokeFinishInput(WrongOpening(opening.value()), empty);
+    Expect(! wrong.has_value(), "capture.wrong-opening-refused");
     Expect(empty == nullptr, "capture.wrong-opening-preserves-null-output");
     Expect(SameOwner(fixture.session, live), "capture.wrong-opening-preserves-live-draft-root-and-history");
     BrushCoverageEngine* nonempty = &CpuBrushCoverage::Shared();
-    auto blocked = fixture.session.TakeStrokeFinishInput(opening.value(), nonempty);
-    Expect(!blocked.has_value(), "capture.nonempty-engine-output-refused");
+    auto blocked                  = fixture.session.TakeStrokeFinishInput(opening.value(), nonempty);
+    Expect(! blocked.has_value(), "capture.nonempty-engine-output-refused");
     Expect(nonempty == &CpuBrushCoverage::Shared(), "capture.nonempty-engine-output-not-overwritten");
     Expect(SameOwner(fixture.session, live), "capture.nonempty-output-preserves-live-draft-root-and-history");
     Expect(accepted.TakeOnOwner(fixture.session, opening.value()), "capture.exact-retry-after-both-refusals-succeeds");
     Expect(accepted.returnedCpuEngine && accepted.ownerEndedEngine, "capture.successful-retry-ends-engine-on-owner");
     fixture.session.CancelBrush();
     // Also retire unexpectedly returned rejected inputs on the worker if an API regression occurs.
-    std::thread retirement(
-        [&]
-        {
-            wrong.reset();
-            blocked.reset();
-        });
+    std::thread retirement([&]
+    {
+        wrong.reset();
+        blocked.reset();
+    });
     retirement.join();
     Expect(AllBgra(fixture.source, kSourceBgra), "capture.original-source-whole-tile-unchanged");
 }
@@ -440,7 +430,7 @@ void CancelAfterDetachRejectsOldPublication()
     const OwnerState original(fixture.session);
     Expect(fixture.BeginFullCanvasStroke(), "cancel.actual-begin");
     const auto opening = fixture.session.PendingBrushOpening();
-    if (!opening.has_value())
+    if (! opening.has_value())
     {
         Expect(false, "cancel.exact-opening-captured");
         return;
@@ -448,17 +438,16 @@ void CancelAfterDetachRejectsOldPublication()
     Expect(work.TakeOnOwner(fixture.session, opening.value()), "cancel.exact-opening-captured");
     work.Prepare();
     Expect(work.Ready(), "cancel.old-publication-ready-before-owner-cancel");
-    if (!work.Ready())
+    if (! work.Ready())
         return;
     fixture.session.CancelBrush();
-    Expect(!fixture.session.PendingBrushOpening().has_value(), "cancel.detached-marker-cleared-on-owner");
+    Expect(! fixture.session.PendingBrushOpening().has_value(), "cancel.detached-marker-cleared-on-owner");
     Expect(SameCommittedOwner(fixture.session, original), "cancel.owner-cancel-preserves-original-root-and-history");
     const OwnerState cancelled(fixture.session);
-    Expect(!fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), "cancel.old-publication-not-current");
-    Expect(work.Publication().FinalDocument() && work.Publication().CommitInfo() &&
-               AllBgra(work.Publication().CommitInfo()->image, kPaintBgra),
+    Expect(! fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), "cancel.old-publication-not-current");
+    Expect(work.Publication().FinalDocument() && work.Publication().CommitInfo() && AllBgra(work.Publication().CommitInfo()->image, kPaintBgra),
            "cancel.stale-immutable-views-grant-no-publication-authority");
-    Expect(!fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication()), "cancel.old-publication-refused");
+    Expect(! fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication()), "cancel.old-publication-refused");
     Expect(SameOwner(fixture.session, cancelled), "cancel.refusal-preserves-original-root-history-and-generation");
     Expect(ActiveBgra(fixture.session, kSourceBgra), "cancel.all-owner-pixels-remain-original");
     Expect(AllBgra(fixture.source, kSourceBgra), "cancel.source-raster-whole-tile-unchanged");
@@ -470,7 +459,7 @@ void DiscardUsesExactOpening()
     FinishWork work;
     Expect(fixture.BeginFullCanvasStroke(), "discard.actual-begin");
     const auto opening = fixture.session.PendingBrushOpening();
-    if (!opening.has_value())
+    if (! opening.has_value())
     {
         Expect(false, "discard.exact-opening-captured");
         return;
@@ -478,24 +467,22 @@ void DiscardUsesExactOpening()
     Expect(work.TakeOnOwner(fixture.session, opening.value()), "discard.exact-opening-captured");
     work.Prepare();
     Expect(work.Ready(), "discard.old-publication-ready");
-    if (!work.Ready())
+    if (! work.Ready())
         return;
     const OwnerState detached(fixture.session);
-    Expect(!fixture.session.DiscardStrokeFinishIfCurrent(WrongOpening(opening.value())),
-           "discard.wrong-opening-refused");
+    Expect(! fixture.session.DiscardStrokeFinishIfCurrent(WrongOpening(opening.value())), "discard.wrong-opening-refused");
     Expect(SameOwner(fixture.session, detached), "discard.wrong-opening-preserves-marker-and-owner");
     Expect(fixture.session.DiscardStrokeFinishIfCurrent(opening.value()), "discard.exact-opening-accepted");
-    Expect(!fixture.session.PendingBrushOpening().has_value(), "discard.exact-marker-cleared");
+    Expect(! fixture.session.PendingBrushOpening().has_value(), "discard.exact-marker-cleared");
     Expect(SameCommittedOwner(fixture.session, detached), "discard.preserves-original-root-and-history");
     const OwnerState discarded(fixture.session);
-    Expect(!fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication()), "discard.old-publication-refused");
+    Expect(! fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication()), "discard.old-publication-refused");
     Expect(SameOwner(fixture.session, discarded), "discard.old-publication-refusal-preserves-owner");
     Expect(fixture.BeginFullCanvasStroke(), "discard.younger-actual-begin-accepted");
     const auto younger = fixture.session.PendingBrushOpening();
     Expect(younger.has_value() && younger != opening, "discard.younger-marker-is-distinct-without-assumed-increment");
     const OwnerState liveYounger(fixture.session);
-    Expect(!fixture.session.DiscardStrokeFinishIfCurrent(opening.value()),
-           "discard.old-marker-cannot-discard-younger-live-draft");
+    Expect(! fixture.session.DiscardStrokeFinishIfCurrent(opening.value()), "discard.old-marker-cannot-discard-younger-live-draft");
     Expect(SameOwner(fixture.session, liveYounger), "discard.old-marker-refusal-preserves-younger-draft");
     fixture.session.CancelBrush();
 }
@@ -525,50 +512,42 @@ void LegitimateOwnerEditsRejectOldPublication()
         FinishWork work;
         ExpectCase(fixture.BeginFullCanvasStroke(), test.group, "actual-begin");
         const auto opening = fixture.session.PendingBrushOpening();
-        ExpectCase(opening.has_value() && work.TakeOnOwner(fixture.session, opening.value()), test.group,
-                   "exact-opening-captured");
+        ExpectCase(opening.has_value() && work.TakeOnOwner(fixture.session, opening.value()), test.group, "exact-opening-captured");
         work.Prepare();
         ExpectCase(work.Ready(), test.group, "old-publication-ready");
-        if (!work.Ready())
+        if (! work.Ready())
             continue;
         const OwnerState beforeEdit(fixture.session);
         bool editObserved = false;
         switch (test.edit)
         {
-        case StaleEdit::Document:
-        {
-            CanvasDocument replacement = FixtureDocument(fixture.source);
-            const Guid active = replacement.layers.front().id;
-            fixture.session.ReplaceDocument(std::move(replacement), active);
-            editObserved = fixture.session.Document().has_value() && beforeEdit.document.has_value() &&
-                           fixture.session.Document().value().id != beforeEdit.document.value().id;
-            break;
-        }
-        case StaleEdit::Layer:
-            fixture.session.SetOpacity(0.5);
-            editObserved =
-                fixture.session.Document().has_value() && beforeEdit.document.has_value() &&
-                fixture.session.ActiveLayer() != nullptr && fixture.session.ActiveLayer()->opacity == 0.5 &&
-                fixture.session.Document().value().layers.Identity() != beforeEdit.document.value().layers.Identity();
-            break;
-        case StaleEdit::Selection:
-            fixture.session.SelectAll();
-            editObserved =
-                fixture.session.Document().has_value() && beforeEdit.document.has_value() &&
-                fixture.session.Selection().has_value() &&
-                fixture.session.Document().value().layers.Identity() == beforeEdit.document.value().layers.Identity();
-            break;
+            case StaleEdit::Document:
+            {
+                CanvasDocument replacement = FixtureDocument(fixture.source);
+                const Guid active          = replacement.layers.front().id;
+                fixture.session.ReplaceDocument(std::move(replacement), active);
+                editObserved = fixture.session.Document().has_value() && beforeEdit.document.has_value() &&
+                               fixture.session.Document().value().id != beforeEdit.document.value().id;
+                break;
+            }
+            case StaleEdit::Layer:
+                fixture.session.SetOpacity(0.5);
+                editObserved = fixture.session.Document().has_value() && beforeEdit.document.has_value() && fixture.session.ActiveLayer() != nullptr &&
+                               fixture.session.ActiveLayer()->opacity == 0.5 &&
+                               fixture.session.Document().value().layers.Identity() != beforeEdit.document.value().layers.Identity();
+                break;
+            case StaleEdit::Selection:
+                fixture.session.SelectAll();
+                editObserved = fixture.session.Document().has_value() && beforeEdit.document.has_value() && fixture.session.Selection().has_value() &&
+                               fixture.session.Document().value().layers.Identity() == beforeEdit.document.value().layers.Identity();
+                break;
         }
         ExpectCase(editObserved, test.group, "legitimate-owner-edit-observed");
         const OwnerState edited(fixture.session);
-        ExpectCase(!fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), test.group,
-                   "old-publication-not-current");
-        ExpectCase(!fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication()), test.group,
-                   "old-publication-refused");
-        ExpectCase(SameOwner(fixture.session, edited), test.group,
-                   "refusal-preserves-current-root-history-selection-and-generation");
-        ExpectCase(ActiveBgra(fixture.session, kSourceBgra) && AllBgra(fixture.source, kSourceBgra), test.group,
-                   "all-owner-and-source-pixels-remain-original");
+        ExpectCase(! fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), test.group, "old-publication-not-current");
+        ExpectCase(! fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication()), test.group, "old-publication-refused");
+        ExpectCase(SameOwner(fixture.session, edited), test.group, "refusal-preserves-current-root-history-selection-and-generation");
+        ExpectCase(ActiveBgra(fixture.session, kSourceBgra) && AllBgra(fixture.source, kSourceBgra), test.group, "all-owner-and-source-pixels-remain-original");
         fixture.session.CancelBrush();
     }
 }
@@ -608,33 +587,26 @@ void ObserverCancellationNeverPublishes()
         FinishWork work;
         ExpectCase(fixture.BeginFullCanvasStroke(), test.group, "actual-begin");
         const auto opening = fixture.session.PendingBrushOpening();
-        ExpectCase(opening.has_value() && work.TakeOnOwner(fixture.session, opening.value()), test.group,
-                   "exact-opening-captured");
+        ExpectCase(opening.has_value() && work.TakeOnOwner(fixture.session, opening.value()), test.group, "exact-opening-captured");
         const OwnerState detached(fixture.session);
         CancelStage cancellation{.target = test.stage};
         work.Prepare(cancellation.cancellation.Token(), {CancelAtStage, &cancellation});
-        ExpectCase(work.preparedCpu && work.composed, test.group,
-                   "final-coverage-composed-before-factory-cancellation");
+        ExpectCase(work.preparedCpu && work.composed, test.group, "final-coverage-composed-before-factory-cancellation");
         ExpectCase(cancellation.observed, test.group, "exact-observer-stage-reached");
-        ExpectCase(work.result.has_value() && work.result.value().status == StrokeFinishStatus::Cancelled, test.group,
-                   "factory-returns-exact-cancelled-status");
-        ExpectCase(work.result.has_value() && !work.result.value().publication.has_value(), test.group,
-                   "no-publication-exposed");
-        ExpectCase(SameOwner(fixture.session, detached), test.group,
-                   "cancelled-factory-preserves-root-history-and-opening");
-        ExpectCase(ActiveBgra(fixture.session, kSourceBgra) && AllBgra(fixture.source, kSourceBgra), test.group,
+        ExpectCase(
+            work.result.has_value() && work.result.value().status == StrokeFinishStatus::Cancelled, test.group, "factory-returns-exact-cancelled-status");
+        ExpectCase(work.result.has_value() && ! work.result.value().publication.has_value(), test.group, "no-publication-exposed");
+        ExpectCase(SameOwner(fixture.session, detached), test.group, "cancelled-factory-preserves-root-history-and-opening");
+        ExpectCase(ActiveBgra(fixture.session, kSourceBgra) && AllBgra(fixture.source, kSourceBgra),
+                   test.group,
                    "cancelled-factory-preserves-every-owner-and-source-pixel");
         if (test.stage == StrokeFinishStage::Mask)
-            ExpectCase(ActiveMask(fixture.session, 128) && AllGray(fixture.mask, 128), test.group,
-                       "mask-source-and-owner-gray128-unchanged");
+            ExpectCase(ActiveMask(fixture.session, 128) && AllGray(fixture.mask, 128), test.group, "mask-source-and-owner-gray128-unchanged");
         if (opening.has_value())
         {
-            ExpectCase(fixture.session.DiscardStrokeFinishIfCurrent(opening.value()), test.group,
-                       "owner-discards-exact-failed-finish");
-            ExpectCase(!fixture.session.PendingBrushOpening().has_value(), test.group,
-                       "discard-clears-only-failed-marker");
-            ExpectCase(SameCommittedOwner(fixture.session, detached), test.group,
-                       "discard-preserves-source-root-and-history");
+            ExpectCase(fixture.session.DiscardStrokeFinishIfCurrent(opening.value()), test.group, "owner-discards-exact-failed-finish");
+            ExpectCase(! fixture.session.PendingBrushOpening().has_value(), test.group, "discard-clears-only-failed-marker");
+            ExpectCase(SameCommittedOwner(fixture.session, detached), test.group, "discard-preserves-source-root-and-history");
         }
     }
 }
@@ -660,22 +632,17 @@ void HistoryObserverCancellationNeverPublishes()
     FinishWork work;
     Expect(fixture.BeginFullCanvasStroke(), "history-observer.actual-begin");
     const auto opening = fixture.session.PendingBrushOpening();
-    Expect(opening.has_value() && work.TakeOnOwner(fixture.session, opening.value()),
-           "history-observer.exact-opening-captured");
+    Expect(opening.has_value() && work.TakeOnOwner(fixture.session, opening.value()), "history-observer.exact-opening-captured");
     const OwnerState detached(fixture.session);
     CancelHistory cancellation;
     work.Prepare(cancellation.cancellation.Token(), {}, {CancelAtHistorySnapshot, &cancellation});
     Expect(cancellation.observed, "history-observer.after-snapshot-checkpoint-reached");
-    Expect(work.result.has_value() && work.result.value().status == StrokeFinishStatus::Cancelled,
-           "history-observer.exact-cancelled-status");
-    Expect(work.result.has_value() && !work.result.value().publication.has_value(),
-           "history-observer.no-publication-exposed");
+    Expect(work.result.has_value() && work.result.value().status == StrokeFinishStatus::Cancelled, "history-observer.exact-cancelled-status");
+    Expect(work.result.has_value() && ! work.result.value().publication.has_value(), "history-observer.no-publication-exposed");
     Expect(SameOwner(fixture.session, detached), "history-observer.original-root-history-and-opening-unchanged");
-    Expect(ActiveBgra(fixture.session, kSourceBgra) && AllBgra(fixture.source, kSourceBgra),
-           "history-observer.all-owner-and-source-pixels-original");
+    Expect(ActiveBgra(fixture.session, kSourceBgra) && AllBgra(fixture.source, kSourceBgra), "history-observer.all-owner-and-source-pixels-original");
     if (opening.has_value())
-        Expect(fixture.session.DiscardStrokeFinishIfCurrent(opening.value()),
-               "history-observer.owner-discards-exact-finish");
+        Expect(fixture.session.DiscardStrokeFinishIfCurrent(opening.value()), "history-observer.owner-discards-exact-finish");
 }
 
 void ReferenceHistoryCancelsDetachedFinishFirst(bool redo)
@@ -692,48 +659,43 @@ void ReferenceHistoryCancelsDetachedFinishFirst(bool redo)
     const OwnerState original(fixture.session);
     ExpectCase(fixture.session.ActiveLayer() != nullptr && fixture.session.ActiveLayer()->opacity == 0.5 &&
                    (redo ? fixture.session.history.CanRedo() : fixture.session.history.CanUndo()),
-               group, "older-history-entry-exists-before-stroke");
+               group,
+               "older-history-entry-exists-before-stroke");
     ExpectCase(fixture.BeginFullCanvasStroke(), group, "actual-begin");
     const auto opening = fixture.session.PendingBrushOpening();
-    ExpectCase(opening.has_value() && work.TakeOnOwner(fixture.session, opening.value()), group,
-               "exact-opening-captured");
+    ExpectCase(opening.has_value() && work.TakeOnOwner(fixture.session, opening.value()), group, "exact-opening-captured");
     work.Prepare();
     ExpectCase(work.Ready(), group, "private-final-publication-ready");
-    if (!work.Ready())
+    if (! work.Ready())
         return;
-    auto authority = fixture.session.CaptureHistoryRestoreAuthority();
-    auto history = fixture.session.history.CaptureState();
+    auto authority             = fixture.session.CaptureHistoryRestoreAuthority();
+    auto history               = fixture.session.history.CaptureState();
     bool settledRestoreRefused = false;
-    std::thread worker(
-        [&]
-        {
-            auto restore = PrepareHistoryRestorePublication(std::move(authority), std::move(history), redo);
-            settledRestoreRefused = !restore.has_value();
-        });
+    std::thread worker([&]
+    {
+        auto restore          = PrepareHistoryRestorePublication(std::move(authority), std::move(history), redo);
+        settledRestoreRefused = ! restore.has_value();
+    });
     worker.join();
     ExpectCase(settledRestoreRefused, group, "settled-history-factory-refuses-detached-finish");
     if (redo)
         fixture.session.Redo();
     else
         fixture.session.Undo();
-    ExpectCase(!fixture.session.PendingBrushOpening().has_value(), group,
-               "first-history-command-cancels-finish-marker");
+    ExpectCase(! fixture.session.PendingBrushOpening().has_value(), group, "first-history-command-cancels-finish-marker");
     ExpectCase(SameCommittedOwner(fixture.session, original), group, "first-command-preserves-older-history-and-root");
     const OwnerState cancelled(fixture.session);
-    ExpectCase(!fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), group,
-               "cancelled-publication-not-current");
-    ExpectCase(!fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication()), group,
-               "cancelled-publication-cannot-reappear");
+    ExpectCase(! fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), group, "cancelled-publication-not-current");
+    ExpectCase(! fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication()), group, "cancelled-publication-cannot-reappear");
     ExpectCase(SameOwner(fixture.session, cancelled), group, "refused-publication-preserves-history-and-generation");
-    ExpectCase(ActiveBgra(fixture.session, kSourceBgra) && AllBgra(fixture.source, kSourceBgra), group,
-               "every-owner-and-source-pixel-remains-original");
+    ExpectCase(ActiveBgra(fixture.session, kSourceBgra) && AllBgra(fixture.source, kSourceBgra), group, "every-owner-and-source-pixel-remains-original");
     if (redo)
         fixture.session.Redo();
     else
         fixture.session.Undo();
-    ExpectCase(fixture.session.ActiveLayer() != nullptr &&
-                   fixture.session.ActiveLayer()->opacity == (redo ? 0.25 : 1.0),
-               group, "next-history-command-moves-original-older-entry");
+    ExpectCase(fixture.session.ActiveLayer() != nullptr && fixture.session.ActiveLayer()->opacity == (redo ? 0.25 : 1.0),
+               group,
+               "next-history-command-moves-original-older-entry");
     ExpectCase(ActiveBgra(fixture.session, kSourceBgra), group, "older-history-move-preserves-literal-image-pixels");
 }
 
@@ -741,7 +703,7 @@ void ReferenceHistoryCancelsDetachedFinishFirst(bool redo)
 
 int RunStrokeFinishPublicationTests()
 {
-    gFailures = 0;
+    gFailures   = 0;
     gAssertions = 0;
     SuccessfulPublication(false);
     SuccessfulPublication(true);

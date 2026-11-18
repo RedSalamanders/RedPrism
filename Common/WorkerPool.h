@@ -11,18 +11,18 @@
 
 namespace WorkerResources
 {
-using UniquePool = wil::unique_any<PTP_POOL, decltype(&CloseThreadpool), CloseThreadpool>;
-using UniqueCleanupGroup =
-    wil::unique_any<PTP_CLEANUP_GROUP, decltype(&CloseThreadpoolCleanupGroup), CloseThreadpoolCleanupGroup>;
-using UniqueWork = wil::unique_any<PTP_WORK, decltype(&CloseThreadpoolWork), CloseThreadpoolWork>;
+using UniquePool         = wil::unique_any<PTP_POOL, decltype(&CloseThreadpool), CloseThreadpool>;
+using UniqueCleanupGroup = wil::unique_any<PTP_CLEANUP_GROUP, decltype(&CloseThreadpoolCleanupGroup), CloseThreadpoolCleanupGroup>;
+using UniqueWork         = wil::unique_any<PTP_WORK, decltype(&CloseThreadpoolWork), CloseThreadpoolWork>;
 
 // The pinned WIL guard has no concurrency SAL annotations. Describe its real acquire/release effects here,
 // retaining WIL ownership. The analysis gate also compiles a deliberate unguarded access as a negative control.
 class ExclusiveLock final
 {
-  public:
+public:
     _Acquires_exclusive_lock_(lock) _Post_same_lock_(_lock, lock) explicit ExclusiveLock(SRWLOCK& lock) noexcept
-        : _lock(lock), _owner(wil::AcquireSRWLockExclusive(&lock))
+        : _lock(lock),
+          _owner(wil::AcquireSRWLockExclusive(&lock))
     {
         _Analysis_assume_lock_acquired_(lock);
     }
@@ -31,10 +31,10 @@ class ExclusiveLock final
         _owner.reset();
         _Analysis_assume_lock_released_(_lock);
     }
-    ExclusiveLock(const ExclusiveLock&) = delete;
+    ExclusiveLock(const ExclusiveLock&)            = delete;
     ExclusiveLock& operator=(const ExclusiveLock&) = delete;
 
-  private:
+private:
     SRWLOCK& _lock;
     wil::rwlock_release_exclusive_scope_exit _owner;
 };
@@ -53,20 +53,19 @@ enum class WorkPriority : unsigned int
 // called from a callback. Callbacks borrow the owner's context until Close returns and carry no queued payload.
 class WorkerPool final : public Executor
 {
-  public:
+public:
     using Dispatch = void (*)(void*, WorkPriority, CancelToken) noexcept;
     struct CloseWork final
     {
-        void (*owner)(void*) noexcept = nullptr;
+        void (*owner)(void*) noexcept  = nullptr;
         void (*worker)(void*) noexcept = nullptr;
-        void* context = nullptr;
+        void* context                  = nullptr;
     };
     WorkerPool() = default;
     ~WorkerPool() override;
-    WorkerPool(const WorkerPool&) = delete;
+    WorkerPool(const WorkerPool&)            = delete;
     WorkerPool& operator=(const WorkerPool&) = delete;
-    [[nodiscard]] HRESULT Initialize(unsigned int threads = 0, Dispatch dispatch = nullptr, void* context = nullptr,
-                                     bool ownerWake = false) noexcept;
+    [[nodiscard]] HRESULT Initialize(unsigned int threads = 0, Dispatch dispatch = nullptr, void* context = nullptr, bool ownerWake = false) noexcept;
     [[nodiscard]] bool Wake(WorkPriority priority) noexcept;
     void RequestStop() noexcept;
     // Join all producers, run owner cleanup, then retire its CPU owners on a preallocated MTA callback.
@@ -82,12 +81,12 @@ class WorkerPool final : public Executor
     }
     void RunParticipants(void* context, Participant run, unsigned int participants) noexcept override;
 
-  private:
+private:
     struct Lane final
     {
-        WorkerPool* owner = nullptr;
+        WorkerPool* owner     = nullptr;
         WorkPriority priority = WorkPriority::Normal;
-        PTP_WORK work = nullptr; // owned by _cleanup; not a queued payload
+        PTP_WORK work         = nullptr; // owned by _cleanup; not a queued payload
     };
     static void OwnerWakeDispatch(void*, WorkerResources::WakeLane, std::uint32_t) noexcept;
     static void CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WORK) noexcept;
@@ -96,17 +95,17 @@ class WorkerPool final : public Executor
     void FinishParallel() noexcept;
 
     WorkerResources::WorkerWake _ownerBroker;
-    DWORD _ownerThread = 0;
-    bool _ownerWake = false; // immutable after Initialize; opt-in owner endpoint
-    SRWLOCK _lock = SRWLOCK_INIT;
-    CONDITION_VARIABLE _parallelDone = CONDITION_VARIABLE_INIT;
-    _Guarded_by_(_lock) bool _closing = false;
+    DWORD _ownerThread                             = 0;
+    bool _ownerWake                                = false; // immutable after Initialize; opt-in owner endpoint
+    SRWLOCK _lock                                  = SRWLOCK_INIT;
+    CONDITION_VARIABLE _parallelDone               = CONDITION_VARIABLE_INIT;
+    _Guarded_by_(_lock) bool _closing              = false;
     _Guarded_by_(_lock) std::size_t _parallelCalls = 0;
     _Guarded_by_(_lock) std::array<unsigned int, 3> _pending {};
     // Initialized before publication; retained through all callbacks and external parallel calls.
     unsigned int _threadCount = 1;
-    Dispatch _dispatch = nullptr;
-    void* _context = nullptr;
+    Dispatch _dispatch        = nullptr;
+    void* _context            = nullptr;
     std::stop_source _stop;
     wil::unique_mta_usage_cookie _mta;
     WorkerResources::UniquePool _pool;
@@ -121,17 +120,17 @@ class WorkerPool final : public Executor
 // Callbacks only publish events; they must not block or call Remove/Close. One-shot waits rearm explicitly.
 class WaitPool final
 {
-  public:
-    using Callback = void (*)(void*) noexcept;
+public:
+    using Callback                         = void (*)(void*) noexcept;
     static constexpr std::size_t kCapacity = 32;
     struct Ticket final
     {
-        std::size_t slot = kCapacity;
+        std::size_t slot         = kCapacity;
         std::uint64_t generation = 0;
     };
     WaitPool() = default;
     ~WaitPool();
-    WaitPool(const WaitPool&) = delete;
+    WaitPool(const WaitPool&)            = delete;
     WaitPool& operator=(const WaitPool&) = delete;
     _No_competing_thread_ [[nodiscard]] HRESULT Initialize() noexcept;
     [[nodiscard]] HRESULT Add(HANDLE event, Callback callback, void* context, Ticket& ticket) noexcept;
@@ -140,21 +139,21 @@ class WaitPool final
     void Remove(Ticket ticket) noexcept;
     void Close() noexcept;
 
-  private:
+private:
     struct Slot final
     {
-        WaitPool* owner = nullptr;
-        PTP_WAIT wait = nullptr; // owned by _cleanup
-        HANDLE event = nullptr;
-        Callback callback = nullptr;
-        void* context = nullptr;
+        WaitPool* owner          = nullptr;
+        PTP_WAIT wait            = nullptr; // owned by _cleanup
+        HANDLE event             = nullptr;
+        Callback callback        = nullptr;
+        void* context            = nullptr;
         std::uint64_t generation = 0;
-        bool retiring = false;
+        bool retiring            = false;
     };
     static void CALLBACK WaitCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WAIT, TP_WAIT_RESULT) noexcept;
     _Requires_lock_held_(_lock) [[nodiscard]] bool Matches(Ticket ticket) const noexcept;
 
-    SRWLOCK _lock = SRWLOCK_INIT;
+    SRWLOCK _lock                     = SRWLOCK_INIT;
     _Guarded_by_(_lock) bool _closing = false;
     _Guarded_by_(_lock) std::array<Slot, kCapacity> _slots {};
     wil::unique_mta_usage_cookie _mta;

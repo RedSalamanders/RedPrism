@@ -20,7 +20,7 @@
 
 namespace
 {
-constexpr int kSide = 16;
+constexpr int kSide     = 16;
 constexpr DWORD kWaitMs = 10000;
 constexpr BrushSettings kSettings{6, .8, 0, 0, 0, 1};
 constexpr Vec2 kDown{7.25, 7.25}, kMove{8.25, 7.25}, kUp{9.25, 7.25};
@@ -35,8 +35,7 @@ enum class Geometry : unsigned
     Masked
 };
 constexpr std::array<const char*, 7> kNames{"translated", "scaled", "rotated", "sparse", "blank", "selected", "masked"};
-constexpr std::array<std::array<std::uint8_t, 4>, 4> kColors{
-    {{0, 0, 255, 255}, {0, 255, 0, 255}, {255, 0, 0, 255}, {0, 255, 255, 255}}};
+constexpr std::array<std::array<std::uint8_t, 4>, 4> kColors{{{0, 0, 255, 255}, {0, 255, 0, 255}, {255, 0, 0, 255}, {0, 255, 255, 255}}};
 
 Raster LiteralSource(Geometry geometry)
 {
@@ -50,9 +49,9 @@ Raster LiteralSource(Geometry geometry)
                     continue;
                 const int ix = geometry == Geometry::Scaled ? dx / 2 : geometry == Geometry::Rotated ? 7 - dx : dx;
                 const int iy = geometry == Geometry::Scaled ? dy / 2 : geometry == Geometry::Rotated ? 7 - dy : dy;
-                auto* pixel = pixels.data() + (y * kSide + x) * 4;
-                std::copy(kColors[static_cast<std::size_t>((iy / 4) * 2 + ix / 4)].begin(),
-                          kColors[static_cast<std::size_t>((iy / 4) * 2 + ix / 4)].end(), pixel);
+                auto* pixel  = pixels.data() + (y * kSide + x) * 4;
+                std::copy(
+                    kColors[static_cast<std::size_t>((iy / 4) * 2 + ix / 4)].begin(), kColors[static_cast<std::size_t>((iy / 4) * 2 + ix / 4)].end(), pixel);
                 if (geometry == Geometry::Sparse && ix == 2 && iy == 3)
                     std::fill_n(pixel, 4, std::uint8_t{255});
             }
@@ -71,13 +70,13 @@ Raster MaskDisplay(const Raster& source, Geometry geometry)
 CanvasDocument Scene(Geometry geometry, Guid& active)
 {
     DocumentFixture fixture;
-    fixture.id = Guid::Generate();
+    fixture.id    = Guid::Generate();
     fixture.width = fixture.height = kSide;
-    auto layer = ImageLayer::Blank(L"Placed live Warp target", {8, 8});
-    layer.transform.origin = {4, 4};
-    layer.transform.size = geometry == Geometry::Scaled ? Vec2{16, 16} : Vec2{8, 8};
-    layer.transform.rotation = geometry == Geometry::Rotated ? 180 : 0;
-    layer.transform.sampling = LayerSampling::Nearest;
+    auto layer                     = ImageLayer::Blank(L"Placed live Warp target", {8, 8});
+    layer.transform.origin         = {4, 4};
+    layer.transform.size           = geometry == Geometry::Scaled ? Vec2{16, 16} : Vec2{8, 8};
+    layer.transform.rotation       = geometry == Geometry::Rotated ? 180 : 0;
+    layer.transform.sampling       = LayerSampling::Nearest;
     if (geometry != Geometry::Blank)
     {
         std::array<std::uint8_t, 8 * 8 * 4> pixels{};
@@ -90,8 +89,7 @@ CanvasDocument Scene(Geometry geometry, Guid& active)
         if (geometry == Geometry::Sparse)
         {
             constexpr std::array<std::uint8_t, 4> white{255, 255, 255, 255};
-            std::vector<RasterTile> tiles{
-                {2, 3, Raster::Make(1, 1, RasterFormat::Bgra8888, white.data(), white.size())}};
+            std::vector<RasterTile> tiles{{2, 3, Raster::Make(1, 1, RasterFormat::Bgra8888, white.data(), white.size())}};
             image = Raster::MakeSparse(8, 8, RasterFormat::Bgra8888, image, 0, 0, std::move(tiles), 0);
         }
         layer.asset = RasterAsset{std::move(image), {}, layer.name};
@@ -101,8 +99,8 @@ CanvasDocument Scene(Geometry geometry, Guid& active)
     if (geometry == Geometry::Masked)
     {
         constexpr std::uint8_t value = 128;
-        const auto mask = Raster::Make(1, 1, RasterFormat::Gray8, &value, 1);
-        layer.mask = LayerMask{RasterAsset{mask, mask, L"Uniform 128 mask"}, true, {}, true};
+        const auto mask              = Raster::Make(1, 1, RasterFormat::Gray8, &value, 1);
+        layer.mask                   = LayerMask{RasterAsset{mask, mask, L"Uniform 128 mask"}, true, {}, true};
     }
     active = layer.id;
     fixture.layers.push_back(std::move(layer));
@@ -116,7 +114,7 @@ std::optional<BrushStroke::Commit> Reference(const ImageLayer& original, Geometr
     warp.Append(kDown);
     warp.Append(kMove);
     warp.Append(kUp);
-    auto settings = kSettings;
+    auto settings     = kSettings;
     settings.diameter = 10;
     settings.hardness = settings.opacity = 1;
     BrushStroke brush(original, false, settings, kSide, kSide, nullptr);
@@ -130,15 +128,14 @@ std::optional<BrushStroke::Commit> Reference(const ImageLayer& original, Geometr
     }
     brush.SetSample(warp.Image(), 0, 0, true);
     for (const auto point : warp.Points())
-        if (!brush.Append(point))
+        if (! brush.Append(point))
             return {};
     return brush.Flush() ? brush.PaintSnapshot() : std::nullopt;
 }
 bool SamePixels(const Raster& actual, const Raster& expected, int tolerance) noexcept
 {
-    if (!actual.HasStorage() || !expected.HasStorage() || actual.Format() != RasterFormat::Bgra8888 ||
-        expected.Format() != RasterFormat::Bgra8888 || actual.Width() != expected.Width() ||
-        actual.Height() != expected.Height() || actual.Width() > 32 || actual.Height() > 32)
+    if (! actual.HasStorage() || ! expected.HasStorage() || actual.Format() != RasterFormat::Bgra8888 || expected.Format() != RasterFormat::Bgra8888 ||
+        actual.Width() != expected.Width() || actual.Height() != expected.Height() || actual.Width() > 32 || actual.Height() > 32)
         return false;
     std::array<std::uint8_t, 32 * 4> a{}, b{};
     const int stride = actual.Width() * 4;
@@ -173,8 +170,8 @@ Raster LiteralFinalDisplay(const BrushStroke::Commit& reference, Geometry geomet
             if (u < 0 || u >= 1 || v < 0 || v >= 1)
                 continue;
             auto* pixel = pixels.data() + (y * kSide + x) * 4;
-            reference.image.ReadRegion(static_cast<int>(std::floor(u * reference.image.Width())),
-                                       static_cast<int>(std::floor(v * reference.image.Height())), 1, 1, pixel, 4, 0);
+            reference.image.ReadRegion(
+                static_cast<int>(std::floor(u * reference.image.Width())), static_cast<int>(std::floor(v * reference.image.Height())), 1, 1, pixel, 4, 0);
         }
     return MaskDisplay(Raster::Make(kSide, kSide, RasterFormat::Bgra8888, pixels.data(), pixels.size()), geometry);
 }
@@ -183,8 +180,8 @@ bool SameDisplay(RecordedDisplayGraph* graph, const Raster& reference, int toler
     auto* composition = graph ? graph->CompositionForTestOwner() : nullptr;
     std::vector<std::uint8_t> pixels;
     unsigned width = 0, height = 0;
-    if (!reference.HasStorage() || !composition || FAILED(composition->Readback(pixels, width, height)) ||
-        width != kSide || height != kSide || pixels.size() != kSide * kSide * 4)
+    if (! reference.HasStorage() || ! composition || FAILED(composition->Readback(pixels, width, height)) || width != kSide || height != kSide ||
+        pixels.size() != kSide * kSide * 4)
         return false;
     const auto actual = Raster::Make(kSide, kSide, RasterFormat::Bgra8888, pixels.data(), pixels.size());
     return SamePixels(actual, reference, tolerance);
@@ -209,21 +206,19 @@ int Application::RunWarpLiveTargetsSelfTest(HINSTANCE instance) noexcept
         failures += value ? 0u : 1u;
     };
     std::unique_ptr<Application> owner{new (std::nothrow) Application(instance, true, L"", 0, nullptr, nullptr)};
-    if (!owner)
+    if (! owner)
         return fail("owner");
-    owner->_quietUi = true;
-    owner->_prompts = &QuietPrompts();
-    const auto cleanup = wil::scope_exit(
-        [&]() noexcept
-        {
-            owner->CancelHostContinuations();
-            if (SettleJobs(owner->_jobs, kWaitMs, DispatchMessageThunk, owner.get()) != SettleResult::Settled)
-                std::_Exit(5);
-            owner->Shutdown();
-            (void)PumpMessages();
-        });
-    const auto settle = [&]() noexcept
-    { return SettleJobs(owner->_jobs, kWaitMs, DispatchMessageThunk, owner.get()) == SettleResult::Settled; };
+    owner->_quietUi      = true;
+    owner->_prompts      = &QuietPrompts();
+    const auto cleanup   = wil::scope_exit([&]() noexcept
+    {
+        owner->CancelHostContinuations();
+        if (SettleJobs(owner->_jobs, kWaitMs, DispatchMessageThunk, owner.get()) != SettleResult::Settled)
+            std::_Exit(5);
+        owner->Shutdown();
+        (void)PumpMessages();
+    });
+    const auto settle    = [&]() noexcept { return SettleJobs(owner->_jobs, kWaitMs, DispatchMessageThunk, owner.get()) == SettleResult::Settled; };
     const auto pumpUntil = [&](auto predicate) noexcept
     {
         const auto deadline = GetTickCount64() + kWaitMs;
@@ -243,122 +238,122 @@ int Application::RunWarpLiveTargetsSelfTest(HINSTANCE instance) noexcept
             if (now >= deadline)
                 return false;
             const HANDLE wake = static_cast<HANDLE>(owner->_jobs.WakeHandle());
-            const auto waited = MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
-                                                            MWMO_INPUTAVAILABLE);
+            const auto waited = MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT, MWMO_INPUTAVAILABLE);
             if (waited != WAIT_OBJECT_0 && waited != WAIT_OBJECT_0 + 1)
                 return false;
         }
     };
-    if (FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
-        FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) ||
-        FAILED(owner->InitializeChrome()))
+    if (FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) || FAILED(owner->CreateMainWindow(false)) ||
+        FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
         return fail("initialize");
     owner->BindCompositionDevice();
-    if (!owner->EnableCommittedDisplayForTest(true) || !owner->EnablePreparedLayerRows() ||
-        !owner->_strokeFinishSource.Start() || !owner->_brushEngine.Ready())
+    if (! owner->EnableCommittedDisplayForTest(true) || ! owner->EnablePreparedLayerRows() || ! owner->_strokeFinishSource.Start() ||
+        ! owner->_brushEngine.Ready())
         return fail("sources");
     owner->_asyncWarpLiveEnabled = true;
     for (unsigned index = 0; index < kNames.size(); ++index)
         for (const auto mode : {SmearMode::Liquify, SmearMode::Smudge})
         {
-            const auto geometry = static_cast<Geometry>(index);
-            const char* name = kNames[index];
+            const auto geometry  = static_cast<Geometry>(index);
+            const char* name     = kNames[index];
             const char* modeName = mode == SmearMode::Liquify ? "liquify" : "smudge";
             Guid active{};
-            auto document = Scene(geometry, active);
-            const auto original = document.layers.front();
+            auto document                = Scene(geometry, active);
+            const auto original          = document.layers.front();
             const auto originalSelection = document.selection;
-            const auto reference = Reference(original, geometry, mode);
-            if (!reference)
+            const auto reference         = Reference(original, geometry, mode);
+            if (! reference)
                 return fail("independent-scalar-reference");
             const auto initial = MaskDisplay(LiteralSource(geometry), geometry);
-            const auto final = LiteralFinalDisplay(*reference, geometry);
-            if (!initial.HasStorage() || !final.HasStorage())
+            const auto final   = LiteralFinalDisplay(*reference, geometry);
+            if (! initial.HasStorage() || ! final.HasStorage())
                 return fail("literal-display-reference");
             owner->ReplaceDocument(std::move(document), active, {});
-            owner->_tool = EditorTool::Smear;
-            owner->_session.smearMode = mode;
+            owner->_tool                  = EditorTool::Smear;
+            owner->_session.smearMode     = mode;
             owner->_session.brushSettings = kSettings;
             owner->_session.history.Reset();
             owner->_session.history.MarkSaved();
-            owner->_viewport.zoom = 1;
-            owner->_viewport.pan = {};
+            owner->_viewport.zoom       = 1;
+            owner->_viewport.pan        = {};
             owner->_viewport.followsFit = false;
             owner->DocumentChanged();
-            if (!settle())
+            if (! settle())
                 return fail("scene-settle");
-            auto gate = std::make_shared<StrokeFinishTestGate>(false);
+            auto gate                    = std::make_shared<StrokeFinishTestGate>(false);
             owner->_strokeFinishTestGate = gate;
-            const auto revision = owner->_session.history.CurrentRevision();
+            const auto revision          = owner->_session.history.CurrentRevision();
             expect(SameDisplay(owner->_acknowledgedCommittedDisplay, initial, 0) &&
-                       (geometry != Geometry::Sparse ||
-                        (original.asset->image.IsSparse() && !original.asset->image.IsMaterialized())),
-                   name, modeName, "literal-initial-placement-and-semantic-mask-exact0");
+                       (geometry != Geometry::Sparse || (original.asset->image.IsSparse() && ! original.asset->image.IsMaterialized())),
+                   name,
+                   modeName,
+                   "literal-initial-placement-and-semantic-mask-exact0");
             DxUi::PointerEvent down{};
-            down.action = DxUi::PointerAction::Down;
+            down.action    = DxUi::PointerAction::Down;
             down.modifiers = MK_LBUTTON;
-            if (!owner->QueueCanvasBrush(down, owner->_viewport.ViewFromDocument(kDown, owner->DocumentSize())) ||
-                !pumpUntil([&]() noexcept { return owner->_session.PendingWarp() != nullptr; }))
+            if (! owner->QueueCanvasBrush(down, owner->_viewport.ViewFromDocument(kDown, owner->DocumentSize())) ||
+                ! pumpUntil([&]() noexcept { return owner->_session.PendingWarp() != nullptr; }))
                 return fail("real-down");
-            const auto ticket = owner->_utilityTicket;
+            const auto ticket  = owner->_utilityTicket;
             const auto ordinal = owner->_activeHostRequest ? owner->_activeHostRequest->ordinal : 0;
-            expect(ticket && ordinal && owner->_session.history.CurrentRevision() == revision &&
-                       owner->_session.history.UndoCount() == 0 &&
+            expect(ticket && ordinal && owner->_session.history.CurrentRevision() == revision && owner->_session.history.UndoCount() == 0 &&
                        SameDisplay(owner->_acknowledgedCommittedDisplay, initial, 0),
-                   name, modeName, "down-primes-placed-source-without-publication-or-dab");
+                   name,
+                   modeName,
+                   "down-primes-placed-source-without-publication-or-dab");
             DxUi::PointerEvent move{};
-            move.action = DxUi::PointerAction::Move;
+            move.action    = DxUi::PointerAction::Move;
             move.modifiers = MK_LBUTTON;
             owner->RecordCanvasBrush(move, owner->_viewport.ViewFromDocument(kMove, owner->DocumentSize()));
-            if (!pumpUntil([&]() noexcept { return gate->samplesAcknowledged.load(std::memory_order_acquire) == 1; }))
+            if (! pumpUntil([&]() noexcept { return gate->samplesAcknowledged.load(std::memory_order_acquire) == 1; }))
                 return fail("real-move");
             WarpStroke preview(LiteralSource(geometry), mode, kSettings);
             preview.Append(kDown);
             preview.Append(kMove);
             const auto expectedPreview = MaskDisplay(preview.Image(), geometry);
-            expect(owner->_utilityTicket == ticket && owner->_activeHostRequest &&
-                       owner->_activeHostRequest->ordinal == ordinal &&
-                       SameDisplay(owner->_acknowledgedStrokePreview, expectedPreview,
-                                   geometry == Geometry::Masked ? 1 : 0) &&
+            expect(owner->_utilityTicket == ticket && owner->_activeHostRequest && owner->_activeHostRequest->ordinal == ordinal &&
+                       SameDisplay(owner->_acknowledgedStrokePreview, expectedPreview, geometry == Geometry::Masked ? 1 : 0) &&
                        owner->_session.history.UndoCount() == 0,
-                   name, modeName, "real-preview-matches-independent-placed-warp-and-mask");
+                   name,
+                   modeName,
+                   "real-preview-matches-independent-placed-warp-and-mask");
             DxUi::PointerEvent up{};
             up.action = DxUi::PointerAction::Up;
             owner->RecordCanvasBrush(up, owner->_viewport.ViewFromDocument(kUp, owner->DocumentSize()));
-            if (!settle())
+            if (! settle())
                 return fail("real-up");
             const auto* layer = owner->_session.ActiveLayer();
-            expect(layer && layer->asset && SamePixels(layer->asset->image, reference->image, 2) &&
-                       layer->transform == reference->transform && layer->mask == original.mask &&
-                       owner->_session.Selection() == originalSelection && owner->_session.history.UndoCount() == 1 &&
+            expect(layer && layer->asset && SamePixels(layer->asset->image, reference->image, 2) && layer->transform == reference->transform &&
+                       layer->mask == original.mask && owner->_session.Selection() == originalSelection && owner->_session.history.UndoCount() == 1 &&
                        SameDisplay(owner->_acknowledgedCommittedDisplay, final, 2),
-                   name, modeName, "final-cpu-and-gpu-match-scalar-selection-and-mask-reference");
-            expect(owner->_canvasBrushReceipt.Read().outcome == HostOutcome::Succeeded &&
-                       owner->_canvasBrushReceipt.Read().error == S_OK && !owner->_utilityTicket &&
-                       !owner->_activeHostRequest && !owner->_canvasBrushInput.Busy() &&
-                       !owner->_session.HasPendingWarp() && owner->_preparedLayerRows &&
-                       owner->_preparedLayerRows->FindVisibleRow(active) &&
-                       gate->retired.load(std::memory_order_acquire) && gate->retiredOffOwner.load(),
-                   name, modeName, "exact-receipt-rows-and-original-worker-retirement");
+                   name,
+                   modeName,
+                   "final-cpu-and-gpu-match-scalar-selection-and-mask-reference");
+            expect(owner->_canvasBrushReceipt.Read().outcome == HostOutcome::Succeeded && owner->_canvasBrushReceipt.Read().error == S_OK &&
+                       ! owner->_utilityTicket && ! owner->_activeHostRequest && ! owner->_canvasBrushInput.Busy() && ! owner->_session.HasPendingWarp() &&
+                       owner->_preparedLayerRows && owner->_preparedLayerRows->FindVisibleRow(active) && gate->retired.load(std::memory_order_acquire) &&
+                       gate->retiredOffOwner.load(),
+                   name,
+                   modeName,
+                   "exact-receipt-rows-and-original-worker-retirement");
             owner->_strokeFinishTestGate.reset();
             owner->OnCommand(ChromeHost::kCommandUndo);
             const bool undone = settle();
-            layer = owner->_session.ActiveLayer();
+            layer             = owner->_session.ActiveLayer();
             expect(undone && layer && layer->asset.has_value() == original.asset.has_value() &&
-                       (!original.asset || layer->asset->image == original.asset->image) &&
-                       layer->transform == original.transform && layer->mask == original.mask &&
-                       owner->_session.Selection() == originalSelection &&
-                       owner->_session.history.CurrentRevision() == revision &&
-                       owner->_session.history.UndoCount() == 0 &&
+                       (! original.asset || layer->asset->image == original.asset->image) && layer->transform == original.transform &&
+                       layer->mask == original.mask && owner->_session.Selection() == originalSelection &&
+                       owner->_session.history.CurrentRevision() == revision && owner->_session.history.UndoCount() == 0 &&
                        SameDisplay(owner->_acknowledgedCommittedDisplay, initial, 0),
-                   name, modeName, "undo-restores-exact-source-placement-selection-and-mask");
+                   name,
+                   modeName,
+                   "undo-restores-exact-source-placement-selection-and-mask");
         }
     if (checks != 84)
     {
         std::printf("FAIL application-warp-live-targets.fixed-count expected=84 actual=%u\n", checks);
         ++failures;
     }
-    std::printf("SUMMARY application-warp-live-targets checks=%u failures=%u scenarios=14 expected=84/14\n", checks,
-                failures);
+    std::printf("SUMMARY application-warp-live-targets checks=%u failures=%u scenarios=14 expected=84/14\n", checks, failures);
     return failures ? 5 : 0;
 }
