@@ -25,6 +25,7 @@
     "Measurements/**",
     "docs/**",
     "Changes/**",
+    "legacy/**",
     ".agents/**",
     ".claude/**",
     ".vscode/**",
