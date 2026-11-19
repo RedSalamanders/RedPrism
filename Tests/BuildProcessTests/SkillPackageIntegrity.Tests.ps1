@@ -203,11 +203,17 @@ if ($linkCreated) {
 }
 # Exercise the actual narrow entrypoint in an isolated checkout-shaped fixture, including its
 # metadata module and read-only changelog prerequisite. Never run its skill examples.
-foreach ($relative in 'validate-skills.ps1','Build/SkillValidation.psm1','Build/SkillPackageIntegrity.psm1','Tools/Test-Changelog.ps1','Tools/Modules/Documentation/Changelog.psm1') {
+foreach ($relative in 'validate-skills.ps1','Build/SkillValidation.psm1','Build/SkillPackageIntegrity.psm1','Tools/Test-Changelog.ps1','.ci/project.json') {
     $destination = Join-Path $run $relative
     [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($destination))
     [IO.File]::Copy((Join-Path $root $relative),$destination)
 }
+# The Tools/Test-Changelog.ps1 engine shim runs the pinned engine from the fixture's own .ci-engine. A first status
+# settles the fresh clone's index here, so the shim's own check cannot change it after the snapshot below.
+$engineClone = & git clone --quiet --no-hardlinks (Join-Path $root '.ci-engine') (Join-Path $run '.ci-engine') 2>&1
+if ($LASTEXITCODE) { throw "Owned engine fixture clone failed: $($engineClone -join ' ')" }
+$null = & git -C (Join-Path $run '.ci-engine') status --porcelain 2>&1
+if ($LASTEXITCODE) { throw 'Owned engine fixture status failed.' }
 Put $skill "---`nname: example-skill`ndescription: `"2026-10-28T09:00:00Z`"`n---`nRead [contract](../../../Specs/contract.md (Owning contract)).`n[owner]:`n  ../../../Specs/contract.md`nRead [contract][owner]."
 Put 'Changes/README.md' '# Changelog fragments'
 Put 'CHANGELOG.md' "# Changes`n`n## Unreleased`n"
