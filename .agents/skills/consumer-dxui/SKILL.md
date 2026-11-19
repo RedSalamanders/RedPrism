@@ -26,9 +26,9 @@ and rollback history. A skill is not a pin manifest or a successful test receipt
   when DxUi `main` is not the lock. It does not edit the lock or fail a valid restore. Yellow means a validated
   newer `main`; red means `main` moved without a successful `ci.yml` run; dark yellow means the pin is ahead,
   diverged, or the lookup failed. The same pin is quiet.
-- Restore into an isolated `.build/dependencies/DxUi/` fingerprint. Restore clones from `Z:\src\DxUi` when that
+- Restore into an isolated `.build/dependencies/DxUi/` fingerprint. Restore clones from the sibling `../DxUi` when that
   checkout already contains the commit, so a library commit made locally is consumable before it is pushed. Do not
-  checkout, reset, or edit `Z:\src\DxUi` from RedPrism restore. The clone is a sparse checkout with Git long paths (no
+  checkout, reset, or edit the sibling `../DxUi` from RedPrism restore. The clone is a sparse checkout with Git long paths (no
   `Measurements/`, `docs/gallery` or `Specs/`; `Build/DxUiRestore.psm1`): read the library's headers and sources in the
   pinned checkout and its specifications in the DxUi repository.
 - Bump the pin only after the library commit is green under DxUi `test.ps1`; then requalify RedPrism with

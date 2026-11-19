@@ -1,4 +1,4 @@
-# RedPrism C++ development guidelines
+# RedPrism development guidance
 
 RedPrism is a Windows-native raster editing application built with Win32, Direct3D 11, DXGI, DirectWrite,
 WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
@@ -19,13 +19,14 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 
 Do not create scratch, caches, evidence, copied checkouts, or other output directories directly at a drive root.
 Use repository-local generated outputs or an existing approved workspace. The only permitted new drive-root
-output name is `<Project>.Perf` (for example `RedPrism.Perf`, `RedSalamander.Perf`, or another project's own
-name), and the user must explicitly authorize the exact path before its first creation or initialization.
-A matching name, environment variable, low disk space, or authorization for another drive/project is not
-authorization. Keep outputs beneath the approved root; do not invent sibling root folders. Preserve any
-runner-specific ownership markers and authorization. Historical cleanup inventories and preserves useful
-evidence/recovery data, checks process use, repairs live junction/worktree references, and verifies preservation
-before removal. Never follow junctions during cleanup or leave compatibility junctions at forbidden old roots.
+output name is `<Project>.Perf`, named after the owning project (for example `RedSalamander.Perf` or
+`RedPrism.Perf`), and the user must explicitly authorize the exact path before its first creation or
+initialization. A matching name, environment variable, low disk space, or authorization for another drive or
+project is not authorization. Keep outputs beneath the approved root; do not invent sibling root folders. Preserve
+runner-specific ownership markers and authorization. Historical cleanup inventories and preserves useful evidence
+and recovery data, checks process use, repairs live junction and worktree references, and verifies preservation
+before removal. Never follow junctions during cleanup or leave compatibility junctions at forbidden old drive-root
+paths.
 
 ## Canonical guidance
 
@@ -47,6 +48,8 @@ preserved failures and interruptions, verified identities/hashes/streams/metadat
 
 ## Skills
 
+Shared skill index: `../RedHome/AGENTS.md`; packages: `../RedHome/.agents/skills/`. If `../RedHome` is missing, clone https://github.com/RedSalamanders/RedHome.git to that path. This repository's guidance and domain specs own product behavior and validation.
+
 | Skill | Use it for |
 | --- | --- |
 | [hlsl-composition](.agents/skills/hlsl-composition/SKILL.md) | Document-space passes, coverage, clipping stacks, the brush compute shader, build-time HLSL |
@@ -61,8 +64,6 @@ Cross-repository C++/WIL, `yyjson`, `d3d11-win32-host`, `localization`, `perform
 | `test-evidence` | In-process tests, goldens, WARP fixtures, harness screenshots, run evidence (was `test-harness`) |
 | `app-settings` | The settings document, its schema, cold recovery, atomic saves, UI-thread live reload (was `settings-store`) |
 | `crash-dumps` | Local minidumps, the pending marker and prompt, the `--crash-probe` gate (was `crash-handling`) |
-
-Shared skill index: `../RedHome/AGENTS.md`; packages: `../RedHome/.agents/skills/`. If `../RedHome` is missing, clone https://github.com/RedSalamanders/RedHome.git to that path. This repository's guidance and domain specs own product behavior and validation.
 
 ## Architecture ownership
 
@@ -107,7 +108,7 @@ Shared skill index: `../RedHome/AGENTS.md`; packages: `../RedHome/.agents/skills
 - Screenshots for specs and docs come from the application harness. Never Computer Use or a desktop screenshot tool.
 - `build.ps1` rejects a running `RedPrism.exe` whose path is the selected output and MUST NOT terminate it.
 - Consume DxUi only as pinned `DxUi.lib` at the API revision in `Dependencies/DxUi.lock.json`. Do not enumerate library sources. Do not reset
-  `Z:\src\DxUi` from restore. Design against the pinned library as it is (see `consumer-dxui` for the facts that
+  the sibling `../DxUi` checkout from restore. Design against the pinned library as it is (see `consumer-dxui` for the facts that
   matter: `Toolbar` has no layout, `Toggle` is a switch, icon-only buttons draw with the icon font).
 - Keep DxUi C++ inside `RedPrism.exe`. If a plugin ABI appears later, it is COM/POD only.
 - Every behavior ships with an independent numeric golden and a documented tolerance, never a screenshot
@@ -123,6 +124,9 @@ regressions need measurement and a spec or WIP justification.
 
 ## Validation before declaring a change complete
 
+These are the checks a complete change answers for. Account for them with `Test-Changes.ps1 -Mode PrePush`
+(scoped testing policy below) and run them in full only where qualification requires it:
+
 ```powershell
 .\validate-skills.ps1
 .\format.ps1 -Check
@@ -133,9 +137,26 @@ regressions need measurement and a spec or WIP justification.
 
 ARM64 builds cross-compile with `build.ps1 -Platform ARM64`; runtime claims need a native ARM64 host.
 
-## Scoped testing policy (2026-10-21)
+Successful default affected runs advance their source and index baseline; explicit partial, failed, mutated or CI-pending runs do not. `CI_PENDING` requires every named candidate check to pass before merge, including when this private account cannot enforce protected checks. Native, manual, platform and performance gates stay in [Specs/Testing/Testing_Validation.md](Specs/Testing/Testing_Validation.md).
 
-Use `Test-Changes.ps1 -Explain` and the affected default while editing. Use explicit Full/PrePush for qualification; this accepted workflow replaces unconditional full-test iteration. Successful default affected runs advance their source/index baseline; explicit partial, failed, mutated or CI-pending runs do not. Reuse only exact successful evidence. CI_PENDING requires all named candidate checks to pass before merge, including when this private account cannot enforce protected checks. Preserve native/manual/platform/performance gates in Specs/Testing/Testing_Validation.md and contextual Scope.Tests.Something.h/.cpp names.
+## Interactive desktop tests
+
+A test that takes real foreground focus, the cursor or the clipboard runs only after the person at the desktop has
+agreed to the time; silence never authorizes one. It warns before and while it runs, targets only windows the test
+owns, and restores the foreground window, keyboard focus and pointer however it ends. Use the repository's
+interactive entry point and desktop lease where it has one. Every other test and every harness capture stays hidden
+and non-activating, and no scoped, CI or partial pass closes a focus-taking gate.
+
+## Scoped testing policy
+
+The user's accepted workflow replaces unconditional full-test iteration. While editing, run `Test-Changes.ps1 -Explain`
+and then the affected default; use `-Mode PrePush` to account for the remaining local and pull-request obligations
+without repeating identical ones, and explicit Full where qualification requires it. A pending CI check is never a
+passed result. Reuse only exact successful evidence for the same source, pin, toolchain, binary and scenario. Native
+test files use contextual `<Component>.Tests.<Subject>.h/.cpp` names, listed in the native file inventory where the
+repository keeps one. Focus-taking work requires agreement to the time, and no scoped pass closes that gate. Build,
+runtime and platform qualification still applies to changed behavior. [Specs/Testing/Testing_Validation.md](Specs/Testing/Testing_Validation.md) and [the test guide](Tests/README.md) own the details.
+
 ## Changes workflow
 
 Record each change as one dated Markdown fragment under `Changes/`; follow [Changes/README.md](Changes/README.md)
@@ -143,7 +164,8 @@ and [Specs/Core/Core_Changes.md](Specs/Core/Core_Changes.md). Do not hand-edit g
 Keep the fragment in the change: never fold it in a feature change and never edit `CHANGELOG.md`. Fragments are
 folded on `main` after merge by `Tools/Submit-ChangelogFold.ps1`, which opens a fold pull request of its own. Run
 `Tools/Test-Changelog.ps1` while editing; PrePush and CI run it with `-Base`, which refuses any `CHANGELOG.md` change
-that is not an exact fold of fragments already on `main`. Validation is read-only.
+that is not an exact fold of fragments already on `main` or, where the repository releases through
+`Tools/Release-Changelog.ps1`, the exact generated release transition. Validation is read-only.
 
 ## Shared native build policy (2026-10-28)
 
@@ -156,4 +178,4 @@ terminal launch links and short dependency folders with full identity checking.
 
 ## Unified CI policy
 
-Use [Specs/Build/Build_UnifiedCI.md](Specs/Build/Build_UnifiedCI.md) for hosted CI. PRs run compiler-free checks and formatting feedback. Main native qualification starts after five continuous quiet minutes; both native Release test branches must pass before either production Release/ZIP branch starts. Scheduled dependency/security/status checks remain compiler-free. Formatting commits, extended qualification and ZIP/winget publication are explicit manual actions. PR checks do not satisfy native acceptance or waive applicable local scoped tests. Shared-engine pins in .ci/project.json and workflow callers must agree. Preserve dependency pins, native toolchain, evidence and desktop ownership contracts.
+Use [Specs/Build/Build_UnifiedCI.md](Specs/Build/Build_UnifiedCI.md) for hosted CI. PRs run compiler-free checks and formatting feedback. Main native qualification starts after five continuous quiet minutes; both native Release test branches must pass before either production Release/ZIP branch starts. Scheduled dependency/security/status checks remain compiler-free. Formatting commits, extended qualification and any ZIP or winget publication are explicit manual actions. PR checks do not satisfy native acceptance or waive applicable local scoped tests. Shared-engine pins in .ci/project.json and workflow callers must agree. Preserve dependency pins, native toolchain, evidence and desktop ownership contracts.

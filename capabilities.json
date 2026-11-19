@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "product": "RedPrism",
+  "status": "in development",
+  "supported": [
+    "layered raster editing with folders, masks, clipping masks and blend modes",
+    "fifteen-tool rail from Move to Zoom",
+    "Move tool and Free Transform with snapping and distortion",
+    "marquee, lasso and magic wand selections",
+    "brush and eraser strokes",
+    "spot healing, clone stamp, smear, gradient and shape tools",
+    "color adjustments, filters and live adjustment layers",
+    "content-aware fill",
+    "crop, canvas size and image size",
+    "undo/redo and clipboard cut, copy, copy merged and paste",
+    ".prism ZIP and exploded projects, versions 1-7",
+    "PNG, JPEG, TIFF and HEIC import through WIC",
+    "PNG and JPEG export",
+    "background open, save and export with progress",
+    "searchable Command List with shortcut overrides",
+    "live-reloaded JSON settings",
+    "local crash minidumps, never uploaded",
+    "high contrast and UI Automation chrome",
+    "portable unsigned x64 and ARM64 ZIP",
+    "optional RedMonitor diagnostics"
+  ],
+  "pending": [
+    "P1 responsive editor milestone (paused)",
+    "Image Size 2 ms apply target",
+    "native ARM64 runtime qualification",
+    "RedMonitor interactive and paired-performance gates",
+    "DX-2 menu hover-timer product acceptance",
+    "merge-review findings Q1-Q15",
+    "Winget, code signing and installer",
+    "translated chrome",
+    "GPU acceleration, RAW and high bit depth"
+  ]
+}
