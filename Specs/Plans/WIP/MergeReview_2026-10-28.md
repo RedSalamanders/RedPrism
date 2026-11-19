@@ -414,7 +414,7 @@ Record these in the owning P1 plans when P1 resumes.
     - they contain harness `std::_Exit(5)` calls (`ApplicationFiles.cpp` ×3, `ApplicationProjectOpenJobs.cpp` ×1).
   - **Proposal**: build `RedPrismCore.lib` + `RedPrism.exe` + `RedPrism.Harness.exe`. Use one
     `ApplicationTestAccess` friend and one injected `ApplicationTestHooks` instead of 34 gates. This touches
-    `test.ps1`, `package.ps1`, CI and the test-harness skill (Q3).
+    `test.ps1`, `package.ps1`, CI and the shared `test-evidence` skill (Q3).
 - [ ] **AR-2** · Dormant P1 code in the shipping image, about 12–14k lines:
   - `ApplicationStrokeFinishJobs.cpp` (2,154) and Warp/StrokeSample/StrokeFinish work (about 2.9k);
   - committed/pending display and final publication (about 4.7k);
@@ -616,7 +616,7 @@ Record these in the owning P1 plans when P1 resumes.
 - **Q2 — Dormant P1 code.** Keep the ~12–14k dormant lines in `RedPrism.exe`, compile them into the harness only
   until activation, or move them to a branch? P1 is HOLD; you said you would restart it from this `main`.
 - **Q3 — Harness split (AR-1).** May the build produce a separate harness executable? This changes `test.ps1`,
-  `package.ps1`, CI and the test-harness skill.
+  `package.ps1`, CI and the shared `test-evidence` skill.
 - **Q4 — CI.** Hosted CI has now been refused for ten merges (PRs #13–#22). Will billing be restored before
   production? Or should AGENTS.md formally adopt "local Full matrix authorizes merge", with the required local
   evidence named? Either way, CI-9 must be fixed first, because today a local green can be produced without a

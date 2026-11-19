@@ -49,15 +49,18 @@ preserved failures and interruptions, verified identities/hashes/streams/metadat
 
 | Skill | Use it for |
 | --- | --- |
-| [build-redprism](.agents/skills/build-redprism/SKILL.md) | `build.ps1`, `test.ps1`, `package.ps1`, configurations, outputs |
-| [test-harness](.agents/skills/test-harness/SKILL.md) | In-process tests, goldens, WARP fixtures, harness screenshots |
 | [hlsl-composition](.agents/skills/hlsl-composition/SKILL.md) | Document-space passes, coverage, clipping stacks, the brush compute shader, build-time HLSL |
 | [numeric-goldens](.agents/skills/numeric-goldens/SKILL.md) | Independent numeric expectations, fixture formulas and documented tolerances |
-| [settings-store](.agents/skills/settings-store/SKILL.md) | The settings document, its schema, cold recovery, atomic saves, UI-thread live reload |
-| [crash-handling](.agents/skills/crash-handling/SKILL.md) | Local minidumps, the pending marker and prompt, the `--crash-probe` gate |
 | [consumer-dxui](.agents/skills/consumer-dxui/SKILL.md) | Exact DxUi pin, pinned-library facts, pin bumps |
 
-Cross-repository C++/WIL, `yyjson`, `d3d11-win32-host`, `localization`, `performance-resources`, and `spec-workflow` skills live in the sibling `RedHome` repository.
+Cross-repository C++/WIL, `yyjson`, `d3d11-win32-host`, `localization`, `performance-resources`, and `spec-workflow` skills live in the sibling `RedHome` repository. So do the shared skills that replaced four local ones, each with RedPrism's facts in its `references/repository-facts.md`:
+
+| Shared skill | Use it for |
+| --- | --- |
+| `native-build` | `build.ps1`, `test.ps1`, `package.ps1`, configurations, outputs (was `build-redprism`) |
+| `test-evidence` | In-process tests, goldens, WARP fixtures, harness screenshots, run evidence (was `test-harness`) |
+| `app-settings` | The settings document, its schema, cold recovery, atomic saves, UI-thread live reload (was `settings-store`) |
+| `crash-dumps` | Local minidumps, the pending marker and prompt, the `--crash-probe` gate (was `crash-handling`) |
 
 Shared skill index: `../RedHome/AGENTS.md`; packages: `../RedHome/.agents/skills/`. If `../RedHome` is missing, clone https://github.com/RedSalamanders/RedHome.git to that path. This repository's guidance and domain specs own product behavior and validation.
 
