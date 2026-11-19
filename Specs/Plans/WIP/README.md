@@ -87,6 +87,8 @@ Its deferred rows RF-1003, RF-1004 and RF-1115 belong to `UiNeverBlocks_2026-09-
 
 - **ACTIVE**: [Explicit state machines and lifetime safety](ExplicitStateMachines_2026-11-10.md) — Plan only; code implementation has not started. Internal value-type state machines (`ExclusiveSessionLease`, `WindowShutdownStateMachine`, GPU slot/stream phases, `ScopedTesting`/`TestRunEvidence` locks) with zero `.prism` or `DxUi` ABI changes. Owning specs: `Core_Architecture`, `Core_PerformanceAndResources`, `Document_Tools`, `Rendering_Composition`, `UI_Windowing`, `Testing_Validation`, `Testing_RunEvidence`.
 
+- **ACTIVE**: [Code conventions convergence](CodeConventionsConvergence_2026-11-19.md) — RedHome CV-6-08: one pull request per register row (device loss, occlusion, JSON5 reading, settings watcher, replace sequence, settings file names, satellite layout, resource string helpers), after the 155-line reformat. Owning specs: `UI_Windowing`, `Core_Settings`, `Core_Architecture`, `Core_PerformanceAndResources`.
+
 - **RETIRED**: [RedPrism Adversarial Review](AdversarialReview_2026-10-21.md) — as a work queue. Snapshot `97dd25b`, 16 October 2026. Not re-triaged as a patch list. Keep the historical findings. Do not implement from its line numbers. Owning specs: `Core_Architecture`, `Core_PerformanceAndResources`, `Testing_Validation`.
 
 On completion of a plan, merge durable requirements into the owning domain spec, move the plan to
