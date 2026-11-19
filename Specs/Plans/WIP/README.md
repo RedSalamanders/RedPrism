@@ -6,7 +6,7 @@ Use `ACTIVE` for executable work, `HOLD` for paused work, `DECISION` when produc
 
 P1 and every child in the HOLD rows are paused since 21 October 2026. Resume only from [`UiNeverBlocks_2026-09-22.md`](UiNeverBlocks_2026-09-22.md). The October checkpoint narrative that used to open this file lives in that plan. `P1MainIntegration_2026-10-21/*.json` is evidence referenced from that plan and from [`P1MainIntegration_2026-10-21.md`](../../TestRuns/P1MainIntegration_2026-10-21.md). It is not a plan.
 
-Re-checked against `main` `e79a83a` on 1 November 2026. `package.ps1` calls `Get-DxUiSourcePath`. `.github/workflows/ci.yml` triggers `push` to `main`. The busy string, the Inverse and Wand admission ceilings, and the format-7 writer are still the code. Correction notes are in the MergeReview, RedTeam, and DeliveryReview files. Line numbers in [`AdversarialReview.md`](AdversarialReview.md) are the 16 October snapshot.
+Re-checked against `main` `e79a83a` on 1 November 2026. `package.ps1` calls `Get-DxUiSourcePath`. `.github/workflows/ci.yml` triggers `push` to `main`. The busy string, the Inverse and Wand admission ceilings, and the format-7 writer are still the code. Correction notes are in the MergeReview, RedTeam, and DeliveryReview files. Line numbers in [`AdversarialReview_2026-10-21.md`](AdversarialReview_2026-10-21.md) are the 16 October snapshot.
 
 The Windows DirectX port master program is historical:
 [`WindowsDirectXPort_2026-09-20.md`](../Done/WindowsDirectXPort_2026-09-20.md). The C0–C7 review and the DxUi editor-control adoption are
@@ -57,7 +57,7 @@ Its deferred rows RF-1003, RF-1004 and RF-1115 belong to `UiNeverBlocks_2026-09-
 | [`Msvc1452ReleaseOptimization_2026-10-23.md`](Msvc1452ReleaseOptimization_2026-10-23.md) | ACTIVE closeout. Local six-build and three Full runs are recorded. Size comparison and the fold remain | `Build_Toolchain` | MSVC 14.52 and Release optimization measurements |
 | [`RedMonitor_Adoption_2026-10-23.md`](RedMonitor_Adoption_2026-10-23.md) | ACTIVE. The adapter is in. Native ARM64 runtime, interactive, and paired-performance gates remain | `Core_RedMonitorIntegration` | Optional diagnostic client. Those gates are shared, not a second feature |
 | [Explicit state machines and lifetime safety](ExplicitStateMachines_2026-11-10.md) | ACTIVE. Plan only; code implementation has not started | `Core_Architecture`, `Core_PerformanceAndResources`, `Document_Tools`, `Rendering_Composition`, `UI_Windowing`, `Testing_Validation`, `Testing_RunEvidence` | Internal value-type state machines (`ExclusiveSessionLease`, `WindowShutdownStateMachine`, GPU slot/stream phases, `ScopedTesting`/`TestRunEvidence` locks) with zero `.prism` or `DxUi` ABI changes |
-| [`AdversarialReview.md`](AdversarialReview.md) | RETIRED as a work queue. Snapshot `97dd25b`, 16 October 2026. Not re-triaged as a patch list | `Core_Architecture`, `Core_PerformanceAndResources`, `Testing_Validation` | Keep the historical findings. Do not implement from its line numbers |
+| [`AdversarialReview_2026-10-21.md`](AdversarialReview_2026-10-21.md) | RETIRED as a work queue. Snapshot `97dd25b`, 16 October 2026. Not re-triaged as a patch list | `Core_Architecture`, `Core_PerformanceAndResources`, `Testing_Validation` | Keep the historical findings. Do not implement from its line numbers |
 
 On completion of a plan, merge durable requirements into the owning domain spec, move the plan to
 `Specs/Plans/Done/`, and remove its row here. Child phase plans spawned from a parent must be

@@ -49,7 +49,7 @@
     activation.
   - [`NativeBuildPolicyCoherence_2026-10-28.md`](NativeBuildPolicyCoherence_2026-10-28.md) (ACTIVE) owns PR #19's
     remaining gates. CI-8, CI-9, MR-24 and AR-12 belong to its follow-up.
-  - [`AdversarialReview.md`](AdversarialReview.md) is the older static review at `97dd25b`. This file does not
+  - [`AdversarialReview_2026-10-21.md`](AdversarialReview_2026-10-21.md) is the older static review at `97dd25b`. This file does not
     re-triage it.
 - **Line anchors**: `path:line` references are to `b6ec336`. The second pass re-anchored every row. PR #19 moved
   lines but changed no reviewed behavior.
