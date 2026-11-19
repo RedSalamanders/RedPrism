@@ -20,9 +20,9 @@ struct HistoryResidencyTestGate final
 {
     static constexpr UINT kMessage = WM_APP + 0x5c1;
     wil::unique_handle release;
-    bool hold = true;
-    bool throwCaptureFailure = false;
-    bool throwPrepareFailure = false;
+    bool hold                      = true;
+    bool throwCaptureFailure       = false;
+    bool throwPrepareFailure       = false;
     std::uint64_t reservationBytes = 0;
     std::atomic<unsigned int> captures{0}, preparations{0}, refreshes{0};
     std::atomic<bool> reservationHeld{false}, retired{false}, retiredOffOwner{false};

@@ -24,9 +24,9 @@ enum class CodecMemoryStage : std::uint8_t
 };
 struct CodecMemoryObserver final
 {
-    void* context = nullptr; // survives the last COM reference; worker calls only
+    void* context                                                    = nullptr; // survives the last COM reference; worker calls only
     void (*reached)(void*, CodecMemoryStage, std::uint64_t) noexcept = nullptr;
-    std::uint32_t (*fault)(void*, CodecMemoryStage) noexcept = nullptr;
+    std::uint32_t (*fault)(void*, CodecMemoryStage) noexcept         = nullptr;
 };
 
 // Capped private WIC memory stream. One worker owns all cursor/data access, only COM references are concurrent.
@@ -42,12 +42,18 @@ class CodecMemoryStream final : public IStream
     {
     };
 
-  public:
+public:
     static constexpr std::uint64_t kMaximumBytes = 512ull * 1024 * 1024;
-    [[nodiscard]] static HRESULT Create(std::uint64_t capacity, CancelToken cancellation, CodecMemoryStream** output,
+    [[nodiscard]] static HRESULT Create(std::uint64_t capacity,
+                                        CancelToken cancellation,
+                                        CodecMemoryStream** output,
                                         CodecMemoryObserver observer = {}) noexcept;
-    CodecMemoryStream(ConstructionKey, wil::unique_virtualalloc_ptr<std::uint8_t> buffer, std::uint64_t capacity,
-                      std::uint64_t reserved, std::uint32_t pageBytes, CancelToken cancellation,
+    CodecMemoryStream(ConstructionKey,
+                      wil::unique_virtualalloc_ptr<std::uint8_t> buffer,
+                      std::uint64_t capacity,
+                      std::uint64_t reserved,
+                      std::uint32_t pageBytes,
+                      CancelToken cancellation,
                       CodecMemoryObserver observer) noexcept;
     // Borrow only while this COM owner is retained, after the encoder completes. Never escape this view.
     [[nodiscard]] std::span<const std::uint8_t> WrittenBytes() const noexcept;
@@ -74,7 +80,7 @@ class CodecMemoryStream final : public IStream
     HRESULT STDMETHODCALLTYPE Stat(STATSTG*, DWORD) noexcept override;
     HRESULT STDMETHODCALLTYPE Clone(IStream**) noexcept override;
 
-  private:
+private:
     friend struct std::default_delete<CodecMemoryStream>;
     ~CodecMemoryStream() = default;
     [[nodiscard]] HRESULT Ensure(std::uint64_t bytes) noexcept;

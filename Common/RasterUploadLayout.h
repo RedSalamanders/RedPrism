@@ -10,10 +10,17 @@
 // windows, not complete CPU/VRAM admission, device resources, driver overhead, mip generation or publication.
 class RasterUploadLayout final
 {
-  public:
-    [[nodiscard]] static RasterUploadLayout Make(const Raster& source, int x, int y, int width, int height, int scale,
-                                                 unsigned int maximumTextureDimension, std::uint64_t chunkBytes,
-                                                 std::uint64_t maximumRowBytes, bool mipChain) noexcept;
+public:
+    [[nodiscard]] static RasterUploadLayout Make(const Raster& source,
+                                                 int x,
+                                                 int y,
+                                                 int width,
+                                                 int height,
+                                                 int scale,
+                                                 unsigned int maximumTextureDimension,
+                                                 std::uint64_t chunkBytes,
+                                                 std::uint64_t maximumRowBytes,
+                                                 bool mipChain) noexcept;
     [[nodiscard]] bool IsValid() const noexcept
     {
         return _source.HasStorage();
@@ -58,20 +65,20 @@ class RasterUploadLayout final
     // identical for every window; splitting uploads never changes reduction origins or partial edge blocks.
     [[nodiscard]] RasterUploadBlockRegion BaseChunkAt(std::uint64_t index) const noexcept;
 
-  private:
+private:
     Raster _source;
-    int _x = 0;
-    int _y = 0;
-    int _sourceWidth = 0;
-    int _sourceHeight = 0;
-    int _scale = 1;
-    int _outputWidth = 0;
-    int _outputHeight = 0;
-    int _chunkRows = 0;
-    unsigned int _mipLevels = 0;
-    std::uint64_t _textureBytes = 0;
-    std::uint64_t _chunkCount = 0;
+    int _x                        = 0;
+    int _y                        = 0;
+    int _sourceWidth              = 0;
+    int _sourceHeight             = 0;
+    int _scale                    = 1;
+    int _outputWidth              = 0;
+    int _outputHeight             = 0;
+    int _chunkRows                = 0;
+    unsigned int _mipLevels       = 0;
+    std::uint64_t _textureBytes   = 0;
+    std::uint64_t _chunkCount     = 0;
     std::uint64_t _sourceRowBytes = 0;
-    std::uint64_t _sumElements = 0;
-    std::uint64_t _scratchBytes = 0;
+    std::uint64_t _sumElements    = 0;
+    std::uint64_t _scratchBytes   = 0;
 };

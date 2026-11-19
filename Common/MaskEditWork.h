@@ -27,29 +27,41 @@ enum class MaskWorkStage : std::uint8_t
 struct MaskWorkObserver final
 {
     void (*checkpoint)(void*, MaskWorkStage) = nullptr;
-    void* context = nullptr;
+    void* context                            = nullptr;
 };
 
 // Source, selected targets and history are sealed together after complete admission. The worker borrows no session.
 class MaskEditInput final
 {
-  public:
-    MaskEditInput(const MaskEditInput&) = delete;
+public:
+    MaskEditInput(const MaskEditInput&)            = delete;
     MaskEditInput& operator=(const MaskEditInput&) = delete;
     MaskEditInput(MaskEditInput&& other) noexcept
-        : _authority(std::move(other._authority)), _source(std::move(other._source)), _active(other._active),
-          _selected(std::move(other._selected)), _history(std::move(other._history)), _revealing(other._revealing),
+        : _authority(std::move(other._authority)),
+          _source(std::move(other._source)),
+          _active(other._active),
+          _selected(std::move(other._selected)),
+          _history(std::move(other._history)),
+          _revealing(other._revealing),
           _valid(std::exchange(other._valid, false))
     {
     }
     MaskEditInput& operator=(MaskEditInput&&) = delete;
 
-  private:
+private:
     friend class DocumentSession;
-    MaskEditInput(ImageImportAuthority authority, CanvasDocument source, Guid active, std::unordered_set<Guid> selected,
-                  DocumentHistory::StateView history, bool revealing) noexcept
-        : _authority(std::move(authority)), _source(std::move(source)), _active(active), _selected(std::move(selected)),
-          _history(std::move(history)), _revealing(revealing)
+    MaskEditInput(ImageImportAuthority authority,
+                  CanvasDocument source,
+                  Guid active,
+                  std::unordered_set<Guid> selected,
+                  DocumentHistory::StateView history,
+                  bool revealing) noexcept
+        : _authority(std::move(authority)),
+          _source(std::move(source)),
+          _active(active),
+          _selected(std::move(selected)),
+          _history(std::move(history)),
+          _revealing(revealing)
     {
     }
     ImageImportAuthority _authority;
@@ -63,26 +75,26 @@ class MaskEditInput final
 
 class PreparedMaskEdit final
 {
-  public:
-    PreparedMaskEdit(const PreparedMaskEdit&) = delete;
+public:
+    PreparedMaskEdit(const PreparedMaskEdit&)            = delete;
     PreparedMaskEdit& operator=(const PreparedMaskEdit&) = delete;
-    PreparedMaskEdit(PreparedMaskEdit&&) noexcept = default;
-    PreparedMaskEdit& operator=(PreparedMaskEdit&&) = delete;
+    PreparedMaskEdit(PreparedMaskEdit&&) noexcept        = default;
+    PreparedMaskEdit& operator=(PreparedMaskEdit&&)      = delete;
 
-    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
-        DocumentHistory::ResidencyPermit& permit) noexcept
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(DocumentHistory::ResidencyPermit& permit) noexcept
     {
         return _publication.TryAcquireHistoryResidency(permit);
     }
-    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
-                                               DocumentHistory::PrepareObserver observer = {})
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {})
     {
         return _publication.RefreshHistoryResidency(cancellation, observer);
     }
 
-  private:
+private:
     friend class DocumentSession;
-    explicit PreparedMaskEdit(PreparedImageImport publication) noexcept : _publication(std::move(publication)) {}
+    explicit PreparedMaskEdit(PreparedImageImport publication) noexcept : _publication(std::move(publication))
+    {
+    }
     PreparedImageImport _publication;
 };
 

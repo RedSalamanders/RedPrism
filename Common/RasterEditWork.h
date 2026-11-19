@@ -38,11 +38,11 @@ struct RasterEditInput final
 {
     ImageLayer layer;
     std::optional<DocumentSelection> selection;
-    int canvasWidth = 0;
-    int canvasHeight = 0;
+    int canvasWidth         = 0;
+    int canvasHeight        = 0;
     std::int64_t pixelLimit = 0;
-    bool mask = false;
-    RasterEditKind kind = RasterEditKind::Fill;
+    bool mask               = false;
+    RasterEditKind kind     = RasterEditKind::Fill;
     std::array<double, 4> color{};
     // Gradient shades in document coordinates, with captured straight endpoints and opacity. Reverse/style
     // are resolved into these colors at capture; workers never consult a mutable palette.
@@ -63,7 +63,7 @@ struct RasterEditInput final
     // Borrowed only during RunRasterEdit, never retained by its result. Observe completed tile checkpoints;
     // callbacks publish progress/cancellation state and never mutate the input or application objects.
     void (*progress)(void*, std::size_t completed, std::size_t total) noexcept = nullptr;
-    void* progressContext = nullptr;
+    void* progressContext                                                      = nullptr;
     // Opt-in recorded display: build immutable metadata on this admitted worker, and hold the original
     // accounting owner through every stroke/metadata control block. Unknown/current owner refuses work.
     bool prepareDisplay = false;
@@ -86,10 +86,10 @@ struct RasterEditResult final
 // selection geometry. After applying, it owns the retired live layer/selection and history containers.
 class PreparedRasterEdit final
 {
-  public:
-    PreparedRasterEdit(const PreparedRasterEdit&) = delete;
-    PreparedRasterEdit& operator=(const PreparedRasterEdit&) = delete;
-    PreparedRasterEdit(PreparedRasterEdit&&) noexcept = default;
+public:
+    PreparedRasterEdit(const PreparedRasterEdit&)                = delete;
+    PreparedRasterEdit& operator=(const PreparedRasterEdit&)     = delete;
+    PreparedRasterEdit(PreparedRasterEdit&&) noexcept            = default;
     PreparedRasterEdit& operator=(PreparedRasterEdit&&) noexcept = default;
     [[nodiscard]] const ImageLayer& Layer() const noexcept
     {
@@ -106,16 +106,32 @@ class PreparedRasterEdit final
         return _raster.previewCommit;
     }
 
-  private:
+private:
     friend class DocumentSession;
-    friend std::optional<PreparedRasterEdit> PrepareRasterEditPublication(
-        RasterEditKind, bool, const std::optional<CanvasDocument>&, const std::optional<Guid>&, JobToken,
-        DocumentHistory::StateView, RasterEditResult&&, std::wstring, CancelToken, DocumentHistory::PrepareObserver);
-    PreparedRasterEdit(RasterEditKind kind, bool mask, JobToken token, RasterEditResult&& raster,
-                       std::optional<CanvasDocument> document, std::size_t targetIndex,
+    friend std::optional<PreparedRasterEdit> PrepareRasterEditPublication(RasterEditKind,
+                                                                          bool,
+                                                                          const std::optional<CanvasDocument>&,
+                                                                          const std::optional<Guid>&,
+                                                                          JobToken,
+                                                                          DocumentHistory::StateView,
+                                                                          RasterEditResult&&,
+                                                                          std::wstring,
+                                                                          CancelToken,
+                                                                          DocumentHistory::PrepareObserver);
+    PreparedRasterEdit(RasterEditKind kind,
+                       bool mask,
+                       JobToken token,
+                       RasterEditResult&& raster,
+                       std::optional<CanvasDocument> document,
+                       std::size_t targetIndex,
                        DocumentHistory::Publication&& history) noexcept
-        : _kind(kind), _mask(mask), _token(std::move(token)), _raster(std::move(raster)),
-          _document(std::move(document)), _targetIndex(targetIndex), _history(std::move(history))
+        : _kind(kind),
+          _mask(mask),
+          _token(std::move(token)),
+          _raster(std::move(raster)),
+          _document(std::move(document)),
+          _targetIndex(targetIndex),
+          _history(std::move(history))
     {
     }
     RasterEditKind _kind;
@@ -134,10 +150,16 @@ class PreparedRasterEdit final
 // source/view/token are captured under whole admission. All after-document construction, history snapshots,
 // growth and trim occur on this calling worker; failed preparation never mutates live session/history state.
 // Refusal leaves `raster` with its caller. Existing source layer records remain value copies until H2.
-[[nodiscard]] std::optional<PreparedRasterEdit> PrepareRasterEditPublication(
-    RasterEditKind kind, bool mask, const std::optional<CanvasDocument>& source, const std::optional<Guid>& active,
-    JobToken token, DocumentHistory::StateView history, RasterEditResult&& raster, std::wstring name,
-    CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+[[nodiscard]] std::optional<PreparedRasterEdit> PrepareRasterEditPublication(RasterEditKind kind,
+                                                                             bool mask,
+                                                                             const std::optional<CanvasDocument>& source,
+                                                                             const std::optional<Guid>& active,
+                                                                             JobToken token,
+                                                                             DocumentHistory::StateView history,
+                                                                             RasterEditResult&& raster,
+                                                                             std::wstring name,
+                                                                             CancelToken cancellation                  = {},
+                                                                             DocumentHistory::PrepareObserver observer = {});
 
 struct RasterEditPreviewResult final
 {
@@ -149,19 +171,17 @@ struct RasterEditPreviewResult final
 };
 
 // Cached complete ownership bound; no raster materialization, allocation or graph traversal.
-[[nodiscard]] std::uint64_t PixelMoveOpeningMemoryBytes(
-    const std::shared_ptr<const PixelMoveOpening>& opening) noexcept;
+[[nodiscard]] std::uint64_t PixelMoveOpeningMemoryBytes(const std::shared_ptr<const PixelMoveOpening>& opening) noexcept;
 
 // Allocation-free planning over borrowed metadata, before owning capture. Zero refuses invalid/overflowing
 // input. Existing published input rasters/selection storage are not charged twice. Include job size separately.
-[[nodiscard]] std::uint64_t RasterEditMemoryBytes(const ImageLayer& layer,
-                                                  const std::optional<DocumentSelection>& selection, int canvasWidth,
-                                                  int canvasHeight, std::int64_t pixelLimit, bool mask) noexcept;
+[[nodiscard]] std::uint64_t RasterEditMemoryBytes(
+    const ImageLayer& layer, const std::optional<DocumentSelection>& selection, int canvasWidth, int canvasHeight, std::int64_t pixelLimit, bool mask) noexcept;
 
 // Adds private lifted pixels, landing/hole indexes and moved immutable outline storage to the raster-edit graph.
 // Requires an image target and selection. Zero refuses invalid or overflowing geometry.
-[[nodiscard]] std::uint64_t PixelMoveMemoryBytes(const ImageLayer& layer, const DocumentSelection& selection,
-                                                 int canvasWidth, int canvasHeight, std::int64_t pixelLimit) noexcept;
+[[nodiscard]] std::uint64_t PixelMoveMemoryBytes(
+    const ImageLayer& layer, const DocumentSelection& selection, int canvasWidth, int canvasHeight, std::int64_t pixelLimit) noexcept;
 
 // Uses only a private CPU raster path. Allocations may throw bad_alloc to the shared runner. Cancellation,
 // failed growing-mask preparation and pixel-limit refusal publish no layer. Caller owns eligibility checks
@@ -195,6 +215,6 @@ struct PixelMoveLiftResult final
 // NoPixels means no selected source region, not transparent source pixels (legacy BrushStroke.swift:681).
 // The caller settles eligibility/prerequisites and admits PixelMoveMemoryBytes plus source/history/
 // display/retirement peaks before capturing input. A supplied memory owner retains opening allocations.
-[[nodiscard]] PixelMoveLiftResult PreparePixelMoveLiftForWork(
-    const RasterEditInput& input, CancelToken cancellation = {},
-    std::shared_ptr<const SharedPublicationMemory> memory = {});
+[[nodiscard]] PixelMoveLiftResult PreparePixelMoveLiftForWork(const RasterEditInput& input,
+                                                              CancelToken cancellation                              = {},
+                                                              std::shared_ptr<const SharedPublicationMemory> memory = {});

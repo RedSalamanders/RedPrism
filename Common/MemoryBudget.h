@@ -5,7 +5,7 @@
 struct MemorySnapshot final
 {
     std::uint64_t availablePhysicalBytes = 0;
-    std::uint64_t availableCommitBytes = 0;
+    std::uint64_t availableCommitBytes   = 0;
 };
 
 // Optional snapshot source for deterministic admission tests. Production samples GlobalMemoryStatusEx on the
@@ -13,23 +13,21 @@ struct MemorySnapshot final
 struct MemorySource final
 {
     bool (*sample)(void*, MemorySnapshot&) noexcept = nullptr;
-    void* context = nullptr;
+    void* context                                   = nullptr;
 };
 
 // UI-owned accounting for declared whole-graph peaks. It never takes partial reservations, waits, queries the OS,
 // or allocates. Workers borrow their already-admitted peak; child stages do not reserve a second time.
 class MemoryBudget final
 {
-  public:
-    MemoryBudget() noexcept = default;
-    MemoryBudget(const MemoryBudget&) = delete;
+public:
+    MemoryBudget() noexcept                      = default;
+    MemoryBudget(const MemoryBudget&)            = delete;
     MemoryBudget& operator=(const MemoryBudget&) = delete;
 
-    [[nodiscard]] MemoryAdmissionResult Reserve(std::uint64_t bytes, MemorySnapshot snapshot,
-                                                std::uint64_t releasingBytes = 0) noexcept
+    [[nodiscard]] MemoryAdmissionResult Reserve(std::uint64_t bytes, MemorySnapshot snapshot, std::uint64_t releasingBytes = 0) noexcept
     {
-        const auto decision = EvaluateMemoryAdmission(bytes, snapshot.availablePhysicalBytes,
-                                                      snapshot.availableCommitBytes, _reserved, releasingBytes);
+        const auto decision = EvaluateMemoryAdmission(bytes, snapshot.availablePhysicalBytes, snapshot.availableCommitBytes, _reserved, releasingBytes);
         if (decision.admission == MemoryAdmission::Ready)
         {
             // The saturating availability test proves this sum is at most the sampled ceiling minus headroom.
@@ -53,6 +51,6 @@ class MemoryBudget final
         return _reserved;
     }
 
-  private:
+private:
     std::uint64_t _reserved = 0;
 };

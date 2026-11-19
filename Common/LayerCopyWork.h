@@ -25,29 +25,37 @@ enum class LayerCopyStage : std::uint8_t
 struct LayerCopyObserver final
 {
     void (*checkpoint)(void*, LayerCopyStage) = nullptr;
-    void* context = nullptr;
+    void* context                             = nullptr;
 };
 
 // Complete source and history captured only after admission. Private clipboard state is neither captured nor written.
 class LayerCopyInput final
 {
-  public:
-    LayerCopyInput(const LayerCopyInput&) = delete;
+public:
+    LayerCopyInput(const LayerCopyInput&)            = delete;
     LayerCopyInput& operator=(const LayerCopyInput&) = delete;
     LayerCopyInput(LayerCopyInput&& other) noexcept
-        : _authority(std::move(other._authority)), _source(std::move(other._source)), _active(other._active),
-          _placement(other._placement), _history(std::move(other._history)), _mask(other._mask),
+        : _authority(std::move(other._authority)),
+          _source(std::move(other._source)),
+          _active(other._active),
+          _placement(other._placement),
+          _history(std::move(other._history)),
+          _mask(other._mask),
           _valid(std::exchange(other._valid, false))
     {
     }
     LayerCopyInput& operator=(LayerCopyInput&&) = delete;
 
-  private:
+private:
     friend class DocumentSession;
-    LayerCopyInput(ImageImportAuthority authority, CanvasDocument source, Guid active, LayerTransform placement,
-                   DocumentHistory::StateView history, bool mask) noexcept
-        : _authority(std::move(authority)), _source(std::move(source)), _active(active), _placement(placement),
-          _history(std::move(history)), _mask(mask)
+    LayerCopyInput(
+        ImageImportAuthority authority, CanvasDocument source, Guid active, LayerTransform placement, DocumentHistory::StateView history, bool mask) noexcept
+        : _authority(std::move(authority)),
+          _source(std::move(source)),
+          _active(active),
+          _placement(placement),
+          _history(std::move(history)),
+          _mask(mask)
     {
     }
     ImageImportAuthority _authority;
@@ -61,27 +69,26 @@ class LayerCopyInput final
 
 class PreparedLayerCopy final
 {
-  public:
-    PreparedLayerCopy(const PreparedLayerCopy&) = delete;
+public:
+    PreparedLayerCopy(const PreparedLayerCopy&)            = delete;
     PreparedLayerCopy& operator=(const PreparedLayerCopy&) = delete;
-    PreparedLayerCopy(PreparedLayerCopy&&) noexcept = default;
-    PreparedLayerCopy& operator=(PreparedLayerCopy&&) = delete;
+    PreparedLayerCopy(PreparedLayerCopy&&) noexcept        = default;
+    PreparedLayerCopy& operator=(PreparedLayerCopy&&)      = delete;
 
-    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
-        DocumentHistory::ResidencyPermit& permit) noexcept
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(DocumentHistory::ResidencyPermit& permit) noexcept
     {
         return _publication.TryAcquireHistoryResidency(permit);
     }
-    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
-                                               DocumentHistory::PrepareObserver observer = {})
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {})
     {
         return _publication.RefreshHistoryResidency(cancellation, observer);
     }
 
-  private:
+private:
     friend class DocumentSession;
     PreparedLayerCopy(PreparedImageImport publication, std::optional<Guid> expandParent) noexcept
-        : _publication(std::move(publication)), _expandParent(expandParent)
+        : _publication(std::move(publication)),
+          _expandParent(expandParent)
     {
     }
     PreparedImageImport _publication;

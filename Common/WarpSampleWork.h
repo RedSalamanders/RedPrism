@@ -13,13 +13,19 @@
 // producers and preview recording users must join before owner publication or worker retirement.
 class WarpSampleInput final
 {
-  public:
-    WarpSampleInput(const WarpSampleInput&) = delete;
+public:
+    WarpSampleInput(const WarpSampleInput&)            = delete;
     WarpSampleInput& operator=(const WarpSampleInput&) = delete;
     WarpSampleInput(WarpSampleInput&& input) noexcept
-        : _authority(std::move(input._authority)), _source(std::move(input._source)),
-          _history(std::move(input._history)), _draft(std::move(input._draft)), _plan(std::move(input._plan)),
-          _target(input._target), _opening(input._opening), _prepared(input._prepared), _started(input._started),
+        : _authority(std::move(input._authority)),
+          _source(std::move(input._source)),
+          _history(std::move(input._history)),
+          _draft(std::move(input._draft)),
+          _plan(std::move(input._plan)),
+          _target(input._target),
+          _opening(input._opening),
+          _prepared(input._prepared),
+          _started(input._started),
           _valid(std::exchange(input._valid, false))
     {
     }
@@ -32,13 +38,22 @@ class WarpSampleInput final
         return _source;
     }
 
-  private:
+private:
     friend class DocumentSession;
-    WarpSampleInput(ImageImportAuthority authority, CanvasDocument source, DocumentHistory::StateView history,
-                    std::shared_ptr<WarpStroke> draft, WarpStroke::SampleMemoryPlan plan, Guid target,
+    WarpSampleInput(ImageImportAuthority authority,
+                    CanvasDocument source,
+                    DocumentHistory::StateView history,
+                    std::shared_ptr<WarpStroke> draft,
+                    WarpStroke::SampleMemoryPlan plan,
+                    Guid target,
                     std::uint64_t opening) noexcept
-        : _authority(std::move(authority)), _source(std::move(source)), _history(std::move(history)),
-          _draft(std::move(draft)), _plan(std::move(plan)), _target(target), _opening(opening)
+        : _authority(std::move(authority)),
+          _source(std::move(source)),
+          _history(std::move(history)),
+          _draft(std::move(draft)),
+          _plan(std::move(plan)),
+          _target(target),
+          _opening(opening)
     {
     }
     ImageImportAuthority _authority;
@@ -48,7 +63,7 @@ class WarpSampleInput final
     WarpStroke::SampleMemoryPlan _plan;
     Guid _target;
     std::uint64_t _opening = 0;
-    bool _prepared = false;
-    bool _started = false;
-    bool _valid = true;
+    bool _prepared         = false;
+    bool _started          = false;
+    bool _valid            = true;
 };

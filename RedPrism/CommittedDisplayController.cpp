@@ -15,7 +15,7 @@
 
 namespace
 {
-constexpr std::uint64_t kGraphFixedCpuBytes = 8ull * 1024 * 1024;
+constexpr std::uint64_t kGraphFixedCpuBytes     = 8ull * 1024 * 1024;
 constexpr std::uint64_t kPerLayerContainerBytes = 4096;
 
 bool Add(std::uint64_t& value, std::uint64_t extra) noexcept
@@ -29,8 +29,7 @@ bool Add(std::uint64_t& value, std::uint64_t extra) noexcept
 bool SameVisibleOpening(const CommittedDisplayKey& first, const CommittedDisplayKey& second) noexcept
 {
     if (first.purpose == DisplaySourcePurpose::Committed && second.purpose == DisplaySourcePurpose::Committed)
-        return first.document.sessionIdentity == second.document.sessionIdentity &&
-               first.document.documentSerial == second.document.documentSerial &&
+        return first.document.sessionIdentity == second.document.sessionIdentity && first.document.documentSerial == second.document.documentSerial &&
                first.deviceGeneration == second.deviceGeneration;
     return first.purpose == second.purpose && first.opening == second.opening && first.document == second.document &&
            first.deviceGeneration == second.deviceGeneration;
@@ -38,13 +37,12 @@ bool SameVisibleOpening(const CommittedDisplayKey& first, const CommittedDisplay
 
 bool DescriptorMatches(const CommittedDisplayDescriptor& descriptor, bool pending) noexcept
 {
-    if (!descriptor.document || !descriptor.device || !descriptor.immediate || !descriptor.key.deviceGeneration)
+    if (! descriptor.document || ! descriptor.device || ! descriptor.immediate || ! descriptor.key.deviceGeneration)
         return false;
-    if (!pending)
-        return descriptor.key.purpose == DisplaySourcePurpose::Committed && !descriptor.pending &&
-               !descriptor.key.opening && !descriptor.key.publication && !descriptor.key.sourceIdentity &&
-               !descriptor.key.lookupIdentity && !descriptor.key.rasterPreviewIdentity;
-    if (!descriptor.pending || descriptor.key.purpose == DisplaySourcePurpose::Committed)
+    if (! pending)
+        return descriptor.key.purpose == DisplaySourcePurpose::Committed && ! descriptor.pending && ! descriptor.key.opening && ! descriptor.key.publication &&
+               ! descriptor.key.sourceIdentity && ! descriptor.key.lookupIdentity && ! descriptor.key.rasterPreviewIdentity;
+    if (! descriptor.pending || descriptor.key.purpose == DisplaySourcePurpose::Committed)
         return false;
     const auto& source = descriptor.pending.value();
     if (source.kind != PendingDisplaySource::Kind::Transform && source.kind != PendingDisplaySource::Kind::Color &&
@@ -52,8 +50,7 @@ bool DescriptorMatches(const CommittedDisplayDescriptor& descriptor, bool pendin
         source.kind != PendingDisplaySource::Kind::PixelMove)
         return false;
     if (source.kind == PendingDisplaySource::Kind::Adjustment &&
-        (!source.original || !source.lookup || !*source.lookup || source.adjustmentSource ||
-         source.adjustmentCoverage || source.previewScale != 1))
+        (! source.original || ! source.lookup || ! *source.lookup || source.adjustmentSource || source.adjustmentCoverage || source.previewScale != 1))
         return false;
     if (source.kind != PendingDisplaySource::Kind::Adjustment && source.original)
         return false;
@@ -61,141 +58,127 @@ bool DescriptorMatches(const CommittedDisplayDescriptor& descriptor, bool pendin
         (source.lookup || source.adjustmentSource || source.adjustmentCoverage || source.previewScale != 1))
         return false;
     const bool procedural = source.pixelOpening != nullptr;
-    if (procedural &&
-        (source.kind != PendingDisplaySource::Kind::PixelMove || !*source.pixelOpening || !source.pixelMemory ||
-         !*source.pixelMemory || !(*source.pixelMemory)->IsBound() || source.rasterPreview || source.lookup ||
-         source.adjustmentSource || source.adjustmentCoverage || source.original || source.previewScale != 1 ||
-         !source.pixelOwnershipBytes || source.pixelWidth < 1 || source.pixelHeight < 1 ||
-         source.pixelWidth > kMaxCanvasSide || source.pixelHeight > kMaxCanvasSide ||
-         !std::isfinite(source.pixelOffset.x) || !std::isfinite(source.pixelOffset.y) ||
-         source.pixelOffset.x != std::round(source.pixelOffset.x) ||
-         source.pixelOffset.y != std::round(source.pixelOffset.y) || source.pixelOffset == Vec2{}))
+    if (procedural && (source.kind != PendingDisplaySource::Kind::PixelMove || ! *source.pixelOpening || ! source.pixelMemory || ! *source.pixelMemory ||
+                       ! (*source.pixelMemory)->IsBound() || source.rasterPreview || source.lookup || source.adjustmentSource || source.adjustmentCoverage ||
+                       source.original || source.previewScale != 1 || ! source.pixelOwnershipBytes || source.pixelWidth < 1 || source.pixelHeight < 1 ||
+                       source.pixelWidth > kMaxCanvasSide || source.pixelHeight > kMaxCanvasSide || ! std::isfinite(source.pixelOffset.x) ||
+                       ! std::isfinite(source.pixelOffset.y) || source.pixelOffset.x != std::round(source.pixelOffset.x) ||
+                       source.pixelOffset.y != std::round(source.pixelOffset.y) || source.pixelOffset == Vec2{}))
         return false;
-    if (!procedural && (source.pixelMemory || source.pixelOwnershipBytes || source.pixelWidth || source.pixelHeight ||
-                        source.pixelOffset != Vec2{} || source.pixelDuplicate))
+    if (! procedural &&
+        (source.pixelMemory || source.pixelOwnershipBytes || source.pixelWidth || source.pixelHeight || source.pixelOffset != Vec2{} || source.pixelDuplicate))
         return false;
-    const bool raster = !procedural && (source.kind == PendingDisplaySource::Kind::Gradient ||
-                                        source.kind == PendingDisplaySource::Kind::PixelMove);
+    const bool raster = ! procedural && (source.kind == PendingDisplaySource::Kind::Gradient || source.kind == PendingDisplaySource::Kind::PixelMove);
     if (raster != (source.rasterPreview && *source.rasterPreview))
         return false;
-    if (raster && (source.lookup || source.adjustmentSource || source.adjustmentCoverage || source.original ||
-                   source.previewScale != 1 || (*source.rasterPreview)->target != source.target ||
-                   !(*source.rasterPreview)->memory || !(*source.rasterPreview)->memory->IsBound()))
+    if (raster && (source.lookup || source.adjustmentSource || source.adjustmentCoverage || source.original || source.previewScale != 1 ||
+                   (*source.rasterPreview)->target != source.target || ! (*source.rasterPreview)->memory || ! (*source.rasterPreview)->memory->IsBound()))
         return false;
     const auto purpose = source.kind == PendingDisplaySource::Kind::Transform   ? DisplaySourcePurpose::Transform
                          : source.kind == PendingDisplaySource::Kind::Color     ? DisplaySourcePurpose::Color
                          : source.kind == PendingDisplaySource::Kind::Gradient  ? DisplaySourcePurpose::Gradient
                          : source.kind == PendingDisplaySource::Kind::PixelMove ? DisplaySourcePurpose::PixelMove
                                                                                 : DisplaySourcePurpose::Adjustment;
-    return source.document == descriptor.document && source.authority == descriptor.key.document && source.opening &&
-           source.publication && source.opening == descriptor.key.opening &&
-           source.publication == descriptor.key.publication && purpose == descriptor.key.purpose &&
-           source.sourceIdentity == descriptor.key.sourceIdentity &&
-           descriptor.document->layers.Identity() == source.sourceIdentity &&
+    return source.document == descriptor.document && source.authority == descriptor.key.document && source.opening && source.publication &&
+           source.opening == descriptor.key.opening && source.publication == descriptor.key.publication && purpose == descriptor.key.purpose &&
+           source.sourceIdentity == descriptor.key.sourceIdentity && descriptor.document->layers.Identity() == source.sourceIdentity &&
            (source.lookup && *source.lookup ? source.lookup->get() : nullptr) == descriptor.key.lookupIdentity &&
            (procedural                                      ? static_cast<const void*>(source.pixelOpening->get())
             : source.rasterPreview && *source.rasterPreview ? source.rasterPreview->get()
                                                             : nullptr) == descriptor.key.rasterPreviewIdentity;
 }
 
-bool PreviewEnvelope(const CommittedDisplayDescriptor& descriptor, AdjustmentDisplayAdmission::Envelope& result,
-                     std::uint64_t& heldBytes) noexcept
+bool PreviewEnvelope(const CommittedDisplayDescriptor& descriptor, AdjustmentDisplayAdmission::Envelope& result, std::uint64_t& heldBytes) noexcept
 {
     heldBytes = 0;
     if (descriptor.pending && descriptor.pending->pixelOpening)
     {
         const auto& source = descriptor.pending.value();
-        if (!source.pixelOpening || !*source.pixelOpening || source.pixelWidth < 1 || source.pixelHeight < 1 ||
-            source.pixelWidth > kMaxCanvasSide || source.pixelHeight > kMaxCanvasSide || !source.pixelOwnershipBytes)
+        if (! source.pixelOpening || ! *source.pixelOpening || source.pixelWidth < 1 || source.pixelHeight < 1 || source.pixelWidth > kMaxCanvasSide ||
+            source.pixelHeight > kMaxCanvasSide || ! source.pixelOwnershipBytes)
             return false;
-        heldBytes = source.pixelOwnershipBytes;
-        auto width = static_cast<std::uint64_t>(source.pixelWidth),
-             height = static_cast<std::uint64_t>(source.pixelHeight);
+        heldBytes  = source.pixelOwnershipBytes;
+        auto width = static_cast<std::uint64_t>(source.pixelWidth), height = static_cast<std::uint64_t>(source.pixelHeight);
         std::uint64_t texels = 0;
         for (;;)
         {
-            if (!Add(texels, width * height))
+            if (! Add(texels, width * height))
                 return false;
             ++result.mipLevels;
             if (width == 1 && height == 1)
                 break;
-            width = width > 1 ? width / 2 : 1;
+            width  = width > 1 ? width / 2 : 1;
             height = height > 1 ? height / 2 : 1;
         }
-        result.textureCount = 1;
-        result.logicalGpuBytes = texels * 4;
+        result.textureCount       = 1;
+        result.logicalGpuBytes    = texels * 4;
         result.additionalGpuBytes = result.logicalGpuBytes + 4ull * 65536;
-        result.logicalCpuBytes = 1024ull * 1024 + static_cast<std::uint64_t>(source.pixelWidth) * 4 * 8;
+        result.logicalCpuBytes    = 1024ull * 1024 + static_cast<std::uint64_t>(source.pixelWidth) * 4 * 8;
         result.additionalCpuBytes = result.logicalCpuBytes;
-        return Add(result.additionalCpuBytes,
-                   sizeof(PreparedPixelMovePreview) + 1024 + SharedPublicationMemory::OwnershipAllowance()) &&
-               (!descriptor.software || Add(result.additionalCpuBytes, result.logicalGpuBytes));
+        return Add(result.additionalCpuBytes, sizeof(PreparedPixelMovePreview) + 1024 + SharedPublicationMemory::OwnershipAllowance()) &&
+               (! descriptor.software || Add(result.additionalCpuBytes, result.logicalGpuBytes));
     }
     if (descriptor.pending && descriptor.pending->rasterPreview)
     {
         const auto& source = *descriptor.pending->rasterPreview;
-        if (!source || source->width <= 0 || source->height <= 0 || source->width > kMaxCanvasSide ||
-            source->height > kMaxCanvasSide || !source->ownershipBytes)
+        if (! source || source->width <= 0 || source->height <= 0 || source->width > kMaxCanvasSide || source->height > kMaxCanvasSide ||
+            ! source->ownershipBytes)
             return false;
         heldBytes = source->ownershipBytes;
         // Full-grid chain is a conservative bound for the recorder's document-window proxy too. It never
         // creates a texture larger than the real device limit. Directory/sparse construction is a separate
         // graphics-stage overlap, in addition to the original completed CPU producer's retained reservation.
         std::uint64_t texels = 0;
-        auto width = static_cast<std::uint64_t>(source->width);
-        auto height = static_cast<std::uint64_t>(source->height);
+        auto width           = static_cast<std::uint64_t>(source->width);
+        auto height          = static_cast<std::uint64_t>(source->height);
         for (;;)
         {
-            if (!Add(texels, width * height))
+            if (! Add(texels, width * height))
                 return false;
             ++result.mipLevels;
             if (width == 1 && height == 1)
                 break;
-            width = width > 1 ? width / 2 : 1;
+            width  = width > 1 ? width / 2 : 1;
             height = height > 1 ? height / 2 : 1;
         }
-        result.textureCount = 1;
-        result.logicalGpuBytes = texels * (source->mask ? 1ull : 4ull);
+        result.textureCount       = 1;
+        result.logicalGpuBytes    = texels * (source->mask ? 1ull : 4ull);
         result.additionalGpuBytes = result.logicalGpuBytes + 4ull * 65536;
-        result.logicalCpuBytes = 1024ull * 1024 + static_cast<std::uint64_t>(source->width) * 4 * 8;
+        result.logicalCpuBytes    = 1024ull * 1024 + static_cast<std::uint64_t>(source->width) * 4 * 8;
         result.additionalCpuBytes = result.logicalCpuBytes;
-        const auto directory = RasterPreviewMetadataMemoryBytes(source->width, source->height);
-        return directory && Add(result.additionalCpuBytes, directory) &&
-               (!descriptor.software || Add(result.additionalCpuBytes, result.logicalGpuBytes));
+        const auto directory      = RasterPreviewMetadataMemoryBytes(source->width, source->height);
+        return directory && Add(result.additionalCpuBytes, directory) && (! descriptor.software || Add(result.additionalCpuBytes, result.logicalGpuBytes));
     }
-    if (!descriptor.pending || !descriptor.pending->lookup)
+    if (! descriptor.pending || ! descriptor.pending->lookup)
         return true; // The completed CPU document is already covered by the base manifest admission.
     const auto& source = descriptor.pending.value();
-    if (!*source.lookup)
+    if (! *source.lookup)
         return false;
     const auto& lookup = **source.lookup;
     AdjustmentDisplayAdmission::Descriptor additional;
-    additional.kind = lookup.adjustment.kind;
-    additional.software = descriptor.software;
+    additional.kind           = lookup.adjustment.kind;
+    additional.software       = descriptor.software;
     additional.liveAdjustment = source.original != nullptr;
-    if (!additional.liveAdjustment)
+    if (! additional.liveAdjustment)
     {
-        if (!source.adjustmentSource || !source.adjustmentSource->HasStorage() || !source.adjustmentCoverage)
+        if (! source.adjustmentSource || ! source.adjustmentSource->HasStorage() || ! source.adjustmentCoverage)
             return false;
-        additional.width = static_cast<std::uint32_t>(source.adjustmentSource->Width());
-        additional.height = static_cast<std::uint32_t>(source.adjustmentSource->Height());
+        additional.width             = static_cast<std::uint32_t>(source.adjustmentSource->Width());
+        additional.height            = static_cast<std::uint32_t>(source.adjustmentSource->Height());
         additional.selectionCoverage = source.adjustmentCoverage->HasStorage();
-        if (!Add(heldBytes, source.adjustmentSource->RetirementMemoryBytes()) ||
-            !Add(heldBytes, source.adjustmentCoverage->RetirementMemoryBytes()))
+        if (! Add(heldBytes, source.adjustmentSource->RetirementMemoryBytes()) || ! Add(heldBytes, source.adjustmentCoverage->RetirementMemoryBytes()))
             return false;
     }
     const auto measured = AdjustmentDisplayAdmission::Estimate(additional);
-    if (!measured || lookup.cube.capacity() > (std::numeric_limits<std::uint64_t>::max)() / sizeof(float) ||
-        !Add(heldBytes, sizeof(AdjustmentLookup) + 256) || !Add(heldBytes, lookup.cube.capacity() * sizeof(float)))
+    if (! measured || lookup.cube.capacity() > (std::numeric_limits<std::uint64_t>::max)() / sizeof(float) ||
+        ! Add(heldBytes, sizeof(AdjustmentLookup) + 256) || ! Add(heldBytes, lookup.cube.capacity() * sizeof(float)))
         return false;
     for (const auto& channel : lookup.adjustment.curves.channels)
-        if (channel.capacity() > (std::numeric_limits<std::uint64_t>::max)() / sizeof(CurvePoint) ||
-            !Add(heldBytes, channel.capacity() * sizeof(CurvePoint)))
+        if (channel.capacity() > (std::numeric_limits<std::uint64_t>::max)() / sizeof(CurvePoint) || ! Add(heldBytes, channel.capacity() * sizeof(CurvePoint)))
             return false;
     if (source.original)
         for (const auto& channel : source.original->curves.channels)
-            if (channel.size() > (std::numeric_limits<std::uint64_t>::max)() / sizeof(CurvePoint) ||
-                !Add(heldBytes, channel.size() * sizeof(CurvePoint)))
+            if (channel.size() > (std::numeric_limits<std::uint64_t>::max)() / sizeof(CurvePoint) || ! Add(heldBytes, channel.size() * sizeof(CurvePoint)))
                 return false;
     result = measured.value();
     return true;
@@ -203,9 +186,7 @@ bool PreviewEnvelope(const CommittedDisplayDescriptor& descriptor, AdjustmentDis
 
 JobResult Result(HRESULT status) noexcept
 {
-    return status == E_ABORT ? JobResult{JobStatus::Cancelled}
-           : FAILED(status)  ? JobResult{JobStatus::Failed, status}
-                             : JobResult{};
+    return status == E_ABORT ? JobResult{JobStatus::Cancelled} : FAILED(status) ? JobResult{JobStatus::Failed, status} : JobResult{};
 }
 } // namespace
 
@@ -246,21 +227,21 @@ struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
     GpuCommandStream stream;
     RecordedDisplayGraph graph;
     const RecordedDisplayGraph* seed = nullptr;
-    std::size_t seedLayers = 0;
-    bool software = false;
-    bool streamInitialized = false;
-    bool streamRetired = false;
-    bool streamRetirementAuthorized = false;
-    bool producerFinished = false; // Recording worker only, then read after its real job-stage acknowledgement.
-    bool graphRetired = false;
-    bool detached = false;
+    std::size_t seedLayers           = 0;
+    bool software                    = false;
+    bool streamInitialized           = false;
+    bool streamRetired               = false;
+    bool streamRetirementAuthorized  = false;
+    bool producerFinished            = false; // Recording worker only, then read after its real job-stage acknowledgement.
+    bool graphRetired                = false;
+    bool detached                    = false;
 
     void RetireForWork() noexcept
     {
-        if (!graphRetired)
+        if (! graphRetired)
         {
             const bool retired = detached ? graph.RetireForWork() : graph.RetireUnpublishedForWork();
-            if (!retired)
+            if (! retired)
                 std::terminate();
             graphRetired = true;
         }
@@ -271,7 +252,7 @@ struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
         pixelOriginalMemory.reset();
         pixelDescriptorMemory.reset();
         manifest.reset();
-        source = {};
+        source   = {};
         captured = {};
         immediate.reset();
         device.reset();
@@ -287,7 +268,7 @@ struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
 #pragma warning(disable : 4625 4626)
 class CommittedDisplayController::DisplayJob final : public Job
 {
-  public:
+public:
     enum class Stage
     {
         Opening,
@@ -296,9 +277,11 @@ class CommittedDisplayController::DisplayJob final : public Job
         TransportRetirement,
         Cleanup
     };
-    DisplayJob(CommittedDisplayController& owner, Cell& cell, RasterResidencyCpuAdmission admission,
-               std::uint64_t bytes) noexcept
-        : _owner(owner), _cell(cell), _admission(admission), _cpuBytes(bytes)
+    DisplayJob(CommittedDisplayController& owner, Cell& cell, RasterResidencyCpuAdmission admission, std::uint64_t bytes) noexcept
+        : _owner(owner),
+          _cell(cell),
+          _admission(admission),
+          _cpuBytes(bytes)
     {
     }
     ~DisplayJob() override
@@ -315,9 +298,9 @@ class CommittedDisplayController::DisplayJob final : public Job
     {
         if (_stage == Stage::Opening)
         {
-            _preparedRoot = std::make_unique<Root>(_owner._ownerThread);
-            _preparedRoot->cell = &_cell;
-            _preparedRoot->bytes = _cpuBytes;
+            _preparedRoot          = std::make_unique<Root>(_owner._ownerThread);
+            _preparedRoot->cell    = &_cell;
+            _preparedRoot->bytes   = _cpuBytes;
             _preparedRoot->destroy = &CommittedDisplayController::DestroyRootForWork;
             return {};
         }
@@ -329,54 +312,51 @@ class CommittedDisplayController::DisplayJob final : public Job
             if (root.pixelOpening)
             {
                 root.pixelDescriptorMemory = SharedPublicationMemory::CreateForWork(root.bytes);
-                root.publicationMemory = root.pixelDescriptorMemory;
-                auto metadata = PixelMovePreviewReader::PrepareDisplayForWork(
-                    root.pixelOpening, root.pixelOffset, root.pixelDuplicate, root.pixelOwner,
-                    root.pixelDescriptorMemory, context.cancellation);
-                if (!metadata)
+                root.publicationMemory     = root.pixelDescriptorMemory;
+                auto metadata              = PixelMovePreviewReader::PrepareDisplayForWork(
+                    root.pixelOpening, root.pixelOffset, root.pixelDuplicate, root.pixelOwner, root.pixelDescriptorMemory, context.cancellation);
+                if (! metadata)
                     return Result(context.cancellation.IsCancelled() ? E_ABORT : E_OUTOFMEMORY);
                 const auto& layout = metadata->Layout();
-                if (layout.target != root.pixelTarget || layout.width != root.pixelWidth ||
-                    layout.height != root.pixelHeight || layout.canvasWidth != root.source.width ||
-                    layout.canvasHeight != root.source.height)
+                if (layout.target != root.pixelTarget || layout.width != root.pixelWidth || layout.height != root.pixelHeight ||
+                    layout.canvasWidth != root.source.width || layout.canvasHeight != root.source.height)
                     return Result(E_INVALIDARG);
                 root.stroke.emplace();
-                auto& preview = root.stroke.value();
-                preview.layerID = layout.target;
-                preview.width = layout.width;
-                preview.height = layout.height;
-                preview.transform = layout.paintTransform;
-                preview.source = layout.source;
-                preview.sourceX = layout.sourceRect.x;
-                preview.sourceY = layout.sourceRect.y;
+                auto& preview       = root.stroke.value();
+                preview.layerID     = layout.target;
+                preview.width       = layout.width;
+                preview.height      = layout.height;
+                preview.transform   = layout.paintTransform;
+                preview.source      = layout.source;
+                preview.sourceX     = layout.sourceRect.x;
+                preview.sourceY     = layout.sourceRect.y;
                 preview.pixelSource = std::move(metadata);
             }
-            root.manifest =
-                RasterResidencyManifestWork::Prepare(std::move(root.source), _admission, context.cancellation);
+            root.manifest = RasterResidencyManifestWork::Prepare(std::move(root.source), _admission, context.cancellation);
             return root.manifest ? JobResult{} : Result(context.cancellation.IsCancelled() ? E_ABORT : E_FAIL);
         }
         if (FAILED(_recordingAdmission))
             return Result(_recordingAdmission); // Immutable before Resume; owner callbacks never write it.
-        HRESULT status = E_OUTOFMEMORY;
-        const auto finish = wil::scope_exit(
-            [&]() noexcept
-            {
-                root.stream.FinishProducerForWork(status);
-                root.producerFinished = true;
-            });
+        HRESULT status    = E_OUTOFMEMORY;
+        const auto finish = wil::scope_exit([&]() noexcept
+        {
+            root.stream.FinishProducerForWork(status);
+            root.producerFinished = true;
+        });
         // Each raster publication describes ALL touched tiles from its original opening. Inheriting the old
         // stroke grid would retain a previous pixel-move landing when it is absent from the new tile set.
-        status = root.stroke ? root.graph.PrepareStrokeForWork(
-                                   root.device.get(), root.manifest->Plan().Source(), root.stroke.value(),
-                                   root.rasterPreview ? std::span<const RasterTile>{root.rasterPreview->tiles}
-                                                      : std::span<const RasterTile>{},
-                                   root.stream, context.cancellation, nullptr)
-                 : root.adjustment
-                     ? root.graph.PrepareAdjustmentForWork(root.device.get(), root.manifest->Plan().Source(),
-                                                           root.adjustment.value(), root.stream, context.cancellation,
-                                                           root.seed)
-                     : root.graph.PrepareForWork(root.device.get(), root.manifest->Plan().Source(), root.stream,
-                                                 context.cancellation, root.seed);
+        status =
+            root.stroke
+                ? root.graph.PrepareStrokeForWork(root.device.get(),
+                                                  root.manifest->Plan().Source(),
+                                                  root.stroke.value(),
+                                                  root.rasterPreview ? std::span<const RasterTile>{root.rasterPreview->tiles} : std::span<const RasterTile>{},
+                                                  root.stream,
+                                                  context.cancellation,
+                                                  nullptr)
+            : root.adjustment ? root.graph.PrepareAdjustmentForWork(
+                                    root.device.get(), root.manifest->Plan().Source(), root.adjustment.value(), root.stream, context.cancellation, root.seed)
+                              : root.graph.PrepareForWork(root.device.get(), root.manifest->Plan().Source(), root.stream, context.cancellation, root.seed);
         return Result(status);
     }
     void RetireWorkerStage(JobContext&, JobResult result) noexcept override
@@ -387,9 +367,9 @@ class CommittedDisplayController::DisplayJob final : public Job
             _preparedRoot.reset();
         }
         auto* root = _cell.root;
-        if (!root)
+        if (! root)
             return;
-        if (_stage == Stage::Recording && !root->producerFinished)
+        if (_stage == Stage::Recording && ! root->producerFinished)
         {
             // Cancellation may skip Run entirely. Only this original recorder callback can finish that producer.
             root->stream.FinishProducerForWork(result.status == JobStatus::Failed ? result.error : E_ABORT);
@@ -397,15 +377,15 @@ class CommittedDisplayController::DisplayJob final : public Job
         }
         if (_stage == Stage::TransportRetirement)
         {
-            if (!root->stream.RetireForWork())
+            if (! root->stream.RetireForWork())
                 std::terminate();
             root->streamRetired = true;
         }
         if (_stage == Stage::Cleanup)
         {
-            if (root->streamRetirementAuthorized && !root->streamRetired)
+            if (root->streamRetirementAuthorized && ! root->streamRetired)
             {
-                if (!root->stream.RetireForWork())
+                if (! root->stream.RetireForWork())
                     std::terminate();
                 root->streamRetired = true;
             }
@@ -436,93 +416,92 @@ class CommittedDisplayController::DisplayJob final : public Job
                 }
                 return false;
             }
-            if (!_preparedRoot)
+            if (! _preparedRoot)
             {
                 _cell.terminal = E_UNEXPECTED;
                 return false;
             }
             CommittedDisplayDescriptor descriptor;
-            if (!_owner.CurrentOwner(_cell, &descriptor))
+            if (! _owner.CurrentOwner(_cell, &descriptor))
             {
                 _cell.terminal = E_ABORT;
-                _cell.root = _preparedRoot.release();
+                _cell.root     = _preparedRoot.release();
                 BeginCleanupOwner();
                 return true;
             }
             _cell.root = _preparedRoot.release();
             try
             {
-                auto* root = _cell.root;
-                root->source = *descriptor.document;
+                auto* root              = _cell.root;
+                root->source            = *descriptor.document;
                 std::uint64_t heldBytes = 0;
-                if (!PreviewEnvelope(descriptor, root->previewEnvelope, heldBytes))
+                if (! PreviewEnvelope(descriptor, root->previewEnvelope, heldBytes))
                     std::terminate(); // Revalidated unchanged descriptor after its original complete admission.
                 if (descriptor.pending && descriptor.pending->lookup)
                 {
                     const auto& source = descriptor.pending.value();
                     root->adjustment.emplace();
-                    auto& preview = root->adjustment.value();
-                    preview.layerId = source.target;
-                    preview.lookup = *source.lookup;
+                    auto& preview        = root->adjustment.value();
+                    preview.layerId      = source.target;
+                    preview.lookup       = *source.lookup;
                     preview.previewScale = source.previewScale;
                     if (source.original)
                         preview.liveOriginal = *source.original;
                     else
                     {
-                        preview.source = *source.adjustmentSource;
+                        preview.source   = *source.adjustmentSource;
                         preview.coverage = *source.adjustmentCoverage;
                     }
                 }
                 if (descriptor.pending && descriptor.pending->rasterPreview)
                 {
-                    root->rasterPreview = *descriptor.pending->rasterPreview;
+                    root->rasterPreview  = *descriptor.pending->rasterPreview;
                     const auto& metadata = *root->rasterPreview;
                     root->stroke.emplace();
-                    auto& preview = root->stroke.value();
-                    preview.layerID = metadata.target;
-                    preview.mask = metadata.mask;
-                    preview.width = metadata.width;
-                    preview.height = metadata.height;
-                    preview.transform = metadata.transform;
-                    preview.source = metadata.source;
-                    preview.sourceX = metadata.sourceRect.x;
-                    preview.sourceY = metadata.sourceRect.y;
-                    preview.sourceWidth = metadata.source.HasStorage() ? metadata.sourceRect.width : 0;
+                    auto& preview        = root->stroke.value();
+                    preview.layerID      = metadata.target;
+                    preview.mask         = metadata.mask;
+                    preview.width        = metadata.width;
+                    preview.height       = metadata.height;
+                    preview.transform    = metadata.transform;
+                    preview.source       = metadata.source;
+                    preview.sourceX      = metadata.sourceRect.x;
+                    preview.sourceY      = metadata.sourceRect.y;
+                    preview.sourceWidth  = metadata.source.HasStorage() ? metadata.sourceRect.width : 0;
                     preview.sourceHeight = metadata.source.HasStorage() ? metadata.sourceRect.height : 0;
-                    preview.fill = metadata.fill;
+                    preview.fill         = metadata.fill;
                 }
                 if (descriptor.pending && descriptor.pending->pixelOpening)
                 {
-                    const auto& source = descriptor.pending.value();
-                    root->pixelOpening = *source.pixelOpening;
+                    const auto& source        = descriptor.pending.value();
+                    root->pixelOpening        = *source.pixelOpening;
                     root->pixelOriginalMemory = *source.pixelMemory;
-                    root->pixelOwner = std::this_thread::get_id();
-                    root->pixelTarget = source.target;
-                    root->pixelOffset = source.pixelOffset;
-                    root->pixelDuplicate = source.pixelDuplicate;
-                    root->pixelWidth = source.pixelWidth;
-                    root->pixelHeight = source.pixelHeight;
+                    root->pixelOwner          = std::this_thread::get_id();
+                    root->pixelTarget         = source.target;
+                    root->pixelOffset         = source.pixelOffset;
+                    root->pixelDuplicate      = source.pixelDuplicate;
+                    root->pixelWidth          = source.pixelWidth;
+                    root->pixelHeight         = source.pixelHeight;
                 }
-                root->device = descriptor.device;
+                root->device    = descriptor.device;
                 root->immediate = descriptor.immediate;
-                root->software = descriptor.software;
-                if (!_cell.root->stroke && !_cell.root->pixelOpening && _owner._published &&
+                root->software  = descriptor.software;
+                if (! _cell.root->stroke && ! _cell.root->pixelOpening && _owner._published &&
                     _owner._published->key.deviceGeneration == _cell.key.deviceGeneration)
                 {
-                    const auto& seed = *_owner._published->root;
-                    _cell.root->seed = &seed.graph;
+                    const auto& seed       = *_owner._published->root;
+                    _cell.root->seed       = &seed.graph;
                     _cell.root->seedLayers = seed.manifest->Plan().Source().layers.size();
-                    _cell.seed = _owner._published;
+                    _cell.seed             = _owner._published;
                 }
                 _stage = Stage::Planning;
-                if (!_owner._jobs->Resume(ticket, JobExecutionLane::Compute))
+                if (! _owner._jobs->Resume(ticket, JobExecutionLane::Compute))
                     std::terminate();
                 return true;
             }
             catch (const std::bad_alloc&)
             {
-                _cell.terminal =
-                    E_OUTOFMEMORY; // Explicit admitted capture boundary; preserve worker-only root retirement.
+                _cell.terminal = E_OUTOFMEMORY; // Explicit admitted capture boundary; preserve worker-only root retirement.
                 BeginCleanupOwner();
                 return true;
             }
@@ -530,28 +509,26 @@ class CommittedDisplayController::DisplayJob final : public Job
         if (_stage == Stage::Recording)
         {
             _cell.recordingJoined = true;
-            _cell.seed = nullptr; // Preparation no longer borrows the old graph; its own residents hold their rasters.
-            _owner.WakeOwner();   // Actual GPU uses may still be pending; no early source/charge release.
+            _cell.seed            = nullptr; // Preparation no longer borrows the old graph; its own residents hold their rasters.
+            _owner.WakeOwner();              // Actual GPU uses may still be pending; no early source/charge release.
             return true;
         }
         if (_stage == Stage::Planning && SUCCEEDED(_cell.terminal))
         {
             CommittedDisplayDescriptor descriptor;
-            _cell.terminal =
-                _owner.CurrentOwner(_cell, &descriptor) ? _owner.AdmitRecordingOwner(_cell, descriptor) : E_ABORT;
+            _cell.terminal = _owner.CurrentOwner(_cell, &descriptor) ? _owner.AdmitRecordingOwner(_cell, descriptor) : E_ABORT;
             if (SUCCEEDED(_cell.terminal) || _cell.root->streamInitialized)
             {
                 // Attachment refusal still retires this initialized source through its actual producer hook,
                 // join and authorization. No record/command/resource creation occurs on the refused stage.
                 _recordingAdmission = _cell.terminal;
-                _stage = Stage::Recording;
-                if (!_owner._jobs->Resume(ticket, JobExecutionLane::GpuRecording))
+                _stage              = Stage::Recording;
+                if (! _owner._jobs->Resume(ticket, JobExecutionLane::GpuRecording))
                     std::terminate();
                 return true;
             }
         }
-        if (_stage == Stage::TransportRetirement && SUCCEEDED(_cell.terminal) && result.status == JobStatus::Finished &&
-            _owner.CurrentOwner(_cell))
+        if (_stage == Stage::TransportRetirement && SUCCEEDED(_cell.terminal) && result.status == JobStatus::Finished && _owner.CurrentOwner(_cell))
             return false; // Final callback transfers the original charge before publication.
         BeginCleanupOwner();
         return true;
@@ -559,15 +536,15 @@ class CommittedDisplayController::DisplayJob final : public Job
     void BeginTransportRetirementOwner() noexcept
     {
         _stage = Stage::TransportRetirement;
-        if (!_owner._jobs->Resume(_cell.ticket, JobExecutionLane::Compute))
+        if (! _owner._jobs->Resume(_cell.ticket, JobExecutionLane::Compute))
             std::terminate();
     }
     void BeginCleanupOwner() noexcept
     {
         _cell.cleanupDispatched = true;
-        _cell.seed = nullptr;
-        _stage = Stage::Cleanup;
-        if (!_owner._jobs->Resume(_cell.ticket, JobExecutionLane::Compute))
+        _cell.seed              = nullptr;
+        _stage                  = Stage::Cleanup;
+        if (! _owner._jobs->Resume(_cell.ticket, JobExecutionLane::Compute))
             std::terminate();
     }
     void Completed(JobResult result) noexcept override
@@ -575,17 +552,15 @@ class CommittedDisplayController::DisplayJob final : public Job
         _cell.job = nullptr;
         if (_rootDeleted)
             _cell.root = nullptr; // Only after actual original worker acknowledgement.
-        if (_stage == Stage::TransportRetirement && result.status == JobStatus::Finished && SUCCEEDED(_cell.terminal) &&
-            _owner.CurrentOwner(_cell))
+        if (_stage == Stage::TransportRetirement && result.status == JobStatus::Finished && SUCCEEDED(_cell.terminal) && _owner.CurrentOwner(_cell))
         {
             // Cleanup clears the root only after its original worker acknowledgement. A successful
             // transport publication must still own that root; refuse protocol corruption before use.
             auto* root = _cell.root;
-            if (_rootDeleted || !root)
+            if (_rootDeleted || ! root)
                 std::terminate();
             const HRESULT retained = root->pixelDescriptorMemory
-                                         ? static_cast<HRESULT>(root->pixelDescriptorMemory->BindAfterCompletedWork(
-                                               *_owner._jobs, _cell.ticket))
+                                         ? static_cast<HRESULT>(root->pixelDescriptorMemory->BindAfterCompletedWork(*_owner._jobs, _cell.ticket))
                                          : _owner._jobs->RetainMemory(_cell.ticket, _cell.retained);
             if (FAILED(retained))
                 std::terminate(); // Descriptor preclaimed the slot; exact successful callback is its sole transfer.
@@ -595,8 +570,8 @@ class CommittedDisplayController::DisplayJob final : public Job
         if (_cell.root)
             std::terminate(); // No cancelled/failed final callback may refund a still-owned CPU/GPU graph.
         const bool report = _cell.terminal != E_ABORT && _owner.CurrentOwner(_cell);
-        const auto key = _cell.key;
-        const auto error = FAILED(_cell.terminal) ? _cell.terminal : E_FAIL;
+        const auto key    = _cell.key;
+        const auto error  = FAILED(_cell.terminal) ? _cell.terminal : E_FAIL;
         _owner.FinishCellOwner(_cell);
         if (report)
         {
@@ -612,21 +587,19 @@ class CommittedDisplayController::DisplayJob final : public Job
         {
             if (_cell.root)
                 std::terminate();
-            _cell.root =
-                _preparedRoot
-                    .release(); // Actual producer joined; existing controller shutdown retires it on its worker.
+            _cell.root = _preparedRoot.release(); // Actual producer joined; existing controller shutdown retires it on its worker.
         }
     }
 
-  private:
+private:
     std::unique_ptr<Root> _preparedRoot;
     CommittedDisplayController& _owner;
     Cell& _cell;
     const RasterResidencyCpuAdmission _admission;
     const std::uint64_t _cpuBytes;
-    Stage _stage = Stage::Opening;
+    Stage _stage                = Stage::Opening;
     HRESULT _recordingAdmission = S_OK;
-    bool _rootDeleted = false;
+    bool _rootDeleted           = false;
 };
 #pragma warning(pop)
 
@@ -636,37 +609,35 @@ CommittedDisplaySeedLease::~CommittedDisplaySeedLease()
         std::terminate(); // Every original parent must explicitly acknowledge its recorder borrow.
 }
 
-bool CommittedDisplayController::AcquirePublishedSeedOwner(CommittedDisplayKey key,
-                                                           CommittedDisplaySeedLease& lease) noexcept
+bool CommittedDisplayController::AcquirePublishedSeedOwner(CommittedDisplayKey key, CommittedDisplaySeedLease& lease) noexcept
 {
-    if (!IsOwner() || !_jobs || _pending || _stopped || _suspended || lease || !_published ||
-        _published->phase != Phase::Cached || _published->retirementRequested || _published->externalBorrow ||
-        _published->key != key || !_published->root || !CurrentOwner(*_published) ||
+    if (! IsOwner() || ! _jobs || _pending || _stopped || _suspended || lease || ! _published || _published->phase != Phase::Cached ||
+        _published->retirementRequested || _published->externalBorrow || _published->key != key || ! _published->root || ! CurrentOwner(*_published) ||
         _published->externalBorrowGeneration == (std::numeric_limits<std::uint64_t>::max)())
         return false;
     auto& cell = *_published;
     ++cell.externalBorrowGeneration; // Never reset on slot reuse; no generation wraps.
     cell.externalBorrow = true;
-    lease._controller = this;
-    lease._graph = &cell.root->graph;
-    lease._cell = static_cast<std::size_t>(&cell - _cells.data());
-    lease._generation = cell.externalBorrowGeneration;
+    lease._controller   = this;
+    lease._graph        = &cell.root->graph;
+    lease._cell         = static_cast<std::size_t>(&cell - _cells.data());
+    lease._generation   = cell.externalBorrowGeneration;
     return true;
 }
 
 bool CommittedDisplayController::ReleasePublishedSeedOwner(CommittedDisplaySeedLease& lease) noexcept
 {
-    if (!IsOwner() || lease._controller != this || lease._cell >= _cells.size())
+    if (! IsOwner() || lease._controller != this || lease._cell >= _cells.size())
         return false;
     auto& cell = _cells[lease._cell];
-    if (!cell.externalBorrow || cell.externalBorrowGeneration != lease._generation || !cell.root ||
-        &cell.root->graph != lease._graph || cell.phase != Phase::Cached)
+    if (! cell.externalBorrow || cell.externalBorrowGeneration != lease._generation || ! cell.root || &cell.root->graph != lease._graph ||
+        cell.phase != Phase::Cached)
         return false;
     cell.externalBorrow = false;
-    lease._controller = nullptr;
-    lease._graph = nullptr;
-    lease._cell = _cells.size();
-    lease._generation = 0;
+    lease._controller   = nullptr;
+    lease._graph        = nullptr;
+    lease._cell         = _cells.size();
+    lease._generation   = 0;
     if (cell.retirementRequested)
         WakeOwner(); // Real reader transition, not an unchanged polling rearm.
     return true;
@@ -686,47 +657,48 @@ bool CommittedDisplayController::IsOwner() const noexcept
 {
     return GetCurrentThreadId() == _ownerThread;
 }
-HRESULT CommittedDisplayController::InitializeOwner(JobScheduler& jobs, GpuWorkQueue& queue, GpuCommandPump& commands,
-                                                    OwnerWorkMultiplexer& routes, CommittedDisplayClient& client,
-                                                    GpuResidencyBudget* sharedBudget, bool pending,
+HRESULT CommittedDisplayController::InitializeOwner(JobScheduler& jobs,
+                                                    GpuWorkQueue& queue,
+                                                    GpuCommandPump& commands,
+                                                    OwnerWorkMultiplexer& routes,
+                                                    CommittedDisplayClient& client,
+                                                    GpuResidencyBudget* sharedBudget,
+                                                    bool pending,
                                                     bool ownsCommandPump) noexcept
 {
-    if (!IsOwner() || _jobs || !jobs.WakeHandle() || !routes.Attach(*this))
+    if (! IsOwner() || _jobs || ! jobs.WakeHandle() || ! routes.Attach(*this))
         return E_INVALIDARG;
-    _jobs = &jobs;
-    _queue = &queue;
-    _commands = &commands;
-    _routes = &routes;
-    _client = &client;
-    _gpuBudget = sharedBudget ? sharedBudget : &_ownedGpuBudget;
-    _pending = pending;
+    _jobs            = &jobs;
+    _queue           = &queue;
+    _commands        = &commands;
+    _routes          = &routes;
+    _client          = &client;
+    _gpuBudget       = sharedBudget ? sharedBudget : &_ownedGpuBudget;
+    _pending         = pending;
     _ownsCommandPump = ownsCommandPump;
     return S_OK;
 }
 RecordedDisplayGraph* CommittedDisplayController::GraphForFrameOwner() const noexcept
 {
-    if (!IsOwner() || !_jobs || _stopped || _suspended || !_published || !_published->root ||
-        _published->retirementRequested || _published->phase != Phase::Cached)
+    if (! IsOwner() || ! _jobs || _stopped || _suspended || ! _published || ! _published->root || _published->retirementRequested ||
+        _published->phase != Phase::Cached)
         return nullptr;
     CommittedDisplayDescriptor descriptor;
-    if (!_client->DescribeCommittedDisplayOwner(descriptor) || !DescriptorMatches(descriptor, _pending) ||
-        !SameVisibleOpening(_published->key, descriptor.key) ||
-        descriptor.key.deviceGeneration != _queue->DeviceGeneration() ||
-        descriptor.device != _published->root->device.get() ||
-        descriptor.immediate != _published->root->immediate.get())
+    if (! _client->DescribeCommittedDisplayOwner(descriptor) || ! DescriptorMatches(descriptor, _pending) ||
+        ! SameVisibleOpening(_published->key, descriptor.key) || descriptor.key.deviceGeneration != _queue->DeviceGeneration() ||
+        descriptor.device != _published->root->device.get() || descriptor.immediate != _published->root->immediate.get())
         return nullptr;
     return &_published->root->graph;
 }
 
 bool CommittedDisplayController::HasCurrentPublicationOwner() const noexcept
 {
-    if (!IsOwner() || !_jobs || _stopped || _suspended || !_published || !_published->root ||
-        _published->retirementRequested || _published->phase != Phase::Cached)
+    if (! IsOwner() || ! _jobs || _stopped || _suspended || ! _published || ! _published->root || _published->retirementRequested ||
+        _published->phase != Phase::Cached)
         return false;
     CommittedDisplayDescriptor descriptor;
-    if (!_client->DescribeCommittedDisplayOwner(descriptor) || !DescriptorMatches(descriptor, _pending) ||
-        _published->key != descriptor.key || descriptor.key.deviceGeneration != _queue->DeviceGeneration() ||
-        descriptor.device != _published->root->device.get() ||
+    if (! _client->DescribeCommittedDisplayOwner(descriptor) || ! DescriptorMatches(descriptor, _pending) || _published->key != descriptor.key ||
+        descriptor.key.deviceGeneration != _queue->DeviceGeneration() || descriptor.device != _published->root->device.get() ||
         descriptor.immediate != _published->root->immediate.get())
         return false;
     return true;
@@ -735,15 +707,15 @@ bool CommittedDisplayController::HasCurrentPublicationOwner() const noexcept
 void CommittedDisplayController::WakeOwner() noexcept
 {
     _ready = true;
-    if (_jobs && !_stopped)
+    if (_jobs && ! _stopped)
         _jobs->NotifyOwnerWork();
 }
 void CommittedDisplayController::SetSuspendedOwner(bool suspended) noexcept
 {
-    if (!IsOwner() || !_jobs || _stopped || _suspended == suspended)
+    if (! IsOwner() || ! _jobs || _stopped || _suspended == suspended)
         return;
     _suspended = suspended;
-    if (!suspended)
+    if (! suspended)
     {
         _failed.reset(); // A real visibility transition permits one fresh admission, not repeated polling.
         RequestOwner();
@@ -756,20 +728,20 @@ void CommittedDisplayController::SetSuspendedOwner(bool suspended) noexcept
         if (cell.phase == Phase::Active)
         {
             (void)_jobs->Cancel(cell.ticket);
-            if (!cell.cleanupDispatched && cell.root && cell.root->streamInitialized)
+            if (! cell.cleanupDispatched && cell.root && cell.root->streamInitialized)
                 cell.root->stream.RequestStopOwner();
         }
     WakeOwner(); // Retirement stays event-driven while no useful display can be produced.
 }
 void CommittedDisplayController::RequestOwner() noexcept
 {
-    if (!IsOwner() || !_jobs || _stopped || _suspended)
+    if (! IsOwner() || ! _jobs || _stopped || _suspended)
         return;
     if (_published)
     {
         CommittedDisplayDescriptor descriptor;
-        if (!_client->DescribeCommittedDisplayOwner(descriptor) || !DescriptorMatches(descriptor, _pending) ||
-            !SameVisibleOpening(_published->key, descriptor.key))
+        if (! _client->DescribeCommittedDisplayOwner(descriptor) || ! DescriptorMatches(descriptor, _pending) ||
+            ! SameVisibleOpening(_published->key, descriptor.key))
             RetireCacheOwner(*_published); // Exclude old document pixels before the next owner route/frame.
     }
     _requested = true;
@@ -777,7 +749,7 @@ void CommittedDisplayController::RequestOwner() noexcept
 }
 void CommittedDisplayController::RetryOwner() noexcept
 {
-    if (IsOwner() && !_stopped)
+    if (IsOwner() && ! _stopped)
     {
         _failed.reset();
         RequestOwner();
@@ -786,11 +758,10 @@ void CommittedDisplayController::RetryOwner() noexcept
 bool CommittedDisplayController::CurrentOwner(const Cell& cell, CommittedDisplayDescriptor* output) const noexcept
 {
     CommittedDisplayDescriptor descriptor;
-    if (_stopped || _suspended || !_client->DescribeCommittedDisplayOwner(descriptor) || descriptor.key != cell.key ||
-        !DescriptorMatches(descriptor, _pending) || descriptor.key.deviceGeneration != _queue->DeviceGeneration())
+    if (_stopped || _suspended || ! _client->DescribeCommittedDisplayOwner(descriptor) || descriptor.key != cell.key ||
+        ! DescriptorMatches(descriptor, _pending) || descriptor.key.deviceGeneration != _queue->DeviceGeneration())
         return false;
-    if (cell.root &&
-        (descriptor.device != cell.root->device.get() || descriptor.immediate != cell.root->immediate.get()))
+    if (cell.root && (descriptor.device != cell.root->device.get() || descriptor.immediate != cell.root->immediate.get()))
         return false;
     if (output)
         *output = descriptor;
@@ -815,18 +786,16 @@ void CommittedDisplayController::BeginOwner(const CommittedDisplayDescriptor& de
         if (cell.phase == Phase::Empty)
             available = &cell;
     }
-    if (!available || (_failed && _failed.value() == descriptor.key) ||
-        (_published && _published->key == descriptor.key))
+    if (! available || (_failed && _failed.value() == descriptor.key) || (_published && _published->key == descriptor.key))
         return;
     RasterResidencyPlanOptions options;
     options.deviceGeneration = descriptor.key.deviceGeneration;
-    const auto admission = RasterResidencyCpuAdmission::Estimate(*descriptor.document, options);
-    auto bytes = admission.CpuBytes();
+    const auto admission     = RasterResidencyCpuAdmission::Estimate(*descriptor.document, options);
+    auto bytes               = admission.CpuBytes();
     AdjustmentDisplayAdmission::Envelope preview;
     std::uint64_t heldBytes = 0;
-    if (!DescriptorMatches(descriptor, _pending) || !admission.IsValid() ||
-        !PreviewEnvelope(descriptor, preview, heldBytes) || !Add(bytes, preview.additionalCpuBytes) ||
-        !Add(bytes, heldBytes) || !Add(bytes, sizeof(Root) + sizeof(DisplayJob) + kGraphFixedCpuBytes))
+    if (! DescriptorMatches(descriptor, _pending) || ! admission.IsValid() || ! PreviewEnvelope(descriptor, preview, heldBytes) ||
+        ! Add(bytes, preview.additionalCpuBytes) || ! Add(bytes, heldBytes) || ! Add(bytes, sizeof(Root) + sizeof(DisplayJob) + kGraphFixedCpuBytes))
     {
         _failed = descriptor.key;
         _client->CommittedDisplayFailedOwner(descriptor.key, E_OUTOFMEMORY);
@@ -834,24 +803,24 @@ void CommittedDisplayController::BeginOwner(const CommittedDisplayDescriptor& de
     }
     try
     {
-        available->key = descriptor.key;
-        auto constructed = std::make_unique<DisplayJob>(*this, *available, admission, bytes);
-        auto* raw = constructed.get();
+        available->key           = descriptor.key;
+        auto constructed         = std::make_unique<DisplayJob>(*this, *available, admission, bytes);
+        auto* raw                = constructed.get();
         std::unique_ptr<Job> job = std::move(constructed);
         JobOptions jobOptions;
-        jobOptions.kind = JobClass::Refinement;
-        jobOptions.memoryBytes = bytes;
-        jobOptions.deferredRetirement = true;
-        jobOptions.allowMemoryWaiting = false;
+        jobOptions.kind                  = JobClass::Refinement;
+        jobOptions.memoryBytes           = bytes;
+        jobOptions.deferredRetirement    = true;
+        jobOptions.allowMemoryWaiting    = false;
         jobOptions.reserveRetainedMemory = true;
-        const HRESULT submitted = _jobs->Submit(job, jobOptions, available->ticket);
+        const HRESULT submitted          = _jobs->Submit(job, jobOptions, available->ticket);
         if (FAILED(submitted))
         {
             _failed = descriptor.key;
             _client->CommittedDisplayFailedOwner(descriptor.key, submitted);
             return;
         }
-        available->job = raw;
+        available->job   = raw;
         available->phase = Phase::Active;
     }
     catch (const std::bad_alloc&)
@@ -860,18 +829,16 @@ void CommittedDisplayController::BeginOwner(const CommittedDisplayDescriptor& de
         _client->CommittedDisplayFailedOwner(descriptor.key, E_OUTOFMEMORY);
     }
 }
-HRESULT CommittedDisplayController::AdmitRecordingOwner(Cell& cell,
-                                                        const CommittedDisplayDescriptor& descriptor) noexcept
+HRESULT CommittedDisplayController::AdmitRecordingOwner(Cell& cell, const CommittedDisplayDescriptor& descriptor) noexcept
 {
-    auto& root = *cell.root;
+    auto& root            = *cell.root;
     const auto layerCount = root.manifest->Plan().Source().layers.size() + root.seedLayers;
-    auto cpu = root.bytes;
-    if (layerCount > (std::numeric_limits<std::uint64_t>::max)() / kPerLayerContainerBytes ||
-        !Add(cpu, layerCount * kPerLayerContainerBytes) ||
-        (root.software && !Add(cpu, root.manifest->LogicalGpuBytes())))
+    auto cpu              = root.bytes;
+    if (layerCount > (std::numeric_limits<std::uint64_t>::max)() / kPerLayerContainerBytes || ! Add(cpu, layerCount * kPerLayerContainerBytes) ||
+        (root.software && ! Add(cpu, root.manifest->LogicalGpuBytes())))
         return E_OUTOFMEMORY;
     HRESULT result = _jobs->IncreaseReservation(cell.ticket, cpu);
-    if (FAILED(result) || !CurrentOwner(cell))
+    if (FAILED(result) || ! CurrentOwner(cell))
         return FAILED(result) ? result : E_ABORT;
     root.bytes = cpu;
     GpuCapabilities::VideoMemorySnapshot snapshot;
@@ -880,31 +847,28 @@ HRESULT CommittedDisplayController::AdmitRecordingOwner(Cell& cell,
         return result;
     // Software DEFAULT textures are additionally charged to physical/commit memory above. The GPU-domain
     // charge still requires a successful actual segment query; unsupported/zero budgets refuse activation.
-    const auto& segment =
-        root.software && snapshot.nonLocal.available && snapshot.nonLocal.budget ? snapshot.nonLocal : snapshot.local;
-    if (!segment.available || !segment.budget)
+    const auto& segment = root.software && snapshot.nonLocal.available && snapshot.nonLocal.budget ? snapshot.nonLocal : snapshot.local;
+    if (! segment.available || ! segment.budget)
         return FAILED(segment.queryResult) ? segment.queryResult : E_OUTOFMEMORY;
     GpuResidencyAdmission decision{};
     auto gpu = root.manifest->RequiredGpuBytes();
-    if (!Add(gpu, root.previewEnvelope.additionalGpuBytes))
+    if (! Add(gpu, root.previewEnvelope.additionalGpuBytes))
         return E_OUTOFMEMORY;
-    cell.gpu =
-        _gpuBudget->ReserveOwner(gpu, {cell.key.deviceGeneration, segment.budget, segment.currentUsage}, decision);
-    if (!cell.gpu)
+    cell.gpu = _gpuBudget->ReserveOwner(gpu, {cell.key.deviceGeneration, segment.budget, segment.currentUsage}, decision);
+    if (! cell.gpu)
         return E_OUTOFMEMORY;
     result = root.stream.InitializeOwner(*_jobs, cell.ticket, cell.key.deviceGeneration);
     if (FAILED(result))
         return result;
     root.streamInitialized = true;
-    result = _commands->AttachOwner(root.stream, cell.ticket, cell, cell.source);
+    result                 = _commands->AttachOwner(root.stream, cell.ticket, cell, cell.source);
     if (FAILED(result))
         return result;
     // Strong device/context capture preceded creation, after initial admission; description revalidation above
     // binds this exact original queue context. Attachment owns the completion references until real retirement.
     return descriptor.device == root.device.get() ? S_OK : E_ABORT;
 }
-void CommittedDisplayController::Cell::CommandAcknowledgedOwner(JobTicket sourceTicket, GpuCommandLease,
-                                                                HRESULT result) noexcept
+void CommittedDisplayController::Cell::CommandAcknowledgedOwner(JobTicket sourceTicket, GpuCommandLease, HRESULT result) noexcept
 {
     if (phase != Phase::Active || ticket != sourceTicket)
         std::terminate();
@@ -920,11 +884,9 @@ void CommittedDisplayController::Cell::CommandSourceFailedOwner(JobTicket source
         terminal = result;
     owner->WakeOwner();
 }
-void CommittedDisplayController::Cell::GpuCompletionReady(JobTicket sourceTicket, std::uint64_t generation,
-                                                          HRESULT) noexcept
+void CommittedDisplayController::Cell::GpuCompletionReady(JobTicket sourceTicket, std::uint64_t generation, HRESULT) noexcept
 {
-    if (phase != Phase::RetiringGpu || !waiting || sourceTicket != ticket ||
-        generation != root->captured.DeviceGeneration())
+    if (phase != Phase::RetiringGpu || ! waiting || sourceTicket != ticket || generation != root->captured.DeviceGeneration())
         std::terminate();
     waiting = false;
     owner->RetireCacheForWorkOwner(*this); // Actual original-use acknowledgement, including stale E_ABORT.
@@ -934,16 +896,16 @@ void CommittedDisplayController::PublishedOwner(Cell& cell) noexcept
     const HRESULT published = cell.root->graph.PublishOwner(cell.root->immediate.get());
     if (FAILED(published))
     {
-        cell.phase = Phase::Cached;
+        cell.phase    = Phase::Cached;
         cell.terminal = published;
-        _failed = cell.key;
+        _failed       = cell.key;
         RetireCacheOwner(cell);
         _client->CommittedDisplayFailedOwner(cell.key, published);
         return;
     }
     auto* previous = _published;
-    cell.phase = Phase::Cached;
-    _published = &cell;
+    cell.phase     = Phase::Cached;
+    _published     = &cell;
     _failed.reset();
     _client->CommittedDisplayPublishedOwner(&cell.root->graph);
     if (previous)
@@ -964,11 +926,11 @@ void CommittedDisplayController::RetireCacheOwner(Cell& cell) noexcept
     // residency. Its worker retains the guard until join; only then detach and record the last-use barrier.
     if (SeedBorrowedOwner(cell))
         return;
-    if (!cell.root->graph.DetachOwner())
+    if (! cell.root->graph.DetachOwner())
         std::terminate();
     cell.root->detached = true;
-    cell.phase = Phase::RetiringGpu;
-    cell.recoveryArmed = true;
+    cell.phase          = Phase::RetiringGpu;
+    cell.recoveryArmed  = true;
     WakeOwner();
 }
 void CommittedDisplayController::RetireCacheForWorkOwner(Cell& cell) noexcept
@@ -976,14 +938,14 @@ void CommittedDisplayController::RetireCacheForWorkOwner(Cell& cell) noexcept
     cell.phase = Phase::RetiringWorker;
     // No new job admission is needed for noncancellable retirement. The installed original sink/pool outlive
     // this node. Whole CPU/GPU charges survive actual destruction and its fixed-cell acknowledgement.
-    if (!TryDeferRelease(*cell.root, DeferredReleasePolicy::AlwaysOnOwner))
+    if (! TryDeferRelease(*cell.root, DeferredReleasePolicy::AlwaysOnOwner))
         std::terminate(); // Startup must enable deferred release before this controller can be activated.
 }
 void CommittedDisplayController::DestroyRootForWork(DeferredReleaseNode* node) noexcept
 {
-    auto* root = static_cast<Root*>(node);
-    auto& cell = *root->cell;
-    auto& owner = *cell.owner;
+    auto* root             = static_cast<Root*>(node);
+    auto& cell             = *root->cell;
+    auto& owner            = *cell.owner;
     auto publicationMemory = std::move(root->publicationMemory);
     root->RetireForWork();
     delete root;
@@ -996,26 +958,26 @@ void CommittedDisplayController::FinishCellOwner(Cell& cell) noexcept
     if (cell.externalBorrow)
         std::terminate(); // Cannot refund/delete a root still borrowed by an original recorder.
     cell.root = nullptr;
-    cell.job = nullptr;
+    cell.job  = nullptr;
     cell.seed = nullptr;
     cell.gpu.ResetOwner();
     if (cell.retained.generation)
     {
-        if (!_jobs->ReleaseRetainedMemory(cell.retained))
+        if (! _jobs->ReleaseRetainedMemory(cell.retained))
             std::terminate();
         cell.retained = {};
     }
-    cell.phase = Phase::Empty;
-    cell.key = {};
-    cell.ticket = {};
-    cell.source = {};
-    cell.terminal = S_OK;
-    cell.recordingJoined = false;
-    cell.cleanupDispatched = false;
+    cell.phase               = Phase::Empty;
+    cell.key                 = {};
+    cell.ticket              = {};
+    cell.source              = {};
+    cell.terminal            = S_OK;
+    cell.recordingJoined     = false;
+    cell.cleanupDispatched   = false;
     cell.retirementRequested = false;
-    cell.waiting = false;
-    cell.quarantine = false;
-    cell.recoveryArmed = false;
+    cell.waiting             = false;
+    cell.quarantine          = false;
+    cell.recoveryArmed       = false;
     cell.workerRetired.store(false, std::memory_order_relaxed);
 }
 bool CommittedDisplayController::HasPending() const noexcept
@@ -1027,7 +989,7 @@ bool CommittedDisplayController::HasPending() const noexcept
 }
 bool CommittedDisplayController::HasReady() const noexcept
 {
-    if (!IsOwner() || _stopped)
+    if (! IsOwner() || _stopped)
         return false;
     if (_ready)
         return true;
@@ -1035,21 +997,20 @@ bool CommittedDisplayController::HasReady() const noexcept
     {
         if (cell.workerRetired.load(std::memory_order_acquire))
             return true;
-        if (cell.phase == Phase::Cached && cell.retirementRequested && !SeedBorrowedOwner(cell))
+        if (cell.phase == Phase::Cached && cell.retirementRequested && ! SeedBorrowedOwner(cell))
             return true;
-        if (cell.phase == Phase::Active && cell.recordingJoined && !cell.cleanupDispatched && cell.root &&
-            cell.root->streamInitialized && cell.root->stream.CanRetireOwner())
+        if (cell.phase == Phase::Active && cell.recordingJoined && ! cell.cleanupDispatched && cell.root && cell.root->streamInitialized &&
+            cell.root->stream.CanRetireOwner())
             return true;
-        if (cell.phase == Phase::RetiringGpu && !cell.waiting && cell.recoveryArmed &&
-            (FAILED(cell.root->captured.DeviceStatusOwner()) ||
-             _queue->HasRetirementCompletionSlot(cell.root->captured)))
+        if (cell.phase == Phase::RetiringGpu && ! cell.waiting && cell.recoveryArmed &&
+            (FAILED(cell.root->captured.DeviceStatusOwner()) || _queue->HasRetirementCompletionSlot(cell.root->captured)))
             return true;
     }
     return false;
 }
 void CommittedDisplayController::Pump() noexcept
 {
-    if (!HasReady())
+    if (! HasReady())
         return;
     _ready = false;
     for (auto& cell : _cells)
@@ -1060,55 +1021,52 @@ void CommittedDisplayController::Pump() noexcept
             WakeOwner();
             return;
         }
-        if (cell.phase == Phase::Cached && cell.retirementRequested && !SeedBorrowedOwner(cell))
+        if (cell.phase == Phase::Cached && cell.retirementRequested && ! SeedBorrowedOwner(cell))
         {
             RetireCacheOwner(cell);
             return;
         }
-        if (cell.phase == Phase::Active && cell.recordingJoined && !cell.cleanupDispatched &&
-            cell.root->streamInitialized && cell.root->stream.CanRetireOwner())
+        if (cell.phase == Phase::Active && cell.recordingJoined && ! cell.cleanupDispatched && cell.root->streamInitialized &&
+            cell.root->stream.CanRetireOwner())
         {
-            if ((cell.source.generation && !_commands->DetachOwner(cell.source, cell.root->captured)) ||
-                !cell.root->stream.AuthorizeRetirementOwner())
+            if ((cell.source.generation && ! _commands->DetachOwner(cell.source, cell.root->captured)) || ! cell.root->stream.AuthorizeRetirementOwner())
                 std::terminate();
             cell.root->streamRetirementAuthorized = true;
-            cell.source = {};
-            cell.recordingJoined = false; // Consume the acknowledged stage once; transport is now running.
+            cell.source                           = {};
+            cell.recordingJoined                  = false; // Consume the acknowledged stage once; transport is now running.
             cell.job->BeginTransportRetirementOwner();
             return;
         }
-        if (cell.phase == Phase::RetiringGpu && !cell.waiting && cell.recoveryArmed &&
-            (FAILED(cell.root->captured.DeviceStatusOwner()) ||
-             _queue->HasRetirementCompletionSlot(cell.root->captured)))
+        if (cell.phase == Phase::RetiringGpu && ! cell.waiting && cell.recoveryArmed &&
+            (FAILED(cell.root->captured.DeviceStatusOwner()) || _queue->HasRetirementCompletionSlot(cell.root->captured)))
         {
-            cell.recoveryArmed = false;
+            cell.recoveryArmed   = false;
             const HRESULT status = cell.root->captured.DeviceStatusOwner();
             if (FAILED(status))
                 RetireCacheForWorkOwner(cell); // Actual original-device removal permits destruction only.
             else
             {
                 const HRESULT recorded = _queue->EnqueueRetirementCompletion(cell.root->captured, cell.ticket, cell);
-                cell.waiting = SUCCEEDED(recorded);
-                cell.quarantine = FAILED(recorded); // Healthy failed signal stays charged and dormant.
+                cell.waiting           = SUCCEEDED(recorded);
+                cell.quarantine        = FAILED(recorded); // Healthy failed signal stays charged and dormant.
             }
             return;
         }
     }
-    if (_requested && !_suspended)
+    if (_requested && ! _suspended)
     {
         CommittedDisplayDescriptor descriptor;
         const bool described = _client->DescribeCommittedDisplayOwner(descriptor);
-        if (_published && (!described || !DescriptorMatches(descriptor, _pending) ||
-                           !SameVisibleOpening(_published->key, descriptor.key)))
+        if (_published && (! described || ! DescriptorMatches(descriptor, _pending) || ! SameVisibleOpening(_published->key, descriptor.key)))
             RetireCacheOwner(*_published); // A different document/device cannot display the old document's pixels.
         for (auto& cell : _cells)
-            if (cell.phase == Phase::Active && (!described || cell.key != descriptor.key))
+            if (cell.phase == Phase::Active && (! described || cell.key != descriptor.key))
             {
                 (void)_jobs->Cancel(cell.ticket);
-                if (!cell.cleanupDispatched && cell.root && cell.root->streamInitialized)
+                if (! cell.cleanupDispatched && cell.root && cell.root->streamInitialized)
                     cell.root->stream.RequestStopOwner();
             }
-        if (!described)
+        if (! described)
         {
             if (_published)
                 RetireCacheOwner(*_published);
@@ -1120,7 +1078,7 @@ void CommittedDisplayController::Pump() noexcept
 }
 void CommittedDisplayController::DeviceChangedOwner() noexcept
 {
-    if (!IsOwner() || _stopped)
+    if (! IsOwner() || _stopped)
         return;
     if (_ownsCommandPump)
         _commands->DeviceChangedOwner();
@@ -1131,10 +1089,10 @@ void CommittedDisplayController::DeviceChangedOwner() noexcept
 }
 void CommittedDisplayController::StopOwner() noexcept
 {
-    if (!IsOwner() || !_jobs || _stopped)
+    if (! IsOwner() || ! _jobs || _stopped)
         return;
-    _stopped = true;
-    _ready = false;
+    _stopped   = true;
+    _ready     = false;
     _requested = false;
     _published = nullptr;
     if (_client)
@@ -1144,8 +1102,7 @@ void CommittedDisplayController::StopOwner() noexcept
         {
             if (cell.job)
                 (void)_jobs->Cancel(cell.ticket);
-            if (cell.phase != Phase::RetiringWorker && !cell.cleanupDispatched && cell.root &&
-                cell.root->streamInitialized)
+            if (cell.phase != Phase::RetiringWorker && ! cell.cleanupDispatched && cell.root && cell.root->streamInitialized)
                 cell.root->stream.RequestStopOwner();
         }
     if (_ownsCommandPump)
@@ -1153,7 +1110,7 @@ void CommittedDisplayController::StopOwner() noexcept
 }
 void CommittedDisplayController::JoinedShutdownOwner() noexcept
 {
-    if (!IsOwner() || !_stopped || _joined)
+    if (! IsOwner() || ! _stopped || _joined)
         std::terminate();
     // Actual scheduler producer joins precede this hook. The pump handles an empty recorder that never ran
     // separately from every submitted use, without delivering callbacks or successful pixels.
@@ -1163,26 +1120,25 @@ void CommittedDisplayController::JoinedShutdownOwner() noexcept
     {
         if (cell.externalBorrow || cell.phase == Phase::Publication)
             std::terminate(); // External parents must release after their actual producer joins, before this hook.
-        if (!cell.root || cell.phase == Phase::RetiringWorker)
+        if (! cell.root || cell.phase == Phase::RetiringWorker)
             continue; // A queued sink node is consumed by the final worker after this hook.
         if (cell.source.generation)
         {
-            if (!_commands->DetachOwner(cell.source, cell.root->captured))
+            if (! _commands->DetachOwner(cell.source, cell.root->captured))
                 std::terminate();
             cell.source = {};
         }
-        if (cell.root->streamInitialized && !cell.root->streamRetired && !cell.root->streamRetirementAuthorized)
+        if (cell.root->streamInitialized && ! cell.root->streamRetired && ! cell.root->streamRetirementAuthorized)
         {
             HRESULT producer = E_PENDING;
-            if ((!cell.root->stream.ProducerFinishedOwner(producer) &&
-                 !cell.root->stream.AcknowledgeEmptyJoinedShutdownOwner()) ||
-                !cell.root->stream.AuthorizeRetirementOwner())
+            if ((! cell.root->stream.ProducerFinishedOwner(producer) && ! cell.root->stream.AcknowledgeEmptyJoinedShutdownOwner()) ||
+                ! cell.root->stream.AuthorizeRetirementOwner())
                 std::terminate();
             cell.root->streamRetirementAuthorized = true;
         }
-        if (!cell.root->detached)
+        if (! cell.root->detached)
         {
-            if (!cell.root->graph.DetachOwner())
+            if (! cell.root->graph.DetachOwner())
                 std::terminate();
             cell.root->detached = true;
         }
@@ -1192,15 +1148,15 @@ void CommittedDisplayController::JoinedShutdownOwner() noexcept
 }
 void CommittedDisplayController::RetireShutdownForWork() noexcept
 {
-    if (IsOwner() || !_joined)
+    if (IsOwner() || ! _joined)
         std::terminate();
     for (auto& cell : _cells)
     {
-        if (!cell.root || cell.phase == Phase::RetiringWorker)
+        if (! cell.root || cell.phase == Phase::RetiringWorker)
             continue;
-        if (cell.root->streamRetirementAuthorized && !cell.root->streamRetired)
+        if (cell.root->streamRetirementAuthorized && ! cell.root->streamRetired)
         {
-            if (!cell.root->stream.RetireForWork())
+            if (! cell.root->stream.RetireForWork())
                 std::terminate();
             cell.root->streamRetired = true;
         }
@@ -1213,26 +1169,25 @@ void CommittedDisplayController::RetireShutdownForWork() noexcept
 }
 bool CommittedDisplayController::CloseAfterWorkersOwner() noexcept
 {
-    if (!IsOwner() || !_joined)
+    if (! IsOwner() || ! _joined)
         return false;
     for (auto& cell : _cells)
     {
-        if (cell.externalBorrow || cell.phase == Phase::Publication ||
-            (cell.root && !cell.workerRetired.load(std::memory_order_acquire)))
+        if (cell.externalBorrow || cell.phase == Phase::Publication || (cell.root && ! cell.workerRetired.load(std::memory_order_acquire)))
             return false;
-        cell.root = nullptr;
-        cell.job = nullptr;
+        cell.root     = nullptr;
+        cell.job      = nullptr;
         cell.retained = {};
         cell.gpu.ResetOwner();
         cell.phase = Phase::Empty;
     }
-    if ((_ownsCommandPump && !_commands->CloseOwner()) || !_routes->Detach(*this))
+    if ((_ownsCommandPump && ! _commands->CloseOwner()) || ! _routes->Detach(*this))
         return false;
-    _routes = nullptr;
-    _jobs = nullptr;
-    _queue = nullptr;
+    _routes   = nullptr;
+    _jobs     = nullptr;
+    _queue    = nullptr;
     _commands = nullptr;
-    _client = nullptr;
+    _client   = nullptr;
     return true;
 }
 
@@ -1242,23 +1197,28 @@ PreparedCommittedDisplay::~PreparedCommittedDisplay()
         std::terminate(); // No implicit partial-graph destruction on the owner or before GPU acknowledgement.
 }
 
-std::unique_ptr<PreparedCommittedDisplay> PreparedCommittedDisplay::PrepareForWork(
-    std::uint32_t ownerThread, CanvasDocument source, RasterResidencyCpuAdmission admission, std::uint64_t cpuBound,
-    ID3D11Device* device, ID3D11DeviceContext* originalContext, GpuCompletionContext captured, CancelToken cancellation)
+std::unique_ptr<PreparedCommittedDisplay> PreparedCommittedDisplay::PrepareForWork(std::uint32_t ownerThread,
+                                                                                   CanvasDocument source,
+                                                                                   RasterResidencyCpuAdmission admission,
+                                                                                   std::uint64_t cpuBound,
+                                                                                   ID3D11Device* device,
+                                                                                   ID3D11DeviceContext* originalContext,
+                                                                                   GpuCompletionContext captured,
+                                                                                   CancelToken cancellation)
 {
-    if (!ownerThread || ownerThread == GetCurrentThreadId() || !admission.IsValid() ||
-        cpuBound < admission.CpuBytes() || cpuBound - admission.CpuBytes() < sizeof(Storage) + 4096 ||
-        !captured.MatchesBindingForWork(ownerThread, device, originalContext) || cancellation.IsCancelled())
+    if (! ownerThread || ownerThread == GetCurrentThreadId() || ! admission.IsValid() || cpuBound < admission.CpuBytes() ||
+        cpuBound - admission.CpuBytes() < sizeof(Storage) + 4096 || ! captured.MatchesBindingForWork(ownerThread, device, originalContext) ||
+        cancellation.IsCancelled())
         return {};
     // The owner already validated and captured this binding. Even observational context methods such as
     // GetType/GetDevice race with rendering here; compare immutable captured identities only on this worker.
-    auto root = std::make_unique<Storage>(ownerThread);
-    root->bytes = cpuBound;
-    root->device = device;
+    auto root       = std::make_unique<Storage>(ownerThread);
+    root->bytes     = cpuBound;
+    root->device    = device;
     root->immediate = originalContext;
-    root->captured = std::move(captured);
-    root->manifest = RasterResidencyManifestWork::Prepare(std::move(source), admission, cancellation);
-    if (!root->manifest)
+    root->captured  = std::move(captured);
+    root->manifest  = RasterResidencyManifestWork::Prepare(std::move(source), admission, cancellation);
+    if (! root->manifest)
         return {};
     auto prepared = std::unique_ptr<PreparedCommittedDisplay>(new PreparedCommittedDisplay(root.get()));
     (void)root.release();
@@ -1270,19 +1230,17 @@ const RasterResidencyManifestWork* PreparedCommittedDisplay::ManifestAfterJoin()
     return _storage ? _storage->manifest.get() : nullptr;
 }
 
-HRESULT PreparedCommittedDisplay::RecordForWork(GpuCommandStream& stream, CancelToken cancellation,
-                                                const RecordedDisplayGraph* seed) noexcept
+HRESULT PreparedCommittedDisplay::RecordForWork(GpuCommandStream& stream, CancelToken cancellation, const RecordedDisplayGraph* seed) noexcept
 {
-    if (!_storage || !_storage->manifest || _storage->ownerThread == GetCurrentThreadId())
+    if (! _storage || ! _storage->manifest || _storage->ownerThread == GetCurrentThreadId())
         return E_INVALIDARG;
-    return _storage->graph.PrepareForWork(_storage->device.get(), _storage->manifest->Plan().Source(), stream,
-                                          std::move(cancellation), seed);
+    return _storage->graph.PrepareForWork(_storage->device.get(), _storage->manifest->Plan().Source(), stream, std::move(cancellation), seed);
 }
 
 bool PreparedCommittedDisplay::BindMemoryOwner(const std::shared_ptr<const SharedPublicationMemory>& memory) noexcept
 {
-    if (!_storage || _storage->ownerThread != GetCurrentThreadId() || _storage->publicationMemory || !memory ||
-        !memory->IsBound() || memory->Bytes() < _storage->bytes)
+    if (! _storage || _storage->ownerThread != GetCurrentThreadId() || _storage->publicationMemory || ! memory || ! memory->IsBound() ||
+        memory->Bytes() < _storage->bytes)
         return false;
     _storage->publicationMemory = memory;
     return true;
@@ -1290,14 +1248,14 @@ bool PreparedCommittedDisplay::BindMemoryOwner(const std::shared_ptr<const Share
 
 HRESULT PreparedCommittedDisplay::PublishOwner() noexcept
 {
-    if (!_storage || _storage->ownerThread != GetCurrentThreadId() || !_storage->publicationMemory)
+    if (! _storage || _storage->ownerThread != GetCurrentThreadId() || ! _storage->publicationMemory)
         return E_INVALIDARG;
     return _storage->graph.PublishOwner(_storage->immediate.get());
 }
 
 bool PreparedCommittedDisplay::DetachOwner() noexcept
 {
-    if (!_storage || _storage->ownerThread != GetCurrentThreadId() || !_storage->graph.DetachOwner())
+    if (! _storage || _storage->ownerThread != GetCurrentThreadId() || ! _storage->graph.DetachOwner())
         return false;
     _storage->detached = true;
     return true;
@@ -1305,7 +1263,7 @@ bool PreparedCommittedDisplay::DetachOwner() noexcept
 
 bool PreparedCommittedDisplay::RetireForWork() noexcept
 {
-    if (!_storage || _storage->ownerThread == GetCurrentThreadId())
+    if (! _storage || _storage->ownerThread == GetCurrentThreadId())
         return false;
     // Root's ordinary helper asserts the graph's exact worker/phase contract. The parent already joined
     // its recorder, retired every command owner and acknowledged original GPU use; this API implies none.
@@ -1322,56 +1280,47 @@ CommittedDisplayPublicationSlot::~CommittedDisplayPublicationSlot()
         std::terminate(); // Explicit owner release after the parent actually joins, never a worker destructor.
 }
 
-CommittedDisplayController::Cell* CommittedDisplayController::PublicationCellOwner(
-    const CommittedDisplayPublicationSlot& slot) noexcept
+CommittedDisplayController::Cell* CommittedDisplayController::PublicationCellOwner(const CommittedDisplayPublicationSlot& slot) noexcept
 {
-    if (!IsOwner() || slot._owner != this || slot._cell >= _cells.size())
+    if (! IsOwner() || slot._owner != this || slot._cell >= _cells.size())
         return nullptr;
     auto& cell = _cells[slot._cell];
-    return cell.phase == Phase::Publication && cell.publicationGeneration == slot._generation &&
-                   cell.ticket == slot._original
-               ? &cell
-               : nullptr;
+    return cell.phase == Phase::Publication && cell.publicationGeneration == slot._generation && cell.ticket == slot._original ? &cell : nullptr;
 }
 
-const CommittedDisplayController::Cell* CommittedDisplayController::PublicationCellOwner(
-    const CommittedDisplayPublicationSlot& slot) const noexcept
+const CommittedDisplayController::Cell* CommittedDisplayController::PublicationCellOwner(const CommittedDisplayPublicationSlot& slot) const noexcept
 {
-    if (!IsOwner() || slot._owner != this || slot._cell >= _cells.size())
+    if (! IsOwner() || slot._owner != this || slot._cell >= _cells.size())
         return nullptr;
     const auto& cell = _cells[slot._cell];
-    return cell.phase == Phase::Publication && cell.publicationGeneration == slot._generation &&
-                   cell.ticket == slot._original
-               ? &cell
-               : nullptr;
+    return cell.phase == Phase::Publication && cell.publicationGeneration == slot._generation && cell.ticket == slot._original ? &cell : nullptr;
 }
 
-bool CommittedDisplayController::ClaimPublicationSlotOwner(JobTicket original,
-                                                           CommittedDisplayPublicationSlot& slot) noexcept
+bool CommittedDisplayController::ClaimPublicationSlotOwner(JobTicket original, CommittedDisplayPublicationSlot& slot) noexcept
 {
-    if (!IsOwner() || !_jobs || _pending || _stopped || _suspended || slot ||
-        original.slot >= JobScheduler::kCapacity || !original.generation || !_jobs->InAcknowledgedJobCallback(original))
+    if (! IsOwner() || ! _jobs || _pending || _stopped || _suspended || slot || original.slot >= JobScheduler::kCapacity || ! original.generation ||
+        ! _jobs->InAcknowledgedJobCallback(original))
         return false;
     for (const auto& cell : _cells)
         if (cell.phase == Phase::Active || cell.phase == Phase::Publication)
             return false;
     CommittedDisplayDescriptor descriptor;
-    if (!_client->DescribeCommittedDisplayOwner(descriptor) || !descriptor.document || !descriptor.device ||
-        !descriptor.immediate || descriptor.key.deviceGeneration != _queue->DeviceGeneration())
+    if (! _client->DescribeCommittedDisplayOwner(descriptor) || ! descriptor.document || ! descriptor.device || ! descriptor.immediate ||
+        descriptor.key.deviceGeneration != _queue->DeviceGeneration())
         return false;
     for (std::size_t index = 0; index < _cells.size(); ++index)
     {
         auto& cell = _cells[index];
         if (cell.phase != Phase::Empty || cell.publicationGeneration == (std::numeric_limits<std::uint64_t>::max)())
             continue;
-        cell.phase = Phase::Publication;
-        cell.key = descriptor.key;
+        cell.phase  = Phase::Publication;
+        cell.key    = descriptor.key;
         cell.ticket = original;
         ++cell.publicationGeneration;
-        slot._owner = this;
-        slot._cell = index;
+        slot._owner      = this;
+        slot._cell       = index;
         slot._generation = cell.publicationGeneration;
-        slot._original = original;
+        slot._original   = original;
         return true;
     }
     return false;
@@ -1383,42 +1332,39 @@ bool CommittedDisplayController::PublicationSlotCurrentOwner(const CommittedDisp
     return cell && _jobs->InAcknowledgedJobCallback(slot._original) && CurrentOwner(*cell);
 }
 
-HRESULT CommittedDisplayController::ReservePublicationGpuOwner(CommittedDisplayPublicationSlot& slot,
-                                                               ID3D11Device* device, bool software, std::uint64_t bytes,
-                                                               GpuResidencyReservation& reservation) noexcept
+HRESULT CommittedDisplayController::ReservePublicationGpuOwner(
+    CommittedDisplayPublicationSlot& slot, ID3D11Device* device, bool software, std::uint64_t bytes, GpuResidencyReservation& reservation) noexcept
 {
     auto* cell = PublicationCellOwner(slot);
     CommittedDisplayDescriptor descriptor;
-    if (!cell || reservation || !bytes || !_jobs->InAcknowledgedJobCallback(slot._original) ||
-        !CurrentOwner(*cell, &descriptor) || device != descriptor.device || software != descriptor.software)
+    if (! cell || reservation || ! bytes || ! _jobs->InAcknowledgedJobCallback(slot._original) || ! CurrentOwner(*cell, &descriptor) ||
+        device != descriptor.device || software != descriptor.software)
         return E_INVALIDARG;
     GpuCapabilities::VideoMemorySnapshot snapshot;
     const HRESULT queried = GpuCapabilities::QueryVideoMemorySnapshot(device, snapshot);
     if (FAILED(queried))
         return queried;
-    const auto& segment =
-        software && snapshot.nonLocal.available && snapshot.nonLocal.budget ? snapshot.nonLocal : snapshot.local;
-    if (!segment.available || !segment.budget)
+    const auto& segment = software && snapshot.nonLocal.available && snapshot.nonLocal.budget ? snapshot.nonLocal : snapshot.local;
+    if (! segment.available || ! segment.budget)
         return FAILED(segment.queryResult) ? segment.queryResult : E_OUTOFMEMORY;
     GpuResidencyAdmission decision{};
-    reservation =
-        _gpuBudget->ReserveOwner(bytes, {cell->key.deviceGeneration, segment.budget, segment.currentUsage}, decision);
+    reservation = _gpuBudget->ReserveOwner(bytes, {cell->key.deviceGeneration, segment.budget, segment.currentUsage}, decision);
     return reservation ? S_OK : E_OUTOFMEMORY;
 }
 
 bool CommittedDisplayController::ReleasePublicationSlotOwner(CommittedDisplayPublicationSlot& slot) noexcept
 {
     auto* cell = PublicationCellOwner(slot);
-    if (!cell || cell->root || cell->job || cell->gpu || cell->retained.generation)
+    if (! cell || cell->root || cell->job || cell->gpu || cell->retained.generation)
         return false;
-    cell->phase = Phase::Empty;
-    cell->key = {};
-    cell->ticket = {};
-    slot._owner = nullptr;
-    slot._cell = _cells.size();
+    cell->phase      = Phase::Empty;
+    cell->key        = {};
+    cell->ticket     = {};
+    slot._owner      = nullptr;
+    slot._cell       = _cells.size();
     slot._generation = 0;
-    slot._original = {};
-    if (!_stopped)
+    slot._original   = {};
+    if (! _stopped)
         WakeOwner();
     return true;
 }
@@ -1432,45 +1378,38 @@ bool CommittedDisplayController::AdoptPublicationOwner(CommittedDisplayPublicati
     CommittedDisplayDescriptor descriptor;
     // Publication changed the generation. Recheck session/document identity and the new root itself;
     // do not require the pre-edit generation to equal the final prepared document's current generation.
-    if (!cell || !root || !_jobs->InAcknowledgedJobCallback(slot._original) || _stopped || _suspended || cell->root ||
-        cell->job || root->ownerThread != GetCurrentThreadId() || !root->publicationMemory ||
-        !root->publicationMemory->BoundTo(*_jobs, slot._original) || !reservation ||
-        !reservation.BelongsTo(*_gpuBudget) || !root->manifest ||
-        reservation.Bytes() < root->manifest->RequiredGpuBytes() ||
-        reservation.DeviceGeneration() != cell->key.deviceGeneration ||
-        !_client->DescribeCommittedDisplayOwner(descriptor) || !descriptor.document ||
+    if (! cell || ! root || ! _jobs->InAcknowledgedJobCallback(slot._original) || _stopped || _suspended || cell->root || cell->job ||
+        root->ownerThread != GetCurrentThreadId() || ! root->publicationMemory || ! root->publicationMemory->BoundTo(*_jobs, slot._original) || ! reservation ||
+        ! reservation.BelongsTo(*_gpuBudget) || ! root->manifest || reservation.Bytes() < root->manifest->RequiredGpuBytes() ||
+        reservation.DeviceGeneration() != cell->key.deviceGeneration || ! _client->DescribeCommittedDisplayOwner(descriptor) || ! descriptor.document ||
         descriptor.key.document.sessionIdentity != cell->key.document.sessionIdentity ||
         descriptor.key.document.documentSerial != cell->key.document.documentSerial ||
         descriptor.key.document.restoreSerial != cell->key.document.restoreSerial ||
         cell->key.document.generation == (std::numeric_limits<std::uint64_t>::max)() ||
-        descriptor.key.document.generation != cell->key.document.generation + 1 ||
-        descriptor.key.deviceGeneration != cell->key.deviceGeneration || descriptor.device != root->device.get() ||
-        descriptor.immediate != root->immediate.get() ||
+        descriptor.key.document.generation != cell->key.document.generation + 1 || descriptor.key.deviceGeneration != cell->key.deviceGeneration ||
+        descriptor.device != root->device.get() || descriptor.immediate != root->immediate.get() ||
         descriptor.document->id != root->manifest->Plan().Source().id ||
         descriptor.document->layers.Identity() != root->manifest->Plan().Source().layers.Identity() ||
-        descriptor.document->width != root->manifest->Plan().Source().width ||
-        descriptor.document->height != root->manifest->Plan().Source().height ||
+        descriptor.document->width != root->manifest->Plan().Source().width || descriptor.document->height != root->manifest->Plan().Source().height ||
         descriptor.document->resolution != root->manifest->Plan().Source().resolution ||
         descriptor.document->selection.has_value() != root->manifest->Plan().Source().selection.has_value() ||
-        (descriptor.document->selection &&
-         (descriptor.document->selection->antialiased != root->manifest->Plan().Source().selection->antialiased ||
-          descriptor.document->selection->loops.Identity() !=
-              root->manifest->Plan().Source().selection->loops.Identity())) ||
-        !root->graph.IsPublishedOnOwner(descriptor.device, descriptor.immediate))
+        (descriptor.document->selection && (descriptor.document->selection->antialiased != root->manifest->Plan().Source().selection->antialiased ||
+                                            descriptor.document->selection->loops.Identity() != root->manifest->Plan().Source().selection->loops.Identity())) ||
+        ! root->graph.IsPublishedOnOwner(descriptor.device, descriptor.immediate))
         return false;
-    root->cell = cell;
-    root->destroy = &CommittedDisplayController::DestroyRootForWork;
-    cell->root = std::exchange(prepared._storage, nullptr);
-    cell->gpu = std::move(reservation);
-    cell->key = descriptor.key;
-    cell->phase = Phase::Cached;
+    root->cell     = cell;
+    root->destroy  = &CommittedDisplayController::DestroyRootForWork;
+    cell->root     = std::exchange(prepared._storage, nullptr);
+    cell->gpu      = std::move(reservation);
+    cell->key      = descriptor.key;
+    cell->phase    = Phase::Cached;
     auto* previous = _published;
-    _published = cell;
+    _published     = cell;
     _failed.reset();
-    slot._owner = nullptr;
-    slot._cell = _cells.size();
+    slot._owner      = nullptr;
+    slot._cell       = _cells.size();
     slot._generation = 0;
-    slot._original = {};
+    slot._original   = {};
     _client->CommittedDisplayPublishedOwner(&root->graph);
     if (previous)
         RetireCacheOwner(*previous);
@@ -1486,23 +1425,17 @@ bool CommittedDisplayController::CanAdoptPublicationOwner(const CommittedDisplay
     const auto* cell = PublicationCellOwner(slot);
     const auto* root = prepared._storage;
     CommittedDisplayDescriptor descriptor;
-    if (!cell || !root || !_jobs->InAcknowledgedJobCallback(slot._original) || _stopped || _suspended || cell->root ||
-        cell->job || root->ownerThread != GetCurrentThreadId() || !root->publicationMemory ||
-        !root->publicationMemory->BoundTo(*_jobs, slot._original) || !reservation ||
-        !reservation.BelongsTo(*_gpuBudget) || !root->manifest ||
-        reservation.Bytes() < root->manifest->RequiredGpuBytes() ||
-        reservation.DeviceGeneration() != cell->key.deviceGeneration ||
-        cell->key.document.generation == (std::numeric_limits<std::uint64_t>::max)() ||
-        !CurrentOwner(*cell, &descriptor) || descriptor.device != root->device.get() ||
-        descriptor.immediate != root->immediate.get() ||
-        !root->graph.IsPublishedOnOwner(descriptor.device, descriptor.immediate))
+    if (! cell || ! root || ! _jobs->InAcknowledgedJobCallback(slot._original) || _stopped || _suspended || cell->root || cell->job ||
+        root->ownerThread != GetCurrentThreadId() || ! root->publicationMemory || ! root->publicationMemory->BoundTo(*_jobs, slot._original) || ! reservation ||
+        ! reservation.BelongsTo(*_gpuBudget) || ! root->manifest || reservation.Bytes() < root->manifest->RequiredGpuBytes() ||
+        reservation.DeviceGeneration() != cell->key.deviceGeneration || cell->key.document.generation == (std::numeric_limits<std::uint64_t>::max)() ||
+        ! CurrentOwner(*cell, &descriptor) || descriptor.device != root->device.get() || descriptor.immediate != root->immediate.get() ||
+        ! root->graph.IsPublishedOnOwner(descriptor.device, descriptor.immediate))
         return false;
     const auto& expected = root->manifest->Plan().Source();
-    return finalDocument.id == expected.id && finalDocument.layers.Identity() == expected.layers.Identity() &&
-           finalDocument.width == expected.width && finalDocument.height == expected.height &&
-           finalDocument.resolution == expected.resolution &&
+    return finalDocument.id == expected.id && finalDocument.layers.Identity() == expected.layers.Identity() && finalDocument.width == expected.width &&
+           finalDocument.height == expected.height && finalDocument.resolution == expected.resolution &&
            finalDocument.selection.has_value() == expected.selection.has_value() &&
-           (!finalDocument.selection ||
-            (finalDocument.selection->antialiased == expected.selection->antialiased &&
-             finalDocument.selection->loops.Identity() == expected.selection->loops.Identity()));
+           (! finalDocument.selection || (finalDocument.selection->antialiased == expected.selection->antialiased &&
+                                          finalDocument.selection->loops.Identity() == expected.selection->loops.Identity()));
 }

@@ -18,26 +18,26 @@ struct SelectionOutlineDisplayKey final
     const void* sourceIdentity = nullptr; // The admitted cell holds the actual immutable selection.
     PreparedSelectionOutlineRaster::GridKey grid;
     std::uint64_t deviceGeneration = 0;
-    std::uint64_t viewEpoch = 0; // Host-owned monotonic view authority; exhaustion must refuse before mutation.
+    std::uint64_t viewEpoch        = 0; // Host-owned monotonic view authority; exhaustion must refuse before mutation.
     [[nodiscard]] bool operator==(const SelectionOutlineDisplayKey&) const noexcept = default;
 };
 
 struct SelectionOutlineDisplayDescriptor final
 {
     SelectionOutlineDisplayKey key;
-    const SelectionLoops* source = nullptr; // Borrowed only until original CPU/GPU admission acknowledges.
-    ID3D11Device* device = nullptr;
+    const SelectionLoops* source   = nullptr; // Borrowed only until original CPU/GPU admission acknowledges.
+    ID3D11Device* device           = nullptr;
     ID3D11DeviceContext* immediate = nullptr;
-    bool software = false;
+    bool software                  = false;
 };
 
 class SelectionOutlineDisplayClient
 {
-  public:
-    virtual ~SelectionOutlineDisplayClient() = default;
+public:
+    virtual ~SelectionOutlineDisplayClient()                                                              = default;
     [[nodiscard]] virtual bool DescribeSelectionOutlineOwner(SelectionOutlineDisplayDescriptor&) noexcept = 0;
     // Nonreentrant bounded invalidation only. No ownership, callback authority or frame borrow is transferred.
-    virtual void SelectionOutlineChangedOwner() noexcept = 0;
+    virtual void SelectionOutlineChangedOwner() noexcept                                   = 0;
     virtual void SelectionOutlineFailedOwner(SelectionOutlineDisplayKey, HRESULT) noexcept = 0;
 };
 
@@ -51,13 +51,12 @@ class SelectionOutlineDisplayClient
 #pragma warning(disable : 4324)
 class SelectionOutlineDisplayController final : public OwnerWorkPump
 {
-  public:
+public:
     SelectionOutlineDisplayController() noexcept;
     ~SelectionOutlineDisplayController();
-    SelectionOutlineDisplayController(const SelectionOutlineDisplayController&) = delete;
+    SelectionOutlineDisplayController(const SelectionOutlineDisplayController&)            = delete;
     SelectionOutlineDisplayController& operator=(const SelectionOutlineDisplayController&) = delete;
-    [[nodiscard]] HRESULT InitializeOwner(JobScheduler&, GpuWorkQueue&, OwnerWorkMultiplexer&, GpuResidencyBudget&,
-                                          SelectionOutlineDisplayClient&) noexcept;
+    [[nodiscard]] HRESULT InitializeOwner(JobScheduler&, GpuWorkQueue&, OwnerWorkMultiplexer&, GpuResidencyBudget&, SelectionOutlineDisplayClient&) noexcept;
     // Optional draft child shares this route; no twelfth multiplexer member is attached.
     [[nodiscard]] HRESULT EnableLassoDraftOwner(LassoDraftDisplayClient&) noexcept;
     void RequestLassoDraftOwner() noexcept;
@@ -75,7 +74,7 @@ class SelectionOutlineDisplayController final : public OwnerWorkPump
     [[nodiscard]] bool HasReady() const noexcept override;
     void Pump() noexcept override;
 
-  private:
+private:
     class OutlineJob;
     enum class Phase : std::uint8_t
     {
@@ -105,12 +104,12 @@ class SelectionOutlineDisplayController final : public OwnerWorkPump
         JobTicket ticket;
         OutlineJob* job = nullptr;
         std::atomic<bool> workerRetired{false};
-        Phase phase = Phase::Empty;
-        HRESULT terminal = S_OK;
-        bool capturedGpu = false;
-        bool detached = false;
-        bool waiting = false;
-        bool recoveryArmed = false;
+        Phase phase         = Phase::Empty;
+        HRESULT terminal    = S_OK;
+        bool capturedGpu    = false;
+        bool detached       = false;
+        bool waiting        = false;
+        bool recoveryArmed  = false;
         bool deferredWorker = false;
         void GpuCompletionReady(JobTicket, std::uint64_t, HRESULT) noexcept override;
     };
@@ -130,21 +129,21 @@ class SelectionOutlineDisplayController final : public OwnerWorkPump
     static void RetireCellForWork(DeferredReleaseNode*) noexcept;
     void RetireForWork(Cell&) noexcept;
     LassoDraftDisplayController _draft;
-    bool _draftEnabled = false;
+    bool _draftEnabled  = false;
     bool _selectionTurn = true;
     std::array<Cell, 2> _cells;
-    JobScheduler* _jobs = nullptr;
-    GpuWorkQueue* _queue = nullptr;
-    GpuResidencyBudget* _budget = nullptr;
-    OwnerWorkMultiplexer* _routes = nullptr;
+    JobScheduler* _jobs                    = nullptr;
+    GpuWorkQueue* _queue                   = nullptr;
+    GpuResidencyBudget* _budget            = nullptr;
+    OwnerWorkMultiplexer* _routes          = nullptr;
     SelectionOutlineDisplayClient* _client = nullptr;
-    Cell* _published = nullptr;
+    Cell* _published                       = nullptr;
     std::optional<SelectionOutlineDisplayKey> _failed;
     std::uint32_t _ownerThread = 0;
-    bool _ready = false;
-    bool _requested = false;
-    bool _suspended = false;
-    bool _stopped = false;
-    bool _joined = false;
+    bool _ready                = false;
+    bool _requested            = false;
+    bool _suspended            = false;
+    bool _stopped              = false;
+    bool _joined               = false;
 };
 #pragma warning(pop)

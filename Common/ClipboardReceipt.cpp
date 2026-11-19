@@ -30,15 +30,14 @@ void StoreU64(std::uint8_t* destination, std::uint64_t value) noexcept
 
 std::uint32_t LoadU32(const std::uint8_t* source) noexcept
 {
-    return static_cast<std::uint32_t>(source[0]) | (static_cast<std::uint32_t>(source[1]) << 8) |
-           (static_cast<std::uint32_t>(source[2]) << 16) | (static_cast<std::uint32_t>(source[3]) << 24);
+    return static_cast<std::uint32_t>(source[0]) | (static_cast<std::uint32_t>(source[1]) << 8) | (static_cast<std::uint32_t>(source[2]) << 16) |
+           (static_cast<std::uint32_t>(source[3]) << 24);
 }
 
 std::uint64_t LoadU64(const std::uint8_t* source) noexcept
 {
-    return static_cast<std::uint64_t>(source[0]) | (static_cast<std::uint64_t>(source[1]) << 8) |
-           (static_cast<std::uint64_t>(source[2]) << 16) | (static_cast<std::uint64_t>(source[3]) << 24) |
-           (static_cast<std::uint64_t>(source[4]) << 32) | (static_cast<std::uint64_t>(source[5]) << 40) |
+    return static_cast<std::uint64_t>(source[0]) | (static_cast<std::uint64_t>(source[1]) << 8) | (static_cast<std::uint64_t>(source[2]) << 16) |
+           (static_cast<std::uint64_t>(source[3]) << 24) | (static_cast<std::uint64_t>(source[4]) << 32) | (static_cast<std::uint64_t>(source[5]) << 40) |
            (static_cast<std::uint64_t>(source[6]) << 48) | (static_cast<std::uint64_t>(source[7]) << 56);
 }
 
@@ -59,7 +58,7 @@ bool IsNonzeroSession(const std::array<std::uint8_t, 16>& session) noexcept
 bool Encode(const Key& key, std::array<std::uint8_t, kEncodedBytes>& output) noexcept
 {
     output.fill(0);
-    if (!IsNonzeroSession(key.session) || key.serial == 0)
+    if (! IsNonzeroSession(key.session) || key.serial == 0)
     {
         return false;
     }
@@ -104,7 +103,7 @@ bool Decode(std::span<const std::uint8_t> input, Key& output) noexcept
         decoded.session[index] = input[16 + index];
     }
     decoded.serial = LoadU64(input.data() + 32);
-    if (!IsNonzeroSession(decoded.session) || decoded.serial == 0)
+    if (! IsNonzeroSession(decoded.session) || decoded.serial == 0)
     {
         return false;
     }

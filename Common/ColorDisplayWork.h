@@ -17,22 +17,24 @@ struct ColorDisplayLayer final
 
 struct ColorDisplayMemory final
 {
-    std::uint64_t additionalBytes = 0;
-    std::uint64_t retirementBytes = 0;
-    std::uint64_t retirementRasterNodes = 0;
+    std::uint64_t additionalBytes                                           = 0;
+    std::uint64_t retirementBytes                                           = 0;
+    std::uint64_t retirementRasterNodes                                     = 0;
     [[nodiscard]] bool operator==(const ColorDisplayMemory&) const noexcept = default;
 };
 
 // Checked envelope arithmetic, exposed independently of a published record root. A bound is an estimate,
 // never source authority. Occurrence overcount is intentional; this is not retained-history accounting.
-[[nodiscard]] std::optional<ColorDisplayMemory> ColorDisplayMemoryFromBounds(
-    const RecordOwnershipBounds& records, std::uint64_t recordCount, std::uint64_t previewBytes,
-    std::uint64_t previewNodes, std::uint64_t selectionBytes = 0, std::uint64_t selectionLoops = 0) noexcept;
+[[nodiscard]] std::optional<ColorDisplayMemory> ColorDisplayMemoryFromBounds(const RecordOwnershipBounds& records,
+                                                                             std::uint64_t recordCount,
+                                                                             std::uint64_t previewBytes,
+                                                                             std::uint64_t previewNodes,
+                                                                             std::uint64_t selectionBytes = 0,
+                                                                             std::uint64_t selectionLoops = 0) noexcept;
 
 // Constant-time cached planning. Does not scan records, copy strings or assemble sparse raster bytes.
 // This partial declaration excludes rendering, panel settings, old display owners and host publication.
-[[nodiscard]] std::optional<ColorDisplayMemory> ColorDisplayMemoryBytes(const CanvasDocument& source,
-                                                                        const ColorDisplayLayer& preview) noexcept;
+[[nodiscard]] std::optional<ColorDisplayMemory> ColorDisplayMemoryBytes(const CanvasDocument& source, const ColorDisplayLayer& preview) noexcept;
 
 enum class ColorDisplayStage : std::uint8_t
 {
@@ -45,7 +47,7 @@ enum class ColorDisplayStage : std::uint8_t
 
 struct ColorDisplayObserver final
 {
-    void* context = nullptr;
+    void* context                                = nullptr;
     void (*checkpoint)(void*, ColorDisplayStage) = nullptr;
 };
 
@@ -65,5 +67,7 @@ struct ColorDisplayResult final
 // Worker-only construction. Shares immutable pixel/selection sources, changes exactly one image/transform,
 // and preserves an implicit mask's original placement when the preview grid moves. No pixel work occurs.
 // bad_alloc reaches the ordinary scheduler runner; there is no partial publication on cancellation/failure.
-[[nodiscard]] ColorDisplayResult PrepareColorDisplay(const CanvasDocument& source, const ColorDisplayLayer& preview,
-                                                     CancelToken cancellation = {}, ColorDisplayObserver observer = {});
+[[nodiscard]] ColorDisplayResult PrepareColorDisplay(const CanvasDocument& source,
+                                                     const ColorDisplayLayer& preview,
+                                                     CancelToken cancellation      = {},
+                                                     ColorDisplayObserver observer = {});

@@ -34,9 +34,9 @@ struct SelectionCommandTestGate final
     std::weak_ptr<SharedPublicationMemory> inverseMemoryOwner;
     std::atomic<const void*> inversePointBuffer{nullptr};
     std::atomic<bool> inverseOutlinePreparedOffOwner{false};
-    std::uint64_t inversePublishedBytes = 0;
+    std::uint64_t inversePublishedBytes  = 0;
     unsigned int inversePublishedOutputs = 0;
-    bool inverseOutputBoundToOriginal = true;
+    bool inverseOutputBoundToOriginal    = true;
     std::atomic<bool> reservationHeld{false}, refreshReservationHeld{false}, retired{false}, retiredOffOwner{false};
     std::atomic<unsigned int> visits{0}, captures{0}, historyFaultHits{0}, residentGrowths{0}, residencyRefreshes{0};
 };

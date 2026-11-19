@@ -30,10 +30,10 @@ struct GradientWorkTestGate final
     // One worker owns the preview ticket at a time. Each visit consumes its own owner release, so a
     // coalesced preview cannot pass a later gate using the preceding visit's signaled event.
     wil::unique_handle release{CreateEventW(nullptr, FALSE, FALSE, nullptr)};
-    GradientWorkTestKind kind = GradientWorkTestKind::Preview;
-    bool afterPreparation = false;
-    bool throwAdmissionFailure = false;
-    bool throwCaptureFailure = false;
+    GradientWorkTestKind kind   = GradientWorkTestKind::Preview;
+    bool afterPreparation       = false;
+    bool throwAdmissionFailure  = false;
+    bool throwCaptureFailure    = false;
     bool throwAllocationFailure = false;
     JobResult result;
     std::optional<RasterEditStatus> status;
@@ -44,8 +44,8 @@ struct GradientWorkTestGate final
     std::atomic<unsigned int> targetCapturesOnWorker{0};
     std::atomic<std::uint64_t> capturedImageNameUnits{0};
     std::atomic<std::uint64_t> capturedMaskNameUnits{0};
-    bool captureReservationHeld = false;
-    bool rootOnlyCapturedOnOwner = false;
+    bool captureReservationHeld    = false;
+    bool rootOnlyCapturedOnOwner   = false;
     std::uint64_t reservationBytes = 0;
 };
 #pragma warning(pop)

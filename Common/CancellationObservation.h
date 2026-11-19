@@ -8,7 +8,7 @@ namespace CancellationObservation
 struct Binding final
 {
     void (*notify)(void*) noexcept = nullptr;
-    void* context = nullptr;
+    void* context                  = nullptr;
 };
 
 inline thread_local constinit Binding gCurrent{};
@@ -20,7 +20,7 @@ inline thread_local constinit Binding gCurrent{};
 
 class Scope final
 {
-  public:
+public:
     explicit Scope(Binding binding) noexcept : _previous(gCurrent)
     {
         gCurrent = binding;
@@ -29,10 +29,10 @@ class Scope final
     {
         gCurrent = _previous;
     }
-    Scope(const Scope&) = delete;
+    Scope(const Scope&)            = delete;
     Scope& operator=(const Scope&) = delete;
 
-  private:
+private:
     const Binding _previous;
 };
 

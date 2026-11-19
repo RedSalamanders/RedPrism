@@ -32,9 +32,9 @@ namespace RedPrism::CompositionTests
 namespace
 {
 constexpr DWORD kFailureBoundMs = 10000;
-constexpr int kCanvasSide = 1;
-unsigned gPassed = 0;
-unsigned gFailed = 0;
+constexpr int kCanvasSide       = 1;
+unsigned gPassed                = 0;
+unsigned gFailed                = 0;
 
 void Expect(bool condition, const char* name) noexcept
 {
@@ -45,7 +45,7 @@ void Expect(bool condition, const char* name) noexcept
 
 bool InMta() noexcept
 {
-    APTTYPE type = APTTYPE_CURRENT;
+    APTTYPE type               = APTTYPE_CURRENT;
     APTTYPEQUALIFIER qualifier = APTTYPEQUALIFIER_NONE;
     return SUCCEEDED(CoGetApartmentType(&type, &qualifier)) && type == APTTYPE_MTA;
 }
@@ -64,8 +64,7 @@ struct Observation final
 {
     Observation() noexcept
     {
-        if (FAILED(entered.create(wil::EventOptions::ManualReset)) ||
-            FAILED(release.create(wil::EventOptions::ManualReset)))
+        if (FAILED(entered.create(wil::EventOptions::ManualReset)) || FAILED(release.create(wil::EventOptions::ManualReset)))
             return;
         eventsReady = true;
     }
@@ -80,24 +79,24 @@ struct Observation final
     std::atomic<std::size_t> firstSlot{0};
     std::atomic<std::uint64_t> firstGeneration{0};
     std::atomic<bool> openingCompute{false};
-    unsigned captureCalls = 0;
-    HRESULT captureResult = E_PENDING;
-    bool captureOnOwner = false;
-    bool captureAdmitted = false;
-    unsigned detachedCaptureCalls = 0;
-    bool processInActualComputeBody = false;
-    bool processInMta = false;
-    DWORD processThread = 0;
-    bool processReleasedByTest = false;
+    unsigned captureCalls                  = 0;
+    HRESULT captureResult                  = E_PENDING;
+    bool captureOnOwner                    = false;
+    bool captureAdmitted                   = false;
+    unsigned detachedCaptureCalls          = 0;
+    bool processInActualComputeBody        = false;
+    bool processInMta                      = false;
+    DWORD processThread                    = 0;
+    bool processReleasedByTest             = false;
     bool processObservedActualCancellation = false;
-    bool enteredEventSignaled = false;
-    bool releaseEventSignaled = false;
-    bool completedOnOwner = false;
-    bool completedInsideUiCallback = false;
-    bool completedExactlyOnce = false;
-    unsigned completedCalls = 0;
+    bool enteredEventSignaled              = false;
+    bool releaseEventSignaled              = false;
+    bool completedOnOwner                  = false;
+    bool completedInsideUiCallback         = false;
+    bool completedExactlyOnce              = false;
+    unsigned completedCalls                = 0;
     JobResult terminal;
-    bool terminalOutputEmpty = false;
+    bool terminalOutputEmpty           = false;
     bool terminalMemoryBoundToOriginal = false;
     std::atomic<bool> terminalCallbackEntered{false};
     std::atomic<bool> aggregateDestroyed{false};
@@ -147,18 +146,15 @@ struct Retirement final : DeferredReleaseNode
 {
     Retirement(Observation& value, std::uint64_t expected) noexcept : observation(value), expectedCpuBytes(expected)
     {
-        bytes = expected;
+        bytes   = expected;
         destroy = [](DeferredReleaseNode* node) noexcept
         {
-            auto* self = static_cast<Retirement*>(node);
+            auto* self  = static_cast<Retirement*>(node);
             auto& state = self->observation;
-            state.aggregateDestroyedOffOwner.store(GetCurrentThreadId() != state.ownerThread,
-                                                   std::memory_order_relaxed);
+            state.aggregateDestroyedOffOwner.store(GetCurrentThreadId() != state.ownerThread, std::memory_order_relaxed);
             state.aggregateDestroyedInMta.store(InMta(), std::memory_order_relaxed);
-            state.aggregateSawTerminal.store(state.terminalCallbackEntered.load(std::memory_order_acquire),
-                                             std::memory_order_relaxed);
-            state.aggregateMemoryChargeIntact.store(self->memory && self->memory->IsBound() &&
-                                                        self->memory->Bytes() == self->expectedCpuBytes &&
+            state.aggregateSawTerminal.store(state.terminalCallbackEntered.load(std::memory_order_acquire), std::memory_order_relaxed);
+            state.aggregateMemoryChargeIntact.store(self->memory && self->memory->IsBound() && self->memory->Bytes() == self->expectedCpuBytes &&
                                                         self->memory->ResidentBytes() == self->expectedCpuBytes,
                                                     std::memory_order_relaxed);
             delete self;
@@ -184,36 +180,42 @@ struct Retirement final : DeferredReleaseNode
 #pragma warning(disable : 4625 4626)
 class CancellationProbe final : public RecordedDocumentReadbackJob
 {
-  public:
-    CancellationProbe(JobScheduler& jobs, GpuWorkQueue& queue, GpuCommandPump& commands,
-                      UtilityReadbackOwnerService& owners, GpuResidencyBudget& budget,
-                      UtilityReadbackAdmission::Envelope envelope, Observation& observation, JobTicket& original)
-        : RecordedDocumentReadbackJob(jobs, queue, commands, owners, budget, envelope, {},
-                                      D3D11_BOX{0, 0, 0, kCanvasSide, kCanvasSide, 1}, true,
-                                      RecordedReadbackCaptureKind::CpuOnly),
-          _jobs(jobs), _observation(observation), _original(original),
-          _aggregate(std::make_unique<Retirement>(observation, envelope.cpuBytes)), _expectedCpuBytes(envelope.cpuBytes)
+public:
+    CancellationProbe(JobScheduler& jobs,
+                      GpuWorkQueue& queue,
+                      GpuCommandPump& commands,
+                      UtilityReadbackOwnerService& owners,
+                      GpuResidencyBudget& budget,
+                      UtilityReadbackAdmission::Envelope envelope,
+                      Observation& observation,
+                      JobTicket& original)
+        : RecordedDocumentReadbackJob(
+              jobs, queue, commands, owners, budget, envelope, {}, D3D11_BOX{0, 0, 0, kCanvasSide, kCanvasSide, 1}, true, RecordedReadbackCaptureKind::CpuOnly),
+          _jobs(jobs),
+          _observation(observation),
+          _original(original),
+          _aggregate(std::make_unique<Retirement>(observation, envelope.cpuBytes)),
+          _expectedCpuBytes(envelope.cpuBytes)
     {
     }
 
     ~CancellationProbe() override
     {
-        if (!_aggregate)
+        if (! _aggregate)
             return;
         TransferReadbackOwners(_aggregate->document, _aggregate->pixels, _aggregate->output, _aggregate->memory);
-        if (!TryDeferRelease(*_aggregate, DeferredReleasePolicy::AlwaysOnOwner))
+        if (! TryDeferRelease(*_aggregate, DeferredReleasePolicy::AlwaysOnOwner))
             std::terminate();
         (void)_aggregate.release();
     }
 
-  protected:
+protected:
     HRESULT CaptureReadbackDocument(CanvasDocument&) noexcept override
     {
         ++_observation.captureCalls;
-        _observation.captureOnOwner =
-            GetCurrentThreadId() == _observation.ownerThread && gActualBody.observation == nullptr;
+        _observation.captureOnOwner  = GetCurrentThreadId() == _observation.ownerThread && gActualBody.observation == nullptr;
         _observation.captureAdmitted = _jobs.ReservedMemoryBytes() == _expectedCpuBytes;
-        _observation.captureResult = S_FALSE;
+        _observation.captureResult   = S_FALSE;
         return S_FALSE; // CPU-only detached continuation: no captured document, GPU source, or allocation.
     }
 
@@ -232,28 +234,25 @@ class CancellationProbe final : public RecordedDocumentReadbackJob
     {
         ++_observation.processEntries;
         _observation.processThread = GetCurrentThreadId();
-        _observation.processInActualComputeBody = gActualBody.observation == &_observation &&
-                                                  gActualBody.ticket == _original &&
-                                                  gActualBody.lane == JobExecutionLane::Compute;
+        _observation.processInActualComputeBody =
+            gActualBody.observation == &_observation && gActualBody.ticket == _original && gActualBody.lane == JobExecutionLane::Compute;
         _observation.processInMta = InMta();
-        if (!_observation.processInActualComputeBody || !_observation.processInMta ||
-            _observation.processThread == _observation.ownerThread)
+        if (! _observation.processInActualComputeBody || ! _observation.processInMta || _observation.processThread == _observation.ownerThread)
             return {JobStatus::Failed, E_UNEXPECTED};
 
         // Publish every blocked-state observation before waking the owner. Writing the flag from
         // SetEvent's return value would race the already-awakened owner on the successful path.
         _observation.enteredEventSignaled = true;
-        if (!SetEvent(_observation.entered.get()))
+        if (! SetEvent(_observation.entered.get()))
         {
-            const HRESULT error = HRESULT_FROM_WIN32(GetLastError());
+            const HRESULT error               = HRESULT_FROM_WIN32(GetLastError());
             _observation.enteredEventSignaled = false;
             return {JobStatus::Failed, error};
         }
-        const DWORD waited = WaitForSingleObject(_observation.release.get(), kFailureBoundMs);
-        _observation.processReleasedByTest = waited == WAIT_OBJECT_0;
-        _observation.processObservedActualCancellation =
-            _observation.processReleasedByTest && context.cancellation.IsCancelled();
-        if (!_observation.processReleasedByTest)
+        const DWORD waited                             = WaitForSingleObject(_observation.release.get(), kFailureBoundMs);
+        _observation.processReleasedByTest             = waited == WAIT_OBJECT_0;
+        _observation.processObservedActualCancellation = _observation.processReleasedByTest && context.cancellation.IsCancelled();
+        if (! _observation.processReleasedByTest)
             return {JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
         return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : JobResult{};
     }
@@ -266,22 +265,20 @@ class CancellationProbe final : public RecordedDocumentReadbackJob
     void ReadbackCompleted(JobResult result, Raster image, std::uint64_t) noexcept override
     {
         ++_observation.completedCalls;
-        _observation.terminal = result;
-        _observation.completedOnOwner =
-            GetCurrentThreadId() == _observation.ownerThread && gActualBody.observation == nullptr;
+        _observation.terminal                  = result;
+        _observation.completedOnOwner          = GetCurrentThreadId() == _observation.ownerThread && gActualBody.observation == nullptr;
         _observation.completedInsideUiCallback = _jobs.InUiCallback();
-        _observation.terminalOutputEmpty = !image.HasStorage();
+        _observation.terminalOutputEmpty       = ! image.HasStorage();
         _observation.terminalCallbackEntered.store(true, std::memory_order_release);
         TransferReadbackOwners(_aggregate->document, _aggregate->pixels, _aggregate->output, _aggregate->memory);
-        _observation.terminalMemoryBoundToOriginal =
-            _aggregate->memory && _aggregate->memory->BoundTo(_jobs, _original);
-        if (!TryDeferRelease(*_aggregate, DeferredReleasePolicy::AlwaysOnOwner))
+        _observation.terminalMemoryBoundToOriginal = _aggregate->memory && _aggregate->memory->BoundTo(_jobs, _original);
+        if (! TryDeferRelease(*_aggregate, DeferredReleasePolicy::AlwaysOnOwner))
             std::terminate();
         (void)_aggregate.release();
         _observation.completedExactlyOnce = _observation.completedCalls == 1;
     }
 
-  private:
+private:
     JobScheduler& _jobs;
     Observation& _observation;
     JobTicket& _original;
@@ -292,49 +289,55 @@ class CancellationProbe final : public RecordedDocumentReadbackJob
 
 struct StartupPrefix final
 {
-    bool jobsInitialized = false;
-    bool releaseEnabled = false;
-    bool recordersEnabled = false;
-    bool routesRegistered = false;
-    bool queueAttempted = false;
-    bool queueInitialized = false;
-    bool queueBound = false;
+    bool jobsInitialized     = false;
+    bool releaseEnabled      = false;
+    bool recordersEnabled    = false;
+    bool routesRegistered    = false;
+    bool queueAttempted      = false;
+    bool queueInitialized    = false;
+    bool queueBound          = false;
     bool commandsInitialized = false;
-    bool serviceInitialized = false;
+    bool serviceInitialized  = false;
 };
 
-bool StartInfrastructure(JobScheduler& jobs, OwnerWorkMultiplexer& routes, GpuWorkQueue& queue,
-                         GpuCommandPump& commands, UtilityReadbackOwnerService& owners, ID3D11Device* device,
-                         ID3D11DeviceContext* context, Observation& observation, StartupPrefix& prefix) noexcept
+bool StartInfrastructure(JobScheduler& jobs,
+                         OwnerWorkMultiplexer& routes,
+                         GpuWorkQueue& queue,
+                         GpuCommandPump& commands,
+                         UtilityReadbackOwnerService& owners,
+                         ID3D11Device* device,
+                         ID3D11DeviceContext* context,
+                         Observation& observation,
+                         StartupPrefix& prefix) noexcept
 {
     prefix.jobsInitialized = SUCCEEDED(jobs.Initialize(1, {}, {Memory, nullptr}, {ObserveExecution, &observation}));
     Expect(prefix.jobsInitialized, "startup-actual-scheduler");
-    if (!prefix.jobsInitialized)
+    if (! prefix.jobsInitialized)
         return false;
     prefix.releaseEnabled = jobs.EnableDeferredRelease();
     Expect(prefix.releaseEnabled, "startup-actual-deferred-release-sink");
-    if (!prefix.releaseEnabled)
+    if (! prefix.releaseEnabled)
         return false;
     prefix.recordersEnabled = SUCCEEDED(jobs.EnableGpuRecordingLane());
     Expect(prefix.recordersEnabled, "startup-actual-recording-lane");
-    if (!prefix.recordersEnabled)
+    if (! prefix.recordersEnabled)
         return false;
     prefix.routesRegistered = jobs.RegisterOwnerWork(routes);
     Expect(prefix.routesRegistered, "startup-actual-owner-router");
-    if (!prefix.routesRegistered)
+    if (! prefix.routesRegistered)
         return false;
-    prefix.queueAttempted = true;
+    prefix.queueAttempted   = true;
     prefix.queueInitialized = SUCCEEDED(queue.Initialize(jobs, &routes));
     Expect(prefix.queueInitialized, "startup-actual-gpu-queue");
-    if (!prefix.queueInitialized)
+    if (! prefix.queueInitialized)
         return false;
     prefix.queueBound = SUCCEEDED(queue.Bind(device, context));
     Expect(prefix.queueBound, "startup-actual-queue-warp-setup");
-    if (!prefix.queueBound)
+    if (! prefix.queueBound)
         return false;
     prefix.commandsInitialized = SUCCEEDED(commands.InitializeOwner(jobs, queue, routes));
     Expect(prefix.commandsInitialized, "startup-actual-command-pump");
-    if (!prefix.commandsInitialized)
+    if (! prefix.commandsInitialized)
         return false;
     prefix.serviceInitialized = SUCCEEDED(owners.InitializeOwner(jobs, routes));
     Expect(prefix.serviceInitialized, "startup-actual-readback-owner-service");
@@ -355,14 +358,14 @@ struct CloseContext final
     GpuResidencyBudget& budget;
     const StartupPrefix& prefix;
     const DWORD ownerThread;
-    DWORD joinedOwnerThread = 0;
-    DWORD finalWorkerThread = 0;
-    bool joinedOwnerHook = false;
-    bool joinedAcknowledgment = false;
-    bool queueClosedInOwnerHook = false;
-    bool commandsClosedInOwnerHook = false;
-    bool finalWorkerHook = false;
-    bool finalWorkerMta = false;
+    DWORD joinedOwnerThread                 = 0;
+    DWORD finalWorkerThread                 = 0;
+    bool joinedOwnerHook                    = false;
+    bool joinedAcknowledgment               = false;
+    bool queueClosedInOwnerHook             = false;
+    bool commandsClosedInOwnerHook          = false;
+    bool finalWorkerHook                    = false;
+    bool finalWorkerMta                     = false;
     bool workerSawClosedOwnerInfrastructure = false;
     std::atomic<unsigned> closeSequence{0};
 };
@@ -370,32 +373,30 @@ struct CloseContext final
 
 void JoinedOwnerClose(void* opaque) noexcept
 {
-    auto& state = *static_cast<CloseContext*>(opaque);
+    auto& state             = *static_cast<CloseContext*>(opaque);
     state.joinedOwnerThread = GetCurrentThreadId();
-    state.joinedOwnerHook = state.joinedOwnerThread == state.ownerThread;
+    state.joinedOwnerHook   = state.joinedOwnerThread == state.ownerThread;
     if (state.prefix.commandsInitialized)
         state.commands.AcknowledgeJoinedShutdownOwner();
     state.joinedAcknowledgment = true;
     state.closeSequence.store(1, std::memory_order_release);
     if (state.prefix.queueAttempted)
         state.queue.CloseAfterWorkers();
-    state.queueClosedInOwnerHook = !state.queue.HasPending() && !state.queue.HasReady() &&
-                                   state.queue.InFlightCount() == 0 && state.queue.LentCount() == 0 &&
+    state.queueClosedInOwnerHook = ! state.queue.HasPending() && ! state.queue.HasReady() && state.queue.InFlightCount() == 0 && state.queue.LentCount() == 0 &&
                                    state.queue.StagingBytes() == 0 && state.queue.DeviceGeneration() == 0;
     state.closeSequence.store(2, std::memory_order_release);
-    state.commandsClosedInOwnerHook = !state.prefix.commandsInitialized || state.commands.CloseOwner();
+    state.commandsClosedInOwnerHook = ! state.prefix.commandsInitialized || state.commands.CloseOwner();
     state.closeSequence.store(3, std::memory_order_release);
 }
 
 void FinalWorkerClose(void* opaque) noexcept
 {
-    auto& state = *static_cast<CloseContext*>(opaque);
-    state.finalWorkerThread = GetCurrentThreadId();
-    state.finalWorkerHook = true;
-    state.finalWorkerMta = InMta();
-    state.workerSawClosedOwnerInfrastructure = state.closeSequence.load(std::memory_order_acquire) == 3 &&
-                                               state.joinedOwnerHook && state.joinedAcknowledgment &&
-                                               state.queueClosedInOwnerHook && state.commandsClosedInOwnerHook;
+    auto& state                              = *static_cast<CloseContext*>(opaque);
+    state.finalWorkerThread                  = GetCurrentThreadId();
+    state.finalWorkerHook                    = true;
+    state.finalWorkerMta                     = InMta();
+    state.workerSawClosedOwnerInfrastructure = state.closeSequence.load(std::memory_order_acquire) == 3 && state.joinedOwnerHook &&
+                                               state.joinedAcknowledgment && state.queueClosedInOwnerHook && state.commandsClosedInOwnerHook;
 }
 
 void CloseInfrastructure(CloseContext& state) noexcept
@@ -408,23 +409,21 @@ void CloseInfrastructure(CloseContext& state) noexcept
         state.queue.StopNotifications();
     if (state.prefix.jobsInitialized)
         state.jobs.Close({JoinedOwnerClose, FinalWorkerClose, &state});
-    const bool chargesReleased = !state.prefix.serviceInitialized || state.owners.ReleaseJoinedChargesOwner();
-    const bool serviceClosed = !state.prefix.serviceInitialized || state.owners.CloseOwner();
+    const bool chargesReleased = ! state.prefix.serviceInitialized || state.owners.ReleaseJoinedChargesOwner();
+    const bool serviceClosed   = ! state.prefix.serviceInitialized || state.owners.CloseOwner();
 
-    Expect(!state.prefix.jobsInitialized || (state.joinedOwnerHook && state.joinedAcknowledgment &&
-                                             state.queueClosedInOwnerHook && state.commandsClosedInOwnerHook),
+    Expect(! state.prefix.jobsInitialized ||
+               (state.joinedOwnerHook && state.joinedAcknowledgment && state.queueClosedInOwnerHook && state.commandsClosedInOwnerHook),
            "close-joined-owner-ack-queue-command-pump-order");
-    Expect(!state.prefix.jobsInitialized ||
-               (state.finalWorkerHook && state.finalWorkerMta && state.finalWorkerThread != state.ownerThread &&
-                state.workerSawClosedOwnerInfrastructure),
+    Expect(! state.prefix.jobsInitialized ||
+               (state.finalWorkerHook && state.finalWorkerMta && state.finalWorkerThread != state.ownerThread && state.workerSawClosedOwnerInfrastructure),
            "close-final-mta-callback-after-owner-infrastructure-close");
     Expect(chargesReleased, "close-service-charges-after-jobs-close");
     Expect(serviceClosed, "close-owner-service-after-jobs-close");
-    Expect(!state.routes.HasPending() && !state.routes.HasReady(), "close-owner-router-empty");
-    Expect(!state.jobs.WakeHandle() && state.jobs.ReservedMemoryBytes() == 0 && state.budget.ReservedOwner() == 0 &&
-               state.budget.ActiveOwner() == 0,
+    Expect(! state.routes.HasPending() && ! state.routes.HasReady(), "close-owner-router-empty");
+    Expect(! state.jobs.WakeHandle() && state.jobs.ReservedMemoryBytes() == 0 && state.budget.ReservedOwner() == 0 && state.budget.ActiveOwner() == 0,
            "close-cpu-and-gpu-accounting-released");
-    if ((state.prefix.jobsInitialized && !state.commandsClosedInOwnerHook) || !chargesReleased || !serviceClosed)
+    if ((state.prefix.jobsInitialized && ! state.commandsClosedInOwnerHook) || ! chargesReleased || ! serviceClosed)
     {
         std::fflush(stdout);
         std::terminate();
@@ -442,8 +441,8 @@ DWORD Remaining(ULONGLONG deadline) noexcept
 bool WaitForEntered(JobScheduler& jobs, OwnerWorkMultiplexer& routes, Observation& observation) noexcept
 {
     const ULONGLONG deadline = GetTickCount64() + kFailureBoundMs;
-    HANDLE handles[2] = {observation.entered.get(), static_cast<HANDLE>(jobs.WakeHandle())};
-    if (!handles[0] || !handles[1])
+    HANDLE handles[2]        = {observation.entered.get(), static_cast<HANDLE>(jobs.WakeHandle())};
+    if (! handles[0] || ! handles[1])
         return false;
     for (;;)
     {
@@ -494,7 +493,7 @@ bool WaitForTerminal(JobScheduler& jobs, OwnerWorkMultiplexer& routes, const Obs
             continue;
         }
         const HANDLE wake = static_cast<HANDLE>(jobs.WakeHandle());
-        if (!wake)
+        if (! wake)
             return false;
         const DWORD waited = WaitForSingleObject(wake, Remaining(deadline));
         if (waited != WAIT_OBJECT_0)
@@ -508,16 +507,15 @@ void RunRegression()
     wil::com_ptr_nothrow<ID3D11Device> device;
     wil::com_ptr_nothrow<ID3D11DeviceContext> context;
     constexpr D3D_FEATURE_LEVEL requestedLevel = D3D_FEATURE_LEVEL_11_0;
-    const HRESULT deviceResult =
-        D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &requestedLevel, 1,
-                          D3D11_SDK_VERSION, device.put(), nullptr, context.put());
+    const HRESULT deviceResult                 = D3D11CreateDevice(
+        nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &requestedLevel, 1, D3D11_SDK_VERSION, device.put(), nullptr, context.put());
     Expect(SUCCEEDED(deviceResult), "setup-actual-warp-device-for-queue-only");
     if (FAILED(deviceResult))
         return;
 
     Observation observation;
     Expect(observation.eventsReady, "setup-entered-and-release-events");
-    if (!observation.eventsReady)
+    if (! observation.eventsReady)
         return;
 
     JobScheduler jobs;
@@ -528,7 +526,7 @@ void RunRegression()
     GpuResidencyBudget budget;
     StartupPrefix prefix;
     CloseContext close{jobs, queue, commands, owners, routes, budget, prefix, observation.ownerThread};
-    if (!StartInfrastructure(jobs, routes, queue, commands, owners, device.get(), context.get(), observation, prefix))
+    if (! StartInfrastructure(jobs, routes, queue, commands, owners, device.get(), context.get(), observation, prefix))
     {
         CloseInfrastructure(close);
         return;
@@ -537,36 +535,33 @@ void RunRegression()
     // A valid one-layer immutable descriptor drives the actual CPU admission estimate. Capture itself returns
     // S_FALSE, so this layer is never captured by the job and no GPU resource is made from it.
     CanvasDocument source;
-    source.id = Guid::Generate();
-    source.width = kCanvasSide;
-    source.height = kCanvasSide;
-    auto layer = ImageLayer::Blank(L"Cancellation fixture", {kCanvasSide, kCanvasSide});
-    layer.transform.origin = {0, 0};
-    layer.transform.size = {kCanvasSide, kCanvasSide};
+    source.id                = Guid::Generate();
+    source.width             = kCanvasSide;
+    source.height            = kCanvasSide;
+    auto layer               = ImageLayer::Blank(L"Cancellation fixture", {kCanvasSide, kCanvasSide});
+    layer.transform.origin   = {0, 0};
+    layer.transform.size     = {kCanvasSide, kCanvasSide};
     layer.transform.rotation = 0;
-    layer.transform.flipX = false;
-    layer.transform.flipY = false;
+    layer.transform.flipX    = false;
+    layer.transform.flipY    = false;
     layer.transform.sampling = LayerSampling::Nearest;
-    layer.opacity = 1;
-    layer.blendMode = LayerBlendMode::Normal;
+    layer.opacity            = 1;
+    layer.blendMode          = LayerBlendMode::Normal;
     constexpr std::array<std::uint8_t, 4> sourcePixel{17, 29, 43, 255};
-    layer.asset = RasterAsset{
-        Raster::Make(kCanvasSide, kCanvasSide, RasterFormat::Bgra8888, sourcePixel.data(), sourcePixel.size()),
-        {},
-        L"Cancellation fixture"};
+    layer.asset =
+        RasterAsset{Raster::Make(kCanvasSide, kCanvasSide, RasterFormat::Bgra8888, sourcePixel.data(), sourcePixel.size()), {}, L"Cancellation fixture"};
     RecordRoot<ImageLayer>::Builder layerBuilder(1);
-    if (!layerBuilder.Append(std::move(layer)))
+    if (! layerBuilder.Append(std::move(layer)))
         std::terminate();
     auto layerRoot = layerBuilder.Seal();
-    if (!layerRoot)
+    if (! layerRoot)
         std::terminate();
     source.layers = std::move(layerRoot.value());
 
     const auto outputBytes = RecordedDocumentReadbackJob::RequiredMemory({0, 0, 0, 1, 1, 1});
-    const auto envelope = UtilityReadbackAdmission::Estimate(source, 1, outputBytes + sizeof(Retirement), true);
-    Expect(envelope.has_value() && envelope->cpuBytes != 0 && envelope->tileSide == 1,
-           "admission-actual-source-and-preallocated-retirement-aggregate");
-    if (!envelope)
+    const auto envelope    = UtilityReadbackAdmission::Estimate(source, 1, outputBytes + sizeof(Retirement), true);
+    Expect(envelope.has_value() && envelope->cpuBytes != 0 && envelope->tileSide == 1, "admission-actual-source-and-preallocated-retirement-aggregate");
+    if (! envelope)
     {
         CloseInfrastructure(close);
         return;
@@ -574,20 +569,17 @@ void RunRegression()
     Expect(budget.ReservedOwner() == 0, "cpu-only-case-starts-without-gpu-charge");
 
     JobTicket ticket{};
-    std::unique_ptr<Job> pending =
-        std::make_unique<CancellationProbe>(jobs, queue, commands, owners, budget, *envelope, observation, ticket);
+    std::unique_ptr<Job> pending = std::make_unique<CancellationProbe>(jobs, queue, commands, owners, budget, *envelope, observation, ticket);
     JobOptions options;
-    options.kind = JobClass::Background;
-    options.memoryBytes = envelope->cpuBytes;
-    options.deferredRetirement = true;
+    options.kind                  = JobClass::Background;
+    options.memoryBytes           = envelope->cpuBytes;
+    options.deferredRetirement    = true;
     options.reserveRetainedMemory = true;
-    options.allowMemoryWaiting = false;
-    options.executionLane = JobExecutionLane::Compute;
-    const HRESULT submitted = jobs.Submit(pending, options, ticket);
-    Expect(SUCCEEDED(submitted) && !pending && ticket.generation != 0,
-           "one-actual-submit-with-original-retained-slot-and-no-memory-wait");
-    Expect(SUCCEEDED(submitted) && jobs.ReservedMemoryBytes() == envelope->cpuBytes,
-           "original-complete-cpu-envelope-held-after-submit");
+    options.allowMemoryWaiting    = false;
+    options.executionLane         = JobExecutionLane::Compute;
+    const HRESULT submitted       = jobs.Submit(pending, options, ticket);
+    Expect(SUCCEEDED(submitted) && ! pending && ticket.generation != 0, "one-actual-submit-with-original-retained-slot-and-no-memory-wait");
+    Expect(SUCCEEDED(submitted) && jobs.ReservedMemoryBytes() == envelope->cpuBytes, "original-complete-cpu-envelope-held-after-submit");
     if (FAILED(submitted))
     {
         pending.reset();
@@ -597,7 +589,7 @@ void RunRegression()
 
     const bool entered = WaitForEntered(jobs, routes, observation);
     Expect(entered, "bounded-event-wait-for-actual-detached-compute-entry");
-    if (!entered)
+    if (! entered)
     {
         (void)jobs.Cancel(ticket);
         SetEvent(observation.release.get());
@@ -605,34 +597,30 @@ void RunRegression()
         return;
     }
 
-    Expect(observation.captureCalls == 1 && observation.captureResult == S_FALSE && observation.captureOnOwner &&
-               observation.captureAdmitted && observation.detachedCaptureCalls == 0,
+    Expect(observation.captureCalls == 1 && observation.captureResult == S_FALSE && observation.captureOnOwner && observation.captureAdmitted &&
+               observation.detachedCaptureCalls == 0,
            "s-false-capture-is-owner-only-and-never-allocates");
-    Expect(observation.processEntries.load(std::memory_order_relaxed) == 1 && observation.processInActualComputeBody &&
-               observation.processInMta && observation.processThread != observation.ownerThread &&
-               observation.openingCompute.load(std::memory_order_relaxed),
+    Expect(observation.processEntries.load(std::memory_order_relaxed) == 1 && observation.processInActualComputeBody && observation.processInMta &&
+               observation.processThread != observation.ownerThread && observation.openingCompute.load(std::memory_order_relaxed),
            "process-is-blocked-inside-actual-original-compute-body");
 
     const bool cancelled = jobs.Cancel(ticket);
     Expect(cancelled, "cancel-original-ticket-while-process-is-blocked");
-    const std::size_t oneBlockedDrain = DrainCompletions(jobs); // Exactly one owner drain in the blocked window.
-    const bool routeReadyWhileBlocked = routes.HasReady();
-    const bool parentReadyWhileBlocked = owners.HasReady();
+    const std::size_t oneBlockedDrain     = DrainCompletions(jobs); // Exactly one owner drain in the blocked window.
+    const bool routeReadyWhileBlocked     = routes.HasReady();
+    const bool parentReadyWhileBlocked    = owners.HasReady();
     const auto schedulerReadyWhileBlocked = jobs.UiReadinessForTest();
-    const auto reservedWhileBlocked = jobs.ReservedMemoryBytes();
-    const auto gpuWhileBlocked = queue.Statistics();
+    const auto reservedWhileBlocked       = jobs.ReservedMemoryBytes();
+    const auto gpuWhileBlocked            = queue.Statistics();
     Expect(oneBlockedDrain == 0 && observation.completedCalls == 0, "one-blocked-drain-delivers-no-terminal-callback");
-    Expect(!routeReadyWhileBlocked && !parentReadyWhileBlocked && !schedulerReadyWhileBlocked.owner &&
-               !schedulerReadyWhileBlocked.resumes,
+    Expect(! routeReadyWhileBlocked && ! parentReadyWhileBlocked && ! schedulerReadyWhileBlocked.owner && ! schedulerReadyWhileBlocked.resumes,
            "cancelled-running-body-has-no-owner-readiness-or-pending-resume");
-    Expect(reservedWhileBlocked == envelope->cpuBytes,
-           "original-retained-slot-and-complete-reservation-stay-held-during-body");
+    Expect(reservedWhileBlocked == envelope->cpuBytes, "original-retained-slot-and-complete-reservation-stay-held-during-body");
     Expect(observation.enteredEventSignaled && observation.processEntries.load(std::memory_order_relaxed) == 1 &&
                WaitForSingleObject(observation.entered.get(), 0) == WAIT_OBJECT_0,
            "blocked-body-has-not-been-resumed-or-dispatched-twice");
-    Expect(budget.ReservedOwner() == 0 && commands.AttachedSourceCountOwnerForTest() == 0 && !commands.HasPending() &&
-               !queue.HasPending() && !queue.HasReady() && gpuWhileBlocked.copies == 0 && gpuWhileBlocked.maps == 0 &&
-               gpuWhileBlocked.readinessBarriers == 0,
+    Expect(budget.ReservedOwner() == 0 && commands.AttachedSourceCountOwnerForTest() == 0 && ! commands.HasPending() && ! queue.HasPending() &&
+               ! queue.HasReady() && gpuWhileBlocked.copies == 0 && gpuWhileBlocked.maps == 0 && gpuWhileBlocked.readinessBarriers == 0,
            "blocked-cpu-only-route-has-no-gpu-source-copy-map-or-barrier");
 
     observation.releaseEventSignaled = SetEvent(observation.release.get()) != FALSE;
@@ -641,13 +629,11 @@ void RunRegression()
     Expect(terminal, "bounded-event-driven-settle-after-worker-release");
     if (terminal)
     {
-        Expect(observation.completedCalls == 1 && observation.completedExactlyOnce &&
-                   observation.terminal.status == JobStatus::Cancelled && SUCCEEDED(observation.terminal.error),
+        Expect(observation.completedCalls == 1 && observation.completedExactlyOnce && observation.terminal.status == JobStatus::Cancelled &&
+                   SUCCEEDED(observation.terminal.error),
                "original-terminal-cancelled-exactly-once-on-owner");
-        Expect(observation.completedOnOwner && observation.completedInsideUiCallback,
-               "terminal-callback-runs-on-owner-inside-real-scheduler-callback");
-        Expect(observation.sameOriginal.load(std::memory_order_relaxed) &&
-                   observation.firstSlot.load(std::memory_order_relaxed) == ticket.slot &&
+        Expect(observation.completedOnOwner && observation.completedInsideUiCallback, "terminal-callback-runs-on-owner-inside-real-scheduler-callback");
+        Expect(observation.sameOriginal.load(std::memory_order_relaxed) && observation.firstSlot.load(std::memory_order_relaxed) == ticket.slot &&
                    observation.firstGeneration.load(std::memory_order_relaxed) == ticket.generation,
                "every-observed-body-keeps-the-original-ticket");
         Expect(observation.processReleasedByTest && observation.processObservedActualCancellation,
@@ -655,20 +641,17 @@ void RunRegression()
         Expect(observation.terminalOutputEmpty, "cancelled-terminal-has-no-useful-output");
         Expect(observation.detachedCaptureCalls == 0, "cancelled-path-never-calls-detached-capture");
         const auto after = queue.Statistics();
-        Expect(after.copies == 0 && after.maps == 0 && after.readinessBarriers == 0 &&
-                   observation.bodyEntries.load(std::memory_order_relaxed) == 2 &&
-                   commands.AttachedSourceCountOwnerForTest() == 0 && !commands.HasPending() && !queue.HasPending(),
+        Expect(after.copies == 0 && after.maps == 0 && after.readinessBarriers == 0 && observation.bodyEntries.load(std::memory_order_relaxed) == 2 &&
+                   commands.AttachedSourceCountOwnerForTest() == 0 && ! commands.HasPending() && ! queue.HasPending(),
                "cpu-only-cancellation-has-zero-gpu-work-and-only-opening-plus-process-bodies");
-        Expect(!routes.HasReady() && !routes.HasPending(), "terminal-owner-routes-are-settled");
+        Expect(! routes.HasReady() && ! routes.HasPending(), "terminal-owner-routes-are-settled");
     }
 
     CloseInfrastructure(close);
-    Expect(observation.aggregateDestroyed.load(std::memory_order_acquire) &&
-               observation.aggregateDestroyedOffOwner.load(std::memory_order_relaxed) &&
+    Expect(observation.aggregateDestroyed.load(std::memory_order_acquire) && observation.aggregateDestroyedOffOwner.load(std::memory_order_relaxed) &&
                observation.aggregateDestroyedInMta.load(std::memory_order_relaxed),
            "transferred-aggregate-is-finally-destroyed-on-mta-worker");
-    Expect(observation.aggregateSawTerminal.load(std::memory_order_relaxed) &&
-               observation.terminalMemoryBoundToOriginal &&
+    Expect(observation.aggregateSawTerminal.load(std::memory_order_relaxed) && observation.terminalMemoryBoundToOriginal &&
                observation.aggregateMemoryChargeIntact.load(std::memory_order_relaxed),
            "same-original-bound-memory-and-terminal-state-survive-to-final-destruction");
 }

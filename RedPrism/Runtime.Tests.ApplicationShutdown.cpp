@@ -27,8 +27,8 @@
 int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
 {
     unsigned int checks = 0;
-    int failures = 0;
-    const auto expect = [&](bool condition, const char* name, bool after) noexcept
+    int failures        = 0;
+    const auto expect   = [&](bool condition, const char* name, bool after) noexcept
     {
         ++checks;
         failures += condition ? 0 : 1;
@@ -36,22 +36,20 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
     };
     for (const bool after : std::array{false, true})
     {
-        expect(!DeferredReleaseDetail::sink.enqueue, "no-surrogate-outer-sink", after);
+        expect(! DeferredReleaseDetail::sink.enqueue, "no-surrogate-outer-sink", after);
         APTTYPE original{};
         APTTYPEQUALIFIER originalQualifier{};
         const HRESULT originalApartment = CoGetApartmentType(&original, &originalQualifier);
-        auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
-        const auto shutdown = wil::scope_exit(
-            [&]() noexcept
-            {
-                if (owner)
-                    owner->Shutdown();
-            });
-        owner->_quietUi = true;
-        owner->_prompts = &QuietPrompts();
-        if (FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
-            FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) ||
-            FAILED(owner->InitializeChrome()))
+        auto owner                      = std::make_unique<Application>(instance, true, nullptr, 0);
+        const auto shutdown             = wil::scope_exit([&]() noexcept
+        {
+            if (owner)
+                owner->Shutdown();
+        });
+        owner->_quietUi                 = true;
+        owner->_prompts                 = &QuietPrompts();
+        if (FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) || FAILED(owner->CreateMainWindow(false)) ||
+            FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
         {
             SelfTestFailure(L"Standalone shutdown fixture could not initialize its actual hidden WARP host.\n");
             return 5;
@@ -61,8 +59,8 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
         // Normal DPI chrome synchronization is allowed to refresh that payload from the document.
         owner->_uiBenchmark = std::make_unique<UiBenchmarkState>();
         {
-            UiBenchmarkState& continuity = *owner->_uiBenchmark;
-            const HWND benchmarkWindow = owner->_window.get();
+            UiBenchmarkState& continuity  = *owner->_uiBenchmark;
+            const HWND benchmarkWindow    = owner->_window.get();
             const HMONITOR initialMonitor = MonitorFromWindow(benchmarkWindow, MONITOR_DEFAULTTONULL);
             MONITORINFOEXW monitorInfo{};
             monitorInfo.cbSize = sizeof(monitorInfo);
@@ -71,85 +69,75 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             RECT suggested{};
             const UINT currentDpi = GetDpiForWindow(benchmarkWindow);
             POINT clientOrigin{};
-            const bool validMove = ClientToScreen(benchmarkWindow, &clientOrigin) != FALSE;
-            const bool validDpi = currentDpi != 0 && GetWindowRect(benchmarkWindow, &suggested) != FALSE;
-            const bool actualDisplayModeAvailable =
-                initialMonitor && GetMonitorInfoW(initialMonitor, static_cast<MONITORINFO*>(&monitorInfo)) &&
-                EnumDisplaySettingsW(monitorInfo.szDevice, ENUM_CURRENT_SETTINGS, &currentMode) &&
-                currentMode.dmBitsPerPel != 0 && currentMode.dmPelsWidth != 0 && currentMode.dmPelsHeight != 0 &&
-                currentMode.dmPelsWidth <= 0xffff && currentMode.dmPelsHeight <= 0xffff;
-            const DWORD displayBitsPerPixel = actualDisplayModeAvailable ? currentMode.dmBitsPerPel : 32;
-            const DWORD displayWidth = actualDisplayModeAvailable ? currentMode.dmPelsWidth : 1024;
-            const DWORD displayHeight = actualDisplayModeAvailable ? currentMode.dmPelsHeight : 768;
-            const bool validDisplayPayload = displayBitsPerPixel != 0 && displayWidth != 0 && displayHeight != 0 &&
-                                             displayWidth <= 0xffff && displayHeight <= 0xffff;
+            const bool validMove                  = ClientToScreen(benchmarkWindow, &clientOrigin) != FALSE;
+            const bool validDpi                   = currentDpi != 0 && GetWindowRect(benchmarkWindow, &suggested) != FALSE;
+            const bool actualDisplayModeAvailable = initialMonitor && GetMonitorInfoW(initialMonitor, static_cast<MONITORINFO*>(&monitorInfo)) &&
+                                                    EnumDisplaySettingsW(monitorInfo.szDevice, ENUM_CURRENT_SETTINGS, &currentMode) &&
+                                                    currentMode.dmBitsPerPel != 0 && currentMode.dmPelsWidth != 0 && currentMode.dmPelsHeight != 0 &&
+                                                    currentMode.dmPelsWidth <= 0xffff && currentMode.dmPelsHeight <= 0xffff;
+            const DWORD displayBitsPerPixel       = actualDisplayModeAvailable ? currentMode.dmBitsPerPel : 32;
+            const DWORD displayWidth              = actualDisplayModeAvailable ? currentMode.dmPelsWidth : 1024;
+            const DWORD displayHeight             = actualDisplayModeAvailable ? currentMode.dmPelsHeight : 768;
+            const bool validDisplayPayload =
+                displayBitsPerPixel != 0 && displayWidth != 0 && displayHeight != 0 && displayWidth <= 0xffff && displayHeight <= 0xffff;
             if (validMove)
-                (void)SendMessageW(benchmarkWindow, WM_MOVE, 0,
-                                   MAKELPARAM(static_cast<WORD>(clientOrigin.x), static_cast<WORD>(clientOrigin.y)));
+                (void)SendMessageW(benchmarkWindow, WM_MOVE, 0, MAKELPARAM(static_cast<WORD>(clientOrigin.x), static_cast<WORD>(clientOrigin.y)));
             if (validDpi)
-                (void)SendMessageW(benchmarkWindow, WM_DPICHANGED,
-                                   static_cast<WPARAM>(MAKELPARAM(currentDpi, currentDpi)),
-                                   reinterpret_cast<LPARAM>(&suggested));
+                (void)SendMessageW(
+                    benchmarkWindow, WM_DPICHANGED, static_cast<WPARAM>(MAKELPARAM(currentDpi, currentDpi)), reinterpret_cast<LPARAM>(&suggested));
             if (validDisplayPayload)
-                (void)SendMessageW(benchmarkWindow, WM_DISPLAYCHANGE, displayBitsPerPixel,
-                                   MAKELPARAM(displayWidth, displayHeight));
-            expect(validMove && validDpi && validDisplayPayload && !continuity.displayContinuityCaptured &&
-                       !continuity.displayContinuity.invalidated && !continuity.RejectPerformanceForDisplayChange(),
-                   "actual-window-messages-before-capture-do-not-invalidate", after);
-            expect(!actualDisplayModeAvailable ||
-                       (displayBitsPerPixel == currentMode.dmBitsPerPel && displayWidth == currentMode.dmPelsWidth &&
-                        displayHeight == currentMode.dmPelsHeight),
-                   "actual-current-mode-payload-preserved-when-available", after);
+                (void)SendMessageW(benchmarkWindow, WM_DISPLAYCHANGE, displayBitsPerPixel, MAKELPARAM(displayWidth, displayHeight));
+            expect(validMove && validDpi && validDisplayPayload && ! continuity.displayContinuityCaptured && ! continuity.displayContinuity.invalidated &&
+                       ! continuity.RejectPerformanceForDisplayChange(),
+                   "actual-window-messages-before-capture-do-not-invalidate",
+                   after);
+            expect(! actualDisplayModeAvailable || (displayBitsPerPixel == currentMode.dmBitsPerPel && displayWidth == currentMode.dmPelsWidth &&
+                                                    displayHeight == currentMode.dmPelsHeight),
+                   "actual-current-mode-payload-preserved-when-available",
+                   after);
 
-            const HMONITOR capturedMonitor = MonitorFromWindow(benchmarkWindow, MONITOR_DEFAULTTONULL);
-            continuity.displayContinuity = {};
-            continuity.initialMonitorIdentity = reinterpret_cast<std::uintptr_t>(capturedMonitor);
+            const HMONITOR capturedMonitor       = MonitorFromWindow(benchmarkWindow, MONITOR_DEFAULTTONULL);
+            continuity.displayContinuity         = {};
+            continuity.initialMonitorIdentity    = reinterpret_cast<std::uintptr_t>(capturedMonitor);
             continuity.displayContinuityCaptured = true;
-            expect(capturedMonitor == initialMonitor && continuity.displayContinuityCaptured,
-                   "actual-window-monitor-capture-attempted-even-when-unknown", after);
+            expect(
+                capturedMonitor == initialMonitor && continuity.displayContinuityCaptured, "actual-window-monitor-capture-attempted-even-when-unknown", after);
             continuity.displayAuthorityKnown = false;
-            continuity.smoke = false;
-            expect(continuity.RejectPerformanceForUnknownDisplayAuthority(),
-                   "unknown-display-authority-refuses-full-performance", after);
+            continuity.smoke                 = false;
+            expect(continuity.RejectPerformanceForUnknownDisplayAuthority(), "unknown-display-authority-refuses-full-performance", after);
             continuity.smoke = true;
-            expect(!continuity.RejectPerformanceForUnknownDisplayAuthority(),
-                   "unknown-display-authority-keeps-smoke-correctness-only", after);
+            expect(! continuity.RejectPerformanceForUnknownDisplayAuthority(), "unknown-display-authority-keeps-smoke-correctness-only", after);
             continuity.smoke = false;
             if (validMove)
-                (void)SendMessageW(benchmarkWindow, WM_MOVE, 0,
-                                   MAKELPARAM(static_cast<WORD>(clientOrigin.x), static_cast<WORD>(clientOrigin.y)));
-            expect(validMove && !continuity.displayContinuity.invalidated &&
-                       !continuity.RejectPerformanceForDisplayChange(),
-                   "actual-same-window-move-preserves-performance-authority", after);
+                (void)SendMessageW(benchmarkWindow, WM_MOVE, 0, MAKELPARAM(static_cast<WORD>(clientOrigin.x), static_cast<WORD>(clientOrigin.y)));
+            expect(validMove && ! continuity.displayContinuity.invalidated && ! continuity.RejectPerformanceForDisplayChange(),
+                   "actual-same-window-move-preserves-performance-authority",
+                   after);
             if (validDisplayPayload)
-                (void)SendMessageW(benchmarkWindow, WM_DISPLAYCHANGE, displayBitsPerPixel,
-                                   MAKELPARAM(displayWidth, displayHeight));
-            expect(validDisplayPayload && continuity.displayContinuity.invalidated &&
-                       continuity.RejectPerformanceForDisplayChange(),
-                   "actual-display-change-refuses-performance-run", after);
+                (void)SendMessageW(benchmarkWindow, WM_DISPLAYCHANGE, displayBitsPerPixel, MAKELPARAM(displayWidth, displayHeight));
+            expect(validDisplayPayload && continuity.displayContinuity.invalidated && continuity.RejectPerformanceForDisplayChange(),
+                   "actual-display-change-refuses-performance-run",
+                   after);
             (void)SendMessageW(benchmarkWindow, WM_NULL, 0, 0);
             expect(continuity.displayContinuity.invalidated && continuity.RejectPerformanceForDisplayChange(),
-                   "actual-unrelated-message-cannot-clear-invalidation", after);
+                   "actual-unrelated-message-cannot-clear-invalidation",
+                   after);
         }
         owner->_uiBenchmark.reset();
-        expect(DeferredReleaseDetail::sink.enqueue && owner->_jobs.WorkerCount() != 0,
-               "actual-application-owns-sink-and-pool", after);
-        expect(owner->_renderer.IsWarp() && owner->_brushEngine.Ready() && owner->_window && owner->_chrome,
-               "actual-hidden-graphics-and-chrome-alive", after);
+        expect(DeferredReleaseDetail::sink.enqueue && owner->_jobs.WorkerCount() != 0, "actual-application-owns-sink-and-pool", after);
+        expect(owner->_renderer.IsWarp() && owner->_brushEngine.Ready() && owner->_window && owner->_chrome, "actual-hidden-graphics-and-chrome-alive", after);
         owner->_session.CreateDocument(2048, 2048, true);
         const Guid layer = InsertPaintedLayer(owner->_session, L"Retained pixels", 2048, 2048, {}, 0, 0xFF7F3F1Fu);
-        expect(owner->_session.ActiveLayer() && owner->_session.ActiveLayer()->id == layer &&
-                   owner->_session.ActiveLayer()->asset &&
-                   owner->_session.ActiveLayer()->asset->image.ByteSize() == 16ull * 1024 * 1024 &&
-                   owner->_session.history.CanUndo(),
-               "real-large-document-and-history", after);
-        expect(owner->_session.CopySelection() && owner->_session.Clipboard() &&
-                   owner->_session.Clipboard()->image.HasStorage() &&
-                   owner->_session.Clipboard()->image.Width() == 2048 &&
-                   owner->_session.Clipboard()->image.Height() == 2048,
-               "private-clipboard-owner-retained-without-os-transfer", after);
-        auto gate = std::make_shared<DocumentLifecycleTestGate>();
-        gate->afterPreparation = after;
+        expect(owner->_session.ActiveLayer() && owner->_session.ActiveLayer()->id == layer && owner->_session.ActiveLayer()->asset &&
+                   owner->_session.ActiveLayer()->asset->image.ByteSize() == 16ull * 1024 * 1024 && owner->_session.history.CanUndo(),
+               "real-large-document-and-history",
+               after);
+        expect(owner->_session.CopySelection() && owner->_session.Clipboard() && owner->_session.Clipboard()->image.HasStorage() &&
+                   owner->_session.Clipboard()->image.Width() == 2048 && owner->_session.Clipboard()->image.Height() == 2048,
+               "private-clipboard-owner-retained-without-os-transfer",
+               after);
+        auto gate                         = std::make_shared<DocumentLifecycleTestGate>();
+        gate->afterPreparation            = after;
         owner->_documentLifecycleTestGate = gate;
         owner->OnCommand(ChromeHost::kCommandNew);
         const ULONGLONG deadline = GetTickCount64() + 10000;
@@ -172,112 +160,104 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 std::_Exit(5);
             }
             const HANDLE wake = static_cast<HANDLE>(owner->_jobs.WakeHandle());
-            if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
-                                            MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+            if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
                 std::_Exit(5);
         }
-        expect(owner->_documentLifecycleTicket && owner->_documentLifecycleStamp && owner->_historyWork.Busy() &&
-                   gate->captureReservationHeld.load() && owner->_jobs.ReservedMemoryBytes() != 0,
-               "lifecycle-pending-with-complete-reservation", after);
+        expect(owner->_documentLifecycleTicket && owner->_documentLifecycleStamp && owner->_historyWork.Busy() && gate->captureReservationHeld.load() &&
+                   owner->_jobs.ReservedMemoryBytes() != 0,
+               "lifecycle-pending-with-complete-reservation",
+               after);
         // Add a live graphics-backed draft after reaching the immutable job gate. Shutdown suppresses publication
         // regardless of later session authority; this owner must remain alive through producer acknowledgement.
         const bool gradient = owner->_session.BeginGradient({0, 0});
         std::weak_ptr<BrushStroke> draft;
         if (owner->_session.PendingGradient())
             draft = owner->_session.PendingGradient()->raster;
-        expect(gradient && !draft.expired(), "graphics-backed-draft-alive-before-shutdown", after);
-        Raster rootStorage = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
-        owner->_drag = ColorSampling{0xFF123456u, rootStorage, Vec2{2, 3}};
-        owner->_overlaySelection =
-            DocumentSelection{false, SelectionLoops{SelectionLoop{Vec2{4, 5}, Vec2{44, 5}, Vec2{44, 35}, Vec2{4, 35}}}};
-        owner->_uiBenchmark = std::make_unique<UiBenchmarkState>();
-        const CanvasDocument& currentDocument = owner->_session.Document().value();
-        owner->_uiBenchmark->fixture = currentDocument;
-        owner->_uiBenchmark->imageImportBaseline = currentDocument;
-        owner->_uiBenchmark->previousImage = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
-        owner->_uiBenchmark->previousPreview = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
-        owner->_uiBenchmark->complete = true;
-        owner->_uiBenchmark->failed = false;
-        owner->_uiBenchmark->runs = 7;
-        owner->_uiBenchmark->ownsSaveDirectory = false;
+        expect(gradient && ! draft.expired(), "graphics-backed-draft-alive-before-shutdown", after);
+        Raster rootStorage                        = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
+        owner->_drag                              = ColorSampling{0xFF123456u, rootStorage, Vec2{2, 3}};
+        owner->_overlaySelection                  = DocumentSelection{false, SelectionLoops{SelectionLoop{Vec2{4, 5}, Vec2{44, 5}, Vec2{44, 35}, Vec2{4, 35}}}};
+        owner->_uiBenchmark                       = std::make_unique<UiBenchmarkState>();
+        const CanvasDocument& currentDocument     = owner->_session.Document().value();
+        owner->_uiBenchmark->fixture              = currentDocument;
+        owner->_uiBenchmark->imageImportBaseline  = currentDocument;
+        owner->_uiBenchmark->previousImage        = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
+        owner->_uiBenchmark->previousPreview      = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
+        owner->_uiBenchmark->complete             = true;
+        owner->_uiBenchmark->failed               = false;
+        owner->_uiBenchmark->runs                 = 7;
+        owner->_uiBenchmark->ownsSaveDirectory    = false;
         UiBenchmarkState* const benchmarkIdentity = owner->_uiBenchmark.get();
         UiTimingStats* const benchmarkTimingIdentity = &owner->_uiBenchmark->timing;
-        const ColorSampling* const sampling = std::get_if<ColorSampling>(&owner->_drag);
-        expect(sampling && sampling->composite && sampling->composite->Identity() == rootStorage.Identity() &&
-                   rootStorage.ByteSize() == 16ull * 1024 * 1024 && rootStorage.PixelCount() == 2048 * 2048 &&
-                   sampling->point == Vec2{2, 3},
-               "sampling-root-identity-size-count-and-point-before-shutdown", after);
-        expect(owner->_overlaySelection && !owner->_overlaySelection->IsEmpty() &&
-                   owner->_overlaySelection->loops.PointCount() == 4,
-               "explicit-overlay-selection-before-shutdown", after);
-        expect(owner->_uiBenchmark && owner->_uiBenchmark.get() == benchmarkIdentity &&
-                   owner->_uiBenchmark->fixture == currentDocument &&
-                   owner->_uiBenchmark->imageImportBaseline == currentDocument &&
-                   owner->_uiBenchmark->previousImage.HasStorage() &&
+        const ColorSampling* const sampling          = std::get_if<ColorSampling>(&owner->_drag);
+        expect(sampling && sampling->composite && sampling->composite->Identity() == rootStorage.Identity() && rootStorage.ByteSize() == 16ull * 1024 * 1024 &&
+                   rootStorage.PixelCount() == 2048 * 2048 && sampling->point == Vec2{2, 3},
+               "sampling-root-identity-size-count-and-point-before-shutdown",
+               after);
+        expect(owner->_overlaySelection && ! owner->_overlaySelection->IsEmpty() && owner->_overlaySelection->loops.PointCount() == 4,
+               "explicit-overlay-selection-before-shutdown",
+               after);
+        expect(owner->_uiBenchmark && owner->_uiBenchmark.get() == benchmarkIdentity && owner->_uiBenchmark->fixture == currentDocument &&
+                   owner->_uiBenchmark->imageImportBaseline == currentDocument && owner->_uiBenchmark->previousImage.HasStorage() &&
                    owner->_uiBenchmark->previousPreview.HasStorage() &&
                    owner->_uiBenchmark->previousImage.Identity() != owner->_uiBenchmark->previousPreview.Identity() &&
                    owner->_uiBenchmark->previousImage.Identity() != rootStorage.Identity() &&
                    owner->_uiBenchmark->previousPreview.Identity() != rootStorage.Identity() &&
                    owner->_uiBenchmark->previousImage.ByteSize() == 16ull * 1024 * 1024 &&
-                   owner->_uiBenchmark->previousPreview.ByteSize() == 16ull * 1024 * 1024 &&
-                   owner->_uiBenchmark->complete && !owner->_uiBenchmark->failed && owner->_uiBenchmark->runs == 7 &&
-                   !owner->_uiBenchmark->ownsSaveDirectory,
-               "benchmark-roots-and-complete-metadata-before-shutdown", after);
+                   owner->_uiBenchmark->previousPreview.ByteSize() == 16ull * 1024 * 1024 && owner->_uiBenchmark->complete && ! owner->_uiBenchmark->failed &&
+                   owner->_uiBenchmark->runs == 7 && ! owner->_uiBenchmark->ownsSaveDirectory,
+               "benchmark-roots-and-complete-metadata-before-shutdown",
+               after);
         // The fixture must not retain the last pixel owner across Shutdown. Identity/size checks above finish
         // while the temporary exists; the ColorSampling variant owns its sole raster reference from here.
         rootStorage = {};
         ApplicationShutdownTestProbe probe;
-        probe.draft = draft;
+        probe.draft               = draft;
         owner->_shutdownTestProbe = &probe;
         owner->Shutdown();
-        expect(owner->_shutdownComplete && !owner->_window && !owner->_chrome && !owner->_rendererReady,
-               "actual-application-shutdown-complete", after);
-        expect(std::holds_alternative<std::monostate>(owner->_drag) && !owner->_overlaySelection,
-               "host-drag-and-outline-roots-retired-after-shutdown", after);
-        expect(owner->_uiBenchmark && owner->_uiBenchmark.get() == benchmarkIdentity &&
-                   &owner->_uiBenchmark->timing == benchmarkTimingIdentity && owner->_uiBenchmark->complete &&
-                   !owner->_uiBenchmark->failed && owner->_uiBenchmark->runs == 7 &&
-                   !owner->_uiBenchmark->ownsSaveDirectory && owner->_uiBenchmark->fixture.layers.empty() &&
-                   owner->_uiBenchmark->imageImportBaseline.layers.empty() &&
-                   !owner->_uiBenchmark->previousImage.HasStorage() &&
-                   !owner->_uiBenchmark->previousPreview.HasStorage(),
-               "benchmark-metadata-preserved-and-document-image-roots-retired-after-shutdown", after);
+        expect(owner->_shutdownComplete && ! owner->_window && ! owner->_chrome && ! owner->_rendererReady, "actual-application-shutdown-complete", after);
+        expect(std::holds_alternative<std::monostate>(owner->_drag) && ! owner->_overlaySelection, "host-drag-and-outline-roots-retired-after-shutdown", after);
+        expect(owner->_uiBenchmark && owner->_uiBenchmark.get() == benchmarkIdentity && &owner->_uiBenchmark->timing == benchmarkTimingIdentity &&
+                   owner->_uiBenchmark->complete && ! owner->_uiBenchmark->failed && owner->_uiBenchmark->runs == 7 &&
+                   ! owner->_uiBenchmark->ownsSaveDirectory && owner->_uiBenchmark->fixture.layers.empty() &&
+                   owner->_uiBenchmark->imageImportBaseline.layers.empty() && ! owner->_uiBenchmark->previousImage.HasStorage() &&
+                   ! owner->_uiBenchmark->previousPreview.HasStorage(),
+               "benchmark-metadata-preserved-and-document-image-roots-retired-after-shutdown",
+               after);
         expect(draft.expired(), "complete-session-cpu-graph-retired-before-shutdown-ack", after);
-        expect(probe.ownerCalls == 1 && probe.draftAliveAtDetach && probe.graphicsDetachedOnOwner &&
-                   probe.reservationAndWakeAlive,
-               "owner-detaches-graphics-after-join-with-cpu-and-reservation-alive", after);
+        expect(probe.ownerCalls == 1 && probe.draftAliveAtDetach && probe.graphicsDetachedOnOwner && probe.reservationAndWakeAlive,
+               "owner-detaches-graphics-after-join-with-cpu-and-reservation-alive",
+               after);
         expect(probe.workerCalls.load() == 1 && probe.mta.load() && probe.offOwner.load() && probe.draftRetired.load(),
-               "whole-session-retired-once-on-final-mta-worker", after);
-        expect(probe.workerCalls.load() == 1 && probe.mta.load() && probe.offOwner.load() &&
-                   probe.hostCpuRootsRetired.load(),
-               "host-cpu-roots-retired-on-acknowledged-final-mta-worker", after);
-        expect(!owner->_session.Clipboard() || !owner->_session.Clipboard()->image.HasStorage(),
-               "private-clipboard-pixels-retired-with-session", after);
+               "whole-session-retired-once-on-final-mta-worker",
+               after);
+        expect(probe.workerCalls.load() == 1 && probe.mta.load() && probe.offOwner.load() && probe.hostCpuRootsRetired.load(),
+               "host-cpu-roots-retired-on-acknowledged-final-mta-worker",
+               after);
+        expect(! owner->_session.Clipboard() || ! owner->_session.Clipboard()->image.HasStorage(), "private-clipboard-pixels-retired-with-session", after);
         expect(gate->retired.load() == 1 && gate->retiredOffOwner.load(), "job-payload-retired-once-off-owner", after);
-        expect(!owner->_documentLifecycleTicket && !owner->_documentLifecycleStamp && !owner->_activeHostRequest &&
-                   !owner->_historyWork.Busy(),
-               "tickets-input-and-history-barrier-acknowledged", after);
-        expect(owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 && !owner->_jobs.WakeHandle() &&
-                   owner->_jobs.ReservedMemoryBytes() == 0 && owner->_jobs.ReleasingMemoryBytes() == 0 &&
-                   !DeferredReleaseDetail::sink.enqueue,
-               "pool-reservations-events-and-sink-retired", after);
+        expect(! owner->_documentLifecycleTicket && ! owner->_documentLifecycleStamp && ! owner->_activeHostRequest && ! owner->_historyWork.Busy(),
+               "tickets-input-and-history-barrier-acknowledged",
+               after);
+        expect(owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 && ! owner->_jobs.WakeHandle() && owner->_jobs.ReservedMemoryBytes() == 0 &&
+                   owner->_jobs.ReleasingMemoryBytes() == 0 && ! DeferredReleaseDetail::sink.enqueue,
+               "pool-reservations-events-and-sink-retired",
+               after);
         APTTYPE apartment{};
         APTTYPEQUALIFIER qualifier{};
-        expect(SUCCEEDED(originalApartment) && SUCCEEDED(CoGetApartmentType(&apartment, &qualifier)) &&
-                   apartment == original && qualifier == originalQualifier,
-               "caller-apartment-preserved", after);
+        expect(SUCCEEDED(originalApartment) && SUCCEEDED(CoGetApartmentType(&apartment, &qualifier)) && apartment == original && qualifier == originalQualifier,
+               "caller-apartment-preserved",
+               after);
         owner->Shutdown();
         expect(gate->retired.load() == 1 && owner->_shutdownComplete, "second-shutdown-is-idempotent", after);
-        expect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1, "second-shutdown-cannot-repeat-retirement-hooks",
+        expect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1, "second-shutdown-cannot-repeat-retirement-hooks", after);
+        expect(owner->_uiBenchmark && owner->_uiBenchmark.get() == benchmarkIdentity && &owner->_uiBenchmark->timing == benchmarkTimingIdentity &&
+                   owner->_uiBenchmark->complete && ! owner->_uiBenchmark->failed && owner->_uiBenchmark->runs == 7 &&
+                   ! owner->_uiBenchmark->ownsSaveDirectory && owner->_uiBenchmark->fixture.layers.empty() &&
+                   owner->_uiBenchmark->imageImportBaseline.layers.empty() && ! owner->_uiBenchmark->previousImage.HasStorage() &&
+                   ! owner->_uiBenchmark->previousPreview.HasStorage() && probe.workerCalls.load() == 1,
+               "second-shutdown-preserves-empty-benchmark-and-single-callback",
                after);
-        expect(owner->_uiBenchmark && owner->_uiBenchmark.get() == benchmarkIdentity &&
-                   &owner->_uiBenchmark->timing == benchmarkTimingIdentity && owner->_uiBenchmark->complete &&
-                   !owner->_uiBenchmark->failed && owner->_uiBenchmark->runs == 7 &&
-                   !owner->_uiBenchmark->ownsSaveDirectory && owner->_uiBenchmark->fixture.layers.empty() &&
-                   owner->_uiBenchmark->imageImportBaseline.layers.empty() &&
-                   !owner->_uiBenchmark->previousImage.HasStorage() &&
-                   !owner->_uiBenchmark->previousPreview.HasStorage() && probe.workerCalls.load() == 1,
-               "second-shutdown-preserves-empty-benchmark-and-single-callback", after);
         owner->_shutdownTestProbe = nullptr;
         owner.reset();
         // DestroyWindow posts this fixture's WM_QUIT. Drain the full queue so pending window messages cannot
@@ -286,8 +266,8 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
         for (;;)
         {
             const auto drained = PumpMessages();
-            consumedQuit = consumedQuit || drained.quit;
-            if (!drained.quit)
+            consumedQuit       = consumedQuit || drained.quit;
+            if (! drained.quit)
                 break;
         }
         expect(consumedQuit, "fixture-quit-consumed-before-next-application", after);
@@ -302,34 +282,31 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
         unsigned inverseCloseFailures = 0;
         for (const bool published : std::array{false, true})
         {
-            const char* phase = published ? "published-output" : "held-before-publication";
+            const char* phase        = published ? "published-output" : "held-before-publication";
             const auto inverseExpect = [&inverseCloseFailures, phase](bool condition, const char* label) noexcept
             {
                 inverseCloseFailures += condition ? 0u : 1u;
-                std::fprintf(stderr, "%s inverse-selection-joined-close.%s.%s\n", condition ? "PASS" : "FAIL", phase,
-                             label);
+                std::fprintf(stderr, "%s inverse-selection-joined-close.%s.%s\n", condition ? "PASS" : "FAIL", phase, label);
             };
-            inverseExpect(!DeferredReleaseDetail::sink.enqueue, "no-outer-owner-sink");
+            inverseExpect(! DeferredReleaseDetail::sink.enqueue, "no-outer-owner-sink");
             auto gate = std::make_shared<SelectionCommandTestGate>();
             gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-            gate->hold = !published;
+            gate->hold                         = ! published;
             gate->observeInverseOutputLifetime = published;
             // An unrelated actual 64-byte lease observes the endpoint without owning any Inverse graph.
             // The scheduler diagnostic itself is intentionally zero after Close.
             constexpr std::uint64_t kProbeBytes = 64;
             SharedRetainedMemoryLease endpointProbe;
-            auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
-            const auto cleanup = wil::scope_exit(
-                [&]() noexcept
-                {
-                    if (owner)
-                        owner->Shutdown();
-                });
-            owner->_quietUi = true;
-            owner->_prompts = &QuietPrompts();
-            if (!gate->release || FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
-                FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) ||
-                FAILED(owner->InitializeChrome()))
+            auto owner         = std::make_unique<Application>(instance, true, nullptr, 0);
+            const auto cleanup = wil::scope_exit([&]() noexcept
+            {
+                if (owner)
+                    owner->Shutdown();
+            });
+            owner->_quietUi    = true;
+            owner->_prompts    = &QuietPrompts();
+            if (! gate->release || FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) || FAILED(owner->CreateMainWindow(false)) ||
+                FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
                 return 5;
             owner->BindCompositionDevice();
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -338,9 +315,11 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
 #pragma warning(disable : 4626 5027)
             class EndpointProbeJob final : public Job
             {
-              public:
+            public:
                 EndpointProbeJob(JobScheduler& scheduler, SharedRetainedMemoryLease& lease, bool& retained) noexcept
-                    : _scheduler(scheduler), _lease(lease), _retained(retained)
+                    : _scheduler(scheduler),
+                      _lease(lease),
+                      _retained(retained)
                 {
                 }
                 JobResult Run(JobContext&) override
@@ -354,11 +333,10 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 }
                 void Completed(JobResult result) noexcept override
                 {
-                    _retained =
-                        result.status == JobStatus::Finished && _scheduler.RetainMemory(_ticket, _lease) == S_OK;
+                    _retained = result.status == JobStatus::Finished && _scheduler.RetainMemory(_ticket, _lease) == S_OK;
                 }
 
-              private:
+            private:
                 JobScheduler& _scheduler;
                 SharedRetainedMemoryLease& _lease;
                 bool& _retained;
@@ -366,23 +344,19 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             };
 #pragma warning(pop)
 
-            bool diagnosticRetained = false;
-            std::unique_ptr<Job> diagnosticJob =
-                std::make_unique<EndpointProbeJob>(owner->_jobs, endpointProbe, diagnosticRetained);
+            bool diagnosticRetained            = false;
+            std::unique_ptr<Job> diagnosticJob = std::make_unique<EndpointProbeJob>(owner->_jobs, endpointProbe, diagnosticRetained);
             JobTicket diagnosticTicket;
-            const auto diagnosticAdmission = owner->_jobs.Submit(diagnosticJob,
-                                                                 {.kind = JobClass::Background,
-                                                                  .memoryBytes = kProbeBytes,
-                                                                  .deferredRetirement = true,
-                                                                  .reserveRetainedMemory = true},
-                                                                 diagnosticTicket);
-            const bool diagnosticReady =
-                diagnosticAdmission == S_OK &&
-                SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) == SettleResult::Settled &&
-                diagnosticRetained && endpointProbe.Bytes() == kProbeBytes &&
-                endpointProbe.ResidentBytes() == kProbeBytes && owner->_jobs.ReservedMemoryBytes() == kProbeBytes;
+            const auto diagnosticAdmission =
+                owner->_jobs.Submit(diagnosticJob,
+                                    {.kind = JobClass::Background, .memoryBytes = kProbeBytes, .deferredRetirement = true, .reserveRetainedMemory = true},
+                                    diagnosticTicket);
+            const bool diagnosticReady = diagnosticAdmission == S_OK &&
+                                         SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) == SettleResult::Settled && diagnosticRetained &&
+                                         endpointProbe.Bytes() == kProbeBytes && endpointProbe.ResidentBytes() == kProbeBytes &&
+                                         owner->_jobs.ReservedMemoryBytes() == kProbeBytes;
             inverseExpect(diagnosticReady, "independent-closed-endpoint-probe-retained");
-            if (!diagnosticReady)
+            if (! diagnosticReady)
                 return 5;
 
             owner->_session.CreateDocument(100, 100, true);
@@ -390,12 +364,12 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             owner->_session.history.Reset();
             owner->_session.history.MarkSaved();
             owner->DocumentChanged();
-            const auto root = owner->_session.Document()->layers.Identity();
-            const auto generation = owner->_session.Generation();
-            const auto revision = owner->_session.history.CurrentRevision();
-            const auto geometry = owner->_session.Selection()->loops.Identity();
+            const auto root                  = owner->_session.Document()->layers.Identity();
+            const auto generation            = owner->_session.Generation();
+            const auto revision              = owner->_session.history.CurrentRevision();
+            const auto geometry              = owner->_session.Selection()->loops.Identity();
             owner->_inverseSelectionTestGate = gate;
-            const auto receipt = owner->QueueHostInput(HostCommandInput{ChromeHost::kCommandInverse});
+            const auto receipt               = owner->QueueHostInput(HostCommandInput{ChromeHost::kCommandInverse});
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
 #pragma warning(push)
@@ -409,7 +383,7 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             held{*owner};
             const auto dispatch = [](void* opaque, void* native) noexcept
             {
-                auto& value = *static_cast<Held*>(opaque);
+                auto& value   = *static_cast<Held*>(opaque);
                 auto& message = *static_cast<MSG*>(native);
                 if (message.message == SelectionCommandTestGate::kMessage)
                     value.reached = true;
@@ -419,10 +393,8 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             std::shared_ptr<const void> copiedOutline;
             if (published)
             {
-                inverseExpect(SettleJobs(owner->_jobs, 15000, dispatch, &held) == SettleResult::Settled &&
-                                  receipt.Read().outcome == HostOutcome::Succeeded &&
-                                  gate->inversePublishedOutputs == 1 && gate->inverseOutputBoundToOriginal &&
-                                  gate->inversePublishedBytes != 0 &&
+                inverseExpect(SettleJobs(owner->_jobs, 15000, dispatch, &held) == SettleResult::Settled && receipt.Read().outcome == HostOutcome::Succeeded &&
+                                  gate->inversePublishedOutputs == 1 && gate->inverseOutputBoundToOriginal && gate->inversePublishedBytes != 0 &&
                                   owner->_jobs.ReservedMemoryBytes() == kProbeBytes + gate->inversePublishedBytes,
                               "published-original-ticket-charge");
                 copiedOutline = gate->inverseOutlineOwner.lock();
@@ -434,29 +406,36 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 {
                     const auto observed = receipt.Read();
                     MEMORYSTATUSEX memory{};
-                    memory.dwLength = sizeof(memory);
+                    memory.dwLength       = sizeof(memory);
                     const bool memoryRead = GlobalMemoryStatusEx(&memory) != FALSE;
                     std::fprintf(stderr,
                                  "DIAG inverse-selection-joined-close.%s held-gate reason=%s outcome=%u error=%08lx "
                                  "native=%lu ticket=%u stamp=%u history=%u queue=%zu active=%u idle=%u ui=%u "
                                  "ownerReady=%u visits=%u reserved=%llu memoryRead=%u phys=%llu commit=%llu\n",
-                                 phase, reason, static_cast<unsigned>(observed.outcome),
-                                 static_cast<unsigned long>(observed.error), nativeError,
+                                 phase,
+                                 reason,
+                                 static_cast<unsigned>(observed.outcome),
+                                 static_cast<unsigned long>(observed.error),
+                                 nativeError,
                                  owner->_inverseSelectionTicket.has_value() ? 1u : 0u,
                                  owner->_inverseSelectionStamp.has_value() ? 1u : 0u,
-                                 owner->_historyWork.Busy() ? 1u : 0u, owner->_hostRequests.Size(),
-                                 owner->_activeHostRequest.has_value() ? 1u : 0u, owner->_jobs.IsIdle() ? 1u : 0u,
-                                 owner->_jobs.HasUiWork() ? 1u : 0u, owner->_ownerWork.HasReady() ? 1u : 0u,
+                                 owner->_historyWork.Busy() ? 1u : 0u,
+                                 owner->_hostRequests.Size(),
+                                 owner->_activeHostRequest.has_value() ? 1u : 0u,
+                                 owner->_jobs.IsIdle() ? 1u : 0u,
+                                 owner->_jobs.HasUiWork() ? 1u : 0u,
+                                 owner->_ownerWork.HasReady() ? 1u : 0u,
                                  gate->visits.load(),
                                  static_cast<unsigned long long>(owner->_jobs.ReservedMemoryBytes()),
-                                 memoryRead ? 1u : 0u, static_cast<unsigned long long>(memory.ullAvailPhys),
+                                 memoryRead ? 1u : 0u,
+                                 static_cast<unsigned long long>(memory.ullAvailPhys),
                                  static_cast<unsigned long long>(memory.ullAvailPageFile));
                     std::fflush(stdout);
                     std::fflush(stderr);
                     std::_Exit(5);
                 };
                 const auto deadline = GetTickCount64() + 10000;
-                while (!held.reached)
+                while (! held.reached)
                 {
                     if (PumpMessages(dispatch, &held).quit)
                         failHeldGate("quit");
@@ -472,15 +451,12 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                     if (owner->_jobs.HasUiWork())
                         continue;
                     const HANDLE wake = owner->_jobs.WakeHandle();
-                    if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
-                                                    MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+                    if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
                         failHeldGate("wait-failed", GetLastError());
                 }
-                inverseExpect(receipt.Read().outcome == HostOutcome::Pending && owner->_inverseSelectionTicket &&
-                                  owner->_inverseSelectionStamp && owner->_historyWork.Busy() &&
-                                  gate->reservationHeld.load() &&
-                                  owner->_jobs.ReservedMemoryBytes() == kProbeBytes + gate->reservationBytes &&
-                                  gate->visits.load() == 1,
+                inverseExpect(receipt.Read().outcome == HostOutcome::Pending && owner->_inverseSelectionTicket && owner->_inverseSelectionStamp &&
+                                  owner->_historyWork.Busy() && gate->reservationHeld.load() &&
+                                  owner->_jobs.ReservedMemoryBytes() == kProbeBytes + gate->reservationBytes && gate->visits.load() == 1,
                               "pending-original-ticket-full-reservation");
             }
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -512,52 +488,43 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                      kProbeBytes + (published ? gate->inversePublishedBytes : gate->reservationBytes)};
             ApplicationShutdownTestProbe probe;
             probe.checkContext = &observed;
-            probe.checkOwner = [](void* opaque) noexcept
+            probe.checkOwner   = [](void* opaque) noexcept
             {
                 auto& value = *static_cast<Observation*>(opaque);
-                value.chargeAliveAtDetach = value.endpointProbe.ResidentBytes() == value.expectedCharge &&
-                                            value.owner._jobs.ReservedMemoryBytes() >= value.expectedCharge;
+                value.chargeAliveAtDetach =
+                    value.endpointProbe.ResidentBytes() == value.expectedCharge && value.owner._jobs.ReservedMemoryBytes() >= value.expectedCharge;
                 value.sourceIntact =
-                    value.owner._session.Document() && value.owner._session.Selection() &&
-                    value.owner._session.Document()->layers.Identity() == value.root &&
-                    (value.published ? value.owner._session.history.UndoName() == L"Inverse"
-                                     : value.owner._session.Selection()->loops.Identity() == value.geometry &&
-                                           value.owner._session.Generation() == value.generation &&
-                                           value.owner._session.history.CurrentRevision() == value.revision &&
-                                           value.owner._session.history.UndoCount() == 0);
+                    value.owner._session.Document() && value.owner._session.Selection() && value.owner._session.Document()->layers.Identity() == value.root &&
+                    (value.published
+                         ? value.owner._session.history.UndoName() == L"Inverse"
+                         : value.owner._session.Selection()->loops.Identity() == value.geometry && value.owner._session.Generation() == value.generation &&
+                               value.owner._session.history.CurrentRevision() == value.revision && value.owner._session.history.UndoCount() == 0);
             };
             owner->_shutdownTestProbe = &probe;
             owner->Shutdown(); // Real joined Close; do not signal the held gate.
-            inverseExpect(receipt.Read().outcome == (published ? HostOutcome::Succeeded : HostOutcome::Cancelled) &&
-                              observed.sourceIntact && observed.chargeAliveAtDetach && probe.graphicsDetachedOnOwner &&
-                              probe.reservationAndWakeAlive,
+            inverseExpect(receipt.Read().outcome == (published ? HostOutcome::Succeeded : HostOutcome::Cancelled) && observed.sourceIntact &&
+                              observed.chargeAliveAtDetach && probe.graphicsDetachedOnOwner && probe.reservationAndWakeAlive,
                           "joined-close-preserves-acknowledged-source-and-graphics-order");
-            inverseExpect(owner->_shutdownComplete && gate->retired.load() && gate->retiredOffOwner.load() &&
-                              probe.hostCpuRootsRetired.load() && !owner->_inverseSelectionTicket &&
-                              !owner->_inverseSelectionStamp && !owner->_historyWork.Busy() &&
-                              !owner->_activeHostRequest && owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 &&
-                              !owner->_jobs.WakeHandle(),
+            inverseExpect(owner->_shutdownComplete && gate->retired.load() && gate->retiredOffOwner.load() && probe.hostCpuRootsRetired.load() &&
+                              ! owner->_inverseSelectionTicket && ! owner->_inverseSelectionStamp && ! owner->_historyWork.Busy() &&
+                              ! owner->_activeHostRequest && owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 && ! owner->_jobs.WakeHandle(),
                           "joined-close-clears-ticket-and-host-barrier");
             if (published)
             {
-                inverseExpect(copiedOutline &&
-                                  endpointProbe.ResidentBytes() == kProbeBytes + gate->inversePublishedBytes,
+                inverseExpect(copiedOutline && endpointProbe.ResidentBytes() == kProbeBytes + gate->inversePublishedBytes,
                               "copied-reader-keeps-output-charge-after-close");
                 copiedOutline.reset();
-                inverseExpect(gate->inverseOutlineOwner.expired() && !gate->inverseMemoryOwner.expired() &&
+                inverseExpect(gate->inverseOutlineOwner.expired() && ! gate->inverseMemoryOwner.expired() &&
                                   endpointProbe.ResidentBytes() == kProbeBytes + gate->inversePublishedBytes,
                               "outline-weak-keeps-charge-after-close");
                 gate->inverseOutlineOwner.reset();
-                inverseExpect(gate->inverseMemoryOwner.expired() &&
-                                  endpointProbe.ResidentBytes() == kProbeBytes + gate->inversePublishedBytes,
+                inverseExpect(gate->inverseMemoryOwner.expired() && endpointProbe.ResidentBytes() == kProbeBytes + gate->inversePublishedBytes,
                               "memory-weak-keeps-charge-after-close");
                 gate->inverseMemoryOwner.reset();
             }
-            inverseExpect(endpointProbe.ResidentBytes() == kProbeBytes && owner->_jobs.ReleasingMemoryBytes() == 0,
-                          "final-original-charge-refunded-once");
+            inverseExpect(endpointProbe.ResidentBytes() == kProbeBytes && owner->_jobs.ReleasingMemoryBytes() == 0, "final-original-charge-refunded-once");
             owner->Shutdown();
-            inverseExpect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1 &&
-                              endpointProbe.ResidentBytes() == kProbeBytes,
+            inverseExpect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1 && endpointProbe.ResidentBytes() == kProbeBytes,
                           "second-close-cannot-repeat-retirement-or-refund");
             endpointProbe.Reset();
             owner->_shutdownTestProbe = nullptr;
@@ -566,11 +533,11 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             for (;;)
             {
                 const auto drained = PumpMessages();
-                consumedQuit = consumedQuit || drained.quit;
-                if (!drained.quit)
+                consumedQuit       = consumedQuit || drained.quit;
+                if (! drained.quit)
                     break;
             }
-            inverseExpect(consumedQuit && !DeferredReleaseDetail::sink.enqueue, "fixture-quit-and-sink-cleared");
+            inverseExpect(consumedQuit && ! DeferredReleaseDetail::sink.enqueue, "fixture-quit-and-sink-cleared");
         }
         if (inverseCloseFailures)
             return 5;
@@ -581,34 +548,32 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
         unsigned offsetCloseFailures = 0;
         for (const bool published : std::array{false, true})
         {
-            const char* phase = published ? "published-output" : "held-before-publication";
+            const char* phase       = published ? "published-output" : "held-before-publication";
             const auto offsetExpect = [&offsetCloseFailures, phase, amount](bool condition, const char* label) noexcept
             {
                 offsetCloseFailures += condition ? 0u : 1u;
-                std::fprintf(stderr, "%s selection-offset-joined-close.%s.%s.%s\n", condition ? "PASS" : "FAIL",
-                             amount > 0 ? "expand" : "contract", phase, label);
+                std::fprintf(
+                    stderr, "%s selection-offset-joined-close.%s.%s.%s\n", condition ? "PASS" : "FAIL", amount > 0 ? "expand" : "contract", phase, label);
             };
-            offsetExpect(!DeferredReleaseDetail::sink.enqueue, "no-outer-owner-sink");
+            offsetExpect(! DeferredReleaseDetail::sink.enqueue, "no-outer-owner-sink");
             auto gate = std::make_shared<SelectionOffsetTestGate>();
             gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-            gate->hold = !published;
+            gate->hold                        = ! published;
             gate->observeOffsetOutputLifetime = published;
             // An unrelated actual 64-byte lease observes the endpoint without owning any offset graph.
             // The scheduler diagnostic itself is intentionally zero after Close.
             constexpr std::uint64_t kProbeBytes = 64;
             SharedRetainedMemoryLease endpointProbe;
-            auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
-            const auto cleanup = wil::scope_exit(
-                [&]() noexcept
-                {
-                    if (owner)
-                        owner->Shutdown();
-                });
-            owner->_quietUi = true;
-            owner->_prompts = &QuietPrompts();
-            if (!gate->release || FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
-                FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) ||
-                FAILED(owner->InitializeChrome()))
+            auto owner         = std::make_unique<Application>(instance, true, nullptr, 0);
+            const auto cleanup = wil::scope_exit([&]() noexcept
+            {
+                if (owner)
+                    owner->Shutdown();
+            });
+            owner->_quietUi    = true;
+            owner->_prompts    = &QuietPrompts();
+            if (! gate->release || FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) || FAILED(owner->CreateMainWindow(false)) ||
+                FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
                 return 5;
             owner->BindCompositionDevice();
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -617,9 +582,11 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
 #pragma warning(disable : 4626 5027)
             class EndpointProbeJob final : public Job
             {
-              public:
+            public:
                 EndpointProbeJob(JobScheduler& scheduler, SharedRetainedMemoryLease& lease, bool& retained) noexcept
-                    : _scheduler(scheduler), _lease(lease), _retained(retained)
+                    : _scheduler(scheduler),
+                      _lease(lease),
+                      _retained(retained)
                 {
                 }
                 JobResult Run(JobContext&) override
@@ -633,11 +600,10 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 }
                 void Completed(JobResult result) noexcept override
                 {
-                    _retained =
-                        result.status == JobStatus::Finished && _scheduler.RetainMemory(_ticket, _lease) == S_OK;
+                    _retained = result.status == JobStatus::Finished && _scheduler.RetainMemory(_ticket, _lease) == S_OK;
                 }
 
-              private:
+            private:
                 JobScheduler& _scheduler;
                 SharedRetainedMemoryLease& _lease;
                 bool& _retained;
@@ -645,23 +611,19 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             };
 #pragma warning(pop)
 
-            bool diagnosticRetained = false;
-            std::unique_ptr<Job> diagnosticJob =
-                std::make_unique<EndpointProbeJob>(owner->_jobs, endpointProbe, diagnosticRetained);
+            bool diagnosticRetained            = false;
+            std::unique_ptr<Job> diagnosticJob = std::make_unique<EndpointProbeJob>(owner->_jobs, endpointProbe, diagnosticRetained);
             JobTicket diagnosticTicket;
-            const auto diagnosticAdmission = owner->_jobs.Submit(diagnosticJob,
-                                                                 {.kind = JobClass::Background,
-                                                                  .memoryBytes = kProbeBytes,
-                                                                  .deferredRetirement = true,
-                                                                  .reserveRetainedMemory = true},
-                                                                 diagnosticTicket);
-            const bool diagnosticReady =
-                diagnosticAdmission == S_OK &&
-                SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) == SettleResult::Settled &&
-                diagnosticRetained && endpointProbe.Bytes() == kProbeBytes &&
-                endpointProbe.ResidentBytes() == kProbeBytes && owner->_jobs.ReservedMemoryBytes() == kProbeBytes;
+            const auto diagnosticAdmission =
+                owner->_jobs.Submit(diagnosticJob,
+                                    {.kind = JobClass::Background, .memoryBytes = kProbeBytes, .deferredRetirement = true, .reserveRetainedMemory = true},
+                                    diagnosticTicket);
+            const bool diagnosticReady = diagnosticAdmission == S_OK &&
+                                         SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) == SettleResult::Settled && diagnosticRetained &&
+                                         endpointProbe.Bytes() == kProbeBytes && endpointProbe.ResidentBytes() == kProbeBytes &&
+                                         owner->_jobs.ReservedMemoryBytes() == kProbeBytes;
             offsetExpect(diagnosticReady, "independent-closed-endpoint-probe-retained");
-            if (!diagnosticReady)
+            if (! diagnosticReady)
                 return 5;
 
             owner->_session.CreateDocument(100, 100, true);
@@ -669,12 +631,12 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             owner->_session.history.Reset();
             owner->_session.history.MarkSaved();
             owner->DocumentChanged();
-            const auto root = owner->_session.Document()->layers.Identity();
-            const auto generation = owner->_session.Generation();
-            const auto revision = owner->_session.history.CurrentRevision();
-            const auto geometry = owner->_session.Selection()->loops.Identity();
+            const auto root                 = owner->_session.Document()->layers.Identity();
+            const auto generation           = owner->_session.Generation();
+            const auto revision             = owner->_session.history.CurrentRevision();
+            const auto geometry             = owner->_session.Selection()->loops.Identity();
             owner->_selectionOffsetTestGate = gate;
-            const auto receipt = owner->QueueHostInput(HostSelectionOffsetInput{amount});
+            const auto receipt              = owner->QueueHostInput(HostSelectionOffsetInput{amount});
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
 #pragma warning(push)
@@ -688,7 +650,7 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             held{*owner};
             const auto dispatch = [](void* opaque, void* native) noexcept
             {
-                auto& value = *static_cast<Held*>(opaque);
+                auto& value   = *static_cast<Held*>(opaque);
                 auto& message = *static_cast<MSG*>(native);
                 if (message.message == SelectionOffsetTestGate::kMessage)
                     value.reached = true;
@@ -698,10 +660,8 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             std::shared_ptr<const void> copiedOutline;
             if (published)
             {
-                offsetExpect(SettleJobs(owner->_jobs, 15000, dispatch, &held) == SettleResult::Settled &&
-                                 receipt.Read().outcome == HostOutcome::Succeeded &&
-                                 gate->offsetPublishedOutputs == 1 && gate->offsetOutputBoundToOriginal &&
-                                 gate->offsetPublishedBytes != 0 &&
+                offsetExpect(SettleJobs(owner->_jobs, 15000, dispatch, &held) == SettleResult::Settled && receipt.Read().outcome == HostOutcome::Succeeded &&
+                                 gate->offsetPublishedOutputs == 1 && gate->offsetOutputBoundToOriginal && gate->offsetPublishedBytes != 0 &&
                                  owner->_jobs.ReservedMemoryBytes() == kProbeBytes + gate->offsetPublishedBytes,
                              "published-original-ticket-charge");
                 copiedOutline = gate->offsetOutlineOwner.lock();
@@ -710,7 +670,7 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             else
             {
                 const auto deadline = GetTickCount64() + 10000;
-                while (!held.reached)
+                while (! held.reached)
                 {
                     if (PumpMessages(dispatch, &held).quit)
                         std::_Exit(5);
@@ -724,15 +684,12 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                     if (owner->_jobs.HasUiWork())
                         continue;
                     const HANDLE wake = owner->_jobs.WakeHandle();
-                    if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
-                                                    MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+                    if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
                         std::_Exit(5);
                 }
-                offsetExpect(receipt.Read().outcome == HostOutcome::Pending && owner->_selectionOffsetTicket &&
-                                 owner->_selectionOffsetStamp && owner->_historyWork.Busy() &&
-                                 gate->reservationHeld.load() &&
-                                 owner->_jobs.ReservedMemoryBytes() == kProbeBytes + gate->reservationBytes &&
-                                 gate->visits.load() == 1,
+                offsetExpect(receipt.Read().outcome == HostOutcome::Pending && owner->_selectionOffsetTicket && owner->_selectionOffsetStamp &&
+                                 owner->_historyWork.Busy() && gate->reservationHeld.load() &&
+                                 owner->_jobs.ReservedMemoryBytes() == kProbeBytes + gate->reservationBytes && gate->visits.load() == 1,
                              "pending-original-ticket-full-reservation");
             }
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -754,59 +711,55 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 bool chargeAliveAtDetach = false;
             }
 #pragma warning(pop)
-            observed{*owner,        root,
-                     geometry,      revision,
-                     generation,    published,
-                     amount > 0,    false,
-                     endpointProbe, kProbeBytes + (published ? gate->offsetPublishedBytes : gate->reservationBytes)};
+            observed{*owner,
+                     root,
+                     geometry,
+                     revision,
+                     generation,
+                     published,
+                     amount > 0,
+                     false,
+                     endpointProbe,
+                     kProbeBytes + (published ? gate->offsetPublishedBytes : gate->reservationBytes)};
             ApplicationShutdownTestProbe probe;
             probe.checkContext = &observed;
-            probe.checkOwner = [](void* opaque) noexcept
+            probe.checkOwner   = [](void* opaque) noexcept
             {
                 auto& value = *static_cast<Observation*>(opaque);
-                value.chargeAliveAtDetach = value.endpointProbe.ResidentBytes() == value.expectedCharge &&
-                                            value.owner._jobs.ReservedMemoryBytes() >= value.expectedCharge;
+                value.chargeAliveAtDetach =
+                    value.endpointProbe.ResidentBytes() == value.expectedCharge && value.owner._jobs.ReservedMemoryBytes() >= value.expectedCharge;
                 value.sourceIntact =
-                    value.owner._session.Document() && value.owner._session.Selection() &&
-                    value.owner._session.Document()->layers.Identity() == value.root &&
-                    (value.published ? value.owner._session.history.UndoName() ==
-                                           (value.expanding ? L"Expand Selection" : L"Contract Selection")
-                                     : value.owner._session.Selection()->loops.Identity() == value.geometry &&
-                                           value.owner._session.Generation() == value.generation &&
-                                           value.owner._session.history.CurrentRevision() == value.revision &&
-                                           value.owner._session.history.UndoCount() == 0);
+                    value.owner._session.Document() && value.owner._session.Selection() && value.owner._session.Document()->layers.Identity() == value.root &&
+                    (value.published
+                         ? value.owner._session.history.UndoName() == (value.expanding ? L"Expand Selection" : L"Contract Selection")
+                         : value.owner._session.Selection()->loops.Identity() == value.geometry && value.owner._session.Generation() == value.generation &&
+                               value.owner._session.history.CurrentRevision() == value.revision && value.owner._session.history.UndoCount() == 0);
             };
             owner->_shutdownTestProbe = &probe;
             owner->Shutdown(); // Real joined Close; do not signal the held gate.
-            offsetExpect(receipt.Read().outcome == (published ? HostOutcome::Succeeded : HostOutcome::Cancelled) &&
-                             observed.sourceIntact && observed.chargeAliveAtDetach && probe.graphicsDetachedOnOwner &&
-                             probe.reservationAndWakeAlive,
+            offsetExpect(receipt.Read().outcome == (published ? HostOutcome::Succeeded : HostOutcome::Cancelled) && observed.sourceIntact &&
+                             observed.chargeAliveAtDetach && probe.graphicsDetachedOnOwner && probe.reservationAndWakeAlive,
                          "joined-close-preserves-acknowledged-source-and-graphics-order");
-            offsetExpect(owner->_shutdownComplete && gate->retired.load() && gate->retiredOffOwner.load() &&
-                             probe.hostCpuRootsRetired.load() && !owner->_selectionOffsetTicket &&
-                             !owner->_selectionOffsetStamp && !owner->_historyWork.Busy() &&
-                             !owner->_activeHostRequest && owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 &&
-                             !owner->_jobs.WakeHandle(),
+            offsetExpect(owner->_shutdownComplete && gate->retired.load() && gate->retiredOffOwner.load() && probe.hostCpuRootsRetired.load() &&
+                             ! owner->_selectionOffsetTicket && ! owner->_selectionOffsetStamp && ! owner->_historyWork.Busy() && ! owner->_activeHostRequest &&
+                             owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 && ! owner->_jobs.WakeHandle(),
                          "joined-close-clears-ticket-and-host-barrier");
             if (published)
             {
                 offsetExpect(copiedOutline && endpointProbe.ResidentBytes() == kProbeBytes + gate->offsetPublishedBytes,
                              "copied-reader-keeps-output-charge-after-close");
                 copiedOutline.reset();
-                offsetExpect(gate->offsetOutlineOwner.expired() && !gate->offsetMemoryOwner.expired() &&
+                offsetExpect(gate->offsetOutlineOwner.expired() && ! gate->offsetMemoryOwner.expired() &&
                                  endpointProbe.ResidentBytes() == kProbeBytes + gate->offsetPublishedBytes,
                              "outline-weak-keeps-charge-after-close");
                 gate->offsetOutlineOwner.reset();
-                offsetExpect(gate->offsetMemoryOwner.expired() &&
-                                 endpointProbe.ResidentBytes() == kProbeBytes + gate->offsetPublishedBytes,
+                offsetExpect(gate->offsetMemoryOwner.expired() && endpointProbe.ResidentBytes() == kProbeBytes + gate->offsetPublishedBytes,
                              "memory-weak-keeps-charge-after-close");
                 gate->offsetMemoryOwner.reset();
             }
-            offsetExpect(endpointProbe.ResidentBytes() == kProbeBytes && owner->_jobs.ReleasingMemoryBytes() == 0,
-                         "final-original-charge-refunded-once");
+            offsetExpect(endpointProbe.ResidentBytes() == kProbeBytes && owner->_jobs.ReleasingMemoryBytes() == 0, "final-original-charge-refunded-once");
             owner->Shutdown();
-            offsetExpect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1 &&
-                             endpointProbe.ResidentBytes() == kProbeBytes,
+            offsetExpect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1 && endpointProbe.ResidentBytes() == kProbeBytes,
                          "second-close-cannot-repeat-retirement-or-refund");
             endpointProbe.Reset();
             owner->_shutdownTestProbe = nullptr;
@@ -815,11 +768,11 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             for (;;)
             {
                 const auto drained = PumpMessages();
-                consumedQuit = consumedQuit || drained.quit;
-                if (!drained.quit)
+                consumedQuit       = consumedQuit || drained.quit;
+                if (! drained.quit)
                     break;
             }
-            offsetExpect(consumedQuit && !DeferredReleaseDetail::sink.enqueue, "fixture-quit-and-sink-cleared");
+            offsetExpect(consumedQuit && ! DeferredReleaseDetail::sink.enqueue, "fixture-quit-and-sink-cleared");
         }
         if (offsetCloseFailures)
             return 5;
@@ -837,8 +790,8 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
         for (const bool held : std::array{false, true})
         {
             const char* direction = redo ? "redo" : "undo";
-            const char* phase = held ? "prepared-worker-held" : "before-capture";
-            auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
+            const char* phase     = held ? "prepared-worker-held" : "before-capture";
+            auto owner            = std::make_unique<Application>(instance, true, nullptr, 0);
         // Borrowed observations must outlive cleanup on every refusal as well as the successful path.
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
@@ -851,7 +804,7 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 std::optional<Guid> active;
                 Guid revision;
                 std::uint64_t generation = 0;
-                int undoCount = 0;
+                int undoCount            = 0;
                 std::optional<JobTicket> ticket;
                 std::optional<HistoryWorkStamp> stamp;
                 bool reached = false, joined = false, sourcePreserved = false, originalHeldAtJoin = false;
@@ -859,20 +812,18 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
 #pragma warning(pop)
             observation{*owner};
             ApplicationShutdownTestProbe probe;
-            const auto shutdown = wil::scope_exit(
-                [&]() noexcept
+            const auto shutdown = wil::scope_exit([&]() noexcept
+            {
+                if (owner)
                 {
-                    if (owner)
-                    {
-                        owner->Shutdown();
-                        owner->_shutdownTestProbe = nullptr;
-                    }
-                });
-            owner->_quietUi = true;
-            owner->_prompts = &QuietPrompts();
-            if (DeferredReleaseDetail::sink.enqueue || FAILED(owner->InitializeProcessing()) ||
-                FAILED(owner->RegisterWindowClass()) || FAILED(owner->CreateMainWindow(false)) ||
-                FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
+                    owner->Shutdown();
+                    owner->_shutdownTestProbe = nullptr;
+                }
+            });
+            owner->_quietUi     = true;
+            owner->_prompts     = &QuietPrompts();
+            if (DeferredReleaseDetail::sink.enqueue || FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
+                FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
                 return 5;
             owner->BindCompositionDevice();
             owner->_session.CreateDocument(2, 1, true);
@@ -887,36 +838,36 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                 return 5;
             const auto gate = std::make_shared<HistoryRestoreTestGate>();
             gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-            if (!gate->release)
+            if (! gate->release)
                 return 5;
             owner->_historyRestoreTestGate = gate;
-            observation.document = owner->_session.Document();
-            observation.active = owner->_session.ActiveLayerID();
-            observation.revision = owner->_session.history.CurrentRevision();
-            observation.generation = owner->_session.Generation();
-            observation.undoCount = owner->_session.history.UndoCount();
-            const auto presents = owner->_renderer.PresentCount();
+            observation.document           = owner->_session.Document();
+            observation.active             = owner->_session.ActiveLayerID();
+            observation.revision           = owner->_session.history.CurrentRevision();
+            observation.generation         = owner->_session.Generation();
+            observation.undoCount          = owner->_session.history.UndoCount();
+            const auto presents            = owner->_renderer.PresentCount();
             std::array<std::uint8_t, 8> pixels{};
             const auto* layer = owner->_session.ActiveLayer();
             if (layer && layer->asset)
                 layer->asset->image.ReadRegion(0, 0, 2, 1, pixels.data(), 8, 0);
-            restoreExpect(layer && layer->id == id && layer->opacity == 0.5 &&
-                              pixels == std::array<std::uint8_t, 8>{204, 102, 51, 255, 204, 102, 51, 255} &&
-                              observation.undoCount == 1 && owner->_session.history.CanUndo() &&
-                              owner->_session.history.CanRedo() && !owner->_session.history.IsModified(),
-                          direction, phase, "literal-source-and-both-history-stacks");
-            const auto receipt =
-                owner->QueueHostInput(HostCommandInput{redo ? ChromeHost::kCommandRedo : ChromeHost::kCommandUndo});
+            restoreExpect(layer && layer->id == id && layer->opacity == 0.5 && pixels == std::array<std::uint8_t, 8>{204, 102, 51, 255, 204, 102, 51, 255} &&
+                              observation.undoCount == 1 && owner->_session.history.CanUndo() && owner->_session.history.CanRedo() &&
+                              ! owner->_session.history.IsModified(),
+                          direction,
+                          phase,
+                          "literal-source-and-both-history-stacks");
+            const auto receipt = owner->QueueHostInput(HostCommandInput{redo ? ChromeHost::kCommandRedo : ChromeHost::kCommandUndo});
             (void)RunUiActions(owner->_jobs); // Admit the actual caller, without draining its capture completion.
-            if (!owner->_historyRestoreTicket || !owner->_historyRestoreStamp)
+            if (! owner->_historyRestoreTicket || ! owner->_historyRestoreStamp)
                 return 5;
             observation.ticket = owner->_historyRestoreTicket;
-            observation.stamp = owner->_historyRestoreStamp;
+            observation.stamp  = owner->_historyRestoreStamp;
             if (held)
             {
                 const auto dispatch = [](void* opaque, void* native) noexcept
                 {
-                    auto& state = *static_cast<Observation*>(opaque);
+                    auto& state   = *static_cast<Observation*>(opaque);
                     auto& message = *static_cast<MSG*>(native);
                     if (message.message == HistoryRestoreTestGate::kMessage)
                         state.reached = true;
@@ -924,7 +875,7 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                         state.owner.DispatchQueuedMessage(message);
                 };
                 const auto deadline = GetTickCount64() + 15000;
-                while (!observation.reached)
+                while (! observation.reached)
                 {
                     const auto messages = PumpMessages(dispatch, &observation);
                     if (messages.quit)
@@ -940,71 +891,68 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
                     if (now >= deadline)
                         return 5;
                     const HANDLE wake = static_cast<HANDLE>(owner->_jobs.WakeHandle());
-                    if (!wake || MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
-                                                             MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+                    if (! wake || MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
                         return 5;
                 }
             }
-            const bool selected = held ? observation.reached && gate->captures.load() == 1 &&
-                                             gate->visits.load() == 1 && gate->reservationHeld.load()
+            const bool selected = held ? observation.reached && gate->captures.load() == 1 && gate->visits.load() == 1 && gate->reservationHeld.load()
                                        : gate->captures.load() == 0 && gate->visits.load() == 0;
             restoreExpect(selected && receipt.Read().outcome == HostOutcome::Pending && owner->_historyWork.Busy() &&
-                              owner->_historyRestoreTicket == observation.ticket &&
-                              owner->_historyRestoreStamp == observation.stamp && gate->reservationBytes != 0 &&
-                              owner->_jobs.ReservedMemoryBytes() >= gate->reservationBytes,
-                          direction, phase, "original-ticket-and-reservation-at-selected-boundary");
-            if (!selected)
+                              owner->_historyRestoreTicket == observation.ticket && owner->_historyRestoreStamp == observation.stamp &&
+                              gate->reservationBytes != 0 && owner->_jobs.ReservedMemoryBytes() >= gate->reservationBytes,
+                          direction,
+                          phase,
+                          "original-ticket-and-reservation-at-selected-boundary");
+            if (! selected)
                 return 5;
             probe.checkContext = &observation;
-            probe.checkJoined = [](void* opaque) noexcept
+            probe.checkJoined  = [](void* opaque) noexcept
             {
-                auto& state = *static_cast<Observation*>(opaque);
-                const auto& app = state.owner;
-                state.joined = true;
-                state.sourcePreserved = app._session.Document() == state.document &&
-                                        app._session.ActiveLayerID() == state.active &&
-                                        app._session.Generation() == state.generation &&
-                                        app._session.history.CurrentRevision() == state.revision &&
-                                        app._session.history.UndoCount() == state.undoCount &&
-                                        app._session.history.CanRedo() && !app._session.history.IsModified();
-                state.originalHeldAtJoin = app._historyRestoreTicket == state.ticket &&
-                                           app._historyRestoreStamp == state.stamp &&
-                                           app._historyWork.IsCurrent(state.stamp.value());
+                auto& state           = *static_cast<Observation*>(opaque);
+                const auto& app       = state.owner;
+                state.joined          = true;
+                state.sourcePreserved = app._session.Document() == state.document && app._session.ActiveLayerID() == state.active &&
+                                        app._session.Generation() == state.generation && app._session.history.CurrentRevision() == state.revision &&
+                                        app._session.history.UndoCount() == state.undoCount && app._session.history.CanRedo() &&
+                                        ! app._session.history.IsModified();
+                state.originalHeldAtJoin =
+                    app._historyRestoreTicket == state.ticket && app._historyRestoreStamp == state.stamp && app._historyWork.IsCurrent(state.stamp.value());
             };
             owner->_shutdownTestProbe = &probe;
             owner->Shutdown(); // Never signal release: RequestStop must wake and join the held original.
-            restoreExpect(observation.joined && observation.sourcePreserved &&
-                              owner->_renderer.PresentCount() == presents,
-                          direction, phase, "joined-close-preserves-source-history-saved-marker-and-no-present");
-            restoreExpect(observation.originalHeldAtJoin, direction, phase,
-                          "original-record-retained-through-producer-join");
-            restoreExpect(owner->_shutdownComplete && !owner->_historyRestoreTicket && !owner->_historyRestoreStamp &&
-                              !owner->_historyWork.Busy() && !owner->_activeHostRequest &&
-                              receipt.Read() == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT},
-                          direction, phase, "joined-acknowledgement-clears-original-ticket-and-barrier");
-            restoreExpect(
-                WaitForSingleObject(gate->release.get(), 0) == WAIT_TIMEOUT &&
-                    (held ? gate->retired.load() && gate->retiredOffOwner.load() && gate->captures.load() == 1 &&
-                                gate->shutdownObserved.load()
-                          : !gate->retired.load() && gate->captures.load() == 0 && !gate->shutdownObserved.load()),
-                direction, phase, "captured-payload-retires-off-owner-and-uncaptured-owns-none");
-            restoreExpect(owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 && !owner->_jobs.WakeHandle() &&
-                              owner->_jobs.ReservedMemoryBytes() == 0 && owner->_jobs.ReleasingMemoryBytes() == 0 &&
-                              probe.workerCalls.load() == 1 && probe.offOwner.load() && probe.mta.load() &&
-                              probe.hostCpuRootsRetired.load() && !owner->_session.Document() &&
-                              !DeferredReleaseDetail::sink.enqueue,
-                          direction, phase, "actual-worker-roots-and-reservations-retire");
+            restoreExpect(observation.joined && observation.sourcePreserved && owner->_renderer.PresentCount() == presents,
+                          direction,
+                          phase,
+                          "joined-close-preserves-source-history-saved-marker-and-no-present");
+            restoreExpect(observation.originalHeldAtJoin, direction, phase, "original-record-retained-through-producer-join");
+            restoreExpect(owner->_shutdownComplete && ! owner->_historyRestoreTicket && ! owner->_historyRestoreStamp && ! owner->_historyWork.Busy() &&
+                              ! owner->_activeHostRequest && receipt.Read() == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT},
+                          direction,
+                          phase,
+                          "joined-acknowledgement-clears-original-ticket-and-barrier");
+            restoreExpect(WaitForSingleObject(gate->release.get(), 0) == WAIT_TIMEOUT &&
+                              (held ? gate->retired.load() && gate->retiredOffOwner.load() && gate->captures.load() == 1 && gate->shutdownObserved.load()
+                                    : ! gate->retired.load() && gate->captures.load() == 0 && ! gate->shutdownObserved.load()),
+                          direction,
+                          phase,
+                          "captured-payload-retires-off-owner-and-uncaptured-owns-none");
+            restoreExpect(owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 && ! owner->_jobs.WakeHandle() && owner->_jobs.ReservedMemoryBytes() == 0 &&
+                              owner->_jobs.ReleasingMemoryBytes() == 0 && probe.workerCalls.load() == 1 && probe.offOwner.load() && probe.mta.load() &&
+                              probe.hostCpuRootsRetired.load() && ! owner->_session.Document() && ! DeferredReleaseDetail::sink.enqueue,
+                          direction,
+                          phase,
+                          "actual-worker-roots-and-reservations-retire");
             owner->Shutdown();
-            restoreExpect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1 && owner->_shutdownComplete, direction,
-                          phase, "second-shutdown-is-idempotent");
+            restoreExpect(
+                probe.ownerCalls == 1 && probe.workerCalls.load() == 1 && owner->_shutdownComplete, direction, phase, "second-shutdown-is-idempotent");
             owner->_shutdownTestProbe = nullptr;
             owner.reset();
             bool quit = false;
             for (;;)
             {
                 const auto messages = PumpMessages();
-                quit = quit || messages.quit;
-                if (!messages.quit)
+                quit                = quit || messages.quit;
+                if (! messages.quit)
                     break;
             }
             restoreExpect(quit, direction, phase, "fixture-quit-consumed-before-next-owner");
@@ -1036,11 +984,10 @@ int Application::RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexce
         const char* name;
         Phase phase;
     };
-    constexpr std::array cases{Case{"before-capture", Phase::BeforeCapture}, Case{"live-prefix", Phase::LivePrefix},
-                               Case{"map-recovery", Phase::MapRecovery}};
-    unsigned int checks = 0;
+    constexpr std::array cases{Case{"before-capture", Phase::BeforeCapture}, Case{"live-prefix", Phase::LivePrefix}, Case{"map-recovery", Phase::MapRecovery}};
+    unsigned int checks   = 0;
     unsigned int failures = 0;
-    const auto expect = [&checks, &failures](bool condition, const char* scenario, const char* name) noexcept
+    const auto expect     = [&checks, &failures](bool condition, const char* scenario, const char* name) noexcept
     {
         ++checks;
         failures += condition ? 0 : 1;
@@ -1052,29 +999,26 @@ int Application::RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexce
         {
             Application* owner = nullptr;
             DocumentReadAuthority source;
-            bool joined = false;
+            bool joined                  = false;
             bool sourcePreservedAtDetach = false;
         } observation;
         ApplicationShutdownTestProbe probe;
         std::uint32_t captures = 0;
-        auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
-        const auto shutdown = wil::scope_exit(
-            [&owner]() noexcept
-            {
-                if (owner)
-                    owner->Shutdown();
-            });
-        owner->_quietUi = true;
-        owner->_prompts = &QuietPrompts();
-        if (DeferredReleaseDetail::sink.enqueue || FAILED(owner->InitializeProcessing()) ||
-            FAILED(owner->RegisterWindowClass()) || FAILED(owner->CreateMainWindow(false)) ||
-            FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
+        auto owner             = std::make_unique<Application>(instance, true, nullptr, 0);
+        const auto shutdown    = wil::scope_exit([&owner]() noexcept
+        {
+            if (owner)
+                owner->Shutdown();
+        });
+        owner->_quietUi        = true;
+        owner->_prompts        = &QuietPrompts();
+        if (DeferredReleaseDetail::sink.enqueue || FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
+            FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
             return 5;
         owner->BindCompositionDevice();
         const HWND originalWindow = owner->_window.get();
         owner->_session.CreateDocument(2048, 2048, true);
-        const Guid layerId =
-            InsertPaintedLayer(owner->_session, L"Sampler shutdown source", 2048, 2048, {}, 0, 0xFF3366CCu);
+        const Guid layerId = InsertPaintedLayer(owner->_session, L"Sampler shutdown source", 2048, 2048, {}, 0, 0xFF3366CCu);
         owner->_session.history.Reset();
         owner->_session.SetForegroundColor(0xFF804020u);
         owner->_tool = EditorTool::Eyedropper;
@@ -1083,28 +1027,26 @@ int Application::RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexce
         if (SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) != SettleResult::Settled)
             return 5;
         const auto authority = owner->_session.CaptureDocumentReadAuthority();
-        if (!authority || !owner->_session.ActiveLayer() || owner->_session.ActiveLayer()->id != layerId ||
-            !owner->_session.ActiveLayer()->asset ||
+        if (! authority || ! owner->_session.ActiveLayer() || owner->_session.ActiveLayer()->id != layerId || ! owner->_session.ActiveLayer()->asset ||
             owner->_session.ActiveLayer()->asset->image.ByteSize() != 16ull * 1024 * 1024)
             return 5;
-        observation.owner = owner.get();
-        observation.source = authority.value();
+        observation.owner           = owner.get();
+        observation.source          = authority.value();
         const auto originalRevision = owner->_session.history.CurrentRevision();
         wil::unique_handle acknowledged{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-        if (!acknowledged)
+        if (! acknowledged)
             return 5;
         owner->_samplerSourceCapturesForTest = &captures;
-        owner->_samplerAcknowledgedForTest = acknowledged.get();
-        const auto clearBorrowedHooks = wil::scope_exit(
-            [&owner]() noexcept
+        owner->_samplerAcknowledgedForTest   = acknowledged.get();
+        const auto clearBorrowedHooks        = wil::scope_exit([&owner]() noexcept
+        {
+            if (owner)
             {
-                if (owner)
-                {
-                    owner->_samplerSourceCapturesForTest = nullptr;
-                    owner->_samplerAcknowledgedForTest = nullptr;
-                    owner->_shutdownTestProbe = nullptr;
-                }
-            });
+                owner->_samplerSourceCapturesForTest = nullptr;
+                owner->_samplerAcknowledgedForTest   = nullptr;
+                owner->_shutdownTestProbe            = nullptr;
+            }
+        });
         if (scenario.phase == Phase::MapRecovery)
         {
             owner->_gpuWork.SetMapBusyForTest(1);
@@ -1112,13 +1054,12 @@ int Application::RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexce
         }
         const auto hole = owner->_chrome->HolePixels();
         const auto view = owner->_viewport.ViewFromDocument({1024, 1024}, owner->DocumentSize());
-        owner->OnPointer(WM_LBUTTONDOWN, MK_LBUTTON,
-                         MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
-                                    static_cast<int>(std::lround(hole.top + view.y))));
+        owner->OnPointer(
+            WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)), static_cast<int>(std::lround(hole.top + view.y))));
         const auto* sampling = std::get_if<ColorSampling>(&owner->_drag);
         const auto openingId = sampling && sampling->opening ? sampling->opening.value() : 0;
-        const auto* opening = owner->FindSamplerOpening(openingId);
-        if (!opening)
+        const auto* opening  = owner->FindSamplerOpening(openingId);
+        if (! opening)
             return 5;
         const auto receipt = opening->receipt;
         (void)RunUiActions(owner->_jobs);
@@ -1127,9 +1068,8 @@ int Application::RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexce
             reached = owner->_samplerHostTicket && owner->_samplerHostJob && captures == 0;
         else if (scenario.phase == Phase::LivePrefix)
             reached = WaitForColorWorkTestEvent(owner->_jobs, acknowledged.get(), DispatchMessageThunk, owner.get()) &&
-                      owner->_session.ForegroundColor() == 0xFF3366CCu && owner->_gpuWork.LentCount() == 0 &&
-                      owner->_gpuWork.InFlightCount() == 0 && owner->_composition.UtilitySurfaceBytes() == 0 &&
-                      !RunUiActions(owner->_jobs) && !owner->_jobs.UiReadinessForTest().source;
+                      owner->_session.ForegroundColor() == 0xFF3366CCu && owner->_gpuWork.LentCount() == 0 && owner->_gpuWork.InFlightCount() == 0 &&
+                      owner->_composition.UtilitySurfaceBytes() == 0 && ! RunUiActions(owner->_jobs) && ! owner->_jobs.UiReadinessForTest().source;
         else
         {
             const auto deadline = GetTickCount64() + 10000;
@@ -1143,80 +1083,76 @@ int Application::RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexce
                 }
                 (void)DrainCompletions(owner->_jobs);
                 (void)RunUiActions(owner->_jobs);
-                if (owner->_gpuWork.MapAttemptsForTest() == 1 && owner->_gpuWork.InFlightCount() == 1 &&
-                    owner->_gpuWork.LentCount() == 0 && !owner->_gpuWork.HasReady())
+                if (owner->_gpuWork.MapAttemptsForTest() == 1 && owner->_gpuWork.InFlightCount() == 1 && owner->_gpuWork.LentCount() == 0 &&
+                    ! owner->_gpuWork.HasReady())
                 {
                     reached = true;
                     break;
                 }
                 const auto now = GetTickCount64();
-                if (now >= deadline || !owner->_jobs.WakeHandle())
+                if (now >= deadline || ! owner->_jobs.WakeHandle())
                     break;
                 const HANDLE wake = static_cast<HANDLE>(owner->_jobs.WakeHandle());
-                if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
-                                                MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+                if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
                     break;
             }
         }
         const auto expectedCaptures = scenario.phase == Phase::BeforeCapture ? 0u : 1u;
-        expect(reached && captures == expectedCaptures && owner->_samplerHostTicket && owner->_samplerHostStamp &&
-                   owner->_historyWork.Busy() && owner->_jobs.ReservedMemoryBytes() != 0 &&
-                   receipt.Read().outcome == HostOutcome::Pending &&
-                   owner->_session.IsDocumentReadCurrent(authority.value()) &&
-                   owner->_session.history.CurrentRevision() == originalRevision &&
+        expect(reached && captures == expectedCaptures && owner->_samplerHostTicket && owner->_samplerHostStamp && owner->_historyWork.Busy() &&
+                   owner->_jobs.ReservedMemoryBytes() != 0 && receipt.Read().outcome == HostOutcome::Pending &&
+                   owner->_session.IsDocumentReadCurrent(authority.value()) && owner->_session.history.CurrentRevision() == originalRevision &&
                    owner->_session.history.UndoCount() == 0,
-               scenario.name, "original-live-record-source-and-reservation-held");
-        if (!reached)
+               scenario.name,
+               "original-live-record-source-and-reservation-held");
+        if (! reached)
             return 5;
         probe.checkContext = &observation;
-        probe.checkJoined = [](void* opaque) noexcept
+        probe.checkJoined  = [](void* opaque) noexcept
         {
-            auto& state = *static_cast<Observation*>(opaque);
-            auto& app = *state.owner;
-            state.joined = !app._samplerHostJob && !app._hostSourceRegistered && !app._activeHostRequest &&
-                           app._hostRequests.Size() == 0 && app._hostInputBudget.Used() == 0 && app._samplerState &&
-                           std::all_of(app._samplerState->openings.begin(), app._samplerState->openings.end(),
-                                       [](const SamplerOpening& slot)
-                                       { return !slot.opening && !slot.jobAlive && !slot.consumers; });
+            auto& state  = *static_cast<Observation*>(opaque);
+            auto& app    = *state.owner;
+            state.joined = ! app._samplerHostJob && ! app._hostSourceRegistered && ! app._activeHostRequest && app._hostRequests.Size() == 0 &&
+                           app._hostInputBudget.Used() == 0 && app._samplerState &&
+                           std::all_of(app._samplerState->openings.begin(), app._samplerState->openings.end(), [](const SamplerOpening& slot) {
+                return ! slot.opening && ! slot.jobAlive && ! slot.consumers;
+            });
         };
         probe.checkOwner = [](void* opaque) noexcept
         {
-            auto& state = *static_cast<Observation*>(opaque);
-            const auto& app = *state.owner;
-            state.sourcePreservedAtDetach = app._session.IsDocumentReadCurrent(state.source) &&
-                                            std::holds_alternative<std::monostate>(app._drag) &&
+            auto& state                   = *static_cast<Observation*>(opaque);
+            const auto& app               = *state.owner;
+            state.sourcePreservedAtDetach = app._session.IsDocumentReadCurrent(state.source) && std::holds_alternative<std::monostate>(app._drag) &&
                                             app._gpuWork.LentCount() == 0 && app._gpuWork.InFlightCount() == 0;
         };
         owner->_shutdownTestProbe = &probe;
         owner->Shutdown();
-        expect(owner->_shutdownComplete && !owner->_window && !owner->_chrome && !owner->_rendererReady &&
-                   receipt.Read() == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT} &&
-                   captures == expectedCaptures && !owner->_samplerHostTicket && !owner->_samplerHostStamp &&
-                   !owner->_samplerHostJob && !owner->_historyWork.Busy() && observation.joined,
-               scenario.name, "actual-shutdown-acknowledges-original-receipt-and-stamp");
-        expect(observation.sourcePreservedAtDetach && probe.ownerCalls == 1 && probe.graphicsDetachedOnOwner &&
-                   probe.workerCalls.load() == 1 && probe.offOwner.load() && probe.mta.load() &&
-                   probe.hostCpuRootsRetired.load() && !owner->_session.Document() &&
-                   !owner->_session.history.CanUndo(),
-               scenario.name, "source-survives-join-and-retires-with-host-roots-on-MTA");
-        expect(owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 && !owner->_jobs.WakeHandle() &&
-                   owner->_jobs.ReservedMemoryBytes() == 0 && owner->_jobs.ReleasingMemoryBytes() == 0 &&
-                   !owner->_gpuWork.HasPending() && owner->_composition.UtilitySurfaceBytes() == 0 &&
-                   !DeferredReleaseDetail::sink.enqueue && GetCapture() != originalWindow,
-               scenario.name, "no-producer-reservation-device-or-retirement-owner-remains");
+        expect(owner->_shutdownComplete && ! owner->_window && ! owner->_chrome && ! owner->_rendererReady &&
+                   receipt.Read() == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT} && captures == expectedCaptures &&
+                   ! owner->_samplerHostTicket && ! owner->_samplerHostStamp && ! owner->_samplerHostJob && ! owner->_historyWork.Busy() && observation.joined,
+               scenario.name,
+               "actual-shutdown-acknowledges-original-receipt-and-stamp");
+        expect(observation.sourcePreservedAtDetach && probe.ownerCalls == 1 && probe.graphicsDetachedOnOwner && probe.workerCalls.load() == 1 &&
+                   probe.offOwner.load() && probe.mta.load() && probe.hostCpuRootsRetired.load() && ! owner->_session.Document() &&
+                   ! owner->_session.history.CanUndo(),
+               scenario.name,
+               "source-survives-join-and-retires-with-host-roots-on-MTA");
+        expect(owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 && ! owner->_jobs.WakeHandle() && owner->_jobs.ReservedMemoryBytes() == 0 &&
+                   owner->_jobs.ReleasingMemoryBytes() == 0 && ! owner->_gpuWork.HasPending() && owner->_composition.UtilitySurfaceBytes() == 0 &&
+                   ! DeferredReleaseDetail::sink.enqueue && GetCapture() != originalWindow,
+               scenario.name,
+               "no-producer-reservation-device-or-retirement-owner-remains");
         owner->Shutdown();
-        expect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1 && owner->_shutdownComplete, scenario.name,
-               "second-shutdown-is-idempotent");
+        expect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1 && owner->_shutdownComplete, scenario.name, "second-shutdown-is-idempotent");
         owner->_samplerSourceCapturesForTest = nullptr;
-        owner->_samplerAcknowledgedForTest = nullptr;
-        owner->_shutdownTestProbe = nullptr;
+        owner->_samplerAcknowledgedForTest   = nullptr;
+        owner->_shutdownTestProbe            = nullptr;
         owner.reset();
         bool quit = false;
         for (;;)
         {
             const auto messages = PumpMessages();
-            quit = quit || messages.quit;
-            if (!messages.quit)
+            quit                = quit || messages.quit;
+            if (! messages.quit)
                 break;
         }
         expect(quit, scenario.name, "fixture-quit-consumed-before-next-owner");
@@ -1261,14 +1197,15 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
 #pragma warning(disable : 4626 5027)
     struct BlockerJob final : Job
     {
-        explicit BlockerJob(BlockerGate& gate) noexcept : _gate(gate) {}
+        explicit BlockerJob(BlockerGate& gate) noexcept : _gate(gate)
+        {
+        }
         JobResult Run(JobContext& context) override
         {
-            if (!SetEvent(_gate.entered.get()))
+            if (! SetEvent(_gate.entered.get()))
                 return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
             const std::array<HANDLE, 2> waits{_gate.release.get(), static_cast<HANDLE>(context.shutdownEvent)};
-            const DWORD result =
-                WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE);
+            const DWORD result = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE);
             if (result == WAIT_OBJECT_0)
                 return {};
             if (result == WAIT_OBJECT_0 + 1)
@@ -1298,19 +1235,21 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
         const char* name;
         Scenario scenario;
     };
-    constexpr std::array cases{Case{"recovery", Scenario::Recovery}, Case{"cancel", Scenario::Cancel},
-                               Case{"escape", Scenario::Escape}, Case{"escape-held", Scenario::EscapeHeld},
+    constexpr std::array cases{Case{"recovery", Scenario::Recovery},
+                               Case{"cancel", Scenario::Cancel},
+                               Case{"escape", Scenario::Escape},
+                               Case{"escape-held", Scenario::EscapeHeld},
                                Case{"refusal", Scenario::Refusal}};
     constexpr std::uint64_t headroom = kMemoryAdmissionHeadroomBytes;
     // The recorded WARP route admits its complete software graphics envelope, including staging/driver
     // allowances. This synthetic ample snapshot exercises recovery; it is not a product RAM requirement.
-    constexpr std::uint64_t ample = headroom + 256ull * 1024 * 1024;
+    constexpr std::uint64_t ample        = headroom + 256ull * 1024 * 1024;
     constexpr std::uint64_t blockerBytes = 4096;
-    constexpr std::uint32_t blue = 0xFF3366CCu;
-    constexpr std::uint32_t brown = 0xFF804020u;
-    unsigned int checks = 0;
-    unsigned int failures = 0;
-    const auto expect = [&checks, &failures](bool condition, const char* scenario, const char* name) noexcept
+    constexpr std::uint32_t blue         = 0xFF3366CCu;
+    constexpr std::uint32_t brown        = 0xFF804020u;
+    unsigned int checks                  = 0;
+    unsigned int failures                = 0;
+    const auto expect                    = [&checks, &failures](bool condition, const char* scenario, const char* name) noexcept
     {
         ++checks;
         failures += condition ? 0u : 1u;
@@ -1324,50 +1263,46 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
         memory.commit.store(ample, std::memory_order_relaxed);
         wil::unique_handle sampled{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
         BlockerGate blocker;
-        if (!sampled || !blocker.entered || !blocker.release)
+        if (! sampled || ! blocker.entered || ! blocker.release)
         {
             SelfTestFailure(L"Standalone sampler-memory fixture could not create its event gates.\n");
             return 5;
         }
         memory.sampled = sampled.get();
         ApplicationProcessingTestProbe processingProbe;
-        processingProbe.memory = {[](void* context, MemorySnapshot& snapshot) noexcept
-                                  {
-                                      auto& memoryContext = *static_cast<MemoryState*>(context);
-                                      const std::uint64_t physical =
-                                          memoryContext.physical.load(std::memory_order_acquire);
-                                      const std::uint64_t commit = memoryContext.commit.load(std::memory_order_acquire);
-                                      snapshot = {physical, commit};
-                                      memoryContext.sampledPhysical.store(physical, std::memory_order_release);
-                                      memoryContext.sampledCommit.store(commit, std::memory_order_release);
-                                      if (memoryContext.sampled)
-                                          (void)SetEvent(memoryContext.sampled);
-                                      return true;
-                                  },
+        processingProbe.memory        = {[](void* context, MemorySnapshot& snapshot) noexcept
+        {
+            auto& memoryContext          = *static_cast<MemoryState*>(context);
+            const std::uint64_t physical = memoryContext.physical.load(std::memory_order_acquire);
+            const std::uint64_t commit   = memoryContext.commit.load(std::memory_order_acquire);
+            snapshot                     = {physical, commit};
+            memoryContext.sampledPhysical.store(physical, std::memory_order_release);
+            memoryContext.sampledCommit.store(commit, std::memory_order_release);
+            if (memoryContext.sampled)
+                (void)SetEvent(memoryContext.sampled);
+            return true;
+        },
                                   &memory};
-        std::uint32_t captures = 0;
-        auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
-        owner->_quietUi = true;
-        owner->_prompts = &QuietPrompts();
-        owner->_processingTestProbe = &processingProbe;
-        const auto clearBorrowedHooks = wil::scope_exit(
-            [&owner]() noexcept
+        std::uint32_t captures        = 0;
+        auto owner                    = std::make_unique<Application>(instance, true, nullptr, 0);
+        owner->_quietUi               = true;
+        owner->_prompts               = &QuietPrompts();
+        owner->_processingTestProbe   = &processingProbe;
+        const auto clearBorrowedHooks = wil::scope_exit([&owner]() noexcept
+        {
+            if (owner)
             {
-                if (owner)
-                {
-                    owner->_samplerSourceCapturesForTest = nullptr;
-                    owner->_processingTestProbe = nullptr;
-                }
-            });
-        const auto shutdown = wil::scope_exit(
-            [&owner]() noexcept
-            {
-                if (owner)
-                    owner->Shutdown();
-            });
-        if (DeferredReleaseDetail::sink.enqueue || FAILED(owner->InitializeProcessing()) ||
-            FAILED(owner->RegisterWindowClass()) || FAILED(owner->CreateMainWindow(false)) ||
-            FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
+                owner->_samplerSourceCapturesForTest = nullptr;
+                owner->_processingTestProbe          = nullptr;
+            }
+        });
+        const auto shutdown           = wil::scope_exit([&owner]() noexcept
+        {
+            if (owner)
+                owner->Shutdown();
+        });
+        if (DeferredReleaseDetail::sink.enqueue || FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
+            FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
         {
             SelfTestFailure(L"Standalone sampler-memory fixture could not initialize its hidden WARP host.\n");
             return 5;
@@ -1381,42 +1316,39 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
         owner->_tool = EditorTool::Eyedropper;
         owner->_viewport.Fit(owner->DocumentSize());
         owner->DocumentChanged();
-        if (layerId == Guid{} ||
-            SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) != SettleResult::Settled ||
+        if (layerId == Guid{} || SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) != SettleResult::Settled ||
             owner->_jobs.ReservedMemoryBytes() != 0 || owner->_jobs.ReleasingMemoryBytes() != 0)
         {
             SelfTestFailure(L"Standalone sampler-memory source fixture did not settle.\n");
             return 5;
         }
         const auto source = owner->_session.CaptureDocumentReadAuthority();
-        if (!source || !owner->_session.ActiveLayer() || owner->_session.ActiveLayer()->id != layerId)
+        if (! source || ! owner->_session.ActiveLayer() || owner->_session.ActiveLayer()->id != layerId)
         {
             SelfTestFailure(L"Standalone sampler-memory fixture lost its literal source.\n");
             return 5;
         }
-        const auto revision = owner->_session.history.CurrentRevision();
+        const auto revision  = owner->_session.history.CurrentRevision();
         const auto undoCount = owner->_session.history.UndoCount();
-        expect(owner->_renderer.IsWarp() && owner->_window && owner->_chrome && source &&
-                   owner->_session.ForegroundColor() == brown && captures == 0,
-               test.name, "fixture-ready-hidden-warp-blue-source-brown-baseline");
+        expect(owner->_renderer.IsWarp() && owner->_window && owner->_chrome && source && owner->_session.ForegroundColor() == brown && captures == 0,
+               test.name,
+               "fixture-ready-hidden-warp-blue-source-brown-baseline");
 
         std::optional<JobTicket> blockerTicket;
         if (test.scenario != Scenario::Refusal)
         {
             std::unique_ptr<Job> job = std::make_unique<BlockerJob>(blocker);
             JobTicket ticket;
-            const HRESULT submitted =
-                static_cast<HRESULT>(owner->_jobs.Submit(job, {JobClass::Background, 0, blockerBytes}, ticket));
-            if (FAILED(submitted) ||
-                !WaitForColorWorkTestEvent(owner->_jobs, blocker.entered.get(), DispatchMessageThunk, owner.get()))
+            const HRESULT submitted = static_cast<HRESULT>(owner->_jobs.Submit(job, {JobClass::Background, 0, blockerBytes}, ticket));
+            if (FAILED(submitted) || ! WaitForColorWorkTestEvent(owner->_jobs, blocker.entered.get(), DispatchMessageThunk, owner.get()))
             {
                 SelfTestFailure(L"Standalone sampler-memory blocker did not reach its real background-job gate.\n");
                 return 5;
             }
             blockerTicket = ticket;
-            expect(owner->_jobs.ReservedMemoryBytes() == blockerBytes &&
-                       blocker.completions.load(std::memory_order_acquire) == 0,
-                   test.name, "background-blocker-holds-exact-4096-byte-reservation");
+            expect(owner->_jobs.ReservedMemoryBytes() == blockerBytes && blocker.completions.load(std::memory_order_acquire) == 0,
+                   test.name,
+                   "background-blocker-holds-exact-4096-byte-reservation");
             (void)ResetEvent(sampled.get());
             memory.physical.store(headroom + blockerBytes, std::memory_order_release);
             memory.commit.store(headroom + blockerBytes, std::memory_order_release);
@@ -1430,15 +1362,14 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
             owner->_jobs.NotifyMemoryChanged();
         }
 
-        const auto hole = owner->_chrome->HolePixels();
-        const auto view = owner->_viewport.ViewFromDocument({2.5, 2.5}, owner->DocumentSize());
-        const LPARAM pointer = MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
-                                          static_cast<int>(std::lround(hole.top + view.y)));
+        const auto hole      = owner->_chrome->HolePixels();
+        const auto view      = owner->_viewport.ViewFromDocument({2.5, 2.5}, owner->DocumentSize());
+        const LPARAM pointer = MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)), static_cast<int>(std::lround(hole.top + view.y)));
         owner->OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, pointer);
         const auto* sampling = std::get_if<ColorSampling>(&owner->_drag);
         const auto openingId = sampling && sampling->opening ? sampling->opening.value() : 0;
-        const auto* opening = owner->FindSamplerOpening(openingId);
-        if (!opening)
+        const auto* opening  = owner->FindSamplerOpening(openingId);
+        if (! opening)
         {
             SelfTestFailure(L"Physical sampler Down did not retain its opening receipt.\n");
             return 5;
@@ -1453,17 +1384,18 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
             if (opening && opening->ticket)
                 break;
         }
-        if (!opening || !opening->ticket)
+        if (! opening || ! opening->ticket)
         {
             SelfTestFailure(L"Physical sampler did not retain its exact scheduler ticket.\n");
             return 5;
         }
         const JobTicket samplerTicket = opening->ticket.value();
         if (test.scenario == Scenario::Refusal)
-            expect(receipt.Read().outcome == HostOutcome::Pending && captures == 0 &&
-                       owner->_jobs.ReservedMemoryBytes() == 0 && owner->_samplerHostTicket == samplerTicket,
-                   test.name, "zero-headroom-refusal-keeps-original-live-ticket-before-acknowledgement");
-        if (!WaitForColorWorkTestEvent(owner->_jobs, sampled.get(), DispatchMessageThunk, owner.get()))
+            expect(receipt.Read().outcome == HostOutcome::Pending && captures == 0 && owner->_jobs.ReservedMemoryBytes() == 0 &&
+                       owner->_samplerHostTicket == samplerTicket,
+                   test.name,
+                   "zero-headroom-refusal-keeps-original-live-ticket-before-acknowledgement");
+        if (! WaitForColorWorkTestEvent(owner->_jobs, sampled.get(), DispatchMessageThunk, owner.get()))
         {
             SelfTestFailure(L"Physical sampler admission did not sample its configured memory source.\n");
             return 5;
@@ -1476,37 +1408,31 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
                    owner->_samplerHostTicket == samplerTicket && owner->_historyWork.Busy() && captures == 0 &&
                    memory.sampledPhysical.load(std::memory_order_acquire) == headroom + blockerBytes &&
                    memory.sampledCommit.load(std::memory_order_acquire) == headroom + blockerBytes &&
-                   owner->_jobs.ReservedMemoryBytes() == (blockerTicket ? blockerBytes : 0) &&
-                   owner->_composition.UtilitySurfaceBytes() == 0 && owner->_gpuWork.InFlightCount() == 0 &&
-                   owner->_gpuWork.LentCount() == 0 && owner->_session.ForegroundColor() == brown &&
-                   owner->_session.IsDocumentReadCurrent(source.value()) &&
-                   owner->_session.history.CurrentRevision() == revision &&
+                   owner->_jobs.ReservedMemoryBytes() == (blockerTicket ? blockerBytes : 0) && owner->_composition.UtilitySurfaceBytes() == 0 &&
+                   owner->_gpuWork.InFlightCount() == 0 && owner->_gpuWork.LentCount() == 0 && owner->_session.ForegroundColor() == brown &&
+                   owner->_session.IsDocumentReadCurrent(source.value()) && owner->_session.history.CurrentRevision() == revision &&
                    owner->_session.history.UndoCount() == undoCount;
         };
 
         if (test.scenario != Scenario::Refusal)
         {
-            expect(waitingState(), test.name,
-                   "low-memory-admission-retains-original-ticket-and-receipt-without-capture");
+            expect(waitingState(), test.name, "low-memory-admission-retains-original-ticket-and-receipt-without-capture");
             if (test.scenario == Scenario::EscapeHeld)
             {
                 const auto* heldSampling = std::get_if<ColorSampling>(&owner->_drag);
-                const auto* heldOpening = owner->FindSamplerOpening(openingId);
-                expect(heldSampling && heldSampling->opening == openingId && heldOpening &&
-                           heldOpening->ticket == samplerTicket &&
+                const auto* heldOpening  = owner->FindSamplerOpening(openingId);
+                expect(heldSampling && heldSampling->opening == openingId && heldOpening && heldOpening->ticket == samplerTicket &&
                            heldOpening->receipt.Read() == ContinuationReceipt::Result{HostOutcome::Pending, 0} &&
-                           receipt.Read() == ContinuationReceipt::Result{HostOutcome::Pending, 0} &&
-                           GetCapture() == owner->_window.get() && captures == 0 &&
-                           owner->_jobs.ReservedMemoryBytes() == blockerBytes &&
-                           owner->_session.ForegroundColor() == brown &&
-                           owner->_session.IsDocumentReadCurrent(source.value()) &&
-                           owner->_session.history.CurrentRevision() == revision &&
+                           receipt.Read() == ContinuationReceipt::Result{HostOutcome::Pending, 0} && GetCapture() == owner->_window.get() && captures == 0 &&
+                           owner->_jobs.ReservedMemoryBytes() == blockerBytes && owner->_session.ForegroundColor() == brown &&
+                           owner->_session.IsDocumentReadCurrent(source.value()) && owner->_session.history.CurrentRevision() == revision &&
                            owner->_session.history.UndoCount() == undoCount,
-                       test.name, "live-color-sampling-opening-and-capture-wait-on-memory-admission");
+                       test.name,
+                       "live-color-sampling-opening-and-capture-wait-on-memory-admission");
             }
-            expect(!RunUiActions(owner->_jobs) && !owner->_jobs.HasUiWork() &&
-                       owner->_jobs.ReservedMemoryBytes() == blockerBytes,
-                   test.name, "waiting-sampler-has-no-idle-self-rearm-or-extra-reservation");
+            expect(! RunUiActions(owner->_jobs) && ! owner->_jobs.HasUiWork() && owner->_jobs.ReservedMemoryBytes() == blockerBytes,
+                   test.name,
+                   "waiting-sampler-has-no-idle-self-rearm-or-extra-reservation");
             if (test.scenario == Scenario::Recovery)
             {
                 memory.physical.store(ample, std::memory_order_release);
@@ -1520,139 +1446,127 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
             else
             {
                 std::array<BYTE, 256> savedKeyboard{};
-                const bool restoreKeyboard = KeyboardState::Read(savedKeyboard);
-                [[maybe_unused]] const auto restore = wil::scope_exit(
-                    [&savedKeyboard, restoreKeyboard]() noexcept
-                    {
-                        if (restoreKeyboard)
-                            KeyboardState::Write(savedKeyboard);
-                    });
+                const bool restoreKeyboard          = KeyboardState::Read(savedKeyboard);
+                [[maybe_unused]] const auto restore = wil::scope_exit([&savedKeyboard, restoreKeyboard]() noexcept
+                {
+                    if (restoreKeyboard)
+                        KeyboardState::Write(savedKeyboard);
+                });
                 std::array<BYTE, 256> keys{};
                 keys[VK_ESCAPE] = 0x80;
                 KeyboardState::Write(keys);
                 const LPARAM escapeDown = 1 | (static_cast<LPARAM>(MapVirtualKeyW(VK_ESCAPE, MAPVK_VK_TO_VSC)) << 16);
                 (void)SendMessageW(owner->_window.get(), WM_KEYDOWN, VK_ESCAPE, escapeDown);
                 const bool handled = owner->_lastKeyHandled;
-                const bool heldGestureReleased = test.scenario == Scenario::EscapeHeld &&
-                                                 std::holds_alternative<std::monostate>(owner->_drag) &&
-                                                 GetCapture() != owner->_window.get();
+                const bool heldGestureReleased =
+                    test.scenario == Scenario::EscapeHeld && std::holds_alternative<std::monostate>(owner->_drag) && GetCapture() != owner->_window.get();
                 keys[VK_ESCAPE] = 0;
                 KeyboardState::Write(keys);
                 (void)SendMessageW(owner->_window.get(), WM_KEYUP, VK_ESCAPE, escapeDown | (1ll << 31));
                 if (test.scenario == Scenario::EscapeHeld)
-                    expect(handled && heldGestureReleased && owner->_samplerHostTicket == samplerTicket &&
-                               owner->_samplerHostStamp &&
+                    expect(handled && heldGestureReleased && owner->_samplerHostTicket == samplerTicket && owner->_samplerHostStamp &&
                                owner->_historyWork.CancelRequested(owner->_samplerHostStamp.value()) && captures == 0 &&
                                receipt.Read() == ContinuationReceipt::Result{HostOutcome::Pending, 0},
-                           test.name, "physical-escape-releases-held-gesture-and-capture-immediately");
+                           test.name,
+                           "physical-escape-releases-held-gesture-and-capture-immediately");
                 else
                     expect(handled && owner->_samplerHostTicket == samplerTicket && owner->_samplerHostStamp &&
                                owner->_historyWork.CancelRequested(owner->_samplerHostStamp.value()) && captures == 0 &&
                                receipt.Read().outcome == HostOutcome::Pending,
-                           test.name, "physical-escape-routes-to-pending-sampler-cancellation");
+                           test.name,
+                           "physical-escape-routes-to-pending-sampler-cancellation");
             }
             (void)SetEvent(blocker.release.get());
         }
 
-        const bool settled =
-            SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) == SettleResult::Settled;
-        const auto result = receipt.Read();
-        const bool commonRetired =
-            settled && !owner->_samplerHostTicket && !owner->_samplerHostStamp && !owner->_samplerHostJob &&
-            !owner->_historyWork.Busy() && owner->_jobs.ReservedMemoryBytes() == 0 &&
-            owner->_jobs.ReleasingMemoryBytes() == 0 && owner->_composition.UtilitySurfaceBytes() == 0 &&
-            owner->_gpuWork.InFlightCount() == 0 && owner->_gpuWork.LentCount() == 0 && !owner->_gpuWork.HasPending() &&
-            owner->_jobs.IsIdle() && !owner->_activeHostRequest && owner->_hostRequests.Size() == 0 &&
-            owner->_samplerState &&
-            std::all_of(owner->_samplerState->openings.begin(), owner->_samplerState->openings.end(),
-                        [](const SamplerOpening& slot)
-                        { return slot.opening == 0 && !slot.jobAlive && slot.consumers == 0; });
+        const bool settled       = SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) == SettleResult::Settled;
+        const auto result        = receipt.Read();
+        const bool commonRetired = settled && ! owner->_samplerHostTicket && ! owner->_samplerHostStamp && ! owner->_samplerHostJob &&
+                                   ! owner->_historyWork.Busy() && owner->_jobs.ReservedMemoryBytes() == 0 && owner->_jobs.ReleasingMemoryBytes() == 0 &&
+                                   owner->_composition.UtilitySurfaceBytes() == 0 && owner->_gpuWork.InFlightCount() == 0 && owner->_gpuWork.LentCount() == 0 &&
+                                   ! owner->_gpuWork.HasPending() && owner->_jobs.IsIdle() && ! owner->_activeHostRequest && owner->_hostRequests.Size() == 0 &&
+                                   owner->_samplerState &&
+                                   std::all_of(owner->_samplerState->openings.begin(), owner->_samplerState->openings.end(), [](const SamplerOpening& slot) {
+            return slot.opening == 0 && ! slot.jobAlive && slot.consumers == 0;
+        });
         if (test.scenario == Scenario::Recovery)
         {
-            expect(result == ContinuationReceipt::Result{HostOutcome::Succeeded, S_OK} && captures == 1 &&
-                       owner->_session.ForegroundColor() == blue &&
-                       memory.sampledPhysical.load(std::memory_order_acquire) == ample &&
-                       memory.sampledCommit.load(std::memory_order_acquire) == ample,
-                   test.name, "memory-recovery-publishes-the-literal-blue-with-one-source-capture");
+            expect(result == ContinuationReceipt::Result{HostOutcome::Succeeded, S_OK} && captures == 1 && owner->_session.ForegroundColor() == blue &&
+                       memory.sampledPhysical.load(std::memory_order_acquire) == ample && memory.sampledCommit.load(std::memory_order_acquire) == ample,
+                   test.name,
+                   "memory-recovery-publishes-the-literal-blue-with-one-source-capture");
             expect(commonRetired && blocker.completions.load(std::memory_order_acquire) == 1 &&
-                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished &&
-                       blocker.error.load(std::memory_order_acquire) == S_OK &&
-                       owner->_session.IsDocumentReadCurrent(source.value()) &&
-                       owner->_session.history.CurrentRevision() == revision &&
+                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished && blocker.error.load(std::memory_order_acquire) == S_OK &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) && owner->_session.history.CurrentRevision() == revision &&
                        owner->_session.history.UndoCount() == undoCount,
-                   test.name, "recovery-acknowledges-both-jobs-and-retires-source-history-and-graph");
+                   test.name,
+                   "recovery-acknowledges-both-jobs-and-retires-source-history-and-graph");
         }
         else if (test.scenario == Scenario::Cancel)
         {
-            expect(result == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT} && captures == 0 &&
-                       owner->_session.ForegroundColor() == brown,
-                   test.name, "cancelled-receipt-preserves-original-brown-without-source-capture");
+            expect(result == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT} && captures == 0 && owner->_session.ForegroundColor() == brown,
+                   test.name,
+                   "cancelled-receipt-preserves-original-brown-without-source-capture");
             expect(commonRetired && blocker.completions.load(std::memory_order_acquire) == 1 &&
-                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished &&
-                       blocker.error.load(std::memory_order_acquire) == S_OK &&
-                       owner->_session.IsDocumentReadCurrent(source.value()) &&
-                       owner->_session.history.CurrentRevision() == revision &&
+                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished && blocker.error.load(std::memory_order_acquire) == S_OK &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) && owner->_session.history.CurrentRevision() == revision &&
                        owner->_session.history.UndoCount() == undoCount,
-                   test.name, "cancel-acknowledges-jobs-and-retires-source-history-and-graph");
+                   test.name,
+                   "cancel-acknowledges-jobs-and-retires-source-history-and-graph");
         }
         else if (test.scenario == Scenario::Escape)
         {
-            expect(result == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT} && captures == 0 &&
-                       owner->_session.ForegroundColor() == brown &&
-                       owner->_session.IsDocumentReadCurrent(source.value()) &&
-                       owner->_session.history.CurrentRevision() == revision &&
+            expect(result == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT} && captures == 0 && owner->_session.ForegroundColor() == brown &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) && owner->_session.history.CurrentRevision() == revision &&
                        owner->_session.history.UndoCount() == undoCount,
-                   test.name, "escape-cancelled-receipt-preserves-palette-source-and-history");
+                   test.name,
+                   "escape-cancelled-receipt-preserves-palette-source-and-history");
             expect(commonRetired && blocker.completions.load(std::memory_order_acquire) == 1 &&
-                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished &&
-                       blocker.error.load(std::memory_order_acquire) == S_OK &&
-                       owner->_session.IsDocumentReadCurrent(source.value()) &&
-                       owner->_session.history.CurrentRevision() == revision &&
+                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished && blocker.error.load(std::memory_order_acquire) == S_OK &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) && owner->_session.history.CurrentRevision() == revision &&
                        owner->_session.history.UndoCount() == undoCount,
-                   test.name, "escape-acknowledges-blocker-and-retires-source-history-and-graph");
+                   test.name,
+                   "escape-acknowledges-blocker-and-retires-source-history-and-graph");
         }
         else if (test.scenario == Scenario::EscapeHeld)
         {
-            expect(result == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT} && captures == 0 &&
-                       owner->_session.ForegroundColor() == brown &&
-                       owner->_session.IsDocumentReadCurrent(source.value()) &&
-                       owner->_session.history.CurrentRevision() == revision &&
+            expect(result == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT} && captures == 0 && owner->_session.ForegroundColor() == brown &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) && owner->_session.history.CurrentRevision() == revision &&
                        owner->_session.history.UndoCount() == undoCount,
-                   test.name, "escape-held-cancelled-same-receipt-preserves-palette-source-and-history");
+                   test.name,
+                   "escape-held-cancelled-same-receipt-preserves-palette-source-and-history");
             expect(commonRetired && blocker.completions.load(std::memory_order_acquire) == 1 &&
-                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished &&
-                       blocker.error.load(std::memory_order_acquire) == S_OK &&
-                       owner->_session.IsDocumentReadCurrent(source.value()) &&
-                       owner->_session.history.CurrentRevision() == revision &&
+                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished && blocker.error.load(std::memory_order_acquire) == S_OK &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) && owner->_session.history.CurrentRevision() == revision &&
                        owner->_session.history.UndoCount() == undoCount,
-                   test.name, "escape-held-acknowledges-blocker-and-retires-memory-gpu-and-opening-references");
+                   test.name,
+                   "escape-held-acknowledges-blocker-and-retires-memory-gpu-and-opening-references");
         }
         else
         {
-            expect(result == ContinuationReceipt::Result{HostOutcome::Failed, E_OUTOFMEMORY} && captures == 0 &&
-                       owner->_session.ForegroundColor() == brown &&
-                       memory.sampledPhysical.load(std::memory_order_acquire) == headroom &&
-                       memory.sampledCommit.load(std::memory_order_acquire) == headroom,
-                   test.name, "hard-memory-refusal-acknowledges-eoutofmemory-without-capture");
-            expect(commonRetired && owner->_session.IsDocumentReadCurrent(source.value()) &&
-                       owner->_session.history.CurrentRevision() == revision &&
+            expect(result == ContinuationReceipt::Result{HostOutcome::Failed, E_OUTOFMEMORY} && captures == 0 && owner->_session.ForegroundColor() == brown &&
+                       memory.sampledPhysical.load(std::memory_order_acquire) == headroom && memory.sampledCommit.load(std::memory_order_acquire) == headroom,
+                   test.name,
+                   "hard-memory-refusal-acknowledges-eoutofmemory-without-capture");
+            expect(commonRetired && owner->_session.IsDocumentReadCurrent(source.value()) && owner->_session.history.CurrentRevision() == revision &&
                        owner->_session.history.UndoCount() == undoCount,
-                   test.name, "refusal-keeps-zero-reservation-and-retires-source-history-and-graph");
+                   test.name,
+                   "refusal-keeps-zero-reservation-and-retires-source-history-and-graph");
         }
-        expect(std::holds_alternative<std::monostate>(owner->_drag) && GetCapture() != owner->_window.get(), test.name,
-               test.scenario == Scenario::EscapeHeld
-                   ? "physical-escape-closes-held-sampler-gesture-and-releases-capture"
-                   : "physical-up-closes-sampler-gesture-and-releases-capture");
+        expect(std::holds_alternative<std::monostate>(owner->_drag) && GetCapture() != owner->_window.get(),
+               test.name,
+               test.scenario == Scenario::EscapeHeld ? "physical-escape-closes-held-sampler-gesture-and-releases-capture"
+                                                     : "physical-up-closes-sampler-gesture-and-releases-capture");
         owner->Shutdown();
         owner->_samplerSourceCapturesForTest = nullptr;
-        owner->_processingTestProbe = nullptr;
+        owner->_processingTestProbe          = nullptr;
         owner.reset();
         bool quit = false;
         for (;;)
         {
             const auto drained = PumpMessages();
-            quit = quit || drained.quit;
-            if (!drained.quit)
+            quit               = quit || drained.quit;
+            if (! drained.quit)
                 break;
         }
         expect(quit, test.name, "fixture-quit-drained-after-joined-shutdown");

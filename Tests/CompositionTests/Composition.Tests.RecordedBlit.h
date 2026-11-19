@@ -21,5 +21,4 @@ struct RecordedBlitGraphHarness final
 // Pair: opaque black/white 2x1 display graph. Stripes: opaque alternating 64x64 column graph with ready mips.
 // Tiled: an actual sealed graph whose viewed center is opaque; all three contexts are their acknowledged owner
 // immediate contexts. No command-list pipeline state is assumed to persist after ExecuteCommandList(FALSE).
-[[nodiscard]] int RunRecordedBlitTests(RecordedBlitGraphHarness& pair, RecordedBlitGraphHarness& stripes,
-                                       RecordedBlitGraphHarness& tiled);
+[[nodiscard]] int RunRecordedBlitTests(RecordedBlitGraphHarness& pair, RecordedBlitGraphHarness& stripes, RecordedBlitGraphHarness& tiled);

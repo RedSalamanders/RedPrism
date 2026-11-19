@@ -19,12 +19,9 @@ namespace SelectionGeometry
 [[nodiscard]] std::vector<SelectionLoop> Ellipse(double x, double y, double width, double height);
 [[nodiscard]] std::optional<SelectionBounds> Bounds(const std::vector<SelectionLoop>& loops) noexcept;
 // Boolean operations under the nonzero rule; results are normalized (outer loops and holes, no overlaps).
-[[nodiscard]] std::vector<SelectionLoop> Union(const std::vector<SelectionLoop>& a,
-                                               const std::vector<SelectionLoop>& b);
-[[nodiscard]] std::vector<SelectionLoop> Subtract(const std::vector<SelectionLoop>& a,
-                                                  const std::vector<SelectionLoop>& b);
-[[nodiscard]] std::vector<SelectionLoop> Intersect(const std::vector<SelectionLoop>& a,
-                                                   const std::vector<SelectionLoop>& b);
+[[nodiscard]] std::vector<SelectionLoop> Union(const std::vector<SelectionLoop>& a, const std::vector<SelectionLoop>& b);
+[[nodiscard]] std::vector<SelectionLoop> Subtract(const std::vector<SelectionLoop>& a, const std::vector<SelectionLoop>& b);
+[[nodiscard]] std::vector<SelectionLoop> Intersect(const std::vector<SelectionLoop>& a, const std::vector<SelectionLoop>& b);
 // Grown (delta > 0) or shrunk (delta < 0) by |delta| pixels with round corners (Photoshop's Expand / Contract).
 [[nodiscard]] std::vector<SelectionLoop> Offset(const std::vector<SelectionLoop>& loops, double delta);
 [[nodiscard]] std::vector<SelectionLoop> Translated(const std::vector<SelectionLoop>& loops, double dx, double dy);
@@ -33,11 +30,10 @@ namespace SelectionGeometry
 [[nodiscard]] bool Contains(const std::vector<SelectionLoop>& loops, Vec2 point) noexcept;
 // Gray8 coverage at document resolution (255 selected). Antialiased edges carry exact-area partial coverage;
 // otherwise a pixel is selected when its center lies inside.
-[[nodiscard]] Raster Coverage(const std::vector<SelectionLoop>& loops, int width, int height, bool antialiased,
-                              const CancelToken& cancellation = {});
+[[nodiscard]] Raster Coverage(const std::vector<SelectionLoop>& loops, int width, int height, bool antialiased, const CancelToken& cancellation = {});
 // Applies the map per edge without duplicating a potentially large selection. Same numeric rasterization.
-[[nodiscard]] Raster CoverageTransformed(const std::vector<SelectionLoop>& loops, const Affine2& map, int width,
-                                         int height, bool antialiased, const CancelToken& cancellation = {});
+[[nodiscard]] Raster CoverageTransformed(
+    const std::vector<SelectionLoop>& loops, const Affine2& map, int width, int height, bool antialiased, const CancelToken& cancellation = {});
 } // namespace SelectionGeometry
 
 // The box a drag from `anchor` to `point` spans, in whole pixels. `square` evens the sides; `fromCenter` grows the
@@ -66,28 +62,23 @@ enum class WorkStage : std::uint8_t
 };
 struct WorkObserver
 {
-    void* context = nullptr;
+    void* context                                              = nullptr;
     void (*checkpoint)(void*, WorkStage, std::size_t) noexcept = nullptr;
 };
 inline constexpr long kCancelledMaskCount = -2;
 // 255 where a premultiplied BGRA pixel matches the color averaged over the sample square around (`x`, `y`);
 // `count` receives the number selected, -1 when memory runs out, or kCancelledMaskCount on cancellation.
 // Cancellation discards the whole output. Sparse reads use a private contiguous view, never the source cache.
-[[nodiscard]] std::vector<std::uint8_t> Mask(const Raster& image, int x, int y, const WandSettings& settings,
-                                             long& count, CancelToken cancellation = {}, WorkObserver observer = {});
+[[nodiscard]] std::vector<std::uint8_t> Mask(
+    const Raster& image, int x, int y, const WandSettings& settings, long& count, CancelToken cancellation = {}, WorkObserver observer = {});
 // Outline of a mask's nonzero pixels along exact pixel edges: outer loops clockwise and holes counterclockwise in
 // top-left coordinates, so the nonzero rule fills exactly those pixels. nullopt when empty or too detailed.
-[[nodiscard]] std::optional<std::vector<SelectionLoop>> Trace(const std::vector<std::uint8_t>& mask, int width,
-                                                              int height, WandFailure* failure = nullptr,
-                                                              CancelToken cancellation = {},
-                                                              WorkObserver observer = {});
+[[nodiscard]] std::optional<std::vector<SelectionLoop>> Trace(
+    const std::vector<std::uint8_t>& mask, int width, int height, WandFailure* failure = nullptr, CancelToken cancellation = {}, WorkObserver observer = {});
 // The outline of the pixels matching the one at `point` (image pixel coordinates); nullopt when nothing matches
 // or the point lies outside the image.
-[[nodiscard]] std::optional<std::vector<SelectionLoop>> Select(const Raster& image, Vec2 point,
-                                                               const WandSettings& settings,
-                                                               WandFailure* failure = nullptr,
-                                                               CancelToken cancellation = {},
-                                                               WorkObserver observer = {});
+[[nodiscard]] std::optional<std::vector<SelectionLoop>> Select(
+    const Raster& image, Vec2 point, const WandSettings& settings, WandFailure* failure = nullptr, CancelToken cancellation = {}, WorkObserver observer = {});
 } // namespace MagicWand
 
 namespace MaskTracing
@@ -95,13 +86,14 @@ namespace MaskTracing
 // Outline of a Gray8 mask's pixels darker than 50 %, in the mask's pixel coordinates; nullopt when none, or when the
 // outline is refused (`failure`: TooDetailed past 8 000 000 pixel edges, Memory when the pixels cannot be read or the
 // outline allocated).
-[[nodiscard]] std::optional<std::vector<SelectionLoop>> DarkPixels(const Raster& mask, WandFailure* failure = nullptr,
-                                                                   CancelToken cancellation = {},
+[[nodiscard]] std::optional<std::vector<SelectionLoop>> DarkPixels(const Raster& mask,
+                                                                   WandFailure* failure             = nullptr,
+                                                                   CancelToken cancellation         = {},
                                                                    MagicWand::WorkObserver observer = {});
 // Outline of a BGRA image's pixels at least 50 % opaque; nullopt when none or refused, as DarkPixels.
 [[nodiscard]] std::optional<std::vector<SelectionLoop>> OpaquePixels(const Raster& image,
-                                                                     WandFailure* failure = nullptr,
-                                                                     CancelToken cancellation = {},
+                                                                     WandFailure* failure             = nullptr,
+                                                                     CancelToken cancellation         = {},
                                                                      MagicWand::WorkObserver observer = {});
 } // namespace MaskTracing
 
@@ -114,5 +106,4 @@ namespace MaskTracing
 // collapsing High to the same single bilinear tap since this is a transient sample, not a resample). Transparent
 // beyond the placed box, or whole when the transform is invalid. What the wand reads for one layer, and what Clone
 // Stamp, Blur, Liquify/Smudge and Copy read as "the layer as shown". Empty when the image's pixels cannot be read.
-[[nodiscard]] Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, int width, int height,
-                                       const CancelToken& cancellation = {});
+[[nodiscard]] Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, int width, int height, const CancelToken& cancellation = {});

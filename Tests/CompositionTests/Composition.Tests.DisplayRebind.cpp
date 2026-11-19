@@ -31,21 +31,51 @@
 namespace
 {
 constexpr DWORD kDeadlockBoundMs = 10000;
-unsigned int gFailures = 0;
+unsigned int gFailures           = 0;
 
 void Expect(const char* name, bool condition) noexcept
 {
     std::printf("%s display-rebind.%s\n", condition ? "PASS" : "FAIL", name);
     std::fflush(stdout);
-    if (!condition)
+    if (! condition)
         ++gFailures;
 }
 
 constexpr std::array<std::uint8_t, 16> kFirstPixels{
-    0x11, 0x22, 0x33, 0xFF, 0x44, 0x55, 0x66, 0xFF, 0x77, 0x88, 0x99, 0xFF, 0xAA, 0xBB, 0xCC, 0xFF,
+    0x11,
+    0x22,
+    0x33,
+    0xFF,
+    0x44,
+    0x55,
+    0x66,
+    0xFF,
+    0x77,
+    0x88,
+    0x99,
+    0xFF,
+    0xAA,
+    0xBB,
+    0xCC,
+    0xFF,
 };
 constexpr std::array<std::uint8_t, 16> kSecondPixels{
-    0xD1, 0xB2, 0x93, 0xFF, 0x74, 0x55, 0x36, 0xFF, 0x17, 0xE8, 0xC9, 0xFF, 0xAA, 0x8B, 0x6C, 0xFF,
+    0xD1,
+    0xB2,
+    0x93,
+    0xFF,
+    0x74,
+    0x55,
+    0x36,
+    0xFF,
+    0x17,
+    0xE8,
+    0xC9,
+    0xFF,
+    0xAA,
+    0x8B,
+    0x6C,
+    0xFF,
 };
 
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -54,25 +84,27 @@ constexpr std::array<std::uint8_t, 16> kSecondPixels{
 #pragma warning(disable : 4626 5027)
 class Client final : public CommittedDisplayClient
 {
-  public:
-    explicit Client(GpuWorkQueue& queue) noexcept : queue(queue) {}
+public:
+    explicit Client(GpuWorkQueue& queue) noexcept : queue(queue)
+    {
+    }
 
     DocumentSession session;
     GpuWorkQueue& queue;
-    ID3D11Device* device = nullptr;
+    ID3D11Device* device           = nullptr;
     ID3D11DeviceContext* immediate = nullptr;
-    RecordedDisplayGraph* graph = nullptr;
-    unsigned int publications = 0;
-    unsigned int callbacks = 0;
-    unsigned int errors = 0;
-    HRESULT error = S_OK;
+    RecordedDisplayGraph* graph    = nullptr;
+    unsigned int publications      = 0;
+    unsigned int callbacks         = 0;
+    unsigned int errors            = 0;
+    HRESULT error                  = S_OK;
 
     bool DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& output) noexcept override
     {
-        output = {};
+        output               = {};
         const auto authority = session.CaptureDocumentReadAuthority();
         const auto& document = std::as_const(session).Document();
-        if (!authority || !document || !device || !immediate)
+        if (! authority || ! document || ! device || ! immediate)
             return false;
         output = {{authority.value(), queue.DeviceGeneration()}, &document.value(), device, immediate, true};
         return true;
@@ -98,22 +130,22 @@ class Client final : public CommittedDisplayClient
         try
         {
             auto image = Raster::Make(2, 2, RasterFormat::Bgra8888, pixels.data(), pixels.size());
-            if (!image.HasStorage())
+            if (! image.HasStorage())
                 return false;
             CanvasDocument document;
-            document.width = 2;
+            document.width  = 2;
             document.height = 2;
-            auto draft = CanvasDocumentDraft::Rebuild(document, 1);
-            if (!draft)
+            auto draft      = CanvasDocumentDraft::Rebuild(document, 1);
+            if (! draft)
                 return false;
-            auto layer = ImageLayer::Blank(L"Display rebind fixture", Vec2{2, 2});
-            const auto active = layer.id;
-            layer.asset = {std::move(image), {}, L"Display rebind fixture"};
+            auto layer               = ImageLayer::Blank(L"Display rebind fixture", Vec2{2, 2});
+            const auto active        = layer.id;
+            layer.asset              = {std::move(image), {}, L"Display rebind fixture"};
             layer.transform.sampling = LayerSampling::Nearest;
-            if (!draft->Append(std::move(layer)))
+            if (! draft->Append(std::move(layer)))
                 return false;
             auto sealed = draft->Seal();
-            if (!sealed)
+            if (! sealed)
                 return false;
             session.ReplaceDocument(std::move(*sealed), active);
             return session.CaptureDocumentReadAuthority().has_value();
@@ -143,31 +175,46 @@ struct Rig final
     Client client;
     CommittedDisplayController display;
     const DWORD ownerThread = GetCurrentThreadId();
-    bool initialized = false;
-    bool closed = false;
+    bool initialized        = false;
+    bool closed             = false;
     std::atomic<bool> finalWorkerWasMta{false};
 
-    Rig() noexcept : client(queue) {}
+    Rig() noexcept : client(queue)
+    {
+    }
 
     bool Initialize() noexcept
     {
         constexpr D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
-        HRESULT result =
-            D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &level, 1,
-                              D3D11_SDK_VERSION, firstDevice.put(), nullptr, firstImmediate.put());
+        HRESULT result                    = D3D11CreateDevice(nullptr,
+                                                              D3D_DRIVER_TYPE_WARP,
+                                                              nullptr,
+                                                              D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                                                              &level,
+                                                              1,
+                                                              D3D11_SDK_VERSION,
+                                                              firstDevice.put(),
+                                                              nullptr,
+                                                              firstImmediate.put());
         if (FAILED(result))
             return false;
-        result = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &level, 1,
-                                   D3D11_SDK_VERSION, secondDevice.put(), nullptr, secondImmediate.put());
+        result = D3D11CreateDevice(nullptr,
+                                   D3D_DRIVER_TYPE_WARP,
+                                   nullptr,
+                                   D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                                   &level,
+                                   1,
+                                   D3D11_SDK_VERSION,
+                                   secondDevice.put(),
+                                   nullptr,
+                                   secondImmediate.put());
         if (FAILED(result))
             return false;
-        client.device = firstDevice.get();
+        client.device    = firstDevice.get();
         client.immediate = firstImmediate.get();
-        if (FAILED(jobs.Initialize(2)) || FAILED(jobs.EnableGpuRecordingLane()) || !jobs.EnableDeferredRelease() ||
-            !jobs.RegisterOwnerWork(routes) || FAILED(queue.Initialize(jobs, &routes)) ||
-            FAILED(queue.Bind(firstDevice.get(), firstImmediate.get())) ||
-            FAILED(commands.InitializeOwner(jobs, queue, routes)) ||
-            FAILED(display.InitializeOwner(jobs, queue, commands, routes, client)))
+        if (FAILED(jobs.Initialize(2)) || FAILED(jobs.EnableGpuRecordingLane()) || ! jobs.EnableDeferredRelease() || ! jobs.RegisterOwnerWork(routes) ||
+            FAILED(queue.Initialize(jobs, &routes)) || FAILED(queue.Bind(firstDevice.get(), firstImmediate.get())) ||
+            FAILED(commands.InitializeOwner(jobs, queue, routes)) || FAILED(display.InitializeOwner(jobs, queue, commands, routes, client)))
             std::terminate(); // Partial route registration cannot be torn down as a valid fixture.
         initialized = true;
         return true;
@@ -175,34 +222,30 @@ struct Rig final
 
     void Close() noexcept
     {
-        if (!initialized || closed)
+        if (! initialized || closed)
             return;
         display.StopOwner();
         queue.StopNotifications();
         jobs.Close({[](void* opaque) noexcept
-                    {
-                        auto& rig = *static_cast<Rig*>(opaque);
-                        rig.display.JoinedShutdownOwner();
-                        rig.queue.CloseAfterWorkers();
-                    },
+        {
+            auto& rig = *static_cast<Rig*>(opaque);
+            rig.display.JoinedShutdownOwner();
+            rig.queue.CloseAfterWorkers();
+        },
                     [](void* opaque) noexcept
-                    {
-                        auto& rig = *static_cast<Rig*>(opaque);
-                        rig.display.RetireShutdownForWork();
-                        APTTYPE apartment = APTTYPE_CURRENT;
-                        APTTYPEQUALIFIER qualifier = APTTYPEQUALIFIER_NONE;
-                        const HRESULT queried = CoGetApartmentType(&apartment, &qualifier);
-                        rig.finalWorkerWasMta.store(SUCCEEDED(queried) && apartment == APTTYPE_MTA &&
-                                                        GetCurrentThreadId() != rig.ownerThread,
-                                                    std::memory_order_release);
-                    },
+        {
+            auto& rig = *static_cast<Rig*>(opaque);
+            rig.display.RetireShutdownForWork();
+            APTTYPE apartment          = APTTYPE_CURRENT;
+            APTTYPEQUALIFIER qualifier = APTTYPEQUALIFIER_NONE;
+            const HRESULT queried      = CoGetApartmentType(&apartment, &qualifier);
+            rig.finalWorkerWasMta.store(SUCCEEDED(queried) && apartment == APTTYPE_MTA && GetCurrentThreadId() != rig.ownerThread, std::memory_order_release);
+        },
                     this});
         closed = true;
         Expect("production-close-detaches-display-and-command-routes", display.CloseAfterWorkersOwner());
-        Expect("production-close-returns-complete-cpu-charge",
-               jobs.ReservedMemoryBytes() == 0 && jobs.ReleasingMemoryBytes() == 0);
-        Expect("production-close-final-retirement-hook-runs-on-mta-worker",
-               finalWorkerWasMta.load(std::memory_order_acquire));
+        Expect("production-close-returns-complete-cpu-charge", jobs.ReservedMemoryBytes() == 0 && jobs.ReleasingMemoryBytes() == 0);
+        Expect("production-close-final-retirement-hook-runs-on-mta-worker", finalWorkerWasMta.load(std::memory_order_acquire));
     }
 
     ~Rig()
@@ -233,7 +276,7 @@ template <typename Predicate> bool Settle(Rig& rig, Predicate predicate) noexcep
 
 struct WarpBudgetPolicy final
 {
-    bool known = false;
+    bool known      = false;
     HRESULT refusal = E_OUTOFMEMORY;
 };
 
@@ -243,29 +286,30 @@ WarpBudgetPolicy QueryWarpBudgetPolicy(ID3D11Device* device) noexcept
     const HRESULT query = GpuCapabilities::QueryVideoMemorySnapshot(device, observed);
     const auto& segment = observed.nonLocal.available && observed.nonLocal.budget ? observed.nonLocal : observed.local;
     std::printf("INFO display-rebind.budget query=0x%08X available=%u budget=%llu usage=%llu\n",
-                static_cast<unsigned int>(query), segment.available ? 1u : 0u,
-                static_cast<unsigned long long>(segment.budget), static_cast<unsigned long long>(segment.currentUsage));
+                static_cast<unsigned int>(query),
+                segment.available ? 1u : 0u,
+                static_cast<unsigned long long>(segment.budget),
+                static_cast<unsigned long long>(segment.currentUsage));
     std::fflush(stdout);
-    const bool known = SUCCEEDED(query) && segment.available && segment.budget != 0;
-    const HRESULT refusal = FAILED(query) ? query
-                            : !segment.available || !segment.budget
-                                ? (FAILED(segment.queryResult) ? segment.queryResult : E_OUTOFMEMORY)
-                                : E_OUTOFMEMORY;
+    const bool known      = SUCCEEDED(query) && segment.available && segment.budget != 0;
+    const HRESULT refusal = FAILED(query)                             ? query
+                            : ! segment.available || ! segment.budget ? (FAILED(segment.queryResult) ? segment.queryResult : E_OUTOFMEMORY)
+                                                                      : E_OUTOFMEMORY;
     return {known, refusal};
 }
 
 bool ReadbackEquals(RecordedDisplayGraph& graph, const std::array<std::uint8_t, 16>& expected) noexcept
 {
     auto* composition = graph.CompositionForTestOwner();
-    if (!composition)
+    if (! composition)
         return false;
     try
     {
         std::vector<std::uint8_t> actual;
-        UINT width = 0;
+        UINT width  = 0;
         UINT height = 0;
-        return SUCCEEDED(composition->Readback(actual, width, height)) && width == 2 && height == 2 &&
-               actual.size() == expected.size() && std::equal(actual.begin(), actual.end(), expected.begin());
+        return SUCCEEDED(composition->Readback(actual, width, height)) && width == 2 && height == 2 && actual.size() == expected.size() &&
+               std::equal(actual.begin(), actual.end(), expected.begin());
     }
     catch (const std::bad_alloc&)
     {
@@ -273,19 +317,13 @@ bool ReadbackEquals(RecordedDisplayGraph& graph, const std::array<std::uint8_t, 
     }
 }
 
-bool ExpectExactBudgetRefusal(Rig& rig, HRESULT expected, unsigned int expectedErrors,
-                              unsigned int publicationsBeforeRequest) noexcept
+bool ExpectExactBudgetRefusal(Rig& rig, HRESULT expected, unsigned int expectedErrors, unsigned int publicationsBeforeRequest) noexcept
 {
-    const bool refused = Settle(rig, [&]() noexcept { return rig.client.errors == expectedErrors; }) &&
-                         rig.client.errors == expectedErrors && rig.client.error == expected && !rig.client.graph &&
-                         rig.client.publications == publicationsBeforeRequest;
+    const bool refused = Settle(rig, [&]() noexcept { return rig.client.errors == expectedErrors; }) && rig.client.errors == expectedErrors &&
+                         rig.client.error == expected && ! rig.client.graph && rig.client.publications == publicationsBeforeRequest;
     Expect("unknown-budget-refusal-matches-query-and-publishes-no-new-root", refused);
-    const bool retired = Settle(rig,
-                                [&]() noexcept
-                                {
-                                    return !rig.display.HasPending() && rig.jobs.ReservedMemoryBytes() == 0 &&
-                                           rig.jobs.ReleasingMemoryBytes() == 0;
-                                });
+    const bool retired =
+        Settle(rig, [&]() noexcept { return ! rig.display.HasPending() && rig.jobs.ReservedMemoryBytes() == 0 && rig.jobs.ReleasingMemoryBytes() == 0; });
     Expect("budget-refusal-retires-through-original-worker-ack", retired);
     return refused && retired;
 }
@@ -294,7 +332,7 @@ void RunDeviceRebindScenario()
 {
     Rig rig;
     Expect("two-independent-actual-warp-devices-created", rig.Initialize());
-    if (!rig.initialized)
+    if (! rig.initialized)
         return;
     Expect("warp-device-identities-are-distinct", rig.firstDevice.get() != rig.secondDevice.get());
     if (rig.firstDevice.get() == rig.secondDevice.get())
@@ -305,13 +343,13 @@ void RunDeviceRebindScenario()
 
     const bool firstFixture = rig.client.InstallFixture(kFirstPixels);
     Expect("first-literal-document-installed", firstFixture);
-    if (!firstFixture)
+    if (! firstFixture)
     {
         rig.Close();
         return;
     }
     const WarpBudgetPolicy firstBudget = QueryWarpBudgetPolicy(rig.firstDevice.get());
-    if (!firstBudget.known)
+    if (! firstBudget.known)
     {
         const unsigned int publicationsBeforeRequest = rig.client.publications;
         rig.display.RequestOwner();
@@ -324,76 +362,65 @@ void RunDeviceRebindScenario()
     }
 
     rig.display.RequestOwner();
-    const bool firstSettled =
-        Settle(rig, [&]() noexcept { return rig.client.publications == 1 || rig.client.errors != 0; });
+    const bool firstSettled = Settle(rig, [&]() noexcept { return rig.client.publications == 1 || rig.client.errors != 0; });
     Expect("known-first-device-budget-publishes-old-source",
            firstSettled && rig.client.errors == 0 && rig.client.publications == 1 && rig.client.graph &&
                rig.client.graph->IsPublishedOnOwner(rig.firstDevice.get(), rig.firstImmediate.get()));
-    if (!firstSettled || rig.client.errors || !rig.client.graph)
+    if (! firstSettled || rig.client.errors || ! rig.client.graph)
     {
         rig.Close();
         return;
     }
     auto* oldGraph = rig.client.graph;
-    const CommittedDisplayKey oldKey{rig.client.session.CaptureDocumentReadAuthority().value(),
-                                     rig.queue.DeviceGeneration()};
-    Expect("old-source-four-nonuniform-bgra-values-read-through-existing-graph",
-           ReadbackEquals(*oldGraph, kFirstPixels));
+    const CommittedDisplayKey oldKey{rig.client.session.CaptureDocumentReadAuthority().value(), rig.queue.DeviceGeneration()};
+    Expect("old-source-four-nonuniform-bgra-values-read-through-existing-graph", ReadbackEquals(*oldGraph, kFirstPixels));
     const std::uint64_t oldCharge = rig.jobs.ReservedMemoryBytes();
-    Expect("published-old-source-retains-complete-nonzero-cpu-charge",
-           oldCharge != 0 && rig.jobs.ReleasingMemoryBytes() == 0 && !rig.display.HasPending());
+    Expect("published-old-source-retains-complete-nonzero-cpu-charge", oldCharge != 0 && rig.jobs.ReleasingMemoryBytes() == 0 && ! rig.display.HasPending());
 
     // These fixture-owned COM references remain alive through original-use retirement and production close.
-    const auto oldDeviceIdentity = rig.firstDevice.get();
+    const auto oldDeviceIdentity  = rig.firstDevice.get();
     const auto oldContextIdentity = rig.firstImmediate.get();
-    const bool secondFixture = rig.client.InstallFixture(kSecondPixels);
+    const bool secondFixture      = rig.client.InstallFixture(kSecondPixels);
     Expect("second-literal-document-installed", secondFixture);
-    if (!secondFixture)
+    if (! secondFixture)
     {
         rig.Close();
         return;
     }
     const WarpBudgetPolicy secondBudget = QueryWarpBudgetPolicy(rig.secondDevice.get());
-    const HRESULT rebound = rig.queue.Bind(rig.secondDevice.get(), rig.secondImmediate.get());
+    const HRESULT rebound               = rig.queue.Bind(rig.secondDevice.get(), rig.secondImmediate.get());
     Expect("queue-successfully-binds-the-second-actual-device", SUCCEEDED(rebound));
     if (FAILED(rebound))
     {
         rig.Close();
         return;
     }
-    rig.client.device = rig.secondDevice.get();
+    rig.client.device    = rig.secondDevice.get();
     rig.client.immediate = rig.secondImmediate.get();
     CommittedDisplayDescriptor current;
     const bool described = rig.client.DescribeCommittedDisplayOwner(current);
     Expect("descriptor-uses-second-device-context-and-new-queue-generation",
            described && current.device == rig.secondDevice.get() && current.immediate == rig.secondImmediate.get() &&
-               current.key.deviceGeneration != oldKey.deviceGeneration &&
-               current.key.document.documentSerial != oldKey.document.documentSerial);
+               current.key.deviceGeneration != oldKey.deviceGeneration && current.key.document.documentSerial != oldKey.document.documentSerial);
 
     const unsigned int callbacksBeforeChange = rig.client.callbacks;
     rig.display.DeviceChangedOwner();
-    Expect("device-change-immediately-excludes-old-published-pointer",
-           rig.client.graph == nullptr && rig.client.callbacks == callbacksBeforeChange + 1);
-    Expect("old-source-cpu-charge-survives-synchronous-device-change",
-           rig.jobs.ReservedMemoryBytes() + rig.jobs.ReleasingMemoryBytes() >= oldCharge);
+    Expect("device-change-immediately-excludes-old-published-pointer", rig.client.graph == nullptr && rig.client.callbacks == callbacksBeforeChange + 1);
+    Expect("old-source-cpu-charge-survives-synchronous-device-change", rig.jobs.ReservedMemoryBytes() + rig.jobs.ReleasingMemoryBytes() >= oldCharge);
 
     // Suspend before the first owner drain after rebind. This gates new admission while the old graph completes
     // its actual original-context retirement barrier and worker destruction.
     rig.display.SetSuspendedOwner(true);
     Expect("rebind-retirement-gate-keeps-old-source-excluded", rig.client.graph == nullptr);
-    const bool oldRetired = Settle(rig,
-                                   [&]() noexcept
-                                   {
-                                       return !rig.display.HasPending() && rig.jobs.ReservedMemoryBytes() == 0 &&
-                                              rig.jobs.ReleasingMemoryBytes() == 0;
-                                   });
+    const bool oldRetired =
+        Settle(rig, [&]() noexcept { return ! rig.display.HasPending() && rig.jobs.ReservedMemoryBytes() == 0 && rig.jobs.ReleasingMemoryBytes() == 0; });
     Expect("old-original-use-and-worker-charge-retire-before-new-admission", oldRetired);
-    if (!oldRetired)
+    if (! oldRetired)
     {
         rig.Close();
         return;
     }
-    if (!secondBudget.known)
+    if (! secondBudget.known)
     {
         const unsigned int publicationsBeforeRequest = rig.client.publications;
         rig.display.SetSuspendedOwner(false);
@@ -409,11 +436,11 @@ void RunDeviceRebindScenario()
 
     rig.display.SetSuspendedOwner(false);
     const ULONGLONG started = GetTickCount64();
-    bool settled = false;
-    while (!settled)
+    bool settled            = false;
+    while (! settled)
     {
         (void)DrainCompletions(rig.jobs);
-        if (rig.client.publications == 2 && rig.client.errors == 0 && rig.client.graph && !rig.display.HasPending())
+        if (rig.client.publications == 2 && rig.client.errors == 0 && rig.client.graph && ! rig.display.HasPending())
         {
             settled = true;
             break;
@@ -434,16 +461,12 @@ void RunDeviceRebindScenario()
     {
         Expect("new-source-is-published-on-the-second-actual-context",
                rig.client.graph->IsPublishedOnOwner(rig.secondDevice.get(), rig.secondImmediate.get()) &&
-                   rig.client.graph->DeviceForTestOwner() == rig.secondDevice.get() &&
-                   rig.client.graph->ContextForTestOwner() == rig.secondImmediate.get());
+                   rig.client.graph->DeviceForTestOwner() == rig.secondDevice.get() && rig.client.graph->ContextForTestOwner() == rig.secondImmediate.get());
         Expect("old-graph-resources-are-not-reused-on-second-device",
-               rig.client.graph->DeviceForTestOwner() != oldDeviceIdentity &&
-                   rig.client.graph->ContextForTestOwner() != oldContextIdentity);
-        Expect("second-source-four-nonuniform-bgra-values-read-through-existing-graph",
-               ReadbackEquals(*rig.client.graph, kSecondPixels));
+               rig.client.graph->DeviceForTestOwner() != oldDeviceIdentity && rig.client.graph->ContextForTestOwner() != oldContextIdentity);
+        Expect("second-source-four-nonuniform-bgra-values-read-through-existing-graph", ReadbackEquals(*rig.client.graph, kSecondPixels));
         Expect("original-use-retirement-and-worker-ack-leave-new-cache-charged",
-               !rig.display.HasPending() && rig.jobs.ReservedMemoryBytes() != 0 &&
-                   rig.jobs.ReleasingMemoryBytes() == 0 &&
+               ! rig.display.HasPending() && rig.jobs.ReservedMemoryBytes() != 0 && rig.jobs.ReleasingMemoryBytes() == 0 &&
                    rig.client.graph->IsPublishedOnOwner(rig.secondDevice.get(), rig.secondImmediate.get()));
     }
     Expect("old-actual-device-and-context-references-remained-live-through-rebind",

@@ -11,7 +11,7 @@
 
 struct PixelMovePreviewObserver final
 {
-    void* context = nullptr;
+    void* context                                                                      = nullptr;
     void (*progress)(void*, std::size_t completedRows, std::size_t totalRows) noexcept = nullptr;
 };
 
@@ -22,29 +22,34 @@ class PreparedPixelMovePreview;
 // Reads write only caller-admitted rows. They do not allocate tile images, snapshots or whole previews.
 class PixelMovePreviewReader final
 {
-  public:
-    PixelMovePreviewReader(std::shared_ptr<const PixelMoveOpening> opening, Vec2 offset, bool duplicate,
-                           std::thread::id ownerThread) noexcept;
-    PixelMovePreviewReader(const PixelMovePreviewReader&) = delete;
+public:
+    PixelMovePreviewReader(std::shared_ptr<const PixelMoveOpening> opening, Vec2 offset, bool duplicate, std::thread::id ownerThread) noexcept;
+    PixelMovePreviewReader(const PixelMovePreviewReader&)            = delete;
     PixelMovePreviewReader& operator=(const PixelMovePreviewReader&) = delete;
     [[nodiscard]] bool IsValidForWork() const noexcept;
     // Region is on the captured brush grid. Padding stays unchanged; cancellation may leave partial private
     // bytes, which the consumer must drop. No shared sparse cache is assembled or awaited.
-    [[nodiscard]] bool Read(GridRect region, std::span<std::uint8_t> output, std::size_t stride,
-                            CancelToken cancellation = {}, PixelMovePreviewObserver observer = {}) const noexcept;
+    [[nodiscard]] bool Read(GridRect region,
+                            std::span<std::uint8_t> output,
+                            std::size_t stride,
+                            CancelToken cancellation          = {},
+                            PixelMovePreviewObserver observer = {}) const noexcept;
     // Worker factory only; the caller already owns complete source/metadata and later graphics admission.
     // Zero offsets intentionally have no pending preview. The original lift is retained, never rebuilt.
-    [[nodiscard]] static std::shared_ptr<const PreparedPixelMovePreview> PrepareDisplayForWork(
-        std::shared_ptr<const PixelMoveOpening> opening, Vec2 offset, bool duplicate, std::thread::id ownerThread,
-        std::shared_ptr<const SharedPublicationMemory> memory, CancelToken cancellation = {});
+    [[nodiscard]] static std::shared_ptr<const PreparedPixelMovePreview> PrepareDisplayForWork(std::shared_ptr<const PixelMoveOpening> opening,
+                                                                                               Vec2 offset,
+                                                                                               bool duplicate,
+                                                                                               std::thread::id ownerThread,
+                                                                                               std::shared_ptr<const SharedPublicationMemory> memory,
+                                                                                               CancelToken cancellation = {});
 
-  private:
+private:
     std::shared_ptr<const PixelMoveOpening> _opening;
     std::thread::id _owner;
     Vec2 _offset{}, _landing{};
     bool _duplicate = false;
-    bool _whole = false;
-    bool _valid = false;
+    bool _whole     = false;
+    bool _valid     = false;
 };
 
 struct PixelMovePreviewLayout final
@@ -66,18 +71,23 @@ class PreparedPixelMovePreview final
     };
     friend class PixelMovePreviewReader;
 
-  public:
-    PreparedPixelMovePreview(ConstructionTag, std::shared_ptr<const SharedPublicationMemory> memory,
-                             std::shared_ptr<const PixelMoveOpening> opening, PixelMovePreviewLayout layout,
-                             Vec2 offset, bool duplicate, std::thread::id ownerThread) noexcept
-        : _memory(std::move(memory)), _reader(std::move(opening), offset, duplicate, ownerThread),
+public:
+    PreparedPixelMovePreview(ConstructionTag,
+                             std::shared_ptr<const SharedPublicationMemory> memory,
+                             std::shared_ptr<const PixelMoveOpening> opening,
+                             PixelMovePreviewLayout layout,
+                             Vec2 offset,
+                             bool duplicate,
+                             std::thread::id ownerThread) noexcept
+        : _memory(std::move(memory)),
+          _reader(std::move(opening), offset, duplicate, ownerThread),
           _layout(std::move(layout))
     {
     }
-    PreparedPixelMovePreview(const PreparedPixelMovePreview&) = delete;
+    PreparedPixelMovePreview(const PreparedPixelMovePreview&)            = delete;
     PreparedPixelMovePreview& operator=(const PreparedPixelMovePreview&) = delete;
-    PreparedPixelMovePreview(PreparedPixelMovePreview&&) = delete;
-    PreparedPixelMovePreview& operator=(PreparedPixelMovePreview&&) = delete;
+    PreparedPixelMovePreview(PreparedPixelMovePreview&&)                 = delete;
+    PreparedPixelMovePreview& operator=(PreparedPixelMovePreview&&)      = delete;
     [[nodiscard]] const PixelMovePreviewLayout& Layout() const noexcept
     {
         return _layout;
@@ -86,8 +96,7 @@ class PreparedPixelMovePreview final
     {
         return _reader.IsValidForWork();
     }
-    [[nodiscard]] bool Read(GridRect region, std::span<std::uint8_t> output, std::size_t stride,
-                            CancelToken cancellation = {}) const noexcept
+    [[nodiscard]] bool Read(GridRect region, std::span<std::uint8_t> output, std::size_t stride, CancelToken cancellation = {}) const noexcept
     {
         return _reader.Read(region, output, stride, cancellation);
     }
@@ -96,7 +105,7 @@ class PreparedPixelMovePreview final
         return _memory;
     }
 
-  private:
+private:
     // Layout's copied source dies before the reader's original lift/accounting; metadata memory dies last.
     std::shared_ptr<const SharedPublicationMemory> _memory;
     PixelMovePreviewReader _reader;

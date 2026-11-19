@@ -10,45 +10,38 @@
 // Capture is owner-only and constant-sized; workers never consult the session through it.
 class HistoryRestoreAuthority final
 {
-  public:
+public:
     HistoryRestoreAuthority() = default;
 
-  private:
+private:
     friend class DocumentSession;
-    friend std::optional<PreparedHistoryRestore> PrepareHistoryRestorePublication(HistoryRestoreAuthority,
-                                                                                  DocumentHistory::StateView, bool,
-                                                                                  CancelToken,
-                                                                                  DocumentHistory::PrepareObserver);
+    friend std::optional<PreparedHistoryRestore> PrepareHistoryRestorePublication(
+        HistoryRestoreAuthority, DocumentHistory::StateView, bool, CancelToken, DocumentHistory::PrepareObserver);
     Guid _session;
     std::uint64_t _documentSerial = 0, _generation = 0, _restoreSerial = 0;
     std::optional<Guid> _documentID, _active;
     std::optional<CropRect> _crop;
     bool _maskSelected = false;
-    bool _valid = false;
+    bool _valid        = false;
 };
 
 class PreparedHistoryRestore final
 {
-  public:
-    PreparedHistoryRestore(const PreparedHistoryRestore&) = delete;
+public:
+    PreparedHistoryRestore(const PreparedHistoryRestore&)            = delete;
     PreparedHistoryRestore& operator=(const PreparedHistoryRestore&) = delete;
     PreparedHistoryRestore(PreparedHistoryRestore&& source) noexcept;
     PreparedHistoryRestore& operator=(PreparedHistoryRestore&& source) noexcept;
     // Owner try and worker refresh retain the exact prepared Undo/Redo snapshot and its original revision.
     // They do not recreate restore intent or consult the live session. Hosts reserve the refresh overlap first.
-    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
-        DocumentHistory::ResidencyPermit& permit) noexcept;
-    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
-                                               DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(DocumentHistory::ResidencyPermit& permit) noexcept;
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
 
-  private:
+private:
     friend class DocumentSession;
-    friend std::optional<PreparedHistoryRestore> PrepareHistoryRestorePublication(HistoryRestoreAuthority,
-                                                                                  DocumentHistory::StateView, bool,
-                                                                                  CancelToken,
-                                                                                  DocumentHistory::PrepareObserver);
-    PreparedHistoryRestore(HistoryRestoreAuthority authority, DocumentHistory::StateView view)
-        : _authority(std::move(authority)), _view(std::move(view))
+    friend std::optional<PreparedHistoryRestore> PrepareHistoryRestorePublication(
+        HistoryRestoreAuthority, DocumentHistory::StateView, bool, CancelToken, DocumentHistory::PrepareObserver);
+    PreparedHistoryRestore(HistoryRestoreAuthority authority, DocumentHistory::StateView view) : _authority(std::move(authority)), _view(std::move(view))
     {
     }
     HistoryRestoreAuthority _authority;
@@ -60,6 +53,8 @@ class PreparedHistoryRestore final
     bool _changesDocumentSerial = false, _maskSelected = false, _applied = false;
 };
 
-[[nodiscard]] std::optional<PreparedHistoryRestore> PrepareHistoryRestorePublication(
-    HistoryRestoreAuthority authority, DocumentHistory::StateView view, bool redo, CancelToken cancellation = {},
-    DocumentHistory::PrepareObserver observer = {});
+[[nodiscard]] std::optional<PreparedHistoryRestore> PrepareHistoryRestorePublication(HistoryRestoreAuthority authority,
+                                                                                     DocumentHistory::StateView view,
+                                                                                     bool redo,
+                                                                                     CancelToken cancellation                  = {},
+                                                                                     DocumentHistory::PrepareObserver observer = {});

@@ -16,7 +16,7 @@ enum class RetryWaitStatus : std::uint8_t
 
 class RetryWaitReceiver
 {
-  public:
+public:
     virtual ~RetryWaitReceiver() = default;
     // Owner pump only. The suspended Job owns this receiver until this acknowledgement. Resume retains the
     // original ticket, reservation and FIFO position. Never create a younger replacement job here.
@@ -34,8 +34,8 @@ enum class RetryWaitFault : std::uint8_t
 
 struct RetryWaitObserver final
 {
-    void* context = nullptr;
-    std::int32_t (*fault)(void*, RetryWaitFault, std::size_t) noexcept = nullptr;
+    void* context                                                         = nullptr;
+    std::int32_t (*fault)(void*, RetryWaitFault, std::size_t) noexcept    = nullptr;
     void (*armed)(void*, JobTicket, unsigned int, std::uint32_t) noexcept = nullptr;
     // Test-only event gating. Production supplies no callback. Its context survives StopNotifications.
     void (*beforePublication)(void*) noexcept = nullptr;
@@ -46,7 +46,7 @@ struct RetryWaitObserver final
 // join, stop_callback destructor, compute worker, recurring timer or polling belongs to this queue.
 class RetryWaitQueue final : public OwnerWorkPump
 {
-  public:
+public:
     static constexpr std::size_t kCapacity = 8;
     [[nodiscard]] static constexpr std::uint32_t DelayMs(unsigned int retry) noexcept
     {
@@ -55,14 +55,12 @@ class RetryWaitQueue final : public OwnerWorkPump
 
     RetryWaitQueue() noexcept;
     ~RetryWaitQueue();
-    RetryWaitQueue(const RetryWaitQueue&) = delete;
+    RetryWaitQueue(const RetryWaitQueue&)            = delete;
     RetryWaitQueue& operator=(const RetryWaitQueue&) = delete;
-    [[nodiscard]] std::int32_t Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer& routes,
-                                          RetryWaitObserver observer = {}) noexcept;
+    [[nodiscard]] std::int32_t Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer& routes, RetryWaitObserver observer = {}) noexcept;
     // Owner only, from successful DeferCompletion. Retry 1..5 follows the initial transfer attempt. The
     // complete suspended Job/reservation already exists. Failure retains all ownership with that Job.
-    [[nodiscard]] std::int32_t Start(JobTicket ticket, unsigned int retry, CancelToken cancellation,
-                                     RetryWaitReceiver& receiver) noexcept;
+    [[nodiscard]] std::int32_t Start(JobTicket ticket, unsigned int retry, CancelToken cancellation, RetryWaitReceiver& receiver) noexcept;
     [[nodiscard]] bool HasPending() const noexcept override;
     [[nodiscard]] bool HasReady() const noexcept override;
     void Pump() noexcept override;
@@ -72,7 +70,7 @@ class RetryWaitQueue final : public OwnerWorkPump
     // Event-driven correctness control; signals the actual wait, never fakes its callback acknowledgement.
     [[nodiscard]] bool SignalDeadlineForTest(JobTicket ticket) noexcept;
 
-  private:
+private:
     struct Impl;
     std::unique_ptr<Impl> _impl;
 };

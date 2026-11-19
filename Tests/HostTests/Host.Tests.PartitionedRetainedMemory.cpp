@@ -14,10 +14,10 @@
 
 namespace
 {
-constexpr std::uint64_t kWhole = 131072;
+constexpr std::uint64_t kWhole  = 131072;
 constexpr std::uint64_t kOutput = 32768;
-int failures = 0;
-std::uint64_t memoryQueries = 0; // MemorySource is invoked only by the scheduler owner.
+int failures                    = 0;
+std::uint64_t memoryQueries     = 0; // MemorySource is invoked only by the scheduler owner.
 void Expect(bool condition, const char* name)
 {
     std::printf("%s retained-partition.%s\n", condition ? "PASS" : "FAIL", name);
@@ -36,7 +36,7 @@ bool Sample(void*, MemorySnapshot& snapshot) noexcept
 }
 void Start(JobScheduler& scheduler)
 {
-    if (scheduler.Initialize(2, {}, {Sample, nullptr}) != S_OK || !scheduler.EnableDeferredRelease())
+    if (scheduler.Initialize(2, {}, {Sample, nullptr}) != S_OK || ! scheduler.EnableDeferredRelease())
         SetupFailure("start");
 }
 void Settle(JobScheduler& scheduler)
@@ -59,20 +59,20 @@ struct State final
     std::shared_ptr<SharedPublicationMemory> temporary;
     std::optional<SelectionLoops> geometry;
     std::uint64_t outputBytes = kOutput;
-    std::int32_t result = E_UNEXPECTED;
-    Route route = Route::Completed;
+    std::int32_t result       = E_UNEXPECTED;
+    Route route               = Route::Completed;
     JobResult workerResult;
-    bool alias = false;
-    bool wrongTicket = false;
-    bool made = false;
-    bool called = false;
-    bool suspended = false;
-    std::int32_t wrong = S_OK;
-    std::uint64_t queriesBefore = 0;
-    std::uint64_t queriesAfter = 0;
-    HANDLE entered = nullptr;
-    HANDLE release = nullptr;
-    SharedRetainedMemoryLease* uniqueOutput = nullptr;
+    bool alias                                 = false;
+    bool wrongTicket                           = false;
+    bool made                                  = false;
+    bool called                                = false;
+    bool suspended                             = false;
+    std::int32_t wrong                         = S_OK;
+    std::uint64_t queriesBefore                = 0;
+    std::uint64_t queriesAfter                 = 0;
+    HANDLE entered                             = nullptr;
+    HANDLE release                             = nullptr;
+    SharedRetainedMemoryLease* uniqueOutput    = nullptr;
     SharedRetainedMemoryLease* uniqueTemporary = nullptr;
     JobResult completed;
 };
@@ -82,15 +82,17 @@ struct State final
 #pragma warning(disable : 4626 5027)
 class PartitionJob final : public Job
 {
-  public:
-    explicit PartitionJob(State& state) : _state(state) {}
+public:
+    explicit PartitionJob(State& state) : _state(state)
+    {
+    }
     JobResult Run(JobContext& context) override
     {
-        _state.output = SharedPublicationMemory::CreateForWork();
-        _state.temporary = SharedPublicationMemory::CreateForWork();
+        _state.output                    = SharedPublicationMemory::CreateForWork();
+        _state.temporary                 = SharedPublicationMemory::CreateForWork();
         std::vector<SelectionLoop> loops = {{{0, 0}, {2, 0}, {2, 2}, {0, 2}}};
-        _state.geometry = SelectionLoops::AdoptForWork(std::move(loops), context.cancellation, _state.output);
-        _state.made = _state.geometry.has_value();
+        _state.geometry                  = SelectionLoops::AdoptForWork(std::move(loops), context.cancellation, _state.output);
+        _state.made                      = _state.geometry.has_value();
         if (_state.entered)
         {
             (void)SetEvent(_state.entered);
@@ -107,8 +109,7 @@ class PartitionJob final : public Job
         _state.suspended = true;
         if (_state.route == Route::Publication)
         {
-            _state.wrong = _state.output->BindPartitionedAfterCompletedWork(*_state.scheduler, ticket,
-                                                                            _state.outputBytes, *_state.temporary);
+            _state.wrong = _state.output->BindPartitionedAfterCompletedWork(*_state.scheduler, ticket, _state.outputBytes, *_state.temporary);
             Bind(Route::Publication);
         }
         return true; // useful work is over; a real suspended original record stays until Close.
@@ -122,31 +123,27 @@ class PartitionJob final : public Job
     void RetainJoinedRetirement(JobScheduler&, JobTicket ticket) noexcept override
     {
         _state.ticket = ticket;
-        if (!_state.output->IsBound())
+        if (! _state.output->IsBound())
             Bind(Route::Retirement);
     }
 
-  private:
+private:
     void Bind(Route route) noexcept
     {
         auto ticket = _state.ticket;
         if (_state.wrongTicket)
             ++ticket.generation;
-        auto& temporary = _state.alias ? *_state.output : *_state.temporary;
+        auto& temporary      = _state.alias ? *_state.output : *_state.temporary;
         _state.queriesBefore = memoryQueries;
         if (_state.uniqueOutput)
-            _state.result = _state.scheduler->RetainPartitionedMemory(ticket, _state.outputBytes, *_state.uniqueOutput,
-                                                                      *_state.uniqueTemporary);
+            _state.result = _state.scheduler->RetainPartitionedMemory(ticket, _state.outputBytes, *_state.uniqueOutput, *_state.uniqueTemporary);
         else
-            _state.result = route == Route::Publication ? _state.output->BindPartitionedForPublication(
-                                                              *_state.scheduler, ticket, _state.outputBytes, temporary)
+            _state.result = route == Route::Publication ? _state.output->BindPartitionedForPublication(*_state.scheduler, ticket, _state.outputBytes, temporary)
                             : route == Route::Retirement
-                                ? _state.output->BindPartitionedForRetirement(*_state.scheduler, ticket,
-                                                                              _state.outputBytes, temporary)
-                                : _state.output->BindPartitionedAfterCompletedWork(*_state.scheduler, ticket,
-                                                                                   _state.outputBytes, temporary);
+                                ? _state.output->BindPartitionedForRetirement(*_state.scheduler, ticket, _state.outputBytes, temporary)
+                                : _state.output->BindPartitionedAfterCompletedWork(*_state.scheduler, ticket, _state.outputBytes, temporary);
         _state.queriesAfter = memoryQueries;
-        _state.called = true;
+        _state.called       = true;
     }
     State& _state;
 };
@@ -154,12 +151,12 @@ class PartitionJob final : public Job
 
 void Submit(JobScheduler& scheduler, State& state, bool preclaim = true, bool deferred = true)
 {
-    state.scheduler = &scheduler;
+    state.scheduler          = &scheduler;
     std::unique_ptr<Job> job = std::make_unique<PartitionJob>(state);
     JobOptions options;
-    options.memoryBytes = kWhole;
+    options.memoryBytes           = kWhole;
     options.reserveRetainedMemory = preclaim;
-    options.deferredRetirement = deferred;
+    options.deferredRetirement    = deferred;
     if (scheduler.Submit(job, options, state.ticket) != S_OK || job)
         SetupFailure("submit");
 }
@@ -178,16 +175,13 @@ void TestGeometryAndWeakOwners()
     Submit(scheduler, state);
     Settle(scheduler);
     Expect(state.result == S_OK && state.called && state.made, "completed-authenticates-original-ticket");
-    Expect(state.output->Bytes() == kOutput && state.temporary->Bytes() == kWhole - kOutput,
-           "two-immutable-parts-sum-to-original");
-    Expect(scheduler.ReservedMemoryBytes() == kWhole && state.output->ResidentBytes() == kWhole,
-           "transfer-never-refunds-original");
-    Expect(state.output->BoundTo(scheduler, state.ticket) && state.temporary->BoundTo(scheduler, state.ticket),
-           "both-parts-retain-exact-endpoint-and-ticket");
+    Expect(state.output->Bytes() == kOutput && state.temporary->Bytes() == kWhole - kOutput, "two-immutable-parts-sum-to-original");
+    Expect(scheduler.ReservedMemoryBytes() == kWhole && state.output->ResidentBytes() == kWhole, "transfer-never-refunds-original");
+    Expect(state.output->BoundTo(scheduler, state.ticket) && state.temporary->BoundTo(scheduler, state.ticket), "both-parts-retain-exact-endpoint-and-ticket");
     Expect(state.queriesBefore == state.queriesAfter, "partition-queries-no-new-memory-snapshot");
-    auto weakGeometry = state.geometry->WeakStorageForTest();
-    auto copied = *state.geometry;
-    auto weakOutput = std::weak_ptr<SharedPublicationMemory>(state.output);
+    auto weakGeometry  = state.geometry->WeakStorageForTest();
+    auto copied        = *state.geometry;
+    auto weakOutput    = std::weak_ptr<SharedPublicationMemory>(state.output);
     auto weakTemporary = std::weak_ptr<SharedPublicationMemory>(state.temporary);
     state.output.reset();
     std::thread releaseTemporary([&] { state.temporary.reset(); });
@@ -196,16 +190,14 @@ void TestGeometryAndWeakOwners()
     Expect(scheduler.ReservedMemoryBytes() == kWhole, "temporary-weak-control-keeps-entire-charge");
     weakTemporary.reset();
     Settle(scheduler);
-    Expect(scheduler.ReservedMemoryBytes() == kOutput && copied.PointCount() == 4 && copied[0][2].x == 2 &&
-               copied[0][2].y == 2,
+    Expect(scheduler.ReservedMemoryBytes() == kOutput && copied.PointCount() == 4 && copied[0][2].x == 2 && copied[0][2].y == 2,
            "temporary-refund-leaves-exact-live-geometry-charge");
     state.geometry.reset();
     Settle(scheduler);
-    Expect(scheduler.ReservedMemoryBytes() == kOutput && copied.PointCount() == 4,
-           "copied-history-reader-remains-readable-and-charged");
+    Expect(scheduler.ReservedMemoryBytes() == kOutput && copied.PointCount() == 4, "copied-history-reader-remains-readable-and-charged");
     copied = {};
     Settle(scheduler);
-    Expect(weakGeometry.expired() && !weakOutput.expired(), "actual-worker-geometry-destruction-keeps-weak-accounting");
+    Expect(weakGeometry.expired() && ! weakOutput.expired(), "actual-worker-geometry-destruction-keeps-weak-accounting");
     weakOutput.reset();
     Expect(scheduler.ReservedMemoryBytes() == kOutput, "geometry-weak-control-survives-accounting-weak-drop");
     weakGeometry.reset();
@@ -224,30 +216,27 @@ void TestIndependentAcknowledgements()
         Settle(scheduler);
         state.geometry.reset();
         Settle(scheduler);
-        std::thread first(
-            [&]
-            {
-                if (temporaryFirst)
-                    state.temporary.reset();
-                else
-                    state.output.reset();
-            });
+        std::thread first([&]
+        {
+            if (temporaryFirst)
+                state.temporary.reset();
+            else
+                state.output.reset();
+        });
         first.join();
         Settle(scheduler);
         Expect(scheduler.ReservedMemoryBytes() == (temporaryFirst ? kOutput : kWhole - kOutput),
                temporaryFirst ? "temporary-first-exact-ack" : "output-first-exact-ack");
-        std::thread second(
-            [&]
-            {
-                if (temporaryFirst)
-                    state.output.reset();
-                else
-                    state.temporary.reset();
-            });
+        std::thread second([&]
+        {
+            if (temporaryFirst)
+                state.output.reset();
+            else
+                state.temporary.reset();
+        });
         second.join();
         Settle(scheduler);
-        Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.IsIdle(),
-               temporaryFirst ? "temporary-first-final-ack" : "output-first-final-ack");
+        Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.IsIdle(), temporaryFirst ? "temporary-first-final-ack" : "output-first-final-ack");
         scheduler.Close();
     }
     JobScheduler scheduler;
@@ -262,23 +251,20 @@ void TestIndependentAcknowledgements()
     for (auto& state : states)
         state.geometry.reset();
     Settle(scheduler);
-    std::thread a(
-        [&]
-        {
-            for (auto& state : states)
-                state.output.reset();
-        });
-    std::thread b(
-        [&]
-        {
-            for (auto& state : states)
-                state.temporary.reset();
-        });
+    std::thread a([&]
+    {
+        for (auto& state : states)
+            state.output.reset();
+    });
+    std::thread b([&]
+    {
+        for (auto& state : states)
+            state.temporary.reset();
+    });
     a.join();
     b.join();
     Settle(scheduler);
-    Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.IsIdle(),
-           "simultaneous-two-word-acks-return-exact-aggregate");
+    Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.IsIdle(), "simultaneous-two-word-acks-return-exact-aggregate");
     State next;
     Submit(scheduler, next);
     Settle(scheduler);
@@ -307,8 +293,7 @@ void TestRefusals()
             state.workerResult = {JobStatus::Failed, E_FAIL};
         Submit(scheduler, state, mode != 5, mode != 6);
         Settle(scheduler);
-        Expect(state.result < 0 && !state.output->IsBound() && !state.temporary->IsBound() &&
-                   scheduler.ReservedMemoryBytes() == 0,
+        Expect(state.result < 0 && ! state.output->IsBound() && ! state.temporary->IsBound() && scheduler.ReservedMemoryBytes() == 0,
                "invalid-transfer-preserves-both-empty-outputs");
         Clear(state, scheduler);
         scheduler.Close();
@@ -319,8 +304,8 @@ void TestRefusals()
     Submit(scheduler, state);
     Settle(scheduler);
     auto extra = SharedPublicationMemory::CreateForWork();
-    Expect(state.output->BindPartitionedAfterCompletedWork(scheduler, state.ticket, kOutput, *extra) < 0 &&
-               !extra->IsBound() && scheduler.ReservedMemoryBytes() == kWhole,
+    Expect(state.output->BindPartitionedAfterCompletedWork(scheduler, state.ticket, kOutput, *extra) < 0 && ! extra->IsBound() &&
+               scheduler.ReservedMemoryBytes() == kWhole,
            "outside-and-repeat-transfer-refused");
     Clear(state, scheduler);
     extra.reset();
@@ -342,14 +327,13 @@ void TestPublicationFailureAndClose()
         else
         {
             const auto deadline = GetTickCount64() + 10000;
-            while (!state.called && !(route == Route::Close && state.suspended))
+            while (! state.called && ! (route == Route::Close && state.suspended))
             {
                 (void)DrainCompletions(scheduler);
                 if (state.called || (route == Route::Close && state.suspended))
                     break;
                 const auto now = GetTickCount64();
-                if (now >= deadline || WaitForSingleObject(static_cast<HANDLE>(scheduler.WakeHandle()),
-                                                           static_cast<DWORD>(deadline - now)) != WAIT_OBJECT_0)
+                if (now >= deadline || WaitForSingleObject(static_cast<HANDLE>(scheduler.WakeHandle()), static_cast<DWORD>(deadline - now)) != WAIT_OBJECT_0)
                     SetupFailure("suspended");
             }
         }
@@ -359,7 +343,7 @@ void TestPublicationFailureAndClose()
                "publication-failed-terminal-and-joined-close-retain-both-parts");
         if (route == Route::Publication)
             Expect(state.wrong < 0, "publication-refuses-completed-only-authority");
-        Expect(state.output->ResidentBytes() == kWhole && !state.output->BoundTo(scheduler, state.ticket),
+        Expect(state.output->ResidentBytes() == kWhole && ! state.output->BoundTo(scheduler, state.ticket),
                "closed-scheduler-keeps-independent-endpoint-residency");
         auto diagnostic = state.output;
         state.geometry.reset();
@@ -377,10 +361,10 @@ void TestCancelledOriginalAndGrowth()
         Start(scheduler);
         wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
         wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-        if (!entered || !release)
+        if (! entered || ! release)
             SetupFailure("events");
         State state;
-        state.route = Route::Retirement;
+        state.route   = Route::Retirement;
         state.entered = entered.get();
         state.release = release.get();
         Submit(scheduler, state);
@@ -389,8 +373,8 @@ void TestCancelledOriginalAndGrowth()
         Expect(scheduler.Cancel(state.ticket), "original-running-cancel-accepted");
         (void)SetEvent(release.get());
         Settle(scheduler);
-        Expect(state.completed.status == JobStatus::Cancelled && state.result == S_OK &&
-                   state.output->Bytes() == kOutput && state.temporary->Bytes() == kWhole - kOutput,
+        Expect(state.completed.status == JobStatus::Cancelled && state.result == S_OK && state.output->Bytes() == kOutput &&
+                   state.temporary->Bytes() == kWhole - kOutput,
                "actual-cancelled-original-permits-destruction-accounting-only");
         Clear(state, scheduler);
         Expect(scheduler.ReservedMemoryBytes() == 0, "cancelled-both-parts-last-owner-ack");
@@ -401,15 +385,14 @@ void TestCancelledOriginalAndGrowth()
         Start(scheduler);
         State state;
         SharedRetainedMemoryLease output, temporary;
-        state.uniqueOutput = &output;
+        state.uniqueOutput    = &output;
         state.uniqueTemporary = &temporary;
         Submit(scheduler, state);
         Settle(scheduler);
         const auto before = memoryQueries;
         Expect(state.result == S_OK && scheduler.IncreaseRetainedReservation(output, kOutput + 1) < 0 &&
-                   scheduler.IncreaseRetainedReservation(temporary, kWhole - kOutput + 1) < 0 &&
-                   output.Bytes() == kOutput && temporary.Bytes() == kWhole - kOutput && memoryQueries == before &&
-                   scheduler.ReservedMemoryBytes() == kWhole,
+                   scheduler.IncreaseRetainedReservation(temporary, kWhole - kOutput + 1) < 0 && output.Bytes() == kOutput &&
+                   temporary.Bytes() == kWhole - kOutput && memoryQueries == before && scheduler.ReservedMemoryBytes() == kWhole,
                "partitioned-leases-refuse-growth-without-query-or-change");
         state.geometry.reset();
         state.output.reset();

@@ -12,7 +12,7 @@
 namespace Localization
 {
 inline constexpr wchar_t kSatelliteFolder[] = L"Languages";
-inline constexpr wchar_t kSatelliteName[] = L"RedPrism.resources.dll";
+inline constexpr wchar_t kSatelliteName[]   = L"RedPrism.resources.dll";
 // The language of the table embedded in RedPrism.exe.
 inline constexpr std::wstring_view kEmbeddedLanguage = L"en";
 

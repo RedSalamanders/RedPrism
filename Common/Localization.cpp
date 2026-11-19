@@ -41,9 +41,9 @@ void AddTagFamily(std::vector<std::wstring>& out, std::wstring_view directory, s
 [[nodiscard]] bool IsEmbeddedLanguage(std::wstring_view tag) noexcept
 {
     const std::wstring_view primary = tag.substr(0, tag.find(L'-'));
-    return primary.size() == kEmbeddedLanguage.size() &&
-           std::equal(primary.begin(), primary.end(), kEmbeddedLanguage.begin(),
-                      [](wchar_t left, wchar_t right) { return std::towlower(left) == std::towlower(right); });
+    return primary.size() == kEmbeddedLanguage.size() && std::equal(primary.begin(), primary.end(), kEmbeddedLanguage.begin(), [](wchar_t left, wchar_t right) {
+        return std::towlower(left) == std::towlower(right);
+    });
 }
 } // namespace
 
@@ -51,7 +51,7 @@ std::vector<std::wstring> SystemUiLanguages()
 {
     std::vector<std::wstring> languages;
     ULONG count = 0;
-    ULONG size = 0;
+    ULONG size  = 0;
     if (GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, nullptr, &size) && size > 1)
     {
         std::wstring buffer(size, L'\0');
@@ -81,18 +81,19 @@ std::vector<std::wstring> SystemUiLanguages()
     return languages;
 }
 
-std::vector<std::wstring> SatelliteCandidates(std::wstring_view executableDirectory, std::wstring_view preferredTag,
+std::vector<std::wstring> SatelliteCandidates(std::wstring_view executableDirectory,
+                                              std::wstring_view preferredTag,
                                               const std::vector<std::wstring>& systemLanguages)
 {
     std::vector<std::wstring> candidates;
     std::wstring_view directory = executableDirectory;
-    while (!directory.empty() && (directory.back() == L'\\' || directory.back() == L'/'))
+    while (! directory.empty() && (directory.back() == L'\\' || directory.back() == L'/'))
     {
         directory.remove_suffix(1);
     }
     // The embedded table is English: an English tag ends the list (after a regional English table, if one ships),
     // so `language: "en"` or an English display language ahead of another one keeps the English strings.
-    if (!preferredTag.empty())
+    if (! preferredTag.empty())
     {
         AddTagFamily(candidates, directory, preferredTag);
         if (IsEmbeddedLanguage(preferredTag))
@@ -119,8 +120,7 @@ HMODULE LoadSatelliteModule(const std::vector<std::wstring>& candidates) noexcep
         {
             continue;
         }
-        if (const HMODULE module =
-                LoadLibraryExW(path.c_str(), nullptr, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE))
+        if (const HMODULE module = LoadLibraryExW(path.c_str(), nullptr, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE))
         {
             return module;
         }

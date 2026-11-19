@@ -25,21 +25,24 @@ namespace
 {
 // Optional thread-local/ETW diagnostics. No active sink/provider means no clock read or allocation.
 // Nested resource scopes are inclusive and must never be summed to infer frame duration.
-HRESULT TimedCreateTexture2D(_In_ ID3D11Device* device, _In_ const D3D11_TEXTURE2D_DESC* description,
+HRESULT TimedCreateTexture2D(_In_ ID3D11Device* device,
+                             _In_ const D3D11_TEXTURE2D_DESC* description,
                              _In_opt_ const D3D11_SUBRESOURCE_DATA* initial,
                              _COM_Outptr_ ID3D11Texture2D** texture) noexcept
 {
     const ScopedUiTiming timing{UiTimingKind::TextureCreate, 2};
     return device->CreateTexture2D(description, initial, texture);
 }
-HRESULT TimedCreateTexture3D(_In_ ID3D11Device* device, _In_ const D3D11_TEXTURE3D_DESC* description,
+HRESULT TimedCreateTexture3D(_In_ ID3D11Device* device,
+                             _In_ const D3D11_TEXTURE3D_DESC* description,
                              _In_opt_ const D3D11_SUBRESOURCE_DATA* initial,
                              _COM_Outptr_ ID3D11Texture3D** texture) noexcept
 {
     const ScopedUiTiming timing{UiTimingKind::TextureCreate, 3};
     return device->CreateTexture3D(description, initial, texture);
 }
-HRESULT TimedCreateShaderResourceView(_In_ ID3D11Device* device, _In_ ID3D11Resource* texture,
+HRESULT TimedCreateShaderResourceView(_In_ ID3D11Device* device,
+                                      _In_ ID3D11Resource* texture,
                                       _In_opt_ const D3D11_SHADER_RESOURCE_VIEW_DESC* description,
                                       _COM_Outptr_ ID3D11ShaderResourceView** view) noexcept
 {
@@ -63,24 +66,24 @@ constexpr std::size_t kUploadBandBytes = std::size_t{8} << 20;
 [[nodiscard]] D3D11_VIEWPORT MakeViewport(UINT width, UINT height) noexcept
 {
     D3D11_VIEWPORT viewport{};
-    viewport.Width = static_cast<float>(width);
-    viewport.Height = static_cast<float>(height);
+    viewport.Width    = static_cast<float>(width);
+    viewport.Height   = static_cast<float>(height);
     viewport.MaxDepth = 1.0f;
     return viewport;
 }
 
 void FillTransform(const LayerTransform& transform, float* center, float* size, float* sinCos, float* flip) noexcept
 {
-    const Vec2 middle = transform.Center();
-    center[0] = static_cast<float>(middle.x);
-    center[1] = static_cast<float>(middle.y);
-    size[0] = static_cast<float>(transform.size.x);
-    size[1] = static_cast<float>(transform.size.y);
+    const Vec2 middle    = transform.Center();
+    center[0]            = static_cast<float>(middle.x);
+    center[1]            = static_cast<float>(middle.y);
+    size[0]              = static_cast<float>(transform.size.x);
+    size[1]              = static_cast<float>(transform.size.y);
     const double radians = std::fmod(transform.rotation, 360.0) * kPi / 180.0;
-    sinCos[0] = static_cast<float>(std::sin(radians));
-    sinCos[1] = static_cast<float>(std::cos(radians));
-    flip[0] = transform.flipX ? -1.0f : 1.0f;
-    flip[1] = transform.flipY ? -1.0f : 1.0f;
+    sinCos[0]            = static_cast<float>(std::sin(radians));
+    sinCos[1]            = static_cast<float>(std::cos(radians));
+    flip[0]              = transform.flipX ? -1.0f : 1.0f;
+    flip[1]              = transform.flipY ? -1.0f : 1.0f;
 }
 
 [[nodiscard]] bool HasEnabledMask(const ImageLayer& layer) noexcept
@@ -93,17 +96,13 @@ void FillTransform(const LayerTransform& transform, float* center, float* size, 
 {
     switch (kind)
     {
-    case AdjustmentKind::Hsv:
-        return kCompositionAdjustCube;
-    case AdjustmentKind::GradientMap:
-        return kCompositionAdjustGradientMap;
-    case AdjustmentKind::Grain:
-        return kCompositionAdjustGrain;
-    case AdjustmentKind::Levels:
-    case AdjustmentKind::Curves:
-    case AdjustmentKind::Exposure:
-    default:
-        return kCompositionAdjustTables;
+        case AdjustmentKind::Hsv: return kCompositionAdjustCube;
+        case AdjustmentKind::GradientMap: return kCompositionAdjustGradientMap;
+        case AdjustmentKind::Grain: return kCompositionAdjustGrain;
+        case AdjustmentKind::Levels:
+        case AdjustmentKind::Curves:
+        case AdjustmentKind::Exposure:
+        default: return kCompositionAdjustTables;
     }
 }
 
@@ -123,7 +122,7 @@ void FillTransform(const LayerTransform& transform, float* center, float* size, 
         {
             break;
         }
-        width = std::max<std::uint64_t>(1, width / 2);
+        width  = std::max<std::uint64_t>(1, width / 2);
         height = std::max<std::uint64_t>(1, height / 2);
     }
     return texels;
@@ -132,8 +131,8 @@ void FillTransform(const LayerTransform& transform, float* center, float* size, 
 // Averages `scale` x `scale` blocks of `width` x `height` pixels (`channels` bytes each, rows `stride` bytes apart)
 // into texels (rows `outStride` bytes apart). A block cut by the right or bottom edge averages the pixels it has.
 // Premultiplied colors average correctly as they are.
-void ReduceBlocks(const std::uint8_t* rows, std::size_t stride, int width, int height, int channels, int scale,
-                  std::uint8_t* out, std::size_t outStride) noexcept
+void ReduceBlocks(
+    const std::uint8_t* rows, std::size_t stride, int width, int height, int channels, int scale, std::uint8_t* out, std::size_t outStride) noexcept
 {
     const int texelsX = CeilDiv(width, scale);
     const int texelsY = CeilDiv(height, scale);
@@ -148,8 +147,7 @@ void ReduceBlocks(const std::uint8_t* rows, std::size_t stride, int width, int h
             std::array<std::uint32_t, 4> sums{};
             for (int y = y0; y < y1; ++y)
             {
-                const std::uint8_t* pixel =
-                    rows + static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x0) * channels;
+                const std::uint8_t* pixel = rows + static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x0) * channels;
                 for (int x = x0; x < x1; ++x)
                 {
                     for (int c = 0; c < channels; ++c)
@@ -160,8 +158,7 @@ void ReduceBlocks(const std::uint8_t* rows, std::size_t stride, int width, int h
                 }
             }
             const std::uint32_t count = static_cast<std::uint32_t>((y1 - y0) * (x1 - x0));
-            std::uint8_t* texel =
-                out + static_cast<std::size_t>(ty) * outStride + static_cast<std::size_t>(tx) * channels;
+            std::uint8_t* texel       = out + static_cast<std::size_t>(ty) * outStride + static_cast<std::size_t>(tx) * channels;
             for (int c = 0; c < channels; ++c)
             {
                 texel[c] = static_cast<std::uint8_t>((sums[static_cast<std::size_t>(c)] + count / 2) / count);
@@ -178,27 +175,25 @@ CanvasRenderer::~CanvasRenderer()
 
 void CanvasRenderer::ReleaseDocumentSurfaces() noexcept
 {
-    _recordedDisplaySealed = false;
-    _recordedOwnerThread = 0;
+    _recordedDisplaySealed    = false;
+    _recordedOwnerThread      = 0;
     _adjustmentPreviewSurface = {};
-    _adjustmentPreviewDirty = true;
+    _adjustmentPreviewDirty   = true;
     for (auto& [id, texture] : _rasters)
         texture.displayResident = false;
     for (auto& texture : _regions)
         texture.displayResident = false;
     for (auto& [id, texture] : _adjustments)
         texture.displayResident = false;
-    const auto unused = [this](const auto& entry) noexcept
-    { return _utilityUsers == 0 || entry.second.lastUse != _lastUtilityComposeId; };
+    const auto unused = [this](const auto& entry) noexcept { return _utilityUsers == 0 || entry.second.lastUse != _lastUtilityComposeId; };
     std::erase_if(_rasters, unused);
-    std::erase_if(_regions, [this](const GpuTexture& entry) noexcept
-                  { return _utilityUsers == 0 || entry.lastUse != _lastUtilityComposeId; });
+    std::erase_if(_regions, [this](const GpuTexture& entry) noexcept { return _utilityUsers == 0 || entry.lastUse != _lastUtilityComposeId; });
     std::erase_if(_adjustments, unused);
     _strokeTexture = {};
-    _canvas[0] = {};
-    _canvas[1] = {};
-    _stack[0] = {};
-    _stack[1] = {};
+    _canvas[0]     = {};
+    _canvas[1]     = {};
+    _stack[0]      = {};
+    _stack[1]      = {};
     _coverage.clear();
     _coverageUsed = 0;
     _byId.clear();
@@ -206,17 +201,17 @@ void CanvasRenderer::ReleaseDocumentSurfaces() noexcept
     _groupCoverageIndex.clear();
     _renderIds.clear();
     _consumed.clear();
-    _scratch = {};
-    _canvasWidth = 0;
-    _canvasHeight = 0;
-    _canvasHasMips = false;
+    _scratch         = {};
+    _canvasWidth     = 0;
+    _canvasHeight    = 0;
+    _canvasHasMips   = false;
     _canvasMipsStale = false;
-    _viewOriginX = 0;
-    _viewOriginY = 0;
-    _viewScale = 1;
-    _front = 0;
-    _stackFront = 0;
-    _documentDirty = true;
+    _viewOriginX     = 0;
+    _viewOriginY     = 0;
+    _viewScale       = 1;
+    _front           = 0;
+    _stackFront      = 0;
+    _documentDirty   = true;
 }
 
 void CanvasRenderer::ReleaseDeviceResources() noexcept
@@ -232,8 +227,8 @@ void CanvasRenderer::ReleaseDeviceResources() noexcept
     _blitPixelShader.reset();
     _pixelShader.reset();
     _vertexShader.reset();
-    _context = nullptr;
-    _device = nullptr;
+    _context           = nullptr;
+    _device            = nullptr;
     _recordingCommands = nullptr;
 }
 
@@ -255,19 +250,19 @@ bool CanvasRenderer::AcquireUtility() noexcept
 
 void CanvasRenderer::ReleaseUtility() noexcept
 {
-    assert(_utilityUsers != 0 && !_utilityRecording);
+    assert(_utilityUsers != 0 && ! _utilityRecording);
     if (_utilityUsers != 0 && --_utilityUsers == 0)
         ReleaseUtilitySurfaces();
 }
 
 void CanvasRenderer::ReleaseUtilitySurfaces() noexcept
 {
-    assert(!_utilityRecording);
-    _utilityView = {};
+    assert(! _utilityRecording);
+    _utilityView          = {};
     _lastUtilityComposeId = 0;
-    std::erase_if(_rasters, [](const auto& entry) noexcept { return !entry.second.displayResident; });
-    std::erase_if(_regions, [](const GpuTexture& entry) noexcept { return !entry.displayResident; });
-    std::erase_if(_adjustments, [](const auto& entry) noexcept { return !entry.second.displayResident; });
+    std::erase_if(_rasters, [](const auto& entry) noexcept { return ! entry.second.displayResident; });
+    std::erase_if(_regions, [](const GpuTexture& entry) noexcept { return ! entry.displayResident; });
+    std::erase_if(_adjustments, [](const auto& entry) noexcept { return ! entry.second.displayResident; });
 }
 
 void CanvasRenderer::SwapUtilityView() noexcept
@@ -297,49 +292,48 @@ void CanvasRenderer::SwapUtilityView() noexcept
     swap(_documentDirty, _utilityView.documentDirty);
 }
 
-HRESULT CanvasRenderer::ComposeUtilityTile(const CanvasDocument& document, const D3D11_BOX& documentRegion,
+HRESULT CanvasRenderer::ComposeUtilityTile(const CanvasDocument& document,
+                                           const D3D11_BOX& documentRegion,
                                            wil::com_ptr_nothrow<ID3D11Texture2D>& texture) noexcept
 {
     texture.reset();
-    if (!_device || !_context || _utilityUsers == 0 || _utilityRecording)
+    if (! _device || ! _context || _utilityUsers == 0 || _utilityRecording)
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
-    if (document.width < 1 || document.height < 1 || document.width > kMaxCanvasSide ||
-        document.height > kMaxCanvasSide || documentRegion.front != 0 || documentRegion.back != 1 ||
-        documentRegion.right <= documentRegion.left || documentRegion.bottom <= documentRegion.top ||
-        documentRegion.right > static_cast<UINT>(document.width) ||
-        documentRegion.bottom > static_cast<UINT>(document.height) ||
+    if (document.width < 1 || document.height < 1 || document.width > kMaxCanvasSide || document.height > kMaxCanvasSide || documentRegion.front != 0 ||
+        documentRegion.back != 1 || documentRegion.right <= documentRegion.left || documentRegion.bottom <= documentRegion.top ||
+        documentRegion.right > static_cast<UINT>(document.width) || documentRegion.bottom > static_cast<UINT>(document.height) ||
         documentRegion.right - documentRegion.left > static_cast<UINT>(_textureLimit) ||
         documentRegion.bottom - documentRegion.top > static_cast<UINT>(_textureLimit))
         return E_INVALIDARG;
     const bool previousIgnoreStroke = _ignoreStroke;
-    _ignoreStroke = true;
-    _utilityRecording = true;
+    _ignoreStroke                   = true;
+    _utilityRecording               = true;
     SwapUtilityView();
-    const auto restore = wil::scope_exit(
-        [&]() noexcept
-        {
-            SwapUtilityView();
-            _utilityRecording = false;
-            _ignoreStroke = previousIgnoreStroke;
-        });
-    _documentWidth = document.width;
-    _documentHeight = document.height;
-    _displayScale = 1;
-    HRESULT result =
-        PrepareView(static_cast<int>(documentRegion.left), static_cast<int>(documentRegion.top), 1,
-                    documentRegion.right - documentRegion.left, documentRegion.bottom - documentRegion.top);
+    const auto restore = wil::scope_exit([&]() noexcept
+    {
+        SwapUtilityView();
+        _utilityRecording = false;
+        _ignoreStroke     = previousIgnoreStroke;
+    });
+    _documentWidth     = document.width;
+    _documentHeight    = document.height;
+    _displayScale      = 1;
+    HRESULT result     = PrepareView(static_cast<int>(documentRegion.left),
+                                     static_cast<int>(documentRegion.top),
+                                     1,
+                                     documentRegion.right - documentRegion.left,
+                                     documentRegion.bottom - documentRegion.top);
     if (SUCCEEDED(result))
         result = ComposeView(document);
     if (FAILED(result))
         return result;
-    texture = _canvas[_front].texture.texture;
+    texture               = _canvas[_front].texture.texture;
     _lastUtilityComposeId = _composeId;
     ++_utilityCompositeCount;
     return S_OK;
 }
 
-HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11DeviceContext* context,
-                                              GpuRecordingCommands* recording) noexcept
+HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11DeviceContext* context, GpuRecordingCommands* recording) noexcept
 {
     if (recording)
     {
@@ -347,100 +341,97 @@ HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11Device
         if (FAILED(policy))
             return policy;
     }
-    else if (!context || context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
+    else if (! context || context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
         return E_INVALIDARG;
     wil::com_ptr_nothrow<ID3D11Device> contextDevice;
     context->GetDevice(contextDevice.put());
-    if (!device || device != contextDevice.get())
+    if (! device || device != contextDevice.get())
         return E_INVALIDARG;
 
     static_assert(sizeof(LayerConstants) % 16 == 0);
     static_assert(sizeof(BlitConstants) % 16 == 0);
     ReleaseDeviceResources();
-    if (!device || !context)
+    if (! device || ! context)
     {
         return E_INVALIDARG;
     }
-    _recordingCommands = recording;
+    _recordingCommands     = recording;
     _recordedDisplaySealed = false;
-    _device = device;
-    _context = context;
+    _device                = device;
+    _context               = context;
 
-    HRESULT result = device->CreateVertexShader(g_CompositionVertexShader, sizeof(g_CompositionVertexShader), nullptr,
-                                                _vertexShader.put());
+    HRESULT result = device->CreateVertexShader(g_CompositionVertexShader, sizeof(g_CompositionVertexShader), nullptr, _vertexShader.put());
     if (FAILED(result))
     {
         return result;
     }
-    result = device->CreatePixelShader(g_CompositionPixelShader, sizeof(g_CompositionPixelShader), nullptr,
-                                       _pixelShader.put());
+    result = device->CreatePixelShader(g_CompositionPixelShader, sizeof(g_CompositionPixelShader), nullptr, _pixelShader.put());
     if (FAILED(result))
     {
         return result;
     }
-    result = device->CreatePixelShader(g_CompositionBlitPixelShader, sizeof(g_CompositionBlitPixelShader), nullptr,
-                                       _blitPixelShader.put());
+    result = device->CreatePixelShader(g_CompositionBlitPixelShader, sizeof(g_CompositionBlitPixelShader), nullptr, _blitPixelShader.put());
     if (FAILED(result))
     {
         return result;
     }
 
     D3D11_SAMPLER_DESC sampler{};
-    sampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sampler.Filter   = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
     sampler.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
     sampler.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
     sampler.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-    sampler.MaxLOD = D3D11_FLOAT32_MAX;
-    result = device->CreateSamplerState(&sampler, _linearSampler.put());
+    sampler.MaxLOD   = D3D11_FLOAT32_MAX;
+    result           = device->CreateSamplerState(&sampler, _linearSampler.put());
     if (FAILED(result))
     {
         return result;
     }
     sampler.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
-    result = device->CreateSamplerState(&sampler, _pointSampler.put());
+    result         = device->CreateSamplerState(&sampler, _pointSampler.put());
     if (FAILED(result))
     {
         return result;
     }
 
     D3D11_RASTERIZER_DESC raster{};
-    raster.FillMode = D3D11_FILL_SOLID;
-    raster.CullMode = D3D11_CULL_NONE;
+    raster.FillMode        = D3D11_FILL_SOLID;
+    raster.CullMode        = D3D11_CULL_NONE;
     raster.DepthClipEnable = TRUE;
-    raster.ScissorEnable = recording ? TRUE : FALSE;
-    result = device->CreateRasterizerState(&raster, _rasterizer.put());
+    raster.ScissorEnable   = recording ? TRUE : FALSE;
+    result                 = device->CreateRasterizerState(&raster, _rasterizer.put());
     if (FAILED(result))
     {
         return result;
     }
 
     D3D11_BUFFER_DESC constants{};
-    constants.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    constants.ByteWidth = sizeof(LayerConstants);
-    constants.Usage = D3D11_USAGE_DYNAMIC;
+    constants.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
+    constants.ByteWidth      = sizeof(LayerConstants);
+    constants.Usage          = D3D11_USAGE_DYNAMIC;
     constants.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-    result = device->CreateBuffer(&constants, nullptr, _layerConstants.put());
+    result                   = device->CreateBuffer(&constants, nullptr, _layerConstants.put());
     if (FAILED(result))
     {
         return result;
     }
     constants.ByteWidth = sizeof(BlitConstants);
-    result = device->CreateBuffer(&constants, nullptr, _blitConstants.put());
+    result              = device->CreateBuffer(&constants, nullptr, _blitConstants.put());
     if (FAILED(result))
     {
         return result;
     }
     D3D11_BLEND_DESC outlineBlend{};
-    auto& outlineTarget = outlineBlend.RenderTarget[0];
-    outlineTarget.BlendEnable = TRUE;
-    outlineTarget.SrcBlend = D3D11_BLEND_ONE;
-    outlineTarget.DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-    outlineTarget.BlendOp = D3D11_BLEND_OP_ADD;
-    outlineTarget.SrcBlendAlpha = D3D11_BLEND_ONE;
-    outlineTarget.DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
-    outlineTarget.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    auto& outlineTarget                 = outlineBlend.RenderTarget[0];
+    outlineTarget.BlendEnable           = TRUE;
+    outlineTarget.SrcBlend              = D3D11_BLEND_ONE;
+    outlineTarget.DestBlend             = D3D11_BLEND_INV_SRC_ALPHA;
+    outlineTarget.BlendOp               = D3D11_BLEND_OP_ADD;
+    outlineTarget.SrcBlendAlpha         = D3D11_BLEND_ONE;
+    outlineTarget.DestBlendAlpha        = D3D11_BLEND_INV_SRC_ALPHA;
+    outlineTarget.BlendOpAlpha          = D3D11_BLEND_OP_ADD;
     outlineTarget.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-    result = device->CreateBlendState(&outlineBlend, _selectionOutlineBlend.put());
+    result                              = device->CreateBlendState(&outlineBlend, _selectionOutlineBlend.put());
     if (FAILED(result))
         return result;
     _documentDirty = true;
@@ -451,22 +442,22 @@ HRESULT CanvasRenderer::CreateSurface(UINT width, UINT height, DXGI_FORMAT forma
 {
     surface = {};
     D3D11_TEXTURE2D_DESC description{};
-    description.Width = width;
-    description.Height = height;
-    description.MipLevels = mips ? 0u : 1u;
-    description.ArraySize = 1;
-    description.Format = format;
+    description.Width            = width;
+    description.Height           = height;
+    description.MipLevels        = mips ? 0u : 1u;
+    description.ArraySize        = 1;
+    description.Format           = format;
     description.SampleDesc.Count = 1;
-    description.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-    description.MiscFlags = mips ? D3D11_RESOURCE_MISC_GENERATE_MIPS : 0u;
-    HRESULT result = TimedCreateTexture2D(_device, &description, nullptr, surface.texture.texture.put());
+    description.BindFlags        = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    description.MiscFlags        = mips ? D3D11_RESOURCE_MISC_GENERATE_MIPS : 0u;
+    HRESULT result               = TimedCreateTexture2D(_device, &description, nullptr, surface.texture.texture.put());
     if (FAILED(result) && mips)
     {
         // Without generated mips the zoomed-out blit samples the top level only.
         description.MipLevels = 1;
         description.MiscFlags = 0;
-        result = TimedCreateTexture2D(_device, &description, nullptr, surface.texture.texture.put());
-        mips = false;
+        result                = TimedCreateTexture2D(_device, &description, nullptr, surface.texture.texture.put());
+        mips                  = false;
     }
     if (FAILED(result))
     {
@@ -483,14 +474,14 @@ HRESULT CanvasRenderer::CreateSurface(UINT width, UINT height, DXGI_FORMAT forma
     {
         return result;
     }
-    surface.texture.width = static_cast<int>(width);
-    surface.texture.height = static_cast<int>(height);
-    surface.texture.regionWidth = surface.texture.width;
+    surface.texture.width        = static_cast<int>(width);
+    surface.texture.height       = static_cast<int>(height);
+    surface.texture.regionWidth  = surface.texture.width;
     surface.texture.regionHeight = surface.texture.height;
-    surface.texture.sourceWidth = surface.texture.width;
+    surface.texture.sourceWidth  = surface.texture.width;
     surface.texture.sourceHeight = surface.texture.height;
-    surface.texture.gray = format == DXGI_FORMAT_R8_UNORM;
-    surface.texture.mipped = mips;
+    surface.texture.gray         = format == DXGI_FORMAT_R8_UNORM;
+    surface.texture.mipped       = mips;
     return S_OK;
 }
 
@@ -502,35 +493,35 @@ HRESULT CanvasRenderer::CreateCanvas(UINT width, UINT height) noexcept
     }
     _canvas[0] = {};
     _canvas[1] = {};
-    _stack[0] = {};
-    _stack[1] = {};
+    _stack[0]  = {};
+    _stack[1]  = {};
     _coverage.clear();
-    _coverageUsed = 0;
-    _canvasWidth = 0;
-    _canvasHeight = 0;
-    _canvasHasMips = false;
+    _coverageUsed    = 0;
+    _canvasWidth     = 0;
+    _canvasHeight    = 0;
+    _canvasHasMips   = false;
     _canvasMipsStale = false;
-    _documentDirty = true;
+    _documentDirty   = true;
     if (width == 0 || height == 0)
     {
         return S_OK;
     }
     // The canvases carry mips so a zoomed-out blit reduces sharply instead of aliasing (RF-412).
-    HRESULT result = CreateSurface(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, !_utilityRecording, _canvas[0]);
+    HRESULT result = CreateSurface(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, ! _utilityRecording, _canvas[0]);
     if (FAILED(result))
     {
         return result;
     }
-    result = CreateSurface(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, !_utilityRecording, _canvas[1]);
+    result = CreateSurface(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, ! _utilityRecording, _canvas[1]);
     if (FAILED(result))
     {
         _canvas[0] = {};
         return result;
     }
-    _canvasWidth = width;
-    _canvasHeight = height;
+    _canvasWidth   = width;
+    _canvasHeight  = height;
     _canvasHasMips = _canvas[0].texture.mipped && _canvas[1].texture.mipped;
-    _front = 0;
+    _front         = 0;
     return S_OK;
 }
 
@@ -586,36 +577,36 @@ HRESULT CanvasRenderer::CreateMippedTexture(int width, int height, bool gray, Gp
         return E_INVALIDARG;
     }
     D3D11_TEXTURE2D_DESC description{};
-    description.Width = static_cast<UINT>(width);
-    description.Height = static_cast<UINT>(height);
-    description.MipLevels = 0;
-    description.ArraySize = 1;
-    description.Format = gray ? DXGI_FORMAT_R8_UNORM : DXGI_FORMAT_B8G8R8A8_UNORM;
+    description.Width            = static_cast<UINT>(width);
+    description.Height           = static_cast<UINT>(height);
+    description.MipLevels        = 0;
+    description.ArraySize        = 1;
+    description.Format           = gray ? DXGI_FORMAT_R8_UNORM : DXGI_FORMAT_B8G8R8A8_UNORM;
     description.SampleDesc.Count = 1;
-    description.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-    description.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
-    HRESULT result = TimedCreateTexture2D(_device, &description, nullptr, gpu.texture.put());
-    bool mipped = true;
+    description.BindFlags        = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+    description.MiscFlags        = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+    HRESULT result               = TimedCreateTexture2D(_device, &description, nullptr, gpu.texture.put());
+    bool mipped                  = true;
     if (FAILED(result))
     {
         description.MipLevels = 1;
         description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
         description.MiscFlags = 0;
-        result = TimedCreateTexture2D(_device, &description, nullptr, gpu.texture.put());
-        mipped = false;
+        result                = TimedCreateTexture2D(_device, &description, nullptr, gpu.texture.put());
+        mipped                = false;
         if (FAILED(result))
         {
             return result;
         }
     }
-    gpu.width = width;
-    gpu.height = height;
-    gpu.regionWidth = width;
+    gpu.width        = width;
+    gpu.height       = height;
+    gpu.regionWidth  = width;
     gpu.regionHeight = height;
-    gpu.sourceWidth = width;
+    gpu.sourceWidth  = width;
     gpu.sourceHeight = height;
-    gpu.gray = gray;
-    gpu.mipped = mipped;
+    gpu.gray         = gray;
+    gpu.mipped       = mipped;
     return S_OK;
 }
 
@@ -629,26 +620,28 @@ void CanvasRenderer::GenerateMipsFor(const GpuTexture& gpu) noexcept
 
 std::array<float, 4> CanvasRenderer::RectFor(const GpuTexture& texture) noexcept
 {
-    const double sourceWidth = std::max(1, texture.sourceWidth);
-    const double sourceHeight = std::max(1, texture.sourceHeight);
-    const double coveredWidth = static_cast<double>(std::max(1, texture.width)) * std::max(1, texture.scale);
+    const double sourceWidth   = std::max(1, texture.sourceWidth);
+    const double sourceHeight  = std::max(1, texture.sourceHeight);
+    const double coveredWidth  = static_cast<double>(std::max(1, texture.width)) * std::max(1, texture.scale);
     const double coveredHeight = static_cast<double>(std::max(1, texture.height)) * std::max(1, texture.scale);
-    return {{static_cast<float>(texture.originX / sourceWidth), static_cast<float>(texture.originY / sourceHeight),
-             static_cast<float>(sourceWidth / coveredWidth), static_cast<float>(sourceHeight / coveredHeight)}};
+    return {{static_cast<float>(texture.originX / sourceWidth),
+             static_cast<float>(texture.originY / sourceHeight),
+             static_cast<float>(sourceWidth / coveredWidth),
+             static_cast<float>(sourceHeight / coveredHeight)}};
 }
 
 template <typename Reader> HRESULT CanvasRenderer::UploadRows(GpuTexture& gpu, Reader&& read) noexcept
 {
     const ScopedUiTiming timing{UiTimingKind::RasterUpload};
-    const int channels = gpu.gray ? 1 : 4;
-    const int scale = std::max(1, gpu.scale);
+    const int channels         = gpu.gray ? 1 : 4;
+    const int scale            = std::max(1, gpu.scale);
     const std::size_t rowBytes = static_cast<std::size_t>(gpu.regionWidth) * static_cast<std::size_t>(channels);
     if (rowBytes == 0 || gpu.width < 1 || gpu.height < 1 || gpu.regionHeight < 1)
     {
         return E_INVALIDARG;
     }
-    const std::size_t band = std::max<std::size_t>(1, kUploadBandBytes / (rowBytes * static_cast<std::size_t>(scale)));
-    const int texelRowsPerBand = static_cast<int>(std::min<std::size_t>(band, static_cast<std::size_t>(gpu.height)));
+    const std::size_t band          = std::max<std::size_t>(1, kUploadBandBytes / (rowBytes * static_cast<std::size_t>(scale)));
+    const int texelRowsPerBand      = static_cast<int>(std::min<std::size_t>(band, static_cast<std::size_t>(gpu.height)));
     const std::size_t texelRowBytes = static_cast<std::size_t>(gpu.width) * static_cast<std::size_t>(channels);
     std::vector<std::uint8_t> rows;
     std::vector<std::uint8_t> texels;
@@ -667,30 +660,25 @@ template <typename Reader> HRESULT CanvasRenderer::UploadRows(GpuTexture& gpu, R
     for (int texelRow = 0; texelRow < gpu.height; texelRow += texelRowsPerBand)
     {
         const int bandTexels = std::min(texelRowsPerBand, gpu.height - texelRow);
-        const int firstRow = texelRow * scale;
-        const int rowCount = std::min(bandTexels * scale, gpu.regionHeight - firstRow);
-        if constexpr (std::is_same_v<std::invoke_result_t<Reader&, int, int, int, int, std::uint8_t*, std::size_t>,
-                                     HRESULT>)
+        const int firstRow   = texelRow * scale;
+        const int rowCount   = std::min(bandTexels * scale, gpu.regionHeight - firstRow);
+        if constexpr (std::is_same_v<std::invoke_result_t<Reader&, int, int, int, int, std::uint8_t*, std::size_t>, HRESULT>)
         {
-            const HRESULT status =
-                read(gpu.originX, gpu.originY + firstRow, gpu.regionWidth, rowCount, rows.data(), rowBytes);
+            const HRESULT status = read(gpu.originX, gpu.originY + firstRow, gpu.regionWidth, rowCount, rows.data(), rowBytes);
             if (FAILED(status))
                 return status; // No upload from an incomplete source band.
         }
         else
             read(gpu.originX, gpu.originY + firstRow, gpu.regionWidth, rowCount, rows.data(), rowBytes);
         const std::uint8_t* data = rows.data();
-        std::size_t pitch = rowBytes;
+        std::size_t pitch        = rowBytes;
         if (scale > 1)
         {
-            ReduceBlocks(rows.data(), rowBytes, gpu.regionWidth, rowCount, channels, scale, texels.data(),
-                         texelRowBytes);
-            data = texels.data();
+            ReduceBlocks(rows.data(), rowBytes, gpu.regionWidth, rowCount, channels, scale, texels.data(), texelRowBytes);
+            data  = texels.data();
             pitch = texelRowBytes;
         }
-        const D3D11_BOX box{
-            0, static_cast<UINT>(texelRow), 0, static_cast<UINT>(gpu.width), static_cast<UINT>(texelRow + bandTexels),
-            1};
+        const D3D11_BOX box{0, static_cast<UINT>(texelRow), 0, static_cast<UINT>(gpu.width), static_cast<UINT>(texelRow + bandTexels), 1};
         UpdateRecorded(gpu.texture.get(), 0, &box, data, static_cast<UINT>(pitch), 0);
         if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
             return _recordingCommands->StatusForWork();
@@ -700,9 +688,9 @@ template <typename Reader> HRESULT CanvasRenderer::UploadRows(GpuTexture& gpu, R
 
 HRESULT CanvasRenderer::WriteTiles(GpuTexture& gpu, std::span<const RasterTile> tiles, bool gray) noexcept
 {
-    const int channels = gray ? 1 : 4;
-    const int scale = std::max(1, gpu.scale);
-    const int regionRight = gpu.originX + gpu.regionWidth;
+    const int channels     = gray ? 1 : 4;
+    const int scale        = std::max(1, gpu.scale);
+    const int regionRight  = gpu.originX + gpu.regionWidth;
     const int regionBottom = gpu.originY + gpu.regionHeight;
     for (const RasterTile& tile : tiles)
     {
@@ -712,24 +700,28 @@ HRESULT CanvasRenderer::WriteTiles(GpuTexture& gpu, std::span<const RasterTile> 
             return E_INVALIDARG;
         }
         // Only the part inside the region the texture holds.
-        const int left = std::max(gpu.originX, tile.x);
-        const int top = std::max(gpu.originY, tile.y);
-        const int right = std::min(regionRight, tile.x + tile.Width());
+        const int left   = std::max(gpu.originX, tile.x);
+        const int top    = std::max(gpu.originY, tile.y);
+        const int right  = std::min(regionRight, tile.x + tile.Width());
         const int bottom = std::min(regionBottom, tile.y + tile.Height());
         if (right <= left || bottom <= top)
         {
             continue;
         }
         const std::size_t stride = static_cast<std::size_t>(tile.pixels.Stride());
-        const auto at = [&](int x, int y) noexcept
+        const auto at            = [&](int x, int y) noexcept
         {
             return pixels + static_cast<std::size_t>(tile.sourceY + (y - tile.y)) * stride +
                    static_cast<std::size_t>(tile.sourceX + (x - tile.x)) * static_cast<std::size_t>(channels);
         };
         if (scale == 1)
         {
-            const D3D11_BOX box{static_cast<UINT>(left - gpu.originX),  static_cast<UINT>(top - gpu.originY),    0,
-                                static_cast<UINT>(right - gpu.originX), static_cast<UINT>(bottom - gpu.originY), 1};
+            const D3D11_BOX box{static_cast<UINT>(left - gpu.originX),
+                                static_cast<UINT>(top - gpu.originY),
+                                0,
+                                static_cast<UINT>(right - gpu.originX),
+                                static_cast<UINT>(bottom - gpu.originY),
+                                1};
             UpdateRecorded(gpu.texture.get(), 0, &box, at(left, top), static_cast<UINT>(stride), 0);
             if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
                 return _recordingCommands->StatusForWork();
@@ -737,21 +729,20 @@ HRESULT CanvasRenderer::WriteTiles(GpuTexture& gpu, std::span<const RasterTile> 
         }
         // Reduced: the texels whose whole block of pixels lies in the tile (a block the region's own edge cuts
         // short counts as whole). Stroke tiles start on the region's tile grid, so they cover their texels exactly.
-        const int texelLeft = CeilDiv(left - gpu.originX, scale);
-        const int texelTop = CeilDiv(top - gpu.originY, scale);
-        const int texelRight = right == regionRight ? gpu.width : (right - gpu.originX) / scale;
+        const int texelLeft   = CeilDiv(left - gpu.originX, scale);
+        const int texelTop    = CeilDiv(top - gpu.originY, scale);
+        const int texelRight  = right == regionRight ? gpu.width : (right - gpu.originX) / scale;
         const int texelBottom = bottom == regionBottom ? gpu.height : (bottom - gpu.originY) / scale;
         if (texelRight <= texelLeft || texelBottom <= texelTop)
         {
             continue;
         }
-        const int pixelLeft = gpu.originX + texelLeft * scale;
-        const int pixelTop = gpu.originY + texelTop * scale;
-        const int pixelRight = std::min(regionRight, gpu.originX + texelRight * scale);
-        const int pixelBottom = std::min(regionBottom, gpu.originY + texelBottom * scale);
-        const std::size_t texelRowBytes =
-            static_cast<std::size_t>(texelRight - texelLeft) * static_cast<std::size_t>(channels);
-        const std::size_t bytes = texelRowBytes * static_cast<std::size_t>(texelBottom - texelTop);
+        const int pixelLeft             = gpu.originX + texelLeft * scale;
+        const int pixelTop              = gpu.originY + texelTop * scale;
+        const int pixelRight            = std::min(regionRight, gpu.originX + texelRight * scale);
+        const int pixelBottom           = std::min(regionBottom, gpu.originY + texelBottom * scale);
+        const std::size_t texelRowBytes = static_cast<std::size_t>(texelRight - texelLeft) * static_cast<std::size_t>(channels);
+        const std::size_t bytes         = texelRowBytes * static_cast<std::size_t>(texelBottom - texelTop);
         if (_scratch.size() < bytes)
         {
             try
@@ -763,10 +754,8 @@ HRESULT CanvasRenderer::WriteTiles(GpuTexture& gpu, std::span<const RasterTile> 
                 return E_OUTOFMEMORY;
             }
         }
-        ReduceBlocks(at(pixelLeft, pixelTop), stride, pixelRight - pixelLeft, pixelBottom - pixelTop, channels, scale,
-                     _scratch.data(), texelRowBytes);
-        const D3D11_BOX box{static_cast<UINT>(texelLeft),  static_cast<UINT>(texelTop),    0,
-                            static_cast<UINT>(texelRight), static_cast<UINT>(texelBottom), 1};
+        ReduceBlocks(at(pixelLeft, pixelTop), stride, pixelRight - pixelLeft, pixelBottom - pixelTop, channels, scale, _scratch.data(), texelRowBytes);
+        const D3D11_BOX box{static_cast<UINT>(texelLeft), static_cast<UINT>(texelTop), 0, static_cast<UINT>(texelRight), static_cast<UINT>(texelBottom), 1};
         UpdateRecorded(gpu.texture.get(), 0, &box, _scratch.data(), static_cast<UINT>(texelRowBytes), 0);
         if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
             return _recordingCommands->StatusForWork();
@@ -774,16 +763,15 @@ HRESULT CanvasRenderer::WriteTiles(GpuTexture& gpu, std::span<const RasterTile> 
     return S_OK;
 }
 
-HRESULT CanvasRenderer::CreateSparseTexture(int width, int height, bool gray, const Raster& base, int baseX, int baseY,
-                                            std::uint8_t fill, std::span<const RasterTile> tiles,
-                                            GpuTexture& gpu) noexcept
+HRESULT CanvasRenderer::CreateSparseTexture(
+    int width, int height, bool gray, const Raster& base, int baseX, int baseY, std::uint8_t fill, std::span<const RasterTile> tiles, GpuTexture& gpu) noexcept
 {
     HRESULT result = CreateMippedTexture(width, height, gray, gpu);
     if (FAILED(result))
     {
         return result;
     }
-    if (!gpu.mipped)
+    if (! gpu.mipped)
     {
         // Without a render target there is nothing to clear into; the caller assembles the pixels instead.
         gpu = {};
@@ -818,16 +806,15 @@ HRESULT CanvasRenderer::CreateSparseTexture(int width, int height, bool gray, co
     ClearRecorded(target.get(), clear.data());
     if (baseTexture != nullptr)
     {
-        const int left = std::max(0, baseX);
-        const int top = std::max(0, baseY);
-        const int right = std::min(width, baseX + base.Width());
+        const int left   = std::max(0, baseX);
+        const int top    = std::max(0, baseY);
+        const int right  = std::min(width, baseX + base.Width());
         const int bottom = std::min(height, baseY + base.Height());
         if (right > left && bottom > top)
         {
-            const D3D11_BOX box{static_cast<UINT>(left - baseX),  static_cast<UINT>(top - baseY),    0,
-                                static_cast<UINT>(right - baseX), static_cast<UINT>(bottom - baseY), 1};
-            CopyRecorded(gpu.texture.get(), 0, static_cast<UINT>(left), static_cast<UINT>(top), 0,
-                         baseTexture->texture.get(), 0, &box);
+            const D3D11_BOX box{
+                static_cast<UINT>(left - baseX), static_cast<UINT>(top - baseY), 0, static_cast<UINT>(right - baseX), static_cast<UINT>(bottom - baseY), 1};
+            CopyRecorded(gpu.texture.get(), 0, static_cast<UINT>(left), static_cast<UINT>(top), 0, baseTexture->texture.get(), 0, &box);
         }
     }
     result = WriteTiles(gpu, tiles, gray);
@@ -850,15 +837,15 @@ HRESULT CanvasRenderer::UploadRaster(const Raster& raster, GpuTexture& gpu, bool
 {
     const ScopedUiTiming timing{UiTimingKind::RasterUpload};
     gpu = {};
-    if (!raster.HasStorage())
+    if (! raster.HasStorage())
     {
         return E_INVALIDARG;
     }
-    if (raster.IsSparse() && !raster.IsMaterialized())
+    if (raster.IsSparse() && ! raster.IsMaterialized())
     {
         // A painted layer: assembled on the GPU from its base texture and tiles, never as contiguous CPU bytes.
-        const HRESULT sparse = CreateSparseTexture(raster.Width(), raster.Height(), gray, raster.Base(), raster.BaseX(),
-                                                   raster.BaseY(), raster.Fill(), raster.Tiles(), gpu);
+        const HRESULT sparse =
+            CreateSparseTexture(raster.Width(), raster.Height(), gray, raster.Base(), raster.BaseX(), raster.BaseY(), raster.Fill(), raster.Tiles(), gpu);
         if (SUCCEEDED(sparse))
         {
             return S_OK;
@@ -890,7 +877,7 @@ HRESULT CanvasRenderer::UploadRaster(const Raster& raster, GpuTexture& gpu, bool
 
 HRESULT CanvasRenderer::TextureFor(const Raster& raster, bool gray, GpuTexture*& texture) noexcept
 {
-    texture = nullptr;
+    texture              = nullptr;
     const void* identity = raster.Identity();
     if (identity == nullptr)
     {
@@ -916,7 +903,7 @@ HRESULT CanvasRenderer::TextureFor(const Raster& raster, bool gray, GpuTexture*&
         }
     }
     found->second.lastUse = _composeId;
-    if (!_utilityRecording)
+    if (! _utilityRecording)
         found->second.displayResident = true;
     texture = &found->second;
     return S_OK;
@@ -925,69 +912,70 @@ HRESULT CanvasRenderer::TextureFor(const Raster& raster, bool gray, GpuTexture*&
 CanvasRenderer::DocumentWindow CanvasRenderer::CanvasWindow() const noexcept
 {
     DocumentWindow window;
-    window.x = _viewOriginX;
-    window.y = _viewOriginY;
-    window.width = static_cast<double>(_canvasWidth) * _viewScale;
+    window.x      = _viewOriginX;
+    window.y      = _viewOriginY;
+    window.width  = static_cast<double>(_canvasWidth) * _viewScale;
     window.height = static_cast<double>(_canvasHeight) * _viewScale;
-    window.scale = _viewScale;
+    window.scale  = _viewScale;
     return window;
 }
 
-bool CanvasRenderer::RegionFor(const LayerTransform& mapping, int width, int height, int align,
-                               const DocumentWindow& window, PixelRect& region, int& scale) const noexcept
+bool CanvasRenderer::RegionFor(
+    const LayerTransform& mapping, int width, int height, int align, const DocumentWindow& window, PixelRect& region, int& scale) const noexcept
 {
     region = {};
-    scale = 1;
+    scale  = 1;
     if (width < 1 || height < 1 || window.width <= 0 || window.height <= 0)
     {
         return false;
     }
     // The window's corners in raster pixels through the inverse of the placement (the shader's DocumentToUnit).
-    const Vec2 center = mapping.Center();
+    const Vec2 center    = mapping.Center();
     const double radians = std::fmod(mapping.rotation, 360.0) * kPi / 180.0;
-    const double sine = std::sin(radians);
-    const double cosine = std::cos(radians);
-    const double flipX = mapping.flipX ? -1.0 : 1.0;
-    const double flipY = mapping.flipY ? -1.0 : 1.0;
-    const double sizeX = std::max(std::fabs(mapping.size.x), 1e-5);
-    const double sizeY = std::max(std::fabs(mapping.size.y), 1e-5);
-    double minX = std::numeric_limits<double>::max();
-    double minY = std::numeric_limits<double>::max();
-    double maxX = std::numeric_limits<double>::lowest();
-    double maxY = std::numeric_limits<double>::lowest();
-    const std::array<Vec2, 4> corners{Vec2{window.x, window.y}, Vec2{window.x + window.width, window.y},
+    const double sine    = std::sin(radians);
+    const double cosine  = std::cos(radians);
+    const double flipX   = mapping.flipX ? -1.0 : 1.0;
+    const double flipY   = mapping.flipY ? -1.0 : 1.0;
+    const double sizeX   = std::max(std::fabs(mapping.size.x), 1e-5);
+    const double sizeY   = std::max(std::fabs(mapping.size.y), 1e-5);
+    double minX          = std::numeric_limits<double>::max();
+    double minY          = std::numeric_limits<double>::max();
+    double maxX          = std::numeric_limits<double>::lowest();
+    double maxY          = std::numeric_limits<double>::lowest();
+    const std::array<Vec2, 4> corners{Vec2{window.x, window.y},
+                                      Vec2{window.x + window.width, window.y},
                                       Vec2{window.x, window.y + window.height},
                                       Vec2{window.x + window.width, window.y + window.height}};
     for (const Vec2& corner : corners)
     {
-        const double dx = corner.x - center.x;
-        const double dy = corner.y - center.y;
+        const double dx     = corner.x - center.x;
+        const double dy     = corner.y - center.y;
         const double localX = (dx * cosine + dy * sine) * flipX;
         const double localY = (-dx * sine + dy * cosine) * flipY;
-        const double x = (localX / sizeX + 0.5) * width;
-        const double y = (localY / sizeY + 0.5) * height;
-        minX = std::min(minX, x);
-        minY = std::min(minY, y);
-        maxX = std::max(maxX, x);
-        maxY = std::max(maxY, y);
+        const double x      = (localX / sizeX + 0.5) * width;
+        const double y      = (localY / sizeY + 0.5) * height;
+        minX                = std::min(minX, x);
+        minY                = std::min(minY, y);
+        maxX                = std::max(maxX, x);
+        maxY                = std::max(maxY, y);
     }
     // Filtering reaches a little past a pixel's footprint: twice the raster pixels one canvas pixel spans, plus two.
     const double footprint = window.scale * std::max(width / sizeX, height / sizeY);
-    const double margin = std::ceil(2.0 * std::min(footprint, 1.0e6)) + 2.0;
-    const double left = std::clamp(std::floor(minX - margin), 0.0, static_cast<double>(width));
-    const double top = std::clamp(std::floor(minY - margin), 0.0, static_cast<double>(height));
-    const double right = std::clamp(std::ceil(maxX + margin), 0.0, static_cast<double>(width));
-    const double bottom = std::clamp(std::ceil(maxY + margin), 0.0, static_cast<double>(height));
-    if (!(right > left) || !(bottom > top))
+    const double margin    = std::ceil(2.0 * std::min(footprint, 1.0e6)) + 2.0;
+    const double left      = std::clamp(std::floor(minX - margin), 0.0, static_cast<double>(width));
+    const double top       = std::clamp(std::floor(minY - margin), 0.0, static_cast<double>(height));
+    const double right     = std::clamp(std::ceil(maxX + margin), 0.0, static_cast<double>(width));
+    const double bottom    = std::clamp(std::ceil(maxY + margin), 0.0, static_cast<double>(height));
+    if (! (right > left) || ! (bottom > top))
     {
         return false;
     }
     const int step = std::max(1, align);
-    const int x0 = static_cast<int>(left) / step * step;
-    const int y0 = static_cast<int>(top) / step * step;
-    const int x1 = std::min(width, CeilDiv(static_cast<int>(right), step) * step);
-    const int y1 = std::min(height, CeilDiv(static_cast<int>(bottom), step) * step);
-    region = PixelRect{x0, y0, x1 - x0, y1 - y0};
+    const int x0   = static_cast<int>(left) / step * step;
+    const int y0   = static_cast<int>(top) / step * step;
+    const int x1   = std::min(width, CeilDiv(static_cast<int>(right), step) * step);
+    const int y1   = std::min(height, CeilDiv(static_cast<int>(bottom), step) * step);
+    region         = PixelRect{x0, y0, x1 - x0, y1 - y0};
     while (CeilDiv(region.width, scale) > _textureLimit || CeilDiv(region.height, scale) > _textureLimit)
     {
         scale *= 2;
@@ -995,19 +983,17 @@ bool CanvasRenderer::RegionFor(const LayerTransform& mapping, int width, int hei
     return true;
 }
 
-HRESULT CanvasRenderer::RegionTextureFor(const Raster& raster, bool gray, const PixelRect& region, int scale,
-                                         GpuTexture*& texture) noexcept
+HRESULT CanvasRenderer::RegionTextureFor(const Raster& raster, bool gray, const PixelRect& region, int scale, GpuTexture*& texture) noexcept
 {
-    texture = nullptr;
+    texture              = nullptr;
     const void* identity = raster.Identity();
     for (GpuTexture& entry : _regions)
     {
-        if (entry.keepAlive.Identity() == identity && entry.gray == gray && entry.originX == region.x &&
-            entry.originY == region.y && entry.regionWidth == region.width && entry.regionHeight == region.height &&
-            entry.scale == scale)
+        if (entry.keepAlive.Identity() == identity && entry.gray == gray && entry.originX == region.x && entry.originY == region.y &&
+            entry.regionWidth == region.width && entry.regionHeight == region.height && entry.scale == scale)
         {
             entry.lastUse = _composeId;
-            if (!_utilityRecording)
+            if (! _utilityRecording)
                 entry.displayResident = true;
             texture = &entry;
             return S_OK;
@@ -1019,16 +1005,17 @@ HRESULT CanvasRenderer::RegionTextureFor(const Raster& raster, bool gray, const 
     {
         return result;
     }
-    gpu.originX = region.x;
-    gpu.originY = region.y;
-    gpu.regionWidth = region.width;
+    gpu.originX      = region.x;
+    gpu.originY      = region.y;
+    gpu.regionWidth  = region.width;
     gpu.regionHeight = region.height;
-    gpu.sourceWidth = raster.Width();
+    gpu.sourceWidth  = raster.Width();
     gpu.sourceHeight = raster.Height();
-    gpu.scale = scale;
+    gpu.scale        = scale;
     // Read through the raster (never Data(): a sparse raster stays unassembled), band by band.
-    result = UploadRows(gpu, [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept
-                        { raster.ReadRegion(x, y, width, height, out, static_cast<int>(stride), 0); });
+    result = UploadRows(gpu, [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept {
+        raster.ReadRegion(x, y, width, height, out, static_cast<int>(stride), 0);
+    });
     if (FAILED(result))
     {
         return result;
@@ -1039,9 +1026,9 @@ HRESULT CanvasRenderer::RegionTextureFor(const Raster& raster, bool gray, const 
         return result;
     }
     GenerateMipsFor(gpu);
-    gpu.keepAlive = raster;
-    gpu.lastUse = _composeId;
-    gpu.displayResident = !_utilityRecording;
+    gpu.keepAlive       = raster;
+    gpu.lastUse         = _composeId;
+    gpu.displayResident = ! _utilityRecording;
     try
     {
         _regions.push_back(std::move(gpu));
@@ -1054,11 +1041,10 @@ HRESULT CanvasRenderer::RegionTextureFor(const Raster& raster, bool gray, const 
     return S_OK;
 }
 
-HRESULT CanvasRenderer::RasterView(const Raster& raster, bool gray, const LayerTransform& mapping,
-                                   TextureView& view) noexcept
+HRESULT CanvasRenderer::RasterView(const Raster& raster, bool gray, const LayerTransform& mapping, TextureView& view) noexcept
 {
     view = {};
-    if (!raster.HasStorage())
+    if (! raster.HasStorage())
     {
         return E_INVALIDARG;
     }
@@ -1076,7 +1062,7 @@ HRESULT CanvasRenderer::RasterView(const Raster& raster, bool gray, const LayerT
     // Larger than the device: only the part the canvas window shows, reduced when that part is still too large.
     PixelRect region;
     int scale = 1;
-    if (!RegionFor(mapping, raster.Width(), raster.Height(), 1, CanvasWindow(), region, scale))
+    if (! RegionFor(mapping, raster.Width(), raster.Height(), 1, CanvasWindow(), region, scale))
     {
         return S_FALSE;
     }
@@ -1085,20 +1071,19 @@ HRESULT CanvasRenderer::RasterView(const Raster& raster, bool gray, const LayerT
     {
         return result;
     }
-    view.srv = texture->srv.get();
+    view.srv  = texture->srv.get();
     view.rect = RectFor(*texture);
     return S_OK;
 }
 
 bool CanvasRenderer::DrawsStrokeImage(const ImageLayer& layer) const noexcept
 {
-    return !_ignoreStroke && _stroke.has_value() && !_stroke->mask && _stroke->layerID == layer.id &&
-           _strokeTexture.srv;
+    return ! _ignoreStroke && _stroke.has_value() && ! _stroke->mask && _stroke->layerID == layer.id && _strokeTexture.srv;
 }
 
 bool CanvasRenderer::DrawsStrokeMask(const ImageLayer& layer) const noexcept
 {
-    return !_ignoreStroke && _stroke.has_value() && _stroke->mask && _stroke->layerID == layer.id && _strokeTexture.srv;
+    return ! _ignoreStroke && _stroke.has_value() && _stroke->mask && _stroke->layerID == layer.id && _strokeTexture.srv;
 }
 
 HRESULT CanvasRenderer::MaskView(const ImageLayer& layer, TextureView& view) noexcept
@@ -1106,11 +1091,11 @@ HRESULT CanvasRenderer::MaskView(const ImageLayer& layer, TextureView& view) noe
     view = {};
     if (DrawsStrokeMask(layer))
     {
-        view.srv = _strokeTexture.srv.get();
+        view.srv  = _strokeTexture.srv.get();
         view.rect = RectFor(_strokeTexture);
         return S_OK;
     }
-    if (!layer.mask.has_value())
+    if (! layer.mask.has_value())
     {
         return S_FALSE;
     }
@@ -1119,54 +1104,49 @@ HRESULT CanvasRenderer::MaskView(const ImageLayer& layer, TextureView& view) noe
 
 HRESULT CanvasRenderer::BeginStroke(const StrokePreview& preview) noexcept
 {
-    if (preview.width < 1 || preview.height < 1 ||
-        ((preview.warpSource || preview.pixelSource) && !_recordingCommands) ||
+    if (preview.width < 1 || preview.height < 1 || ((preview.warpSource || preview.pixelSource) && ! _recordingCommands) ||
         (preview.warpSource && preview.pixelSource))
     {
         return E_INVALIDARG;
     }
-    _stroke = preview;
+    _stroke        = preview;
     _strokeTexture = {};
     _documentDirty = true;
     return S_OK;
 }
 
-HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& document, const StrokePreview& preview,
+HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& document,
+                                                     const StrokePreview& preview,
                                                      std::span<const RasterTile> changed,
-                                                     const CanvasRenderer* publishedSeed, bool& inherited) noexcept
+                                                     const CanvasRenderer* publishedSeed,
+                                                     bool& inherited) noexcept
 {
     inherited = false;
-    if (!_recordingCommands || _recordedDisplaySealed || !_device || !_context ||
-        FAILED(_recordingCommands->ContextStatusForWork(_device, _context)) || document.width < 1 ||
-        document.height < 1 || document.width > kMaxCanvasSide || document.height > kMaxCanvasSide ||
-        preview.width < 1 || preview.height < 1 || preview.width > kMaxCanvasSide || preview.height > kMaxCanvasSide)
+    if (! _recordingCommands || _recordedDisplaySealed || ! _device || ! _context || FAILED(_recordingCommands->ContextStatusForWork(_device, _context)) ||
+        document.width < 1 || document.height < 1 || document.width > kMaxCanvasSide || document.height > kMaxCanvasSide || preview.width < 1 ||
+        preview.height < 1 || preview.width > kMaxCanvasSide || preview.height > kMaxCanvasSide)
         return E_INVALIDARG;
     const auto* target = document.layers.FindKey(preview.layerID);
-    if (!target || target->isGroup || target->adjustment || (preview.mask && !target->mask))
+    if (! target || target->isGroup || target->adjustment || (preview.mask && ! target->mask))
         return E_INVALIDARG;
     const auto expectedFormat = preview.mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888;
-    const Raster original = preview.mask ? target->mask->asset.image : target->asset ? target->asset->image : Raster{};
-    const bool uniformMask = preview.mask && !preview.source.HasStorage() && original.Width() == 1 &&
-                             original.Height() == 1 && original.Format() == RasterFormat::Gray8;
-    if ((!uniformMask && preview.source != original) ||
-        (preview.source.HasStorage() && preview.source.Format() != expectedFormat) || preview.sourceWidth < 0 ||
-        preview.sourceHeight < 0 || preview.sourceWidth > kMaxCanvasSide || preview.sourceHeight > kMaxCanvasSide ||
-        ((preview.sourceWidth == 0) != (preview.sourceHeight == 0)) ||
-        (!preview.source.HasStorage() && (preview.sourceWidth || preview.sourceHeight)))
+    const Raster original     = preview.mask ? target->mask->asset.image : target->asset ? target->asset->image : Raster{};
+    const bool uniformMask =
+        preview.mask && ! preview.source.HasStorage() && original.Width() == 1 && original.Height() == 1 && original.Format() == RasterFormat::Gray8;
+    if ((! uniformMask && preview.source != original) || (preview.source.HasStorage() && preview.source.Format() != expectedFormat) ||
+        preview.sourceWidth < 0 || preview.sourceHeight < 0 || preview.sourceWidth > kMaxCanvasSide || preview.sourceHeight > kMaxCanvasSide ||
+        ((preview.sourceWidth == 0) != (preview.sourceHeight == 0)) || (! preview.source.HasStorage() && (preview.sourceWidth || preview.sourceHeight)))
         return E_INVALIDARG;
-    if (preview.pixelSource && (!changed.empty() || !RecordedPixelPreviewMatchesForWork(document, preview)))
+    if (preview.pixelSource && (! changed.empty() || ! RecordedPixelPreviewMatchesForWork(document, preview)))
         return E_INVALIDARG;
     if (preview.warpSource)
     {
         const auto& source = preview.warpSource->source;
         WarpPreviewReader reader(preview.warpSource);
-        const LayerTransform documentGrid{
-            Vec2{0, 0}, Vec2{static_cast<double>(document.width), static_cast<double>(document.height)}};
-        if (preview.mask || !reader.IsValidForWork() || source.image != original ||
-            source.placement != target->transform || source.width != document.width ||
-            source.height != document.height || preview.width != document.width || preview.height != document.height ||
-            preview.transform != documentGrid || preview.sourceX || preview.sourceY || preview.sourceWidth ||
-            preview.sourceHeight || preview.fill)
+        const LayerTransform documentGrid{Vec2{0, 0}, Vec2{static_cast<double>(document.width), static_cast<double>(document.height)}};
+        if (preview.mask || ! reader.IsValidForWork() || source.image != original || source.placement != target->transform || source.width != document.width ||
+            source.height != document.height || preview.width != document.width || preview.height != document.height || preview.transform != documentGrid ||
+            preview.sourceX || preview.sourceY || preview.sourceWidth || preview.sourceHeight || preview.fill)
             return E_INVALIDARG;
     }
     if (uniformMask)
@@ -1178,39 +1158,34 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
     }
     // Validate every complete immutable tile before recording a prefix. No materialization is needed.
     for (const auto& tile : changed)
-        if (!tile.pixels.HasStorage() || tile.pixels.Format() != expectedFormat || tile.x < 0 || tile.y < 0 ||
-            tile.x > preview.width || tile.y > preview.height || tile.Width() < 1 || tile.Height() < 1 ||
-            tile.Width() > preview.width - tile.x || tile.Height() > preview.height - tile.y || tile.sourceX < 0 ||
-            tile.sourceY < 0 || tile.sourceX > tile.pixels.Width() || tile.sourceY > tile.pixels.Height() ||
-            tile.Width() > tile.pixels.Width() - tile.sourceX || tile.Height() > tile.pixels.Height() - tile.sourceY)
+        if (! tile.pixels.HasStorage() || tile.pixels.Format() != expectedFormat || tile.x < 0 || tile.y < 0 || tile.x > preview.width ||
+            tile.y > preview.height || tile.Width() < 1 || tile.Height() < 1 || tile.Width() > preview.width - tile.x ||
+            tile.Height() > preview.height - tile.y || tile.sourceX < 0 || tile.sourceY < 0 || tile.sourceX > tile.pixels.Width() ||
+            tile.sourceY > tile.pixels.Height() || tile.Width() > tile.pixels.Width() - tile.sourceX || tile.Height() > tile.pixels.Height() - tile.sourceY)
             return E_INVALIDARG;
-    _documentWidth = document.width;
-    _documentHeight = document.height;
-    _displayScale = ScaleToFit(document.width, document.height);
+    _documentWidth        = document.width;
+    _documentHeight       = document.height;
+    _displayScale         = ScaleToFit(document.width, document.height);
     bool compatibleStroke = false;
-    if (publishedSeed && publishedSeed->_stroke && !preview.pixelSource)
+    if (publishedSeed && publishedSeed->_stroke && ! preview.pixelSource)
     {
-        const auto& old = *publishedSeed->_stroke;
-        compatibleStroke = publishedSeed->_device == _device && publishedSeed->_recordedDisplaySealed &&
-                           publishedSeed->_strokeTexture.srv && publishedSeed->_documentWidth == document.width &&
-                           publishedSeed->_documentHeight == document.height &&
-                           publishedSeed->_displayScale == _displayScale && old.layerID == preview.layerID &&
-                           old.mask == preview.mask && old.width == preview.width && old.height == preview.height &&
-                           old.transform == preview.transform && old.source == preview.source &&
+        const auto& old  = *publishedSeed->_stroke;
+        compatibleStroke = publishedSeed->_device == _device && publishedSeed->_recordedDisplaySealed && publishedSeed->_strokeTexture.srv &&
+                           publishedSeed->_documentWidth == document.width && publishedSeed->_documentHeight == document.height &&
+                           publishedSeed->_displayScale == _displayScale && old.layerID == preview.layerID && old.mask == preview.mask &&
+                           old.width == preview.width && old.height == preview.height && old.transform == preview.transform && old.source == preview.source &&
                            old.sourceX == preview.sourceX && old.sourceY == preview.sourceY && old.fill == preview.fill;
-        compatibleStroke =
-            compatibleStroke && old.sourceWidth == preview.sourceWidth && old.sourceHeight == preview.sourceHeight;
-        compatibleStroke = compatibleStroke &&
-                           static_cast<bool>(old.warpSource) == static_cast<bool>(preview.warpSource) &&
+        compatibleStroke = compatibleStroke && old.sourceWidth == preview.sourceWidth && old.sourceHeight == preview.sourceHeight;
+        compatibleStroke = compatibleStroke && static_cast<bool>(old.warpSource) == static_cast<bool>(preview.warpSource) &&
                            static_cast<bool>(old.pixelSource) == static_cast<bool>(preview.pixelSource);
         if (compatibleStroke && preview.warpSource)
         {
             const auto& previous = old.warpSource->source;
-            const auto& current = preview.warpSource->source;
-            compatibleStroke = previous.image == current.image && previous.placement == current.placement &&
-                               previous.width == current.width && previous.height == current.height;
+            const auto& current  = preview.warpSource->source;
+            compatibleStroke     = previous.image == current.image && previous.placement == current.placement && previous.width == current.width &&
+                                   previous.height == current.height;
         }
-        if (!compatibleStroke)
+        if (! compatibleStroke)
             return E_INVALIDARG; // Changed tiles cannot reconstruct an incompatible previous working grid.
     }
     HRESULT result = BeginStroke(preview);
@@ -1223,13 +1198,13 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
         result = CreateMippedTexture(seed.width, seed.height, seed.gray, next);
         if (FAILED(result))
             return result;
-        next.originX = seed.originX;
-        next.originY = seed.originY;
-        next.regionWidth = seed.regionWidth;
+        next.originX      = seed.originX;
+        next.originY      = seed.originY;
+        next.regionWidth  = seed.regionWidth;
         next.regionHeight = seed.regionHeight;
-        next.sourceWidth = seed.sourceWidth;
+        next.sourceWidth  = seed.sourceWidth;
         next.sourceHeight = seed.sourceHeight;
-        next.scale = seed.scale;
+        next.scale        = seed.scale;
         const D3D11_BOX full{0, 0, 0, static_cast<UINT>(seed.width), static_cast<UINT>(seed.height), 1};
         CopyRecorded(next.texture.get(), 0, 0, 0, 0, seed.texture.get(), 0, &full);
         result = _recordingCommands->StatusForWork();
@@ -1239,7 +1214,7 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
         if (FAILED(result))
             return result;
         _strokeTexture = std::move(next);
-        inherited = true;
+        inherited      = true;
     }
     return UpdateStrokeTiles(changed);
 }
@@ -1247,20 +1222,19 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
 HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) noexcept
 {
     const StrokePreview& stroke = _stroke.value();
-    const bool gray = stroke.mask;
+    const bool gray             = stroke.mask;
     PixelRect region{0, 0, stroke.width, stroke.height};
-    int scale = 1;
-    const int sourceWidth = stroke.sourceWidth ? stroke.sourceWidth : stroke.source.Width();
+    int scale              = 1;
+    const int sourceWidth  = stroke.sourceWidth ? stroke.sourceWidth : stroke.source.Width();
     const int sourceHeight = stroke.sourceHeight ? stroke.sourceHeight : stroke.source.Height();
-    const bool stretched =
-        stroke.source.HasStorage() && (sourceWidth != stroke.source.Width() || sourceHeight != stroke.source.Height());
-    if (stroke.width <= _textureLimit && stroke.height <= _textureLimit && !stroke.warpSource && !stroke.pixelSource)
+    const bool stretched   = stroke.source.HasStorage() && (sourceWidth != stroke.source.Width() || sourceHeight != stroke.source.Height());
+    if (stroke.width <= _textureLimit && stroke.height <= _textureLimit && ! stroke.warpSource && ! stroke.pixelSource)
     {
         // The whole grid, assembled on the GPU from the source's own texture and the tiles.
         const HRESULT result =
-            stretched ? E_NOTIMPL
-                      : CreateSparseTexture(stroke.width, stroke.height, gray, stroke.source, stroke.sourceX,
-                                            stroke.sourceY, stroke.fill, tiles, _strokeTexture);
+            stretched
+                ? E_NOTIMPL
+                : CreateSparseTexture(stroke.width, stroke.height, gray, stroke.source, stroke.sourceX, stroke.sourceY, stroke.fill, tiles, _strokeTexture);
         if (result != E_NOTIMPL)
         {
             return result;
@@ -1271,19 +1245,16 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
         // A grid larger than the device: the part the display shows (the whole document at its proxy scale), on the
         // tile grid, reduced to fit.
         DocumentWindow window;
-        window.width = _documentWidth > 0 ? _documentWidth : stroke.width;
+        window.width  = _documentWidth > 0 ? _documentWidth : stroke.width;
         window.height = _documentHeight > 0 ? _documentHeight : stroke.height;
-        window.scale = _displayScale;
-        const LayerTransform mapping = _documentWidth > 0
-                                           ? stroke.transform
-                                           : LayerTransform{Vec2{0, 0}, Vec2{static_cast<double>(stroke.width),
-                                                                             static_cast<double>(stroke.height)}};
-        if (!RegionFor(mapping, stroke.width, stroke.height, kStrokeTileAlign, window, region, scale))
+        window.scale  = _displayScale;
+        const LayerTransform mapping =
+            _documentWidth > 0 ? stroke.transform : LayerTransform{Vec2{0, 0}, Vec2{static_cast<double>(stroke.width), static_cast<double>(stroke.height)}};
+        if (! RegionFor(mapping, stroke.width, stroke.height, kStrokeTileAlign, window, region, scale))
         {
             // Nothing of the grid is on the canvas; a small part keeps the preview settled.
-            region =
-                PixelRect{0, 0, std::min(stroke.width, kStrokeTileAlign), std::min(stroke.height, kStrokeTileAlign)};
-            scale = 1;
+            region = PixelRect{0, 0, std::min(stroke.width, kStrokeTileAlign), std::min(stroke.height, kStrokeTileAlign)};
+            scale  = 1;
         }
     }
     // On the CPU: the fill and the source row by row, reduced to the texture, then the tiles.
@@ -1293,112 +1264,108 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
     {
         return result;
     }
-    gpu.originX = region.x;
-    gpu.originY = region.y;
-    gpu.regionWidth = region.width;
-    gpu.regionHeight = region.height;
-    gpu.sourceWidth = stroke.width;
-    gpu.sourceHeight = stroke.height;
-    gpu.scale = scale;
+    gpu.originX        = region.x;
+    gpu.originY        = region.y;
+    gpu.regionWidth    = region.width;
+    gpu.regionHeight   = region.height;
+    gpu.sourceWidth    = stroke.width;
+    gpu.sourceHeight   = stroke.height;
+    gpu.scale          = scale;
     const int channels = gray ? 1 : 4;
     if (stroke.pixelSource)
     {
-        if (!_recordingCommands || !stroke.pixelSource->IsValidForWork())
+        if (! _recordingCommands || ! stroke.pixelSource->IsValidForWork())
             return E_INVALIDARG;
-        result = UploadRows(
-            gpu,
-            [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept -> HRESULT
-            {
-                const auto bytes = static_cast<std::size_t>(height - 1) * stride + static_cast<std::size_t>(width) * 4;
-                const std::span<std::uint8_t> band{out, bytes};
-                for (int row = 0; row < height; row += 256)
-                    for (int column = 0; column < width; column += 256)
-                    {
-                        const HRESULT status = _recordingCommands->StatusForWork();
-                        if (FAILED(status))
-                            return status;
-                        const int columns = std::min(256, width - column), rows = std::min(256, height - row);
-                        const auto offset =
-                            static_cast<std::size_t>(row) * stride + static_cast<std::size_t>(column) * 4;
-                        if (!stroke.pixelSource->Read({x + column, y + row, columns, rows}, band.subspan(offset),
-                                                      stride, _recordingCommands->CancellationForWork()))
-                            return E_ABORT;
-                    }
-                return _recordingCommands->StatusForWork();
-            });
+        result = UploadRows(gpu,
+                            [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept -> HRESULT
+        {
+            const auto bytes = static_cast<std::size_t>(height - 1) * stride + static_cast<std::size_t>(width) * 4;
+            const std::span<std::uint8_t> band{out, bytes};
+            for (int row = 0; row < height; row += 256)
+                for (int column = 0; column < width; column += 256)
+                {
+                    const HRESULT status = _recordingCommands->StatusForWork();
+                    if (FAILED(status))
+                        return status;
+                    const int columns = std::min(256, width - column), rows = std::min(256, height - row);
+                    const auto offset = static_cast<std::size_t>(row) * stride + static_cast<std::size_t>(column) * 4;
+                    if (! stroke.pixelSource->Read(
+                            {x + column, y + row, columns, rows}, band.subspan(offset), stride, _recordingCommands->CancellationForWork()))
+                        return E_ABORT;
+                }
+            return _recordingCommands->StatusForWork();
+        });
     }
     else if (stroke.warpSource)
     {
-        if (!_recordingCommands)
+        if (! _recordingCommands)
             return E_INVALIDARG; // Warp sampling must never run on the application owner.
         WarpPreviewReader reader(stroke.warpSource);
-        result = UploadRows(
-            gpu,
-            [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept -> HRESULT
-            {
-                const auto bytes = static_cast<std::size_t>(height - 1) * stride + static_cast<std::size_t>(width) * 4;
-                const std::span<std::uint8_t> band{out, bytes};
-                for (int row = 0; row < height; row += 256)
-                    for (int column = 0; column < width; column += 256)
-                    {
-                        const HRESULT status = _recordingCommands->StatusForWork();
-                        if (FAILED(status))
-                            return status;
-                        const int columns = std::min(256, width - column), rows = std::min(256, height - row);
-                        const auto offset =
-                            static_cast<std::size_t>(row) * stride + static_cast<std::size_t>(column) * 4;
-                        if (!reader.Read({x + column, y + row, columns, rows}, band.subspan(offset), stride))
-                            return E_ABORT;
-                    }
-                return _recordingCommands->StatusForWork();
-            });
+        result = UploadRows(gpu,
+                            [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept -> HRESULT
+        {
+            const auto bytes = static_cast<std::size_t>(height - 1) * stride + static_cast<std::size_t>(width) * 4;
+            const std::span<std::uint8_t> band{out, bytes};
+            for (int row = 0; row < height; row += 256)
+                for (int column = 0; column < width; column += 256)
+                {
+                    const HRESULT status = _recordingCommands->StatusForWork();
+                    if (FAILED(status))
+                        return status;
+                    const int columns = std::min(256, width - column), rows = std::min(256, height - row);
+                    const auto offset = static_cast<std::size_t>(row) * stride + static_cast<std::size_t>(column) * 4;
+                    if (! reader.Read({x + column, y + row, columns, rows}, band.subspan(offset), stride))
+                        return E_ABORT;
+                }
+            return _recordingCommands->StatusForWork();
+        });
     }
     else
-        result =
-            UploadRows(gpu,
-                       [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept
-                       {
-                           for (int row = 0; row < height; ++row)
-                           {
-                               std::memset(out + static_cast<std::size_t>(row) * stride, stroke.fill,
-                                           static_cast<std::size_t>(width) * static_cast<std::size_t>(channels));
-                           }
-                           if (!stroke.source.HasStorage())
-                           {
-                               return;
-                           }
-                           const int left = std::max(x, stroke.sourceX);
-                           const int top = std::max(y, stroke.sourceY);
-                           const int right = std::min(x + width, stroke.sourceX + sourceWidth);
-                           const int bottom = std::min(y + height, stroke.sourceY + sourceHeight);
-                           if (right > left && bottom > top)
-                           {
-                               if (!stretched)
-                                   stroke.source.ReadRegion(left - stroke.sourceX, top - stroke.sourceY, right - left,
-                                                            bottom - top,
-                                                            out + static_cast<std::size_t>(top - y) * stride +
-                                                                static_cast<std::size_t>(left - x) * channels,
-                                                            static_cast<int>(stride), stroke.fill);
-                               else
-                                   for (int row = top; row < bottom; ++row)
-                                   {
-                                       if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
-                                           return;
-                                       const int sy = static_cast<int>(static_cast<std::int64_t>(row - stroke.sourceY) *
-                                                                       stroke.source.Height() / sourceHeight);
-                                       for (int column = left; column < right; ++column)
-                                       {
-                                           const int sx =
-                                               static_cast<int>(static_cast<std::int64_t>(column - stroke.sourceX) *
-                                                                stroke.source.Width() / sourceWidth);
-                                           stroke.source.ReadRegion(sx, sy, 1, 1,
-                                                                    out + static_cast<std::size_t>(row - y) * stride +
-                                                                        static_cast<std::size_t>(column - x) * channels,
-                                                                    channels, stroke.fill);
-                                       }
-                                   }
-                           }
-                       });
+        result = UploadRows(gpu,
+                            [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept
+        {
+            for (int row = 0; row < height; ++row)
+            {
+                std::memset(out + static_cast<std::size_t>(row) * stride, stroke.fill, static_cast<std::size_t>(width) * static_cast<std::size_t>(channels));
+            }
+            if (! stroke.source.HasStorage())
+            {
+                return;
+            }
+            const int left   = std::max(x, stroke.sourceX);
+            const int top    = std::max(y, stroke.sourceY);
+            const int right  = std::min(x + width, stroke.sourceX + sourceWidth);
+            const int bottom = std::min(y + height, stroke.sourceY + sourceHeight);
+            if (right > left && bottom > top)
+            {
+                if (! stretched)
+                    stroke.source.ReadRegion(left - stroke.sourceX,
+                                             top - stroke.sourceY,
+                                             right - left,
+                                             bottom - top,
+                                             out + static_cast<std::size_t>(top - y) * stride + static_cast<std::size_t>(left - x) * channels,
+                                             static_cast<int>(stride),
+                                             stroke.fill);
+                else
+                    for (int row = top; row < bottom; ++row)
+                    {
+                        if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
+                            return;
+                        const int sy = static_cast<int>(static_cast<std::int64_t>(row - stroke.sourceY) * stroke.source.Height() / sourceHeight);
+                        for (int column = left; column < right; ++column)
+                        {
+                            const int sx = static_cast<int>(static_cast<std::int64_t>(column - stroke.sourceX) * stroke.source.Width() / sourceWidth);
+                            stroke.source.ReadRegion(sx,
+                                                     sy,
+                                                     1,
+                                                     1,
+                                                     out + static_cast<std::size_t>(row - y) * stride + static_cast<std::size_t>(column - x) * channels,
+                                                     channels,
+                                                     stroke.fill);
+                        }
+                    }
+            }
+        });
     if (FAILED(result))
     {
         return result;
@@ -1420,12 +1387,12 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
 
 HRESULT CanvasRenderer::UpdateStrokeTiles(std::span<const RasterTile> tiles) noexcept
 {
-    if (!_stroke.has_value() || !_device || !_context)
+    if (! _stroke.has_value() || ! _device || ! _context)
     {
         return E_UNEXPECTED;
     }
     HRESULT result = S_OK;
-    if (!_strokeTexture.srv)
+    if (! _strokeTexture.srv)
     {
         result = CreateStrokeTexture(tiles);
     }
@@ -1445,17 +1412,15 @@ void CanvasRenderer::EndStroke(const Raster* committed, int cropX, int cropY, co
 {
     // The working texture holds the committed pixels only when the commit is this preview's own: the same layer
     // and target, a crop inside the part the texture holds, nothing reduced.
-    const bool adopt = committed != nullptr && committed->HasStorage() && committedLayerID != nullptr &&
-                       _stroke.has_value() && _strokeTexture.srv && _device && *committedLayerID == _stroke->layerID &&
-                       (committed->Format() == RasterFormat::Gray8) == _stroke->mask && _strokeTexture.scale == 1 &&
+    const bool adopt = committed != nullptr && committed->HasStorage() && committedLayerID != nullptr && _stroke.has_value() && _strokeTexture.srv && _device &&
+                       *committedLayerID == _stroke->layerID && (committed->Format() == RasterFormat::Gray8) == _stroke->mask && _strokeTexture.scale == 1 &&
                        committed->Width() <= _textureLimit && committed->Height() <= _textureLimit;
     if (adopt)
     {
         const int left = cropX - _strokeTexture.originX;
-        const int top = cropY - _strokeTexture.originY;
+        const int top  = cropY - _strokeTexture.originY;
         GpuTexture adopted;
-        if (left >= 0 && top >= 0 && left + committed->Width() <= _strokeTexture.width &&
-            top + committed->Height() <= _strokeTexture.height &&
+        if (left >= 0 && top >= 0 && left + committed->Width() <= _strokeTexture.width && top + committed->Height() <= _strokeTexture.height &&
             SUCCEEDED(CreateMippedTexture(committed->Width(), committed->Height(), _stroke->mask, adopted)))
         {
             // Crop the working texture into the cache: no upload.
@@ -1469,8 +1434,8 @@ void CanvasRenderer::EndStroke(const Raster* committed, int cropX, int cropY, co
             if (SUCCEEDED(TimedCreateShaderResourceView(_device, adopted.texture.get(), nullptr, adopted.srv.put())))
             {
                 GenerateMipsFor(adopted);
-                adopted.keepAlive = *committed;
-                adopted.lastUse = _composeId;
+                adopted.keepAlive       = *committed;
+                adopted.lastUse         = _composeId;
                 adopted.displayResident = true;
                 try
                 {
@@ -1489,16 +1454,15 @@ void CanvasRenderer::EndStroke(const Raster* committed, int cropX, int cropY, co
     _documentDirty = true;
 }
 
-HRESULT CanvasRenderer::RunPass(const LayerConstants& constants, const PassInputs& inputs,
-                                ID3D11RenderTargetView* target) noexcept
+HRESULT CanvasRenderer::RunPass(const LayerConstants& constants, const PassInputs& inputs, ID3D11RenderTargetView* target) noexcept
 {
-    const UINT fullWidth = static_cast<UINT>(constants.canvasSize[0]);
+    const UINT fullWidth  = static_cast<UINT>(constants.canvasSize[0]);
     const UINT fullHeight = static_cast<UINT>(constants.canvasSize[1]);
     if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
         return _recordingCommands->StatusForWork();
-    const UINT chunkWidth = _recordingCommands ? GpuRecordingCommands::kTileSide : fullWidth;
+    const UINT chunkWidth  = _recordingCommands ? GpuRecordingCommands::kTileSide : fullWidth;
     const UINT chunkHeight = _recordingCommands ? GpuRecordingCommands::kTileSide : fullHeight;
-    if (!chunkWidth || !chunkHeight)
+    if (! chunkWidth || ! chunkHeight)
         return E_INVALIDARG;
     for (UINT y = 0; y < fullHeight; y += chunkHeight)
         for (UINT x = 0; x < fullWidth; x += chunkWidth)
@@ -1514,8 +1478,7 @@ HRESULT CanvasRenderer::RunPass(const LayerConstants& constants, const PassInput
 
             ID3D11RenderTargetView* views[] = {target};
             _context->OMSetRenderTargets(1, views, nullptr);
-            const D3D11_VIEWPORT viewport =
-                MakeViewport(static_cast<UINT>(constants.canvasSize[0]), static_cast<UINT>(constants.canvasSize[1]));
+            const D3D11_VIEWPORT viewport = MakeViewport(static_cast<UINT>(constants.canvasSize[0]), static_cast<UINT>(constants.canvasSize[1]));
             _context->RSSetViewports(1, &viewport);
             _context->RSSetState(_rasterizer.get());
             _context->IASetInputLayout(nullptr);
@@ -1525,14 +1488,14 @@ HRESULT CanvasRenderer::RunPass(const LayerConstants& constants, const PassInput
             ID3D11Buffer* buffers[] = {_layerConstants.get()};
             _context->VSSetConstantBuffers(0, 1, buffers);
             _context->PSSetConstantBuffers(0, 1, buffers);
-            ID3D11ShaderResourceView* srvs[] = {inputs.source, inputs.dest, inputs.mask, inputs.live,
-                                                inputs.folder, inputs.lut,  inputs.cube};
+            ID3D11ShaderResourceView* srvs[] = {inputs.source, inputs.dest, inputs.mask, inputs.live, inputs.folder, inputs.lut, inputs.cube};
             _context->PSSetShaderResources(0, 7, srvs);
             ID3D11SamplerState* samplers[] = {_linearSampler.get(), _pointSampler.get()};
             _context->PSSetSamplers(0, 2, samplers);
             if (_recordingCommands)
             {
-                const D3D11_RECT region{static_cast<LONG>(x), static_cast<LONG>(y),
+                const D3D11_RECT region{static_cast<LONG>(x),
+                                        static_cast<LONG>(y),
                                         static_cast<LONG>((std::min)(fullWidth, x + chunkWidth)),
                                         static_cast<LONG>((std::min)(fullHeight, y + chunkHeight))};
                 _context->RSSetScissorRects(1, &region);
@@ -1557,11 +1520,10 @@ void CanvasRenderer::FillViewConstants(LayerConstants& constants) const noexcept
     constants.canvasSize[1] = static_cast<float>(_canvasHeight);
     constants.viewOrigin[0] = static_cast<float>(_viewOriginX);
     constants.viewOrigin[1] = static_cast<float>(_viewOriginY);
-    constants.viewScale = static_cast<float>(_viewScale);
+    constants.viewScale     = static_cast<float>(_viewScale);
 }
 
-HRESULT CanvasRenderer::FillLayerConstants(const ImageLayer& layer, LayerConstants& constants,
-                                           PassInputs& inputs) noexcept
+HRESULT CanvasRenderer::FillLayerConstants(const ImageLayer& layer, LayerConstants& constants, PassInputs& inputs) noexcept
 {
     constants = {};
     FillViewConstants(constants);
@@ -1570,34 +1532,30 @@ HRESULT CanvasRenderer::FillLayerConstants(const ImageLayer& layer, LayerConstan
     if (strokeImage)
     {
         // The stroke's grid, drawn where the stroke places it, stands in for the layer's pixels.
-        source.srv = _strokeTexture.srv.get();
+        source.srv  = _strokeTexture.srv.get();
         source.rect = RectFor(_strokeTexture);
-        FillTransform(_stroke->transform, constants.layerCenter, constants.layerSize, constants.layerSinCos,
-                      constants.layerFlip);
+        FillTransform(_stroke->transform, constants.layerCenter, constants.layerSize, constants.layerSinCos, constants.layerFlip);
     }
     else
     {
-        if (!layer.asset.has_value())
+        if (! layer.asset.has_value())
         {
             return S_FALSE;
         }
-        const bool adjustPreview = !_ignoreStroke && _adjustmentPreview && !_adjustmentPreview->liveOriginal &&
-                                   _adjustmentPreview->lookup && _adjustmentPreview->layerId == layer.id &&
-                                   _adjustmentPreview->source == layer.asset->image;
-        const HRESULT result = adjustPreview ? LayerAdjustmentView(source)
-                                             : RasterView(layer.asset.value().image, false, layer.transform, source);
+        const bool adjustPreview = ! _ignoreStroke && _adjustmentPreview && ! _adjustmentPreview->liveOriginal && _adjustmentPreview->lookup &&
+                                   _adjustmentPreview->layerId == layer.id && _adjustmentPreview->source == layer.asset->image;
+        const HRESULT result     = adjustPreview ? LayerAdjustmentView(source) : RasterView(layer.asset.value().image, false, layer.transform, source);
         if (result != S_OK)
         {
             return result;
         }
-        FillTransform(layer.transform, constants.layerCenter, constants.layerSize, constants.layerSinCos,
-                      constants.layerFlip);
+        FillTransform(layer.transform, constants.layerCenter, constants.layerSize, constants.layerSinCos, constants.layerFlip);
     }
     inputs.source = source.srv;
     std::copy(source.rect.begin(), source.rect.end(), constants.sourceRect);
-    constants.blendMode = static_cast<std::uint32_t>(layer.blendMode);
+    constants.blendMode  = static_cast<std::uint32_t>(layer.blendMode);
     constants.filterMode = layer.transform.sampling == LayerSampling::Nearest ? 0u : 1u;
-    constants.opacity = static_cast<float>(layer.opacity);
+    constants.opacity    = static_cast<float>(layer.opacity);
     if (HasEnabledMask(layer))
     {
         const LayerMask& mask = layer.mask.value();
@@ -1613,25 +1571,22 @@ HRESULT CanvasRenderer::FillLayerConstants(const ImageLayer& layer, LayerConstan
         if (mask.placement.has_value())
         {
             constants.flags |= kCompositionFlagMaskPlaced;
-            FillTransform(mask.placement.value(), constants.maskCenter, constants.maskSize, constants.maskSinCos,
-                          constants.maskFlip);
+            FillTransform(mask.placement.value(), constants.maskCenter, constants.maskSize, constants.maskSinCos, constants.maskFlip);
             constants.maskBackground = static_cast<float>(MaskEdgeBackground(mask.asset.thumbnail));
         }
-        else if (strokeImage && mask.asset.image.PixelCount() > 1 && !(_stroke->transform == layer.transform))
+        else if (strokeImage && mask.asset.image.PixelCount() > 1 && ! (_stroke->transform == layer.transform))
         {
             // The preview's grid grew past the layer: the mask stays on the layer's own pixels, and paint beyond
             // them is revealed, as the commit grows the mask with 255 (a uniform 1 x 1 mask stays uniform).
             constants.flags |= kCompositionFlagMaskPlaced;
-            FillTransform(layer.transform, constants.maskCenter, constants.maskSize, constants.maskSinCos,
-                          constants.maskFlip);
+            FillTransform(layer.transform, constants.maskCenter, constants.maskSize, constants.maskSinCos, constants.maskFlip);
             constants.maskBackground = 1.0f;
         }
         else if (result == S_FALSE)
         {
             // An unplaced mask whose pixels the window does not reach reads as its edge tone there.
             constants.flags |= kCompositionFlagMaskPlaced;
-            FillTransform(MaskTransform(layer), constants.maskCenter, constants.maskSize, constants.maskSinCos,
-                          constants.maskFlip);
+            FillTransform(MaskTransform(layer), constants.maskCenter, constants.maskSize, constants.maskSinCos, constants.maskFlip);
             constants.maskBackground = static_cast<float>(MaskEdgeBackground(mask.asset.thumbnail));
         }
     }
@@ -1646,7 +1601,7 @@ const ImageLayer* CanvasRenderer::Find(const Guid& id) const noexcept
 
 HRESULT CanvasRenderer::LayerCoverage(const Guid& id, int depth, int& index) noexcept
 {
-    index = kNoCoverage;
+    index             = kNoCoverage;
     const auto cached = _liveCoverageIndex.find(id);
     if (cached != _liveCoverageIndex.end())
     {
@@ -1658,7 +1613,7 @@ HRESULT CanvasRenderer::LayerCoverage(const Guid& id, int depth, int& index) noe
         return S_OK;
     }
     const ImageLayer* layer = Find(id);
-    HRESULT result = AcquireCoverage(index);
+    HRESULT result          = AcquireCoverage(index);
     if (FAILED(result))
     {
         return result;
@@ -1673,7 +1628,7 @@ HRESULT CanvasRenderer::LayerCoverage(const Guid& id, int depth, int& index) noe
     }
     ID3D11RenderTargetView* target = _coverage[static_cast<std::size_t>(index)].rtv.get();
     ClearRecorded(target, kClearZero.data());
-    if (layer == nullptr || (!layer->asset.has_value() && !DrawsStrokeImage(*layer)))
+    if (layer == nullptr || (! layer->asset.has_value() && ! DrawsStrokeImage(*layer)))
     {
         // A blank source covers nothing until its admitted stroke texture supplies the image.
         return S_OK;
@@ -1706,7 +1661,7 @@ HRESULT CanvasRenderer::LayerCoverage(const Guid& id, int depth, int& index) noe
 
 HRESULT CanvasRenderer::GroupCoverage(const Guid& groupId, int depth, int& index) noexcept
 {
-    index = kNoCoverage;
+    index             = kNoCoverage;
     const auto cached = _groupCoverageIndex.find(groupId);
     if (cached != _groupCoverageIndex.end())
     {
@@ -1744,7 +1699,7 @@ HRESULT CanvasRenderer::GroupCoverage(const Guid& groupId, int depth, int& index
         }
         return S_OK;
     };
-    if (!HasEnabledMask(*group))
+    if (! HasEnabledMask(*group))
     {
         return remember(parent);
     }
@@ -1754,7 +1709,7 @@ HRESULT CanvasRenderer::GroupCoverage(const Guid& groupId, int depth, int& index
     {
         return result;
     }
-    int coverage = kNoCoverage;
+    int coverage           = kNoCoverage;
     const HRESULT acquired = AcquireCoverage(coverage);
     if (FAILED(acquired))
     {
@@ -1774,10 +1729,9 @@ HRESULT CanvasRenderer::GroupCoverage(const Guid& groupId, int depth, int& index
     }
     LayerConstants constants{};
     FillViewConstants(constants);
-    constants.passMode = kCompositionPassMaskCoverage;
+    constants.passMode   = kCompositionPassMaskCoverage;
     constants.filterMode = group->transform.sampling == LayerSampling::Nearest ? 0u : 1u;
-    FillTransform(MaskTransform(*group), constants.maskCenter, constants.maskSize, constants.maskSinCos,
-                  constants.maskFlip);
+    FillTransform(MaskTransform(*group), constants.maskCenter, constants.maskSize, constants.maskSinCos, constants.maskFlip);
     std::copy(maskView.rect.begin(), maskView.rect.end(), constants.maskRect);
     PassInputs inputs{};
     inputs.mask = maskView.srv;
@@ -1789,8 +1743,12 @@ HRESULT CanvasRenderer::GroupCoverage(const Guid& groupId, int depth, int& index
     return RunPass(constants, inputs, target);
 }
 
-HRESULT CanvasRenderer::DrawLayerPass(const ImageLayer& layer, std::uint32_t pass, ID3D11ShaderResourceView* destSrv,
-                                      ID3D11RenderTargetView* destRtv, int liveCoverage, int folderCoverage,
+HRESULT CanvasRenderer::DrawLayerPass(const ImageLayer& layer,
+                                      std::uint32_t pass,
+                                      ID3D11ShaderResourceView* destSrv,
+                                      ID3D11RenderTargetView* destRtv,
+                                      int liveCoverage,
+                                      int folderCoverage,
                                       bool& drawn) noexcept
 {
     drawn = false;
@@ -1803,7 +1761,7 @@ HRESULT CanvasRenderer::DrawLayerPass(const ImageLayer& layer, std::uint32_t pas
         return SUCCEEDED(result) ? S_OK : result;
     }
     constants.passMode = pass;
-    inputs.dest = destSrv;
+    inputs.dest        = destSrv;
     if (liveCoverage != kNoCoverage)
     {
         inputs.live = _coverage[static_cast<std::size_t>(liveCoverage)].texture.srv.get();
@@ -1815,7 +1773,7 @@ HRESULT CanvasRenderer::DrawLayerPass(const ImageLayer& layer, std::uint32_t pas
         constants.flags |= kCompositionFlagHasFolder;
     }
     const HRESULT ran = RunPass(constants, inputs, destRtv);
-    drawn = SUCCEEDED(ran);
+    drawn             = SUCCEEDED(ran);
     return ran;
 }
 
@@ -1824,16 +1782,14 @@ void CanvasRenderer::SwapCanvas() noexcept
     _front = 1 - _front;
 }
 
-HRESULT CanvasRenderer::FillAdjustConstants(const ImageLayer& layer, LayerConstants& constants,
-                                            PassInputs& inputs) noexcept
+HRESULT CanvasRenderer::FillAdjustConstants(const ImageLayer& layer, LayerConstants& constants, PassInputs& inputs) noexcept
 {
     constants = {};
     FillViewConstants(constants);
-    FillTransform(layer.transform, constants.layerCenter, constants.layerSize, constants.layerSinCos,
-                  constants.layerFlip);
-    constants.blendMode = static_cast<std::uint32_t>(layer.blendMode);
+    FillTransform(layer.transform, constants.layerCenter, constants.layerSize, constants.layerSinCos, constants.layerFlip);
+    constants.blendMode  = static_cast<std::uint32_t>(layer.blendMode);
     constants.filterMode = layer.transform.sampling == LayerSampling::Nearest ? 0u : 1u;
-    constants.opacity = static_cast<float>(layer.opacity);
+    constants.opacity    = static_cast<float>(layer.opacity);
     if (HasEnabledMask(layer))
     {
         const LayerMask& mask = layer.mask.value();
@@ -1849,8 +1805,7 @@ HRESULT CanvasRenderer::FillAdjustConstants(const ImageLayer& layer, LayerConsta
         if (mask.placement.has_value() || result == S_FALSE)
         {
             constants.flags |= kCompositionFlagMaskPlaced;
-            FillTransform(MaskTransform(layer), constants.maskCenter, constants.maskSize, constants.maskSinCos,
-                          constants.maskFlip);
+            FillTransform(MaskTransform(layer), constants.maskCenter, constants.maskSize, constants.maskSinCos, constants.maskFlip);
             constants.maskBackground = static_cast<float>(MaskEdgeBackground(mask.asset.thumbnail));
         }
     }
@@ -1861,40 +1816,37 @@ void CanvasRenderer::SetAdjustmentPreview(std::optional<AdjustmentPreview> previ
 {
     if (_adjustmentPreview == preview)
         return;
-    _adjustmentPreview = std::move(preview);
+    _adjustmentPreview      = std::move(preview);
     _adjustmentPreviewDirty = true;
-    _documentDirty = true;
-    if (!_adjustmentPreview || _adjustmentPreview->liveOriginal)
+    _documentDirty          = true;
+    if (! _adjustmentPreview || _adjustmentPreview->liveOriginal)
         _adjustmentPreviewSurface = {};
 }
 
 HRESULT CanvasRenderer::LayerAdjustmentView(TextureView& view) noexcept
 {
     const auto& preview = _adjustmentPreview.value();
-    const int width = preview.source.Width();
-    const int height = preview.source.Height();
-    if (!preview.lookup || width < 1 || height < 1 || width > _textureLimit || height > _textureLimit ||
-        !(preview.previewScale > 0 && preview.previewScale <= 1))
+    const int width     = preview.source.Width();
+    const int height    = preview.source.Height();
+    if (! preview.lookup || width < 1 || height < 1 || width > _textureLimit || height > _textureLimit ||
+        ! (preview.previewScale > 0 && preview.previewScale <= 1))
         return E_INVALIDARG;
     GpuTexture* source = nullptr;
-    HRESULT result = TextureFor(preview.source, false, source);
+    HRESULT result     = TextureFor(preview.source, false, source);
     if (FAILED(result))
         return result;
     GpuTexture* coverage = nullptr;
     if (preview.coverage.HasStorage())
     {
-        if (preview.coverage.Format() != RasterFormat::Gray8 || preview.coverage.Width() != width ||
-            preview.coverage.Height() != height)
+        if (preview.coverage.Format() != RasterFormat::Gray8 || preview.coverage.Width() != width || preview.coverage.Height() != height)
             return E_INVALIDARG;
         result = TextureFor(preview.coverage, true, coverage);
         if (FAILED(result))
             return result;
     }
-    if (_adjustmentPreviewSurface.texture.width != width || _adjustmentPreviewSurface.texture.height != height ||
-        !_adjustmentPreviewSurface.rtv)
+    if (_adjustmentPreviewSurface.texture.width != width || _adjustmentPreviewSurface.texture.height != height || ! _adjustmentPreviewSurface.rtv)
     {
-        result = CreateSurface(static_cast<UINT>(width), static_cast<UINT>(height), DXGI_FORMAT_B8G8R8A8_UNORM, true,
-                               _adjustmentPreviewSurface);
+        result = CreateSurface(static_cast<UINT>(width), static_cast<UINT>(height), DXGI_FORMAT_B8G8R8A8_UNORM, true, _adjustmentPreviewSurface);
         if (FAILED(result))
             return result;
         _adjustmentPreviewDirty = true;
@@ -1904,13 +1856,13 @@ HRESULT CanvasRenderer::LayerAdjustmentView(TextureView& view) noexcept
         LayerConstants constants{};
         constants.canvasSize[0] = static_cast<float>(width);
         constants.canvasSize[1] = static_cast<float>(height);
-        constants.viewScale = static_cast<float>(1 / preview.previewScale);
-        constants.passMode = kCompositionPassLayerAdjust;
+        constants.viewScale     = static_cast<float>(1 / preview.previewScale);
+        constants.passMode      = kCompositionPassLayerAdjust;
         PassInputs inputs{};
         inputs.source = source->srv.get();
         if (coverage)
         {
-            inputs.mask = coverage->srv.get();
+            inputs.mask     = coverage->srv.get();
             constants.flags = kCompositionFlagHasMask;
         }
         result = AdjustmentInputs(preview.layerId, preview.lookup->adjustment, constants, inputs, preview.lookup.get());
@@ -1928,35 +1880,33 @@ HRESULT CanvasRenderer::LayerAdjustmentView(TextureView& view) noexcept
         const auto found = _adjustments.find(preview.layerId);
         if (found != _adjustments.end())
         {
-            found->second.lastUse = _composeId;
+            found->second.lastUse         = _composeId;
             found->second.displayResident = true;
         }
     }
-    view.srv = _adjustmentPreviewSurface.texture.srv.get();
+    view.srv  = _adjustmentPreviewSurface.texture.srv.get();
     view.rect = {0, 0, 1, 1};
     return S_OK;
 }
 
-HRESULT CanvasRenderer::AdjustmentInputs(const ImageLayer& layer, LayerConstants& constants,
-                                         PassInputs& inputs) noexcept
+HRESULT CanvasRenderer::AdjustmentInputs(const ImageLayer& layer, LayerConstants& constants, PassInputs& inputs) noexcept
 {
-    if (!layer.adjustment.has_value() || !layer.adjustment->IsValid())
+    if (! layer.adjustment.has_value() || ! layer.adjustment->IsValid())
     {
         return E_INVALIDARG;
     }
     const AdjustmentLookup* lookup = nullptr;
-    const LayerAdjustment* value = &layer.adjustment.value();
-    if (!_ignoreStroke && _adjustmentPreview && _adjustmentPreview->layerId == layer.id &&
-        _adjustmentPreview->liveOriginal)
+    const LayerAdjustment* value   = &layer.adjustment.value();
+    if (! _ignoreStroke && _adjustmentPreview && _adjustmentPreview->layerId == layer.id && _adjustmentPreview->liveOriginal)
     {
         lookup = _adjustmentPreview->lookup.get();
-        value = lookup ? &lookup->adjustment : &_adjustmentPreview->liveOriginal.value();
+        value  = lookup ? &lookup->adjustment : &_adjustmentPreview->liveOriginal.value();
     }
     return AdjustmentInputs(layer.id, *value, constants, inputs, lookup);
 }
 
-HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustment, LayerConstants& constants,
-                                         PassInputs& inputs, const AdjustmentLookup* lookup) noexcept
+HRESULT CanvasRenderer::AdjustmentInputs(
+    Guid id, const LayerAdjustment& adjustment, LayerConstants& constants, PassInputs& inputs, const AdjustmentLookup* lookup) noexcept
 {
     AdjustTextures* entry = nullptr;
     try
@@ -1968,9 +1918,9 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
         return E_OUTOFMEMORY;
     }
     const std::uint32_t kernel = AdjustKernel(adjustment.kind);
-    const bool usesLut = kernel == kCompositionAdjustTables || kernel == kCompositionAdjustGradientMap;
-    const bool usesCube = kernel == kCompositionAdjustCube;
-    if (!(entry->value == adjustment) || (usesLut && !entry->lut.srv) || (usesCube && !entry->cubeSrv))
+    const bool usesLut         = kernel == kCompositionAdjustTables || kernel == kCompositionAdjustGradientMap;
+    const bool usesCube        = kernel == kCompositionAdjustCube;
+    if (! (entry->value == adjustment) || (usesLut && ! entry->lut.srv) || (usesCube && ! entry->cubeSrv))
     {
         if (usesLut)
         {
@@ -1985,7 +1935,7 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
                 const std::array<std::uint8_t, 768> table = Adjust::GradientMapTable(adjustment.GradientMap());
                 for (std::size_t i = 0; i < 256; ++i)
                 {
-                    texels[i * 4] = table[i * 3] / 255.0f;
+                    texels[i * 4]     = table[i * 3] / 255.0f;
                     texels[i * 4 + 1] = table[i * 3 + 1] / 255.0f;
                     texels[i * 4 + 2] = table[i * 3 + 2] / 255.0f;
                     texels[i * 4 + 3] = 1.0f;
@@ -1993,29 +1943,28 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
             }
             else
             {
-                const Adjust::ChannelTables tables =
-                    adjustment.kind == AdjustmentKind::Levels   ? Adjust::LevelsTables(adjustment.levels)
-                    : adjustment.kind == AdjustmentKind::Curves ? Adjust::CurvesTables(adjustment.curves)
-                                                                : Adjust::ExposureTables(adjustment.Exposure());
+                const Adjust::ChannelTables tables = adjustment.kind == AdjustmentKind::Levels   ? Adjust::LevelsTables(adjustment.levels)
+                                                     : adjustment.kind == AdjustmentKind::Curves ? Adjust::CurvesTables(adjustment.curves)
+                                                                                                 : Adjust::ExposureTables(adjustment.Exposure());
                 for (std::size_t i = 0; i < 256; ++i)
                 {
-                    texels[i * 4] = tables.values[i];
+                    texels[i * 4]     = tables.values[i];
                     texels[i * 4 + 1] = tables.values[256 + i];
                     texels[i * 4 + 2] = tables.values[512 + i];
                     texels[i * 4 + 3] = 1.0f;
                 }
             }
             D3D11_TEXTURE2D_DESC desc{};
-            desc.Width = 256;
-            desc.Height = 1;
-            desc.MipLevels = 1;
-            desc.ArraySize = 1;
-            desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            desc.Width            = 256;
+            desc.Height           = 1;
+            desc.MipLevels        = 1;
+            desc.ArraySize        = 1;
+            desc.Format           = DXGI_FORMAT_R32G32B32A32_FLOAT;
             desc.SampleDesc.Count = 1;
-            desc.Usage = D3D11_USAGE_DYNAMIC;
-            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-            desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-            if (!entry->lut.srv)
+            desc.Usage            = D3D11_USAGE_DYNAMIC;
+            desc.BindFlags        = D3D11_BIND_SHADER_RESOURCE;
+            desc.CPUAccessFlags   = D3D11_CPU_ACCESS_WRITE;
+            if (! entry->lut.srv)
             {
                 GpuTexture lut;
                 HRESULT result = TimedCreateTexture2D(_device, &desc, nullptr, lut.texture.put());
@@ -2028,7 +1977,7 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
                 {
                     return result;
                 }
-                lut.width = 256;
+                lut.width  = 256;
                 lut.height = 1;
                 entry->lut = std::move(lut);
                 ++_adjustmentTextureCreates;
@@ -2049,7 +1998,7 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
             const std::vector<float>* values = lookup ? &lookup->cube : &cube;
             try
             {
-                if (!lookup)
+                if (! lookup)
                     cube = Adjust::ColorCube(adjustment.ResolvedHsv());
             }
             catch (const std::bad_alloc&)
@@ -2057,14 +2006,14 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
                 return E_OUTOFMEMORY;
             }
             D3D11_TEXTURE3D_DESC desc{};
-            desc.Width = Adjust::kCubeDimension;
-            desc.Height = Adjust::kCubeDimension;
-            desc.Depth = Adjust::kCubeDimension;
+            desc.Width     = Adjust::kCubeDimension;
+            desc.Height    = Adjust::kCubeDimension;
+            desc.Depth     = Adjust::kCubeDimension;
             desc.MipLevels = 1;
-            desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-            desc.Usage = D3D11_USAGE_DEFAULT;
+            desc.Format    = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            desc.Usage     = D3D11_USAGE_DEFAULT;
             desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-            if (!entry->cubeSrv)
+            if (! entry->cubeSrv)
             {
                 wil::com_ptr_nothrow<ID3D11Texture3D> texture;
                 wil::com_ptr_nothrow<ID3D11ShaderResourceView> srv;
@@ -2074,28 +2023,27 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
                     return result;
                 }
                 D3D11_SHADER_RESOURCE_VIEW_DESC view{};
-                view.Format = desc.Format;
-                view.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
+                view.Format              = desc.Format;
+                view.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE3D;
                 view.Texture3D.MipLevels = 1;
-                result = TimedCreateShaderResourceView(_device, texture.get(), &view, srv.put());
+                result                   = TimedCreateShaderResourceView(_device, texture.get(), &view, srv.put());
                 if (FAILED(result))
                 {
                     return result;
                 }
                 entry->cubeTexture = std::move(texture);
-                entry->cubeSrv = std::move(srv);
+                entry->cubeSrv     = std::move(srv);
                 ++_adjustmentTextureCreates;
             }
-            if (values->size() !=
-                static_cast<std::size_t>(Adjust::kCubeDimension * Adjust::kCubeDimension * Adjust::kCubeDimension * 4))
+            if (values->size() != static_cast<std::size_t>(Adjust::kCubeDimension * Adjust::kCubeDimension * Adjust::kCubeDimension * 4))
                 return E_INVALIDARG;
-            UpdateRecorded(entry->cubeTexture.get(), 0, nullptr, values->data(), Adjust::kCubeDimension * 16,
-                           Adjust::kCubeDimension * Adjust::kCubeDimension * 16);
+            UpdateRecorded(
+                entry->cubeTexture.get(), 0, nullptr, values->data(), Adjust::kCubeDimension * 16, Adjust::kCubeDimension * Adjust::kCubeDimension * 16);
             ++_adjustmentTextureUpdates;
         }
-        if (!usesLut)
+        if (! usesLut)
             entry->lut = {};
-        if (!usesCube)
+        if (! usesCube)
         {
             entry->cubeSrv.reset();
             entry->cubeTexture.reset();
@@ -2103,24 +2051,24 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
         entry->value = adjustment; // publish the cache key only after every required resource update succeeded
     }
     entry->lastUse = _composeId;
-    if (!_utilityRecording)
+    if (! _utilityRecording)
         entry->displayResident = true;
     constants.adjustKind = kernel;
     if (kernel == kCompositionAdjustGrain)
     {
         const GrainSettings grain = adjustment.Grain();
-        constants.grainAmount = static_cast<float>(grain.amount);
-        constants.grainSize = static_cast<float>(grain.size);
-        constants.grainRoughness = static_cast<float>(grain.roughness);
-        constants.grainSeed = grain.seed;
+        constants.grainAmount     = static_cast<float>(grain.amount);
+        constants.grainSize       = static_cast<float>(grain.size);
+        constants.grainRoughness  = static_cast<float>(grain.roughness);
+        constants.grainSeed       = grain.seed;
     }
-    inputs.lut = entry->lut.srv.get();
+    inputs.lut  = entry->lut.srv.get();
     inputs.cube = entry->cubeSrv.get();
     return S_OK;
 }
 
-HRESULT CanvasRenderer::DrawAdjustPass(const ImageLayer& layer, std::uint32_t pass, ID3D11ShaderResourceView* destSrv,
-                                       ID3D11RenderTargetView* destRtv, int folderCoverage) noexcept
+HRESULT CanvasRenderer::DrawAdjustPass(
+    const ImageLayer& layer, std::uint32_t pass, ID3D11ShaderResourceView* destSrv, ID3D11RenderTargetView* destRtv, int folderCoverage) noexcept
 {
     LayerConstants constants{};
     PassInputs inputs{};
@@ -2135,7 +2083,7 @@ HRESULT CanvasRenderer::DrawAdjustPass(const ImageLayer& layer, std::uint32_t pa
         return result;
     }
     constants.passMode = pass;
-    inputs.dest = destSrv;
+    inputs.dest        = destSrv;
     if (folderCoverage != kNoCoverage)
     {
         inputs.folder = _coverage[static_cast<std::size_t>(folderCoverage)].texture.srv.get();
@@ -2144,8 +2092,7 @@ HRESULT CanvasRenderer::DrawAdjustPass(const ImageLayer& layer, std::uint32_t pa
     return RunPass(constants, inputs, destRtv);
 }
 
-HRESULT CanvasRenderer::DrawStack(const ImageLayer& base, std::size_t firstChild, std::size_t childCount,
-                                  int folderCoverage) noexcept
+HRESULT CanvasRenderer::DrawStack(const ImageLayer& base, std::size_t firstChild, std::size_t childCount, int folderCoverage) noexcept
 {
     HRESULT result = EnsureStackSurfaces();
     if (FAILED(result))
@@ -2155,13 +2102,12 @@ HRESULT CanvasRenderer::DrawStack(const ImageLayer& base, std::size_t firstChild
     _stackFront = 0;
     ClearRecorded(_stack[0].rtv.get(), kClearZero.data());
     bool drawn = false;
-    result =
-        DrawLayerPass(base, kCompositionPassStackBegin, nullptr, _stack[0].rtv.get(), kNoCoverage, kNoCoverage, drawn);
+    result     = DrawLayerPass(base, kCompositionPassStackBegin, nullptr, _stack[0].rtv.get(), kNoCoverage, kNoCoverage, drawn);
     if (FAILED(result))
     {
         return result;
     }
-    if (!drawn)
+    if (! drawn)
     {
         // The base shows nothing in this window, so neither does anything clipped to it.
         return S_OK;
@@ -2177,8 +2123,7 @@ HRESULT CanvasRenderer::DrawStack(const ImageLayer& base, std::size_t firstChild
         if (child->adjustment.has_value())
         {
             // A clipped adjustment reworks the base's straight color, keeping the stack alpha.
-            result = DrawAdjustPass(*child, kCompositionPassStackAdjust, _stack[_stackFront].texture.srv.get(),
-                                    _stack[back].rtv.get(), kNoCoverage);
+            result = DrawAdjustPass(*child, kCompositionPassStackAdjust, _stack[_stackFront].texture.srv.get(), _stack[back].rtv.get(), kNoCoverage);
             if (FAILED(result))
             {
                 return result;
@@ -2186,12 +2131,12 @@ HRESULT CanvasRenderer::DrawStack(const ImageLayer& base, std::size_t firstChild
             _stackFront = back;
             continue;
         }
-        if (!child->asset.has_value() && !DrawsStrokeImage(*child))
+        if (! child->asset.has_value() && ! DrawsStrokeImage(*child))
         {
             continue;
         }
-        result = DrawLayerPass(*child, kCompositionPassStackChild, _stack[_stackFront].texture.srv.get(),
-                               _stack[back].rtv.get(), kNoCoverage, kNoCoverage, drawn);
+        result =
+            DrawLayerPass(*child, kCompositionPassStackChild, _stack[_stackFront].texture.srv.get(), _stack[back].rtv.get(), kNoCoverage, kNoCoverage, drawn);
         if (FAILED(result))
         {
             return result;
@@ -2203,11 +2148,11 @@ HRESULT CanvasRenderer::DrawStack(const ImageLayer& base, std::size_t firstChild
     }
     LayerConstants constants{};
     FillViewConstants(constants);
-    constants.passMode = kCompositionPassStackResolve;
+    constants.passMode  = kCompositionPassStackResolve;
     constants.blendMode = static_cast<std::uint32_t>(base.blendMode);
     PassInputs inputs{};
     inputs.source = _stack[_stackFront].texture.srv.get();
-    inputs.dest = _canvas[_front].texture.srv.get();
+    inputs.dest   = _canvas[_front].texture.srv.get();
     if (folderCoverage != kNoCoverage)
     {
         inputs.folder = _coverage[static_cast<std::size_t>(folderCoverage)].texture.srv.get();
@@ -2241,9 +2186,9 @@ HRESULT CanvasRenderer::PrepareView(int originX, int originY, int scale, UINT wi
     }
     if (originX != _viewOriginX || originY != _viewOriginY || scale != _viewScale)
     {
-        _viewOriginX = originX;
-        _viewOriginY = originY;
-        _viewScale = scale;
+        _viewOriginX   = originX;
+        _viewOriginY   = originY;
+        _viewScale     = scale;
         _documentDirty = true;
     }
     return S_OK;
@@ -2254,7 +2199,7 @@ HRESULT CanvasRenderer::Compose(const CanvasDocument& document) noexcept
     if (_recordedDisplaySealed)
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE); // A published graph is replaced, never re-composed.
 
-    if (!_device || !_context)
+    if (! _device || ! _context)
     {
         return E_UNEXPECTED;
     }
@@ -2262,17 +2207,17 @@ HRESULT CanvasRenderer::Compose(const CanvasDocument& document) noexcept
     {
         return CreateCanvas(0, 0);
     }
-    _documentWidth = document.width;
+    _documentWidth  = document.width;
     _documentHeight = document.height;
     // The whole document, through a reduced proxy when a side exceeds the device's texture limit.
     _displayScale = ScaleToFit(document.width, document.height);
-    HRESULT result = PrepareView(0, 0, _displayScale, static_cast<UINT>(CeilDiv(document.width, _displayScale)),
-                                 static_cast<UINT>(CeilDiv(document.height, _displayScale)));
+    HRESULT result =
+        PrepareView(0, 0, _displayScale, static_cast<UINT>(CeilDiv(document.width, _displayScale)), static_cast<UINT>(CeilDiv(document.height, _displayScale)));
     if (FAILED(result) || _canvasWidth == 0)
     {
         return result;
     }
-    if (!_documentDirty)
+    if (! _documentDirty)
     {
         return S_OK;
     }
@@ -2281,7 +2226,7 @@ HRESULT CanvasRenderer::Compose(const CanvasDocument& document) noexcept
     {
         return result;
     }
-    _documentDirty = false;
+    _documentDirty   = false;
     _canvasMipsStale = true;
     ++_compositeCount;
     return S_OK;
@@ -2291,7 +2236,7 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
 {
     const ScopedUiTiming timing{UiTimingKind::CompositionRecord};
     _composeId = ++_composeSerial;
-    if (!_utilityRecording)
+    if (! _utilityRecording)
     {
         for (auto& [id, texture] : _rasters)
             texture.displayResident = false;
@@ -2337,7 +2282,7 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
         if (layer->adjustment.has_value())
         {
             // An adjustment layer reworks the composite beneath it; a clipped one only its base, inside the stack.
-            if (!layer->maskSourceID.has_value())
+            if (! layer->maskSourceID.has_value())
             {
                 int adjustFolder = kNoCoverage;
                 if (layer->parentID.has_value())
@@ -2348,8 +2293,7 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
                         return result;
                     }
                 }
-                result = DrawAdjustPass(*layer, kCompositionPassAdjust, _canvas[_front].texture.srv.get(),
-                                        _canvas[1 - _front].rtv.get(), adjustFolder);
+                result = DrawAdjustPass(*layer, kCompositionPassAdjust, _canvas[_front].texture.srv.get(), _canvas[1 - _front].rtv.get(), adjustFolder);
                 if (FAILED(result))
                 {
                     return result;
@@ -2358,7 +2302,7 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
             }
             continue;
         }
-        if (!layer->asset.has_value() && !DrawsStrokeImage(*layer))
+        if (! layer->asset.has_value() && ! DrawsStrokeImage(*layer))
         {
             continue;
         }
@@ -2371,15 +2315,15 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
                 return result;
             }
         }
-        if (!layer->maskSourceID.has_value())
+        if (! layer->maskSourceID.has_value())
         {
             // Clipping stack: the contiguous clipped siblings directly above this base share its alpha.
             std::size_t childCount = 0;
             while (index + 1 + childCount < _renderIds.size())
             {
                 const ImageLayer* candidate = Find(_renderIds[index + 1 + childCount]);
-                if (candidate == nullptr || !candidate->maskSourceID.has_value() ||
-                    !(candidate->maskSourceID.value() == layer->id) || candidate->parentID != layer->parentID)
+                if (candidate == nullptr || ! candidate->maskSourceID.has_value() || ! (candidate->maskSourceID.value() == layer->id) ||
+                    candidate->parentID != layer->parentID)
                 {
                     break;
                 }
@@ -2409,8 +2353,7 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
             }
         }
         bool drawn = false;
-        result = DrawLayerPass(*layer, kCompositionPassLayer, _canvas[_front].texture.srv.get(),
-                               _canvas[1 - _front].rtv.get(), live, folder, drawn);
+        result     = DrawLayerPass(*layer, kCompositionPassLayer, _canvas[_front].texture.srv.get(), _canvas[1 - _front].rtv.get(), live, folder, drawn);
         if (FAILED(result))
         {
             return result;
@@ -2423,7 +2366,7 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
     // Rasters this composition did not touch belong to a previous document state: release their textures.
     for (auto entry = _rasters.begin(); entry != _rasters.end();)
     {
-        if (entry->second.lastUse != _composeId && !entry->second.displayResident &&
+        if (entry->second.lastUse != _composeId && ! entry->second.displayResident &&
             (_utilityRecording || _utilityUsers == 0 || entry->second.lastUse != _lastUtilityComposeId))
         {
             entry = _rasters.erase(entry);
@@ -2433,15 +2376,12 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
             ++entry;
         }
     }
-    std::erase_if(_regions,
-                  [this](const GpuTexture& entry) noexcept
-                  {
-                      return entry.lastUse != _composeId && !entry.displayResident &&
-                             (_utilityRecording || _utilityUsers == 0 || entry.lastUse != _lastUtilityComposeId);
-                  });
+    std::erase_if(_regions, [this](const GpuTexture& entry) noexcept {
+        return entry.lastUse != _composeId && ! entry.displayResident && (_utilityRecording || _utilityUsers == 0 || entry.lastUse != _lastUtilityComposeId);
+    });
     for (auto entry = _adjustments.begin(); entry != _adjustments.end();)
     {
-        if (entry->second.lastUse != _composeId && !entry->second.displayResident &&
+        if (entry->second.lastUse != _composeId && ! entry->second.displayResident &&
             (_utilityRecording || _utilityUsers == 0 || entry->second.lastUse != _lastUtilityComposeId))
         {
             entry = _adjustments.erase(entry);
@@ -2454,22 +2394,20 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
     return S_OK;
 }
 
-HRESULT CanvasRenderer::ComposeReadback(const CanvasDocument& document, std::vector<std::uint8_t>& bgra, UINT& width,
-                                        UINT& height) noexcept
+HRESULT CanvasRenderer::ComposeReadback(const CanvasDocument& document, std::vector<std::uint8_t>& bgra, UINT& width, UINT& height) noexcept
 {
-    width = 0;
+    width  = 0;
     height = 0;
     bgra.clear();
-    if (!_device || !_context)
+    if (! _device || ! _context)
     {
         return E_UNEXPECTED;
     }
-    if (document.width < 1 || document.height < 1 || document.width > kMaxCanvasSide ||
-        document.height > kMaxCanvasSide)
+    if (document.width < 1 || document.height < 1 || document.width > kMaxCanvasSide || document.height > kMaxCanvasSide)
     {
         return E_INVALIDARG;
     }
-    const std::size_t documentWidth = static_cast<std::size_t>(document.width);
+    const std::size_t documentWidth  = static_cast<std::size_t>(document.width);
     const std::size_t documentHeight = static_cast<std::size_t>(document.height);
     try
     {
@@ -2485,7 +2423,7 @@ HRESULT CanvasRenderer::ComposeReadback(const CanvasDocument& document, std::vec
         bgra.clear();
         return result;
     }
-    width = static_cast<UINT>(document.width);
+    width  = static_cast<UINT>(document.width);
     height = static_cast<UINT>(document.height);
     return S_OK;
 }
@@ -2493,18 +2431,16 @@ HRESULT CanvasRenderer::ComposeReadback(const CanvasDocument& document, std::vec
 HRESULT CanvasRenderer::ComposeReadback(const CanvasDocument& document, Raster& image) noexcept
 {
     image = {};
-    if (!_device || !_context)
+    if (! _device || ! _context)
     {
         return E_UNEXPECTED;
     }
-    if (document.width < 1 || document.height < 1 || document.width > kMaxCanvasSide ||
-        document.height > kMaxCanvasSide)
+    if (document.width < 1 || document.height < 1 || document.width > kMaxCanvasSide || document.height > kMaxCanvasSide)
     {
         return E_INVALIDARG;
     }
-    PixelBuffer pixels = PixelBuffer::TryAllocate(static_cast<std::size_t>(document.width) *
-                                                  static_cast<std::size_t>(document.height) * 4u);
-    if (!pixels)
+    PixelBuffer pixels = PixelBuffer::TryAllocate(static_cast<std::size_t>(document.width) * static_cast<std::size_t>(document.height) * 4u);
+    if (! pixels)
     {
         return E_OUTOFMEMORY;
     }
@@ -2533,16 +2469,15 @@ HRESULT CanvasRenderer::ComposeReadbackRows(const CanvasDocument& document, std:
     // One window when the document fits; otherwise tiles small enough that a layer's part of one, with its filtering
     // margin, still fits a full-resolution texture.
     const bool fits = document.width <= _textureLimit && document.height <= _textureLimit;
-    const int tile =
-        fits ? std::max(document.width, document.height) : std::max(1, std::min(_textureLimit / 2, kReadbackTileSide));
-    HRESULT result = S_OK;
+    const int tile  = fits ? std::max(document.width, document.height) : std::max(1, std::min(_textureLimit / 2, kReadbackTileSide));
+    HRESULT result  = S_OK;
     for (int top = 0; top < document.height && SUCCEEDED(result); top += tile)
     {
         for (int left = 0; left < document.width && SUCCEEDED(result); left += tile)
         {
-            const UINT tileWidth = static_cast<UINT>(std::min(tile, document.width - left));
+            const UINT tileWidth  = static_cast<UINT>(std::min(tile, document.width - left));
             const UINT tileHeight = static_cast<UINT>(std::min(tile, document.height - top));
-            result = PrepareView(left, top, 1, tileWidth, tileHeight);
+            result                = PrepareView(left, top, 1, tileWidth, tileHeight);
             if (SUCCEEDED(result))
             {
                 result = ComposeView(document);
@@ -2550,31 +2485,34 @@ HRESULT CanvasRenderer::ComposeReadbackRows(const CanvasDocument& document, std:
             if (SUCCEEDED(result))
             {
                 result = ReadCanvas(
-                    out + (static_cast<std::size_t>(top) * documentWidth + static_cast<std::size_t>(left)) * 4u,
-                    documentWidth * 4u, tileWidth, tileHeight);
+                    out + (static_cast<std::size_t>(top) * documentWidth + static_cast<std::size_t>(left)) * 4u, documentWidth * 4u, tileWidth, tileHeight);
             }
         }
     }
-    _ignoreStroke = false;
+    _ignoreStroke  = false;
     _documentDirty = true;
     return result;
 }
 
-HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT targetWidth, UINT targetHeight,
-                                     const CanvasViewport& viewport, float holeLeft, float holeTop, float holeWidth,
+HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target,
+                                     UINT targetWidth,
+                                     UINT targetHeight,
+                                     const CanvasViewport& viewport,
+                                     float holeLeft,
+                                     float holeTop,
+                                     float holeWidth,
                                      float holeHeight) noexcept
 {
     if (_recordingCommands || (_recordedDisplaySealed && _recordedOwnerThread != GetCurrentThreadId()))
         return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
-    if (!_context || !target || !_canvas[_front].texture.srv || targetWidth == 0 || targetHeight == 0 ||
-        holeWidth <= 0.0f || holeHeight <= 0.0f)
+    if (! _context || ! target || ! _canvas[_front].texture.srv || targetWidth == 0 || targetHeight == 0 || holeWidth <= 0.0f || holeHeight <= 0.0f)
     {
         // Successful no-op remains distinct from an actual draw for the first visible source-frame proof.
         return S_FALSE;
     }
-    const double scale = viewport.ViewScale();
+    const double scale                = viewport.ViewScale();
     const double devicePixelsPerTexel = scale * _viewScale;
-    const bool reduces = _canvasHasMips && devicePixelsPerTexel > 0.0 && devicePixelsPerTexel < 1.0;
+    const bool reduces                = _canvasHasMips && devicePixelsPerTexel > 0.0 && devicePixelsPerTexel < 1.0;
     if (reduces && _canvasMipsStale)
     {
         // Zoomed out: reduce the new composite through its mips, once per change (RF-412).
@@ -2582,24 +2520,23 @@ HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT target
         _canvasMipsStale = false;
     }
     BlitConstants constants{};
-    constants.viewSize[0] = static_cast<float>(targetWidth);
-    constants.viewSize[1] = static_cast<float>(targetHeight);
-    constants.holeOrigin[0] = holeLeft;
-    constants.holeOrigin[1] = holeTop;
-    constants.holeSize[0] = holeWidth;
-    constants.holeSize[1] = holeHeight;
-    const int documentWidth = _documentWidth > 0 ? _documentWidth : static_cast<int>(_canvasWidth);
-    const int documentHeight = _documentHeight > 0 ? _documentHeight : static_cast<int>(_canvasHeight);
+    constants.viewSize[0]     = static_cast<float>(targetWidth);
+    constants.viewSize[1]     = static_cast<float>(targetHeight);
+    constants.holeOrigin[0]   = holeLeft;
+    constants.holeOrigin[1]   = holeTop;
+    constants.holeSize[0]     = holeWidth;
+    constants.holeSize[1]     = holeHeight;
+    const int documentWidth   = _documentWidth > 0 ? _documentWidth : static_cast<int>(_canvasWidth);
+    const int documentHeight  = _documentHeight > 0 ? _documentHeight : static_cast<int>(_canvasHeight);
     constants.documentSize[0] = static_cast<float>(documentWidth);
     constants.documentSize[1] = static_cast<float>(documentHeight);
     constants.canvasExtent[0] = static_cast<float>(static_cast<double>(_canvasWidth) * _viewScale);
     constants.canvasExtent[1] = static_cast<float>(static_cast<double>(_canvasHeight) * _viewScale);
-    constants.pan[0] = static_cast<float>(viewport.pan.x);
-    constants.pan[1] = static_cast<float>(viewport.pan.y);
-    constants.zoom = static_cast<float>(scale);
-    constants.blitFlags = (viewport.SamplesCrisp() ? kCompositionBlitCrisp : 0u) |
-                          (viewport.ShowsPixelGrid() ? kCompositionBlitGrid : 0u);
-    constants.canvasLod = reduces ? static_cast<float>(-std::log2(devicePixelsPerTexel)) : 0.0f;
+    constants.pan[0]          = static_cast<float>(viewport.pan.x);
+    constants.pan[1]          = static_cast<float>(viewport.pan.y);
+    constants.zoom            = static_cast<float>(scale);
+    constants.blitFlags       = (viewport.SamplesCrisp() ? kCompositionBlitCrisp : 0u) | (viewport.ShowsPixelGrid() ? kCompositionBlitGrid : 0u);
+    constants.canvasLod       = reduces ? static_cast<float>(-std::log2(devicePixelsPerTexel)) : 0.0f;
 
     D3D11_MAPPED_SUBRESOURCE mapped{};
     HRESULT result = _context->Map(_blitConstants.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
@@ -2637,45 +2574,57 @@ HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT target
     return S_OK;
 }
 
-HRESULT CanvasRenderer::DrawSelectionOutlineToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
-                                                     unsigned int targetHeight, ID3D11ShaderResourceView* solid,
-                                                     ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
-                                                     unsigned int maskHeight, float pixelLeft, float pixelTop,
+HRESULT CanvasRenderer::DrawSelectionOutlineToTarget(ID3D11RenderTargetView* target,
+                                                     unsigned int targetWidth,
+                                                     unsigned int targetHeight,
+                                                     ID3D11ShaderResourceView* solid,
+                                                     ID3D11ShaderResourceView* dashes,
+                                                     unsigned int maskWidth,
+                                                     unsigned int maskHeight,
+                                                     float pixelLeft,
+                                                     float pixelTop,
                                                      const std::array<float, 4>* clip) noexcept
 {
-    return DrawViewOverlayToTarget(target, targetWidth, targetHeight, solid, dashes, maskWidth, maskHeight, pixelLeft,
-                                   pixelTop, clip, false);
+    return DrawViewOverlayToTarget(target, targetWidth, targetHeight, solid, dashes, maskWidth, maskHeight, pixelLeft, pixelTop, clip, false);
 }
-HRESULT CanvasRenderer::DrawLassoDraftToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
-                                               unsigned int targetHeight, ID3D11ShaderResourceView* color,
-                                               unsigned int width, unsigned int height, float pixelLeft, float pixelTop,
+HRESULT CanvasRenderer::DrawLassoDraftToTarget(ID3D11RenderTargetView* target,
+                                               unsigned int targetWidth,
+                                               unsigned int targetHeight,
+                                               ID3D11ShaderResourceView* color,
+                                               unsigned int width,
+                                               unsigned int height,
+                                               float pixelLeft,
+                                               float pixelTop,
                                                const std::array<float, 4>* clip) noexcept
 {
-    return DrawViewOverlayToTarget(target, targetWidth, targetHeight, color, nullptr, width, height, pixelLeft,
-                                   pixelTop, clip, true);
+    return DrawViewOverlayToTarget(target, targetWidth, targetHeight, color, nullptr, width, height, pixelLeft, pixelTop, clip, true);
 }
-HRESULT CanvasRenderer::DrawViewOverlayToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
-                                                unsigned int targetHeight, ID3D11ShaderResourceView* solid,
-                                                ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
-                                                unsigned int maskHeight, float pixelLeft, float pixelTop,
-                                                const std::array<float, 4>* clip, bool colorDraft) noexcept
+HRESULT CanvasRenderer::DrawViewOverlayToTarget(ID3D11RenderTargetView* target,
+                                                unsigned int targetWidth,
+                                                unsigned int targetHeight,
+                                                ID3D11ShaderResourceView* solid,
+                                                ID3D11ShaderResourceView* dashes,
+                                                unsigned int maskWidth,
+                                                unsigned int maskHeight,
+                                                float pixelLeft,
+                                                float pixelTop,
+                                                const std::array<float, 4>* clip,
+                                                bool colorDraft) noexcept
 {
     if (_recordingCommands || (_context && _context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE) ||
         (_recordedDisplaySealed && _recordedOwnerThread != GetCurrentThreadId()))
         return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
-    if (!_context || !target || !solid || (!colorDraft && !dashes) || !_selectionOutlineBlend || !targetWidth ||
-        !targetHeight)
+    if (! _context || ! target || ! solid || (! colorDraft && ! dashes) || ! _selectionOutlineBlend || ! targetWidth || ! targetHeight)
         return S_FALSE;
-    constexpr unsigned int sideLimit = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+    constexpr unsigned int sideLimit   = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
     constexpr std::uint64_t pixelLimit = 64ull * 1024ull * 1024ull;
-    if (targetWidth > sideLimit || targetHeight > sideLimit || !maskWidth || !maskHeight || maskWidth > sideLimit ||
-        maskHeight > sideLimit || maskWidth > pixelLimit / maskHeight || !std::isfinite(pixelLeft) ||
-        !std::isfinite(pixelTop) || std::floor(pixelLeft) != pixelLeft || std::floor(pixelTop) != pixelTop)
+    if (targetWidth > sideLimit || targetHeight > sideLimit || ! maskWidth || ! maskHeight || maskWidth > sideLimit || maskHeight > sideLimit ||
+        maskWidth > pixelLimit / maskHeight || ! std::isfinite(pixelLeft) || ! std::isfinite(pixelTop) || std::floor(pixelLeft) != pixelLeft ||
+        std::floor(pixelTop) != pixelTop)
         return E_INVALIDARG;
-    if (clip &&
-        (!std::isfinite((*clip)[0]) || !std::isfinite((*clip)[1]) || !std::isfinite((*clip)[2]) ||
-         !std::isfinite((*clip)[3]) || (*clip)[0] < 0 || (*clip)[1] < 0 || (*clip)[2] > static_cast<float>(maskWidth) ||
-         (*clip)[3] > static_cast<float>(maskHeight) || (*clip)[2] <= (*clip)[0] || (*clip)[3] <= (*clip)[1]))
+    if (clip && (! std::isfinite((*clip)[0]) || ! std::isfinite((*clip)[1]) || ! std::isfinite((*clip)[2]) || ! std::isfinite((*clip)[3]) || (*clip)[0] < 0 ||
+                 (*clip)[1] < 0 || (*clip)[2] > static_cast<float>(maskWidth) || (*clip)[3] > static_cast<float>(maskHeight) || (*clip)[2] <= (*clip)[0] ||
+                 (*clip)[3] <= (*clip)[1]))
         return E_INVALIDARG;
     LayerConstants constants{};
     if (clip)
@@ -2685,11 +2634,11 @@ HRESULT CanvasRenderer::DrawViewOverlayToTarget(ID3D11RenderTargetView* target, 
     }
     constants.canvasSize[0] = static_cast<float>(targetWidth);
     constants.canvasSize[1] = static_cast<float>(targetHeight);
-    constants.layerSize[0] = static_cast<float>(maskWidth);
-    constants.layerSize[1] = static_cast<float>(maskHeight);
+    constants.layerSize[0]  = static_cast<float>(maskWidth);
+    constants.layerSize[1]  = static_cast<float>(maskHeight);
     constants.viewOrigin[0] = pixelLeft;
     constants.viewOrigin[1] = pixelTop;
-    constants.passMode = colorDraft ? kCompositionPassLassoDraft : kCompositionPassSelectionOutline;
+    constants.passMode      = colorDraft ? kCompositionPassLassoDraft : kCompositionPassSelectionOutline;
     D3D11_MAPPED_SUBRESOURCE mapped{};
     const HRESULT result = _context->Map(_layerConstants.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
     if (FAILED(result))
@@ -2698,13 +2647,12 @@ HRESULT CanvasRenderer::DrawViewOverlayToTarget(ID3D11RenderTargetView* target, 
     _context->Unmap(_layerConstants.get(), 0);
     // Consumers explicitly bind their own pipeline, like the existing blit. Remove both borrowed inputs and
     // restore the ordinary disabled blend state before a later composition, readback or chrome consumer.
-    const auto reset = wil::scope_exit(
-        [this]() noexcept
-        {
-            ID3D11ShaderResourceView* none[3]{};
-            _context->PSSetShaderResources(0, 3, none);
-            _context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFFu);
-        });
+    const auto reset                  = wil::scope_exit([this]() noexcept
+    {
+        ID3D11ShaderResourceView* none[3]{};
+        _context->PSSetShaderResources(0, 3, none);
+        _context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFFu);
+    });
     ID3D11RenderTargetView* targets[] = {target};
     _context->OMSetRenderTargets(1, targets, nullptr);
     _context->OMSetDepthStencilState(nullptr, 0);
@@ -2732,7 +2680,7 @@ HRESULT CanvasRenderer::DrawViewOverlayToTarget(ID3D11RenderTargetView* target, 
 
 HRESULT CanvasRenderer::ReadCanvas(std::uint8_t* out, std::size_t outStride, UINT width, UINT height) noexcept
 {
-    if (!_context || _recordingCommands || _context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE ||
+    if (! _context || _recordingCommands || _context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE ||
         (_recordedDisplaySealed && _recordedOwnerThread != GetCurrentThreadId()))
         return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID); // No READ Map/resource creation on the recorder.
 
@@ -2743,14 +2691,14 @@ HRESULT CanvasRenderer::ReadCanvas(std::uint8_t* out, std::size_t outStride, UIN
     }
     // Mip 0 of the canvas into a one-level staging copy.
     D3D11_TEXTURE2D_DESC description{};
-    description.Width = width;
-    description.Height = height;
-    description.MipLevels = 1;
-    description.ArraySize = 1;
-    description.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    description.Width            = width;
+    description.Height           = height;
+    description.MipLevels        = 1;
+    description.ArraySize        = 1;
+    description.Format           = DXGI_FORMAT_B8G8R8A8_UNORM;
     description.SampleDesc.Count = 1;
-    description.Usage = D3D11_USAGE_STAGING;
-    description.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    description.Usage            = D3D11_USAGE_STAGING;
+    description.CPUAccessFlags   = D3D11_CPU_ACCESS_READ;
     wil::com_ptr_nothrow<ID3D11Texture2D> staging;
     HRESULT result = TimedCreateTexture2D(_device, &description, nullptr, staging.put());
     if (FAILED(result))
@@ -2778,15 +2726,14 @@ HRESULT CanvasRenderer::ReadCanvas(std::uint8_t* out, std::size_t outStride, UIN
 HRESULT CanvasRenderer::Readback(std::vector<std::uint8_t>& bgra, UINT& width, UINT& height) noexcept
 {
     bgra.clear();
-    width = 0;
+    width  = 0;
     height = 0;
-    if (!_context || !_canvasWidth || !_canvas[_front].texture.texture)
+    if (! _context || ! _canvasWidth || ! _canvas[_front].texture.texture)
     {
         return E_UNEXPECTED;
     }
     if (_viewScale != 1 || _viewOriginX != 0 || _viewOriginY != 0 ||
-        (_documentWidth > 0 &&
-         (static_cast<int>(_canvasWidth) != _documentWidth || static_cast<int>(_canvasHeight) != _documentHeight)))
+        (_documentWidth > 0 && (static_cast<int>(_canvasWidth) != _documentWidth || static_cast<int>(_canvasHeight) != _documentHeight)))
     {
         // A reduced proxy or a readback tile is not the document: read it through ComposeReadback.
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
@@ -2799,14 +2746,13 @@ HRESULT CanvasRenderer::Readback(std::vector<std::uint8_t>& bgra, UINT& width, U
     {
         return E_OUTOFMEMORY;
     }
-    const HRESULT result =
-        ReadCanvas(bgra.data(), static_cast<std::size_t>(_canvasWidth) * 4u, _canvasWidth, _canvasHeight);
+    const HRESULT result = ReadCanvas(bgra.data(), static_cast<std::size_t>(_canvasWidth) * 4u, _canvasWidth, _canvasHeight);
     if (FAILED(result))
     {
         bgra.clear();
         return result;
     }
-    width = _canvasWidth;
+    width  = _canvasWidth;
     height = _canvasHeight;
     return S_OK;
 }
@@ -2817,9 +2763,9 @@ std::uint64_t CanvasRenderer::CanvasSurfaceBytes() const noexcept
     {
         return 0;
     }
-    const std::uint64_t pixels = static_cast<std::uint64_t>(_canvasWidth) * static_cast<std::uint64_t>(_canvasHeight);
+    const std::uint64_t pixels       = static_cast<std::uint64_t>(_canvasWidth) * static_cast<std::uint64_t>(_canvasHeight);
     const std::uint64_t canvasTexels = _canvasHasMips ? MipChainTexels(_canvasWidth, _canvasHeight) : pixels;
-    std::uint64_t bytes = 2ull * canvasTexels * 4ull;
+    std::uint64_t bytes              = 2ull * canvasTexels * 4ull;
     if (_stack[0].texture.texture)
     {
         bytes += 2ull * pixels * 4ull;
@@ -2827,27 +2773,22 @@ std::uint64_t CanvasRenderer::CanvasSurfaceBytes() const noexcept
     bytes += static_cast<std::uint64_t>(_coverage.size()) * pixels;
     for (const auto& [id, textures] : _adjustments)
     {
-        if (!textures.displayResident)
+        if (! textures.displayResident)
             continue;
         bytes += textures.lut.texture ? 256ull * 16ull : 0ull;
-        bytes += textures.cubeTexture ? static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension *
-                                            Adjust::kCubeDimension * 16ull
-                                      : 0ull;
+        bytes += textures.cubeTexture ? static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension * Adjust::kCubeDimension * 16ull : 0ull;
     }
     if (_strokeTexture.texture)
     {
-        const std::uint64_t texels =
-            _strokeTexture.mipped
-                ? MipChainTexels(static_cast<std::uint64_t>(_strokeTexture.width),
-                                 static_cast<std::uint64_t>(_strokeTexture.height))
-                : static_cast<std::uint64_t>(_strokeTexture.width) * static_cast<std::uint64_t>(_strokeTexture.height);
+        const std::uint64_t texels = _strokeTexture.mipped
+                                         ? MipChainTexels(static_cast<std::uint64_t>(_strokeTexture.width), static_cast<std::uint64_t>(_strokeTexture.height))
+                                         : static_cast<std::uint64_t>(_strokeTexture.width) * static_cast<std::uint64_t>(_strokeTexture.height);
         bytes += texels * (_strokeTexture.gray ? 1ull : 4ull);
     }
     if (_adjustmentPreviewSurface.texture.texture)
     {
         const auto& texture = _adjustmentPreviewSurface.texture;
-        bytes += (texture.mipped ? MipChainTexels(static_cast<std::uint64_t>(texture.width),
-                                                  static_cast<std::uint64_t>(texture.height))
+        bytes += (texture.mipped ? MipChainTexels(static_cast<std::uint64_t>(texture.width), static_cast<std::uint64_t>(texture.height))
                                  : static_cast<std::uint64_t>(texture.width) * texture.height) *
                  4;
     }
@@ -2856,9 +2797,9 @@ std::uint64_t CanvasRenderer::CanvasSurfaceBytes() const noexcept
 
 std::uint64_t CanvasRenderer::UtilitySurfaceBytes() const noexcept
 {
-    const auto& view = _utilityView;
+    const auto& view           = _utilityView;
     const std::uint64_t pixels = static_cast<std::uint64_t>(view.canvasWidth) * view.canvasHeight;
-    std::uint64_t bytes = 2 * pixels * 4;
+    std::uint64_t bytes        = 2 * pixels * 4;
     if (view.stack[0].texture.texture)
         bytes += 2 * pixels * 4;
     bytes += static_cast<std::uint64_t>(view.coverage.size()) * pixels;
@@ -2867,9 +2808,7 @@ std::uint64_t CanvasRenderer::UtilitySurfaceBytes() const noexcept
         if (textures.displayResident || textures.lastUse != _lastUtilityComposeId)
             continue;
         bytes += textures.lut.texture ? 256ULL * 16 : 0;
-        bytes += textures.cubeTexture ? static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension *
-                                            Adjust::kCubeDimension * 16
-                                      : 0;
+        bytes += textures.cubeTexture ? static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension * Adjust::kCubeDimension * 16 : 0;
     }
     return bytes;
 }
@@ -2881,23 +2820,27 @@ void CanvasRenderer::ClearRecorded(ID3D11RenderTargetView* target, const float* 
     else
         _context->ClearRenderTargetView(target, color);
 }
-void CanvasRenderer::UpdateRecorded(ID3D11Resource* resource, UINT subresource, const D3D11_BOX* region,
-                                    const void* data, UINT rowPitch, UINT depthPitch) noexcept
+void CanvasRenderer::UpdateRecorded(
+    ID3D11Resource* resource, UINT subresource, const D3D11_BOX* region, const void* data, UINT rowPitch, UINT depthPitch) noexcept
 {
     if (_recordingCommands)
         _recordingCommands->UpdateForWork(resource, subresource, region, data, rowPitch, depthPitch);
     else
         _context->UpdateSubresource(resource, subresource, region, data, rowPitch, depthPitch);
 }
-void CanvasRenderer::CopyRecorded(ID3D11Resource* destination, UINT destinationSubresource, UINT x, UINT y, UINT z,
-                                  ID3D11Resource* source, UINT sourceSubresource, const D3D11_BOX* region) noexcept
+void CanvasRenderer::CopyRecorded(ID3D11Resource* destination,
+                                  UINT destinationSubresource,
+                                  UINT x,
+                                  UINT y,
+                                  UINT z,
+                                  ID3D11Resource* source,
+                                  UINT sourceSubresource,
+                                  const D3D11_BOX* region) noexcept
 {
     if (_recordingCommands)
-        _recordingCommands->CopyForWork(destination, destinationSubresource, x, y, z, source, sourceSubresource,
-                                        region);
+        _recordingCommands->CopyForWork(destination, destinationSubresource, x, y, z, source, sourceSubresource, region);
     else
-        _context->CopySubresourceRegion(destination, destinationSubresource, x, y, z, source, sourceSubresource,
-                                        region);
+        _context->CopySubresourceRegion(destination, destinationSubresource, x, y, z, source, sourceSubresource, region);
 }
 void CanvasRenderer::GenerateRecordedMips(ID3D11ShaderResourceView* source) noexcept
 {
@@ -2908,9 +2851,8 @@ void CanvasRenderer::GenerateRecordedMips(ID3D11ShaderResourceView* source) noex
 }
 HRESULT CanvasRenderer::SeedRasterResidencyForWork(const CanvasRenderer& stable) noexcept
 {
-    if (!_recordingCommands || FAILED(_recordingCommands->StatusForWork()) || !stable._recordedDisplaySealed ||
-        !stable._recordedOwnerThread || stable._recordingCommands || _device != stable._device || !_rasters.empty() ||
-        !_regions.empty())
+    if (! _recordingCommands || FAILED(_recordingCommands->StatusForWork()) || ! stable._recordedDisplaySealed || ! stable._recordedOwnerThread ||
+        stable._recordingCommands || _device != stable._device || ! _rasters.empty() || ! _regions.empty())
         return E_INVALIDARG;
     try
     {
@@ -2924,20 +2866,19 @@ HRESULT CanvasRenderer::SeedRasterResidencyForWork(const CanvasRenderer& stable)
     for (auto& [identity, texture] : _rasters)
     {
         (void)identity;
-        texture.lastUse = 0;
+        texture.lastUse         = 0;
         texture.displayResident = false;
     }
     for (auto& texture : _regions)
     {
-        texture.lastUse = 0;
+        texture.lastUse         = 0;
         texture.displayResident = false;
     }
     return S_OK;
 }
 HRESULT CanvasRenderer::SealRecordedDisplayForWork() noexcept
 {
-    if (!_recordingCommands || _recordedDisplaySealed || _utilityUsers || _documentDirty ||
-        !_canvas[_front].texture.srv)
+    if (! _recordingCommands || _recordedDisplaySealed || _utilityUsers || _documentDirty || ! _canvas[_front].texture.srv)
         return E_INVALIDARG;
     if (_canvasHasMips && _canvasMipsStale)
     {
@@ -2952,14 +2893,14 @@ HRESULT CanvasRenderer::SealRecordedDisplayForWork() noexcept
 }
 HRESULT CanvasRenderer::BindAcknowledgedDisplayOwner(ID3D11DeviceContext* context) noexcept
 {
-    if (!_recordedDisplaySealed || !context || context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
+    if (! _recordedDisplaySealed || ! context || context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
         return E_INVALIDARG;
     wil::com_ptr_nothrow<ID3D11Device> device;
     context->GetDevice(device.put());
     if (device.get() != _device)
         return E_INVALIDARG;
-    _recordingCommands = nullptr;
-    _context = context;
+    _recordingCommands   = nullptr;
+    _context             = context;
     _recordedOwnerThread = GetCurrentThreadId();
     return S_OK;
 }

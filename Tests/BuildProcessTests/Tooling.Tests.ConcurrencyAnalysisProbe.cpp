@@ -2,7 +2,7 @@
 
 struct ConcurrencyAnalysisProbe final
 {
-    SRWLOCK lock = SRWLOCK_INIT;
+    SRWLOCK lock                 = SRWLOCK_INIT;
     _Guarded_by_(lock) int value = 0;
 
     void Safe() noexcept

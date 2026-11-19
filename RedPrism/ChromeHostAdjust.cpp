@@ -14,19 +14,19 @@
 
 namespace
 {
-constexpr float kCardWidthDip = 384.0f;
-constexpr float kCardPaddingDip = 12.0f;
-constexpr float kRowDip = 28.0f;
-constexpr float kRowGapDip = 6.0f;
-constexpr float kLabelWidthDip = 96.0f;
+constexpr float kCardWidthDip    = 384.0f;
+constexpr float kCardPaddingDip  = 12.0f;
+constexpr float kRowDip          = 28.0f;
+constexpr float kRowGapDip       = 6.0f;
+constexpr float kLabelWidthDip   = 96.0f;
 constexpr float kStepperWidthDip = 118.0f;
-constexpr float kCurveDip = 232.0f;
-constexpr float kHistogramDip = 132.0f;
-constexpr float kOutputRampDip = 14.0f;
-constexpr float kSpectrumDip = 54.0f;
-constexpr float kRampDip = 20.0f;
-constexpr float kNoteDip = 20.0f;
-constexpr float kMarginDip = 8.0f;
+constexpr float kCurveDip        = 232.0f;
+constexpr float kHistogramDip    = 132.0f;
+constexpr float kOutputRampDip   = 14.0f;
+constexpr float kSpectrumDip     = 54.0f;
+constexpr float kRampDip         = 20.0f;
+constexpr float kNoteDip         = 20.0f;
+constexpr float kMarginDip       = 8.0f;
 
 [[nodiscard]] double RoundTo(double value, int decimals) noexcept
 {
@@ -36,8 +36,7 @@ constexpr float kMarginDip = 8.0f;
 
 [[nodiscard]] uint32_t ArgbOf(const AdjustmentColor& color) noexcept
 {
-    const auto byte = [](double value)
-    { return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0, 1.0) * 255)); };
+    const auto byte = [](double value) { return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0, 1.0) * 255)); };
     return 0xFF000000u | (byte(color.red) << 16) | (byte(color.green) << 8) | byte(color.blue);
 }
 } // namespace
@@ -50,12 +49,12 @@ bool ChromeHost::AdjustPanelOpen() const noexcept
 bool ChromeHost::FocusAdjustRadiusForTest() noexcept
 {
     DxUi::NumericStepper* stepper = _adjustRows[static_cast<std::size_t>(AdjustRowId::Radius)].stepper;
-    if (!_attached || !AdjustPanelOpen() || stepper == nullptr || !stepper->IsVisible())
+    if (! _attached || ! AdjustPanelOpen() || stepper == nullptr || ! stepper->IsVisible())
     {
         return false;
     }
-    DxUi::TextField& field = stepper->Field();
-    _canvasFocused = false;
+    DxUi::TextField& field       = stepper->Field();
+    _canvasFocused               = false;
     _accessibilityPlacementDirty = true;
     _view.Controls().SetFocusControl(&field);
     field.SetSelectionRange(0, field.GetText().size());
@@ -78,30 +77,14 @@ D2D1_RECT_F ChromeHost::AdjustControlBoundsForTest(AdjustControlForTest control)
     const DxUi::Control* selected = nullptr;
     switch (control)
     {
-    case AdjustControlForTest::Curves:
-        selected = _curveEditor;
-        break;
-    case AdjustControlForTest::LevelsInput:
-        selected = _levelsInput;
-        break;
-    case AdjustControlForTest::Spectrum:
-        selected = _spectrum;
-        break;
-    case AdjustControlForTest::LevelsAutoContrast:
-        selected = _levelsAuto[0];
-        break;
-    case AdjustControlForTest::Apply:
-        selected = _adjustApply;
-        break;
-    case AdjustControlForTest::Cancel:
-        selected = _adjustCancel;
-        break;
-    case AdjustControlForTest::HueRange:
-        selected = _hueRange;
-        break;
-    case AdjustControlForTest::CurveRemove:
-        selected = _curveRemove;
-        break;
+        case AdjustControlForTest::Curves: selected = _curveEditor; break;
+        case AdjustControlForTest::LevelsInput: selected = _levelsInput; break;
+        case AdjustControlForTest::Spectrum: selected = _spectrum; break;
+        case AdjustControlForTest::LevelsAutoContrast: selected = _levelsAuto[0]; break;
+        case AdjustControlForTest::Apply: selected = _adjustApply; break;
+        case AdjustControlForTest::Cancel: selected = _adjustCancel; break;
+        case AdjustControlForTest::HueRange: selected = _hueRange; break;
+        case AdjustControlForTest::CurveRemove: selected = _curveRemove; break;
     }
     return AdjustPanelOpen() && selected != nullptr && selected->IsVisible() ? selected->GetBounds() : D2D1::RectF();
 }
@@ -110,29 +93,21 @@ bool ChromeHost::AdjustControlEnabledForTest(AdjustControlForTest control) const
 {
     switch (control)
     {
-    case AdjustControlForTest::Curves:
-        return _curveEditor != nullptr && _curveEditor->IsEnabled();
-    case AdjustControlForTest::LevelsInput:
-        return _levelsInput != nullptr && _levelsInput->IsEnabled();
-    case AdjustControlForTest::Spectrum:
-        return _spectrum != nullptr && _spectrum->IsEnabled();
-    case AdjustControlForTest::LevelsAutoContrast:
-        return _levelsAuto[0] != nullptr && _levelsAuto[0]->IsEnabled();
-    case AdjustControlForTest::Apply:
-        return _adjustApply != nullptr && _adjustApply->IsEnabled();
-    case AdjustControlForTest::Cancel:
-        return _adjustCancel != nullptr && _adjustCancel->IsEnabled();
-    case AdjustControlForTest::HueRange:
-        return _hueRange != nullptr && _hueRange->IsEnabled();
-    case AdjustControlForTest::CurveRemove:
-        return _curveRemove != nullptr && _curveRemove->IsEnabled();
+        case AdjustControlForTest::Curves: return _curveEditor != nullptr && _curveEditor->IsEnabled();
+        case AdjustControlForTest::LevelsInput: return _levelsInput != nullptr && _levelsInput->IsEnabled();
+        case AdjustControlForTest::Spectrum: return _spectrum != nullptr && _spectrum->IsEnabled();
+        case AdjustControlForTest::LevelsAutoContrast: return _levelsAuto[0] != nullptr && _levelsAuto[0]->IsEnabled();
+        case AdjustControlForTest::Apply: return _adjustApply != nullptr && _adjustApply->IsEnabled();
+        case AdjustControlForTest::Cancel: return _adjustCancel != nullptr && _adjustCancel->IsEnabled();
+        case AdjustControlForTest::HueRange: return _hueRange != nullptr && _hueRange->IsEnabled();
+        case AdjustControlForTest::CurveRemove: return _curveRemove != nullptr && _curveRemove->IsEnabled();
     }
     return false;
 }
 
 bool ChromeHost::FilterOptionsVisible() const noexcept
 {
-    if (!AdjustPanelOpen() || !_adjustInspector.filter.has_value() || _adjustInspector.filter == FilterKind::Levels ||
+    if (! AdjustPanelOpen() || ! _adjustInspector.filter.has_value() || _adjustInspector.filter == FilterKind::Levels ||
         _adjustInspector.filter == FilterKind::HueSaturation || _adjustCard == nullptr)
     {
         return false;
@@ -140,45 +115,25 @@ bool ChromeHost::FilterOptionsVisible() const noexcept
     DxUi::Control* option = nullptr;
     switch (*_adjustInspector.filter)
     {
-    case FilterKind::GaussianBlur:
-        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Radius)].slider;
-        break;
-    case FilterKind::MotionBlur:
-        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Angle)].slider;
-        break;
-    case FilterKind::AddNoise:
-        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Amount)].slider;
-        break;
-    case FilterKind::LensCorrection:
-        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Distortion)].slider;
-        break;
-    case FilterKind::Exposure:
-        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Exposure)].slider;
-        break;
-    case FilterKind::Grain:
-        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::GrainAmount)].slider;
-        break;
-    case FilterKind::Curves:
-        option = _curveEditor;
-        break;
-    case FilterKind::GradientMap:
-        option = _gradientRamp;
-        break;
-    case FilterKind::ContentAwareFill:
-        option = _fillHint;
-        break;
-    case ::FilterKind::HueSaturation:
-    case ::FilterKind::Levels:
-        break;
+        case FilterKind::GaussianBlur: option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Radius)].slider; break;
+        case FilterKind::MotionBlur: option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Angle)].slider; break;
+        case FilterKind::AddNoise: option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Amount)].slider; break;
+        case FilterKind::LensCorrection: option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Distortion)].slider; break;
+        case FilterKind::Exposure: option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Exposure)].slider; break;
+        case FilterKind::Grain: option = _adjustRows[static_cast<std::size_t>(AdjustRowId::GrainAmount)].slider; break;
+        case FilterKind::Curves: option = _curveEditor; break;
+        case FilterKind::GradientMap: option = _gradientRamp; break;
+        case FilterKind::ContentAwareFill: option = _fillHint; break;
+        case ::FilterKind::HueSaturation:
+        case ::FilterKind::Levels: break;
     }
-    if (option == nullptr || !option->IsVisible())
+    if (option == nullptr || ! option->IsVisible())
     {
         return false;
     }
     const D2D1_RECT_F bounds = option->GetBounds();
-    const D2D1_RECT_F card = _adjustCard->GetBounds();
-    return bounds.bottom > bounds.top + 1.0f && bounds.right > bounds.left + 1.0f && bounds.top >= card.top - 0.5f &&
-           bounds.bottom <= card.bottom + 0.5f;
+    const D2D1_RECT_F card   = _adjustCard->GetBounds();
+    return bounds.bottom > bounds.top + 1.0f && bounds.right > bounds.left + 1.0f && bounds.top >= card.top - 0.5f && bounds.bottom <= card.bottom + 0.5f;
 }
 
 void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
@@ -187,160 +142,148 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     _adjustCard->SetCornerRadius(8.0f);
     _adjustCard->SetVisible(false);
     DxUi::Panel& card = *_adjustCard;
-    _adjustTitle = card.AddChild<DxUi::Label>(std::wstring{});
+    _adjustTitle      = card.AddChild<DxUi::Label>(std::wstring{});
     _adjustTitle->SetFontRole(DxUi::FontRole::BodyStrong);
     // A value row: a label, a slider (logarithmic ones give the small values most of the travel) and an exact stepper.
-    const auto row = [&](AdjustRowId id, UINT labelId, UINT unitId, double minimum, double maximum, int decimals,
-                         bool logarithmic, AdjustAction what)
+    const auto row = [&](AdjustRowId id, UINT labelId, UINT unitId, double minimum, double maximum, int decimals, bool logarithmic, AdjustAction what)
     {
         AdjustRow& entry = _adjustRows[static_cast<std::size_t>(id)];
-        entry.label = card.AddChild<DxUi::Label>(LoadStringResource(nullptr, labelId));
-        entry.slider = card.AddChild<DxUi::Slider>();
+        entry.label      = card.AddChild<DxUi::Label>(LoadStringResource(nullptr, labelId));
+        entry.slider     = card.AddChild<DxUi::Slider>();
         entry.slider->SetAccessibleName(LoadStringResource(nullptr, labelId));
         entry.slider->SetMinimum(logarithmic ? std::log(minimum) : minimum);
         entry.slider->SetMaximum(logarithmic ? std::log(maximum) : maximum);
         entry.slider->SetStep(logarithmic ? 0.01 : std::pow(10.0, -decimals));
         entry.slider->SetLargeStep(logarithmic ? 0.1 : (maximum - minimum) / 10);
-        entry.slider->SetOnValueChanged(
-            [this, id](double value)
-            {
-                const AdjustRow& changed = _adjustRows[static_cast<std::size_t>(id)];
-                const double real = changed.logarithmic ? std::exp(value) : value;
-                Report(changed.action, RoundTo(std::clamp(real, changed.minimum, changed.maximum), changed.decimals));
-            });
-        entry.stepper = MakeStepper(card,
-                                    {.labelId = labelId,
-                                     .unitId = unitId,
-                                     .unitWidth = 14.0f,
-                                     .minimum = minimum,
-                                     .maximum = maximum,
-                                     .step = std::pow(10.0, -decimals),
-                                     .decimals = static_cast<std::uint8_t>(decimals)},
-                                    what);
-        entry.action = what;
-        entry.minimum = minimum;
-        entry.maximum = maximum;
+        entry.slider->SetOnValueChanged([this, id](double value)
+        {
+            const AdjustRow& changed = _adjustRows[static_cast<std::size_t>(id)];
+            const double real        = changed.logarithmic ? std::exp(value) : value;
+            Report(changed.action, RoundTo(std::clamp(real, changed.minimum, changed.maximum), changed.decimals));
+        });
+        entry.stepper     = MakeStepper(card,
+                                        {.labelId   = labelId,
+                                         .unitId    = unitId,
+                                         .unitWidth = 14.0f,
+                                         .minimum   = minimum,
+                                         .maximum   = maximum,
+                                         .step      = std::pow(10.0, -decimals),
+                                         .decimals  = static_cast<std::uint8_t>(decimals)},
+                                        what);
+        entry.action      = what;
+        entry.minimum     = minimum;
+        entry.maximum     = maximum;
         entry.logarithmic = logarithmic;
-        entry.decimals = decimals;
+        entry.decimals    = decimals;
     };
     // Curves and Levels share the channel choice.
-    _adjustChannel = MakeCombo(card, NumberedItems({IDS_ADJUST_RGB, IDS_ADJUST_RED, IDS_ADJUST_GREEN, IDS_ADJUST_BLUE}),
-                               {.nameId = IDS_ADJUST_CHANNEL}, AdjustAction::SetChannel);
+    _adjustChannel = MakeCombo(
+        card, NumberedItems({IDS_ADJUST_RGB, IDS_ADJUST_RED, IDS_ADJUST_GREEN, IDS_ADJUST_BLUE}), {.nameId = IDS_ADJUST_CHANNEL}, AdjustAction::SetChannel);
     _curveEditor = card.AddChild<CurveEditor>();
     _curveEditor->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_CURVE_EDITOR));
-    _curveEditor->SetOnChange(
-        [this](std::vector<CurvePoint> points)
+    _curveEditor->SetOnChange([this](std::vector<CurvePoint> points)
+    {
+        if (! _syncing && ! _adjustInspector.busy)
         {
-            if (!_syncing && !_adjustInspector.busy)
-            {
-                _resync |= kResyncAdjust; // the editor shows the user's curve: the next push writes it back
-                ++_adjustCallbacksForTest;
-                _events.OnCurveChanged(std::move(points));
-            }
-        });
+            _resync |= kResyncAdjust; // the editor shows the user's curve: the next push writes it back
+            ++_adjustCallbacksForTest;
+            _events.OnCurveChanged(std::move(points));
+        }
+    });
     _curveCaption = card.AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_CURVE_HINT));
-    _curveRemove = MakeButton(card, {.labelId = IDS_ADJUST_REMOVE_POINT},
-                              [this]
-                              {
-                                  const std::optional<std::size_t> selected =
-                                      _curveEditor ? _curveEditor->SelectedIndex() : std::nullopt;
-                                  if (selected.has_value())
-                                  {
-                                      Report(AdjustAction::RemovePoint, static_cast<double>(selected.value()));
-                                  }
-                              });
-    _curveReset = MakeButton(card, {.labelId = IDS_ADJUST_RESET}, AdjustAction::Reset);
+    _curveRemove  = MakeButton(card,
+                               {.labelId = IDS_ADJUST_REMOVE_POINT},
+                               [this]
+    {
+        const std::optional<std::size_t> selected = _curveEditor ? _curveEditor->SelectedIndex() : std::nullopt;
+        if (selected.has_value())
+        {
+            Report(AdjustAction::RemovePoint, static_cast<double>(selected.value()));
+        }
+    });
+    _curveReset   = MakeButton(card, {.labelId = IDS_ADJUST_RESET}, AdjustAction::Reset);
     // Levels.
     _levelsInput = card.AddChild<LevelsBar>();
     _levelsInput->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_LEVELS_INPUT));
     _levelsInput->SetKind(LevelsBar::Kind::Input);
-    _levelsInput->SetOnHandle(
-        [this](int handle, double value)
+    _levelsInput->SetOnHandle([this](int handle, double value)
+    {
+        if (_syncing || _adjustInspector.busy)
         {
-            if (_syncing || _adjustInspector.busy)
-            {
-                return;
-            }
-            _resync |= kResyncAdjust;
-            ++_adjustCallbacksForTest;
-            const LevelRange& range = Adjust::LevelsCurrent(_adjustInspector.levels);
-            if (handle == 0)
-            {
-                _events.OnAdjustAction(AdjustAction::SetInputBlack, std::min(range.white - 1, std::round(value)));
-            }
-            else if (handle == 2)
-            {
-                _events.OnAdjustAction(AdjustAction::SetInputWhite, std::max(range.black + 1, std::round(value)));
-            }
-            else
-            {
-                const double fraction =
-                    std::min(0.999, std::max(0.001, (value - range.black) / (range.white - range.black)));
-                _events.OnAdjustAction(AdjustAction::SetInputGamma, std::log(fraction) / std::log(0.5));
-            }
-        });
+            return;
+        }
+        _resync |= kResyncAdjust;
+        ++_adjustCallbacksForTest;
+        const LevelRange& range = Adjust::LevelsCurrent(_adjustInspector.levels);
+        if (handle == 0)
+        {
+            _events.OnAdjustAction(AdjustAction::SetInputBlack, std::min(range.white - 1, std::round(value)));
+        }
+        else if (handle == 2)
+        {
+            _events.OnAdjustAction(AdjustAction::SetInputWhite, std::max(range.black + 1, std::round(value)));
+        }
+        else
+        {
+            const double fraction = std::min(0.999, std::max(0.001, (value - range.black) / (range.white - range.black)));
+            _events.OnAdjustAction(AdjustAction::SetInputGamma, std::log(fraction) / std::log(0.5));
+        }
+    });
     _levelsOutput = card.AddChild<LevelsBar>();
     _levelsOutput->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_LEVELS_OUTPUT));
     _levelsOutput->SetKind(LevelsBar::Kind::Output);
-    _levelsOutput->SetOnHandle(
-        [this](int handle, double value)
-        { Report(handle == 0 ? AdjustAction::SetOutputBlack : AdjustAction::SetOutputWhite, std::round(value)); });
-    _levelsBlack = MakeStepper(card, {.labelId = IDS_ADJUST_INPUT_BLACK, .minimum = 0, .maximum = 254},
-                               AdjustAction::SetInputBlack);
-    _levelsGamma =
-        MakeStepper(card, {.labelId = IDS_ADJUST_GAMMA, .minimum = 0.1, .maximum = 9.99, .step = 0.01, .decimals = 2},
-                    AdjustAction::SetInputGamma);
-    _levelsWhite = MakeStepper(card, {.labelId = IDS_ADJUST_INPUT_WHITE, .minimum = 1, .maximum = 255},
-                               AdjustAction::SetInputWhite);
-    _levelsOutBlack = MakeStepper(card, {.labelId = IDS_ADJUST_OUTPUT_BLACK, .minimum = 0, .maximum = 255},
-                                  AdjustAction::SetOutputBlack);
-    _levelsOutWhite = MakeStepper(card, {.labelId = IDS_ADJUST_OUTPUT_WHITE, .minimum = 0, .maximum = 255},
-                                  AdjustAction::SetOutputWhite);
+    _levelsOutput->SetOnHandle([this](int handle, double value)
+    { Report(handle == 0 ? AdjustAction::SetOutputBlack : AdjustAction::SetOutputWhite, std::round(value)); });
+    _levelsBlack = MakeStepper(card, {.labelId = IDS_ADJUST_INPUT_BLACK, .minimum = 0, .maximum = 254}, AdjustAction::SetInputBlack);
+    _levelsGamma = MakeStepper(card, {.labelId = IDS_ADJUST_GAMMA, .minimum = 0.1, .maximum = 9.99, .step = 0.01, .decimals = 2}, AdjustAction::SetInputGamma);
+    _levelsWhite = MakeStepper(card, {.labelId = IDS_ADJUST_INPUT_WHITE, .minimum = 1, .maximum = 255}, AdjustAction::SetInputWhite);
+    _levelsOutBlack = MakeStepper(card, {.labelId = IDS_ADJUST_OUTPUT_BLACK, .minimum = 0, .maximum = 255}, AdjustAction::SetOutputBlack);
+    _levelsOutWhite = MakeStepper(card, {.labelId = IDS_ADJUST_OUTPUT_WHITE, .minimum = 0, .maximum = 255}, AdjustAction::SetOutputWhite);
     // The eyedroppers: pressing the armed one again stops sampling.
     const UINT sampleIds[] = {IDS_ADJUST_SAMPLE_BLACK, IDS_ADJUST_SAMPLE_GRAY, IDS_ADJUST_SAMPLE_WHITE};
     for (int index = 0; index < 3; ++index)
     {
-        _levelsSample[static_cast<std::size_t>(index)] = MakeButton(
-            card, {.labelId = sampleIds[index], .tipId = IDS_ADJUST_SAMPLE_TIP}, [this, index]
-            { Report(AdjustAction::SetLevelsSample, _adjustInspector.levelsSample == index + 1 ? 0.0 : index + 1.0); });
+        _levelsSample[static_cast<std::size_t>(index)] = MakeButton(card, {.labelId = sampleIds[index], .tipId = IDS_ADJUST_SAMPLE_TIP}, [this, index] {
+            Report(AdjustAction::SetLevelsSample, _adjustInspector.levelsSample == index + 1 ? 0.0 : index + 1.0);
+        });
     }
     const UINT autoIds[] = {IDS_ADJUST_AUTO_CONTRAST, IDS_ADJUST_AUTO_COLOR, IDS_ADJUST_AUTO_NEUTRAL};
     for (int index = 0; index < 3; ++index)
     {
         _levelsAuto[static_cast<std::size_t>(index)] =
-            MakeButton(card, {.labelId = autoIds[index]},
-                       [this, index] { Report(AdjustAction::AutoLevels, static_cast<double>(index)); });
+            MakeButton(card, {.labelId = autoIds[index]}, [this, index] { Report(AdjustAction::AutoLevels, static_cast<double>(index)); });
     }
     // Hue / Saturation.
-    _hueRange = MakeCombo(card,
-                          NumberedItems({IDS_ADJUST_MASTER, IDS_ADJUST_REDS, IDS_ADJUST_YELLOWS, IDS_ADJUST_GREENS,
-                                         IDS_ADJUST_CYANS, IDS_ADJUST_BLUES, IDS_ADJUST_MAGENTAS}),
-                          {.nameId = IDS_ADJUST_RANGE}, AdjustAction::SetRange);
+    _hueRange = MakeCombo(
+        card,
+        NumberedItems({IDS_ADJUST_MASTER, IDS_ADJUST_REDS, IDS_ADJUST_YELLOWS, IDS_ADJUST_GREENS, IDS_ADJUST_CYANS, IDS_ADJUST_BLUES, IDS_ADJUST_MAGENTAS}),
+        {.nameId = IDS_ADJUST_RANGE},
+        AdjustAction::SetRange);
     const UINT hueSampleIds[] = {IDS_ADJUST_HUE_SAMPLE, IDS_ADJUST_HUE_ADD, IDS_ADJUST_HUE_REMOVE};
     for (int index = 0; index < 3; ++index)
     {
-        _hueSample[static_cast<std::size_t>(index)] = MakeButton(
-            card, {.labelId = hueSampleIds[index], .tipId = IDS_ADJUST_HUE_SAMPLE_TIP}, [this, index]
-            { Report(AdjustAction::SetHueSample, _adjustInspector.hueSample == index + 1 ? 0.0 : index + 1.0); });
+        _hueSample[static_cast<std::size_t>(index)] = MakeButton(card, {.labelId = hueSampleIds[index], .tipId = IDS_ADJUST_HUE_SAMPLE_TIP}, [this, index] {
+            Report(AdjustAction::SetHueSample, _adjustInspector.hueSample == index + 1 ? 0.0 : index + 1.0);
+        });
     }
-    _hueTargeting = MakeButton(card, {.labelId = IDS_ADJUST_TARGETED, .tipId = IDS_ADJUST_TARGETED_TIP},
-                               [this] { Report(AdjustAction::SetTargeting, _adjustInspector.targeting ? 0.0 : 1.0); });
+    _hueTargeting = MakeButton(card, {.labelId = IDS_ADJUST_TARGETED, .tipId = IDS_ADJUST_TARGETED_TIP}, [this] {
+        Report(AdjustAction::SetTargeting, _adjustInspector.targeting ? 0.0 : 1.0);
+    });
     row(AdjustRowId::Hue, IDS_ADJUST_HUE, IDS_UNIT_DEGREES, -180, 180, 0, false, AdjustAction::SetHue);
     row(AdjustRowId::Saturation, IDS_ADJUST_SATURATION, 0, -100, 100, 0, false, AdjustAction::SetSaturation);
     row(AdjustRowId::Lightness, IDS_ADJUST_LIGHTNESS, 0, -100, 100, 0, false, AdjustAction::SetLightness);
     _spectrum = card.AddChild<SpectrumEditor>();
     _spectrum->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_HUE_SPECTRUM));
-    _spectrum->SetOnHandle(
-        [this](int index, double degrees)
+    _spectrum->SetOnHandle([this](int index, double degrees)
+    {
+        if (! _syncing && ! _adjustInspector.busy)
         {
-            if (!_syncing && !_adjustInspector.busy)
-            {
-                _resync |= kResyncAdjust;
-                ++_adjustCallbacksForTest;
-                _events.OnBandChanged(index, degrees);
-            }
-        });
-    _hueInvert = MakeCheck(card, {.labelId = IDS_ADJUST_INVERT_RANGE}, AdjustAction::SetInvertRange);
+            _resync |= kResyncAdjust;
+            ++_adjustCallbacksForTest;
+            _events.OnBandChanged(index, degrees);
+        }
+    });
+    _hueInvert   = MakeCheck(card, {.labelId = IDS_ADJUST_INVERT_RANGE}, AdjustAction::SetInvertRange);
     _hueColorize = MakeCheck(card, {.labelId = IDS_ADJUST_COLORIZE}, AdjustAction::SetColorize);
     // Exposure, Gradient Map, Grain.
     row(AdjustRowId::Exposure, IDS_ADJUST_EXPOSURE, 0, -20, 20, 2, false, AdjustAction::SetExposure);
@@ -352,11 +295,11 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     _mapShadows->SetAccessibleName(LoadStringResource(nullptr, IDS_ADJUST_SHADOWS));
     _mapShadows->SetOnClick([this] { Report(AdjustAction::OpenShadows, 0.0); });
     _mapShadowsLabel = card.AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_SHADOWS));
-    _mapHighlights = card.AddChild<DxUi::ColorSwatch>(0xFFFFFFFFu);
+    _mapHighlights   = card.AddChild<DxUi::ColorSwatch>(0xFFFFFFFFu);
     _mapHighlights->SetAccessibleName(LoadStringResource(nullptr, IDS_ADJUST_HIGHLIGHTS));
     _mapHighlights->SetOnClick([this] { Report(AdjustAction::OpenHighlights, 0.0); });
     _mapHighlightsLabel = card.AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_HIGHLIGHTS));
-    _mapReverse = MakeCheck(card, {.labelId = IDS_ADJUST_REVERSE}, AdjustAction::SetReversed);
+    _mapReverse         = MakeCheck(card, {.labelId = IDS_ADJUST_REVERSE}, AdjustAction::SetReversed);
     row(AdjustRowId::GrainAmount, IDS_ADJUST_AMOUNT, 0, 0, 100, 0, false, AdjustAction::SetGrainAmount);
     row(AdjustRowId::GrainSize, IDS_ADJUST_SIZE, IDS_UNIT_PIXELS, 0.5, 20, 1, true, AdjustAction::SetGrainSize);
     row(AdjustRowId::GrainRoughness, IDS_ADJUST_ROUGHNESS, 0, 0, 100, 0, false, AdjustAction::SetGrainRoughness);
@@ -365,8 +308,8 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     row(AdjustRowId::Angle, IDS_ADJUST_ANGLE, IDS_UNIT_DEGREES, -90, 90, 0, false, AdjustAction::SetAngle);
     row(AdjustRowId::Distance, IDS_ADJUST_DISTANCE, IDS_UNIT_PIXELS, 1, 2000, 0, true, AdjustAction::SetDistance);
     row(AdjustRowId::Amount, IDS_ADJUST_AMOUNT, IDS_UNIT_PERCENT, 0.1, 400, 1, true, AdjustAction::SetAmount);
-    _noiseDistribution = MakeCombo(card, NumberedItems({IDS_ADJUST_UNIFORM, IDS_ADJUST_GAUSSIAN}),
-                                   {.nameId = IDS_A11Y_NOISE_DISTRIBUTION}, AdjustAction::SetGaussian);
+    _noiseDistribution =
+        MakeCombo(card, NumberedItems({IDS_ADJUST_UNIFORM, IDS_ADJUST_GAUSSIAN}), {.nameId = IDS_A11Y_NOISE_DISTRIBUTION}, AdjustAction::SetGaussian);
     _noiseMono = MakeCheck(card, {.labelId = IDS_ADJUST_MONOCHROMATIC}, AdjustAction::SetMonochromatic);
     row(AdjustRowId::Distortion, IDS_ADJUST_DISTORTION, 0, -100, 100, 0, false, AdjustAction::SetDistortion);
     _lensHint = card.AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_LENS_HINT));
@@ -380,10 +323,10 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     _fillNoSource->SetFontRole(DxUi::FontRole::Small);
     // Shared footer.
     _adjustPreview = MakeCheck(card, {.labelId = IDS_ADJUST_PREVIEW}, AdjustAction::SetPreview);
-    _adjustNote = card.AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_LIMITED));
+    _adjustNote    = card.AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_LIMITED));
     _adjustNote->SetFontRole(DxUi::FontRole::Small);
     _adjustCancel = MakeButton(card, {.labelId = IDS_TRANSFORM_CANCEL}, AdjustAction::Cancel);
-    _adjustApply = MakeButton(card, {.labelId = IDS_ADJUST_OK, .primary = true}, AdjustAction::Apply);
+    _adjustApply  = MakeButton(card, {.labelId = IDS_ADJUST_OK, .primary = true}, AdjustAction::Apply);
     for (const std::unique_ptr<DxUi::Control>& child : _adjustCard->GetChildren())
     {
         child->SetVisible(false);
@@ -392,17 +335,17 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
 
 void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexcept
 {
-    if (!_adjustCard || !_adjustCard->IsVisible())
+    if (! _adjustCard || ! _adjustCard->IsVisible())
     {
         return;
     }
     const AdjustInspectorState& state = _adjustInspector;
-    const float width = std::min(kCardWidthDip, std::max(200.0f, right - kRailWidthDip - 2.0f * kMarginDip));
-    const float left = right - kMarginDip - width;
-    const float innerLeft = left + kCardPaddingDip;
-    const float innerRight = left + width - kCardPaddingDip;
-    float y = top + kMarginDip + kCardPaddingDip;
-    const auto place = [&](DxUi::Control* control, float height)
+    const float width                 = std::min(kCardWidthDip, std::max(200.0f, right - kRailWidthDip - 2.0f * kMarginDip));
+    const float left                  = right - kMarginDip - width;
+    const float innerLeft             = left + kCardPaddingDip;
+    const float innerRight            = left + width - kCardPaddingDip;
+    float y                           = top + kMarginDip + kCardPaddingDip;
+    const auto place                  = [&](DxUi::Control* control, float height)
     {
         if (control != nullptr)
         {
@@ -418,17 +361,15 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
             return;
         }
         PlaceControl(entry.label, D2D1::RectF(innerLeft, y, innerLeft + kLabelWidthDip, y + kRowDip));
-        PlaceControl(entry.slider, D2D1::RectF(innerLeft + kLabelWidthDip + 4.0f, y,
-                                               innerRight - kStepperWidthDip - 8.0f, y + kRowDip));
+        PlaceControl(entry.slider, D2D1::RectF(innerLeft + kLabelWidthDip + 4.0f, y, innerRight - kStepperWidthDip - 8.0f, y + kRowDip));
         PlaceControl(entry.stepper, D2D1::RectF(innerRight - kStepperWidthDip, y, innerRight, y + kRowDip));
         y += kRowDip + kRowGapDip;
     };
     const auto placeButtons = [&](std::span<DxUi::Button* const> buttons, float height)
     {
-        const float gap = 6.0f;
-        const float each = (innerRight - innerLeft - gap * static_cast<float>(buttons.size() - 1)) /
-                           static_cast<float>(buttons.size());
-        float x = innerLeft;
+        const float gap  = 6.0f;
+        const float each = (innerRight - innerLeft - gap * static_cast<float>(buttons.size() - 1)) / static_cast<float>(buttons.size());
+        float x          = innerLeft;
         for (DxUi::Button* control : buttons)
         {
             if (control != nullptr)
@@ -445,102 +386,99 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
     {
         switch (*state.filter)
         {
-        case FilterKind::Levels:
-        {
-            place(_adjustChannel, kRowDip);
-            place(_levelsInput, kHistogramDip + LevelsBar::kHandleRowDip);
-            const float third = (innerRight - innerLeft - 12.0f) / 3.0f;
-            PlaceControl(_levelsBlack, D2D1::RectF(innerLeft, y, innerLeft + third, y + kRowDip));
-            PlaceControl(_levelsGamma,
-                         D2D1::RectF(innerLeft + third + 6.0f, y, innerLeft + 2 * third + 6.0f, y + kRowDip));
-            PlaceControl(_levelsWhite, D2D1::RectF(innerRight - third, y, innerRight, y + kRowDip));
-            y += kRowDip + kRowGapDip;
-            place(_levelsOutput, kOutputRampDip + LevelsBar::kHandleRowDip);
-            const float half = (innerRight - innerLeft - 6.0f) / 2.0f;
-            PlaceControl(_levelsOutBlack, D2D1::RectF(innerLeft, y, innerLeft + half, y + kRowDip));
-            PlaceControl(_levelsOutWhite, D2D1::RectF(innerRight - half, y, innerRight, y + kRowDip));
-            y += kRowDip + kRowGapDip;
-            placeButtons(_levelsSample, kRowDip);
-            placeButtons(_levelsAuto, kRowDip);
-            break;
-        }
-        case FilterKind::HueSaturation:
-        {
-            const bool spectrum = state.hsv.range != ColorRange::Master && !state.hsv.colorize;
-            PlaceControl(_hueRange, D2D1::RectF(innerLeft, y, innerLeft + 150.0f, y + kRowDip));
-            float x = innerRight;
-            for (DxUi::Button* control : {_hueTargeting, _hueSample[2], _hueSample[1], _hueSample[0]})
+            case FilterKind::Levels:
             {
-                const float buttonWidth = 50.0f;
-                PlaceControl(control, D2D1::RectF(x - buttonWidth, y, x, y + kRowDip));
-                x -= buttonWidth + 4.0f;
+                place(_adjustChannel, kRowDip);
+                place(_levelsInput, kHistogramDip + LevelsBar::kHandleRowDip);
+                const float third = (innerRight - innerLeft - 12.0f) / 3.0f;
+                PlaceControl(_levelsBlack, D2D1::RectF(innerLeft, y, innerLeft + third, y + kRowDip));
+                PlaceControl(_levelsGamma, D2D1::RectF(innerLeft + third + 6.0f, y, innerLeft + 2 * third + 6.0f, y + kRowDip));
+                PlaceControl(_levelsWhite, D2D1::RectF(innerRight - third, y, innerRight, y + kRowDip));
+                y += kRowDip + kRowGapDip;
+                place(_levelsOutput, kOutputRampDip + LevelsBar::kHandleRowDip);
+                const float half = (innerRight - innerLeft - 6.0f) / 2.0f;
+                PlaceControl(_levelsOutBlack, D2D1::RectF(innerLeft, y, innerLeft + half, y + kRowDip));
+                PlaceControl(_levelsOutWhite, D2D1::RectF(innerRight - half, y, innerRight, y + kRowDip));
+                y += kRowDip + kRowGapDip;
+                placeButtons(_levelsSample, kRowDip);
+                placeButtons(_levelsAuto, kRowDip);
+                break;
             }
-            y += kRowDip + kRowGapDip;
-            placeRow(AdjustRowId::Hue);
-            placeRow(AdjustRowId::Saturation);
-            placeRow(AdjustRowId::Lightness);
-            if (spectrum)
+            case FilterKind::HueSaturation:
             {
-                place(_spectrum, kSpectrumDip);
-                place(_hueInvert, 24.0f);
+                const bool spectrum = state.hsv.range != ColorRange::Master && ! state.hsv.colorize;
+                PlaceControl(_hueRange, D2D1::RectF(innerLeft, y, innerLeft + 150.0f, y + kRowDip));
+                float x = innerRight;
+                for (DxUi::Button* control : {_hueTargeting, _hueSample[2], _hueSample[1], _hueSample[0]})
+                {
+                    const float buttonWidth = 50.0f;
+                    PlaceControl(control, D2D1::RectF(x - buttonWidth, y, x, y + kRowDip));
+                    x -= buttonWidth + 4.0f;
+                }
+                y += kRowDip + kRowGapDip;
+                placeRow(AdjustRowId::Hue);
+                placeRow(AdjustRowId::Saturation);
+                placeRow(AdjustRowId::Lightness);
+                if (spectrum)
+                {
+                    place(_spectrum, kSpectrumDip);
+                    place(_hueInvert, 24.0f);
+                }
+                place(_hueColorize, 24.0f);
+                break;
             }
-            place(_hueColorize, 24.0f);
-            break;
-        }
-        case FilterKind::Curves:
-            place(_adjustChannel, kRowDip);
-            place(_curveEditor, kCurveDip);
-            place(_curveCaption, kNoteDip);
-            placeButtons(std::array<DxUi::Button*, 2>{_curveRemove, _curveReset}, kRowDip);
-            break;
-        case FilterKind::Exposure:
-            placeRow(AdjustRowId::Exposure);
-            placeRow(AdjustRowId::Offset);
-            placeRow(AdjustRowId::Gamma);
-            break;
-        case FilterKind::GradientMap:
-        {
-            place(_gradientRamp, kRampDip);
-            PlaceControl(_mapShadows, D2D1::RectF(innerLeft, y, innerLeft + 24.0f, y + 24.0f));
-            PlaceControl(_mapShadowsLabel, D2D1::RectF(innerLeft + 30.0f, y, innerLeft + 130.0f, y + 24.0f));
-            PlaceControl(_mapHighlights, D2D1::RectF(innerLeft + 150.0f, y, innerLeft + 174.0f, y + 24.0f));
-            PlaceControl(_mapHighlightsLabel, D2D1::RectF(innerLeft + 180.0f, y, innerRight, y + 24.0f));
-            y += 24.0f + kRowGapDip;
-            place(_mapReverse, 24.0f);
-            break;
-        }
-        case FilterKind::Grain:
-            placeRow(AdjustRowId::GrainAmount);
-            placeRow(AdjustRowId::GrainSize);
-            placeRow(AdjustRowId::GrainRoughness);
-            break;
-        case FilterKind::GaussianBlur:
-            placeRow(AdjustRowId::Radius);
-            break;
-        case FilterKind::MotionBlur:
-            placeRow(AdjustRowId::Angle);
-            placeRow(AdjustRowId::Distance);
-            break;
-        case FilterKind::AddNoise:
-            placeRow(AdjustRowId::Amount);
-            place(_noiseDistribution, kRowDip);
-            place(_noiseMono, 24.0f);
-            break;
-        case FilterKind::LensCorrection:
-            placeRow(AdjustRowId::Distortion);
-            place(_lensHint, 36.0f);
-            break;
-        case FilterKind::ContentAwareFill:
-            place(_fillHint, 36.0f);
-            if (state.previewFailed)
+            case FilterKind::Curves:
+                place(_adjustChannel, kRowDip);
+                place(_curveEditor, kCurveDip);
+                place(_curveCaption, kNoteDip);
+                placeButtons(std::array<DxUi::Button*, 2>{_curveRemove, _curveReset}, kRowDip);
+                break;
+            case FilterKind::Exposure:
+                placeRow(AdjustRowId::Exposure);
+                placeRow(AdjustRowId::Offset);
+                placeRow(AdjustRowId::Gamma);
+                break;
+            case FilterKind::GradientMap:
             {
-                place(_fillNoSource, 54.0f);
+                place(_gradientRamp, kRampDip);
+                PlaceControl(_mapShadows, D2D1::RectF(innerLeft, y, innerLeft + 24.0f, y + 24.0f));
+                PlaceControl(_mapShadowsLabel, D2D1::RectF(innerLeft + 30.0f, y, innerLeft + 130.0f, y + 24.0f));
+                PlaceControl(_mapHighlights, D2D1::RectF(innerLeft + 150.0f, y, innerLeft + 174.0f, y + 24.0f));
+                PlaceControl(_mapHighlightsLabel, D2D1::RectF(innerLeft + 180.0f, y, innerRight, y + 24.0f));
+                y += 24.0f + kRowGapDip;
+                place(_mapReverse, 24.0f);
+                break;
             }
-            break;
+            case FilterKind::Grain:
+                placeRow(AdjustRowId::GrainAmount);
+                placeRow(AdjustRowId::GrainSize);
+                placeRow(AdjustRowId::GrainRoughness);
+                break;
+            case FilterKind::GaussianBlur: placeRow(AdjustRowId::Radius); break;
+            case FilterKind::MotionBlur:
+                placeRow(AdjustRowId::Angle);
+                placeRow(AdjustRowId::Distance);
+                break;
+            case FilterKind::AddNoise:
+                placeRow(AdjustRowId::Amount);
+                place(_noiseDistribution, kRowDip);
+                place(_noiseMono, 24.0f);
+                break;
+            case FilterKind::LensCorrection:
+                placeRow(AdjustRowId::Distortion);
+                place(_lensHint, 36.0f);
+                break;
+            case FilterKind::ContentAwareFill:
+                place(_fillHint, 36.0f);
+                if (state.previewFailed)
+                {
+                    place(_fillNoSource, 54.0f);
+                }
+                break;
         }
     }
     place(_adjustPreview, 24.0f);
-    if (state.limitedToSelection && !state.editsAdjustment)
+    if (state.limitedToSelection && ! state.editsAdjustment)
     {
         place(_adjustNote, kNoteDip);
     }
@@ -556,15 +494,15 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
 {
     // The panel writes only a state it has not shown (RF-1001, `_resync`): an open panel is synced on every pointer
     // move over the canvas.
-    if (!_adjustCard || (!TakeResync(kResyncAdjust) && state == _adjustInspector))
+    if (! _adjustCard || (! TakeResync(kResyncAdjust) && state == _adjustInspector))
     {
         return;
     }
     ++_syncCounters.headers;
-    const auto hold = HoldReports();
+    const auto hold    = HoldReports();
     const bool wasOpen = _adjustCard->IsVisible();
-    _adjustInspector = state;
-    const bool open = state.filter.has_value();
+    _adjustInspector   = state;
+    const bool open    = state.filter.has_value();
     _adjustCard->SetVisible(open);
     if (open)
     {
@@ -583,18 +521,18 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
                 entry.slider->SetValue(entry.logarithmic ? std::log(std::max(value, entry.minimum)) : value);
                 // A typed value in progress reformats on every keystroke otherwise (SetValue clears IsEditing()
                 // and re-renders the text), mangling a second '.' or a partial decimal before Enter commits it.
-                if (!entry.stepper->IsEditing())
+                if (! entry.stepper->IsEditing())
                 {
                     entry.stepper->SetValue(value);
                 }
             }
         };
-        const bool levels = state.filter == FilterKind::Levels;
-        const bool hsv = state.filter == FilterKind::HueSaturation;
-        const auto kind = [&](FilterKind which) { return state.filter == which; };
+        const bool levels         = state.filter == FilterKind::Levels;
+        const bool hsv            = state.filter == FilterKind::HueSaturation;
+        const auto kind           = [&](FilterKind which) { return state.filter == which; };
         const auto enableMutation = [&](DxUi::Control* control, bool prerequisite = true)
         {
-            const bool enabled = !state.busy && prerequisite;
+            const bool enabled = ! state.busy && prerequisite;
             if (control != nullptr && control->IsEnabled() != enabled)
             {
                 control->SetEnabled(enabled);
@@ -645,7 +583,7 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
             // Same guard as the value rows below: never reformat a stepper the user is still typing into.
             const auto syncLevel = [](DxUi::NumericStepper* stepper, double value)
             {
-                if (!stepper->IsEditing())
+                if (! stepper->IsEditing())
                 {
                     stepper->SetValue(value);
                 }
@@ -657,9 +595,8 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
             syncLevel(_levelsOutWhite, range.outputWhite);
             for (int index = 0; index < 3; ++index)
             {
-                SetPressedVisualIfChanged(_levelsSample[static_cast<std::size_t>(index)],
-                                          _levelsSamplePressed[static_cast<std::size_t>(index)],
-                                          state.levelsSample == index + 1);
+                SetPressedVisualIfChanged(
+                    _levelsSample[static_cast<std::size_t>(index)], _levelsSamplePressed[static_cast<std::size_t>(index)], state.levelsSample == index + 1);
                 enableMutation(_levelsAuto[static_cast<std::size_t>(index)], state.histogramReady);
             }
         }
@@ -668,13 +605,11 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
             _adjustChannel->SetSelectedIndex(static_cast<size_t>(state.settings.curves.channel));
             _curveEditor->SetCurves(state.settings.curves, static_cast<int>(state.settings.curves.channel));
             const std::optional<std::size_t> selected = _curveEditor->SelectedIndex();
-            const std::vector<CurvePoint>& points =
-                state.settings.curves.channels[static_cast<std::size_t>(state.settings.curves.channel)];
+            const std::vector<CurvePoint>& points     = state.settings.curves.channels[static_cast<std::size_t>(state.settings.curves.channel)];
             if (selected.has_value() && selected.value() < points.size())
             {
-                _curveCaption->SetText(FormatStringResource(nullptr, IDS_ADJUST_CURVE_POINT,
-                                                            static_cast<int>(points[selected.value()].x),
-                                                            static_cast<int>(points[selected.value()].y)));
+                _curveCaption->SetText(FormatStringResource(
+                    nullptr, IDS_ADJUST_CURVE_POINT, static_cast<int>(points[selected.value()].x), static_cast<int>(points[selected.value()].y)));
                 enableMutation(_curveRemove, selected.value() > 0 && selected.value() + 1 < points.size());
             }
             else
@@ -683,11 +618,13 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
                 enableMutation(_curveRemove, false);
             }
         }
-        for (DxUi::Control* control :
-             {static_cast<DxUi::Control*>(_levelsInput), static_cast<DxUi::Control*>(_levelsOutput),
-              static_cast<DxUi::Control*>(_levelsBlack), static_cast<DxUi::Control*>(_levelsGamma),
-              static_cast<DxUi::Control*>(_levelsWhite), static_cast<DxUi::Control*>(_levelsOutBlack),
-              static_cast<DxUi::Control*>(_levelsOutWhite)})
+        for (DxUi::Control* control : {static_cast<DxUi::Control*>(_levelsInput),
+                                       static_cast<DxUi::Control*>(_levelsOutput),
+                                       static_cast<DxUi::Control*>(_levelsBlack),
+                                       static_cast<DxUi::Control*>(_levelsGamma),
+                                       static_cast<DxUi::Control*>(_levelsWhite),
+                                       static_cast<DxUi::Control*>(_levelsOutBlack),
+                                       static_cast<DxUi::Control*>(_levelsOutWhite)})
         {
             ShowControl(control, levels);
         }
@@ -704,22 +641,22 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
         ShowControl(_curveRemove, kind(FilterKind::Curves));
         ShowControl(_curveReset, kind(FilterKind::Curves));
         // Hue / Saturation.
-        const bool spectrum = hsv && state.hsv.range != ColorRange::Master && !state.hsv.colorize;
+        const bool spectrum = hsv && state.hsv.range != ColorRange::Master && ! state.hsv.colorize;
         ShowControl(_hueRange, hsv);
         for (DxUi::Button* control : _hueSample)
         {
             ShowControl(control, spectrum);
         }
-        ShowControl(_hueTargeting, hsv && !state.hsv.colorize);
+        ShowControl(_hueTargeting, hsv && ! state.hsv.colorize);
         ShowControl(_spectrum, spectrum);
         ShowControl(_hueInvert, spectrum);
         ShowControl(_hueColorize, hsv);
         if (hsv)
         {
             _hueRange->SetSelectedIndex(static_cast<size_t>(state.hsv.range));
-            enableMutation(_hueRange, !state.hsv.colorize);
-            const RangeAdjustment& range = Adjust::RangeOf(state.hsv);
-            const AdjustRow& hueRow = _adjustRows[static_cast<std::size_t>(AdjustRowId::Hue)];
+            enableMutation(_hueRange, ! state.hsv.colorize);
+            const RangeAdjustment& range   = Adjust::RangeOf(state.hsv);
+            const AdjustRow& hueRow        = _adjustRows[static_cast<std::size_t>(AdjustRowId::Hue)];
             const AdjustRow& saturationRow = _adjustRows[static_cast<std::size_t>(AdjustRowId::Saturation)];
             hueRow.slider->SetMinimum(state.hsv.colorize ? 0 : -180);
             hueRow.slider->SetMaximum(state.hsv.colorize ? 360 : 180);
@@ -729,9 +666,8 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
             saturationRow.stepper->SetMinimum(state.hsv.colorize ? 0 : -100);
             for (int index = 0; index < 3; ++index)
             {
-                SetPressedVisualIfChanged(_hueSample[static_cast<std::size_t>(index)],
-                                          _hueSamplePressed[static_cast<std::size_t>(index)],
-                                          state.hueSample == index + 1);
+                SetPressedVisualIfChanged(
+                    _hueSample[static_cast<std::size_t>(index)], _hueSamplePressed[static_cast<std::size_t>(index)], state.hueSample == index + 1);
             }
             SetPressedVisualIfChanged(_hueTargeting, _hueTargetingPressed, state.targeting);
             _spectrum->SetSettings(state.hsv);
@@ -761,10 +697,8 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
         ShowControl(_mapReverse, map);
         if (map)
         {
-            const AdjustmentColor& dark =
-                settings.gradientMap.reversed ? settings.gradientMap.highlights : settings.gradientMap.shadows;
-            const AdjustmentColor& light =
-                settings.gradientMap.reversed ? settings.gradientMap.shadows : settings.gradientMap.highlights;
+            const AdjustmentColor& dark  = settings.gradientMap.reversed ? settings.gradientMap.highlights : settings.gradientMap.shadows;
+            const AdjustmentColor& light = settings.gradientMap.reversed ? settings.gradientMap.shadows : settings.gradientMap.highlights;
             _gradientRamp->SetEnds(dark, light);
             _mapShadows->SetSwatchValue(ArgbOf(settings.gradientMap.shadows));
             _mapHighlights->SetSwatchValue(ArgbOf(settings.gradientMap.highlights));
@@ -791,15 +725,15 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
         // Footer.
         ShowControl(_adjustPreview, true);
         _adjustPreview->SetChecked(state.preview);
-        ShowControl(_adjustNote, state.limitedToSelection && !state.editsAdjustment);
+        ShowControl(_adjustNote, state.limitedToSelection && ! state.editsAdjustment);
         ShowControl(_adjustCancel, true);
         ShowControl(_adjustApply, true);
-        if (!_adjustCancel->IsEnabled())
+        if (! _adjustCancel->IsEnabled())
         {
             _adjustCancel->SetEnabled(true);
         }
-        enableMutation(_adjustApply, !(kind(FilterKind::ContentAwareFill) && state.previewFailed));
-        if (!wasOpen)
+        enableMutation(_adjustApply, ! (kind(FilterKind::ContentAwareFill) && state.previewFailed));
+        if (! wasOpen)
         {
             // Enter and Escape its controls leave are its OK and Cancel; it takes no keyboard when it opens.
             PushCard(ModalCard::Adjust, _adjustCard, nullptr);
@@ -813,8 +747,7 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
         }
         // The panel closing (Cancel/OK, a tool switch, the document going away) takes its Gradient Map color picker
         // with it, as the size card does its custom-extension picker, without reporting a pick.
-        if (ColorPickerOpen() &&
-            (_pickerTarget == PickerTarget::GradientShadows || _pickerTarget == PickerTarget::GradientHighlights))
+        if (ColorPickerOpen() && (_pickerTarget == PickerTarget::GradientShadows || _pickerTarget == PickerTarget::GradientHighlights))
         {
             ClosePickerCard();
         }

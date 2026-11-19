@@ -26,30 +26,32 @@ namespace RedPrismBoundedClipper
 
 class Clipper2Exception : public std::exception
 {
-  public:
-    explicit Clipper2Exception(const char* description) : m_descr(description) {}
+public:
+    explicit Clipper2Exception(const char* description) : m_descr(description)
+    {
+    }
     virtual const char* what() const noexcept override
     {
         return m_descr.c_str();
     }
 
-  private:
+private:
     std::string m_descr;
 };
 
 static const char* precision_error = "Precision exceeds the permitted range";
-static const char* range_error = "Values exceed permitted range";
-static const char* scale_error = "Invalid scale (either 0 or too large)";
-static const char* non_pair_error = "There must be 2 values for each coordinate";
+static const char* range_error     = "Values exceed permitted range";
+static const char* scale_error     = "Invalid scale (either 0 or too large)";
+static const char* non_pair_error  = "There must be 2 values for each coordinate";
 static const char* undefined_error = "There is an undefined error in Clipper2";
 #endif
 
 // error codes (2^n)
 const int precision_error_i = 1;  // non-fatal
-const int scale_error_i = 2;      // non-fatal
-const int non_pair_error_i = 4;   // non-fatal
+const int scale_error_i     = 2;  // non-fatal
+const int non_pair_error_i  = 4;  // non-fatal
 const int undefined_error_i = 32; // fatal
-const int range_error_i = 64;
+const int range_error_i     = 64;
 
 #ifndef PI
 static const double PI = 3.141592653589793238;
@@ -63,9 +65,9 @@ const int CLIPPER2_MAX_DEC_PRECISION = 8; // see Discussions #564
 
 static const int64_t MAX_COORD = INT64_MAX >> 2;
 static const int64_t MIN_COORD = -MAX_COORD;
-static const int64_t INVALID = INT64_MAX;
-const double max_coord = static_cast<double>(MAX_COORD);
-const double min_coord = static_cast<double>(MIN_COORD);
+static const int64_t INVALID   = INT64_MAX;
+const double max_coord         = static_cast<double>(MAX_COORD);
+const double min_coord         = static_cast<double>(MIN_COORD);
 
 static const double MAX_DBL = (std::numeric_limits<double>::max)();
 
@@ -74,19 +76,13 @@ static void DoError([[maybe_unused]] int error_code)
 #if (defined(__cpp_exceptions) && __cpp_exceptions) || (defined(__EXCEPTIONS) && __EXCEPTIONS)
     switch (error_code)
     {
-    case precision_error_i:
-        Workspace::Refuse();
-    case scale_error_i:
-        Workspace::Refuse();
-    case non_pair_error_i:
-        Workspace::Refuse();
-    case undefined_error_i:
-        Workspace::Refuse();
-    case range_error_i:
-        Workspace::Refuse();
-    // Should never happen, but adding this to stop a compiler warning
-    default:
-        Workspace::Refuse();
+        case precision_error_i: Workspace::Refuse();
+        case scale_error_i: Workspace::Refuse();
+        case non_pair_error_i: Workspace::Refuse();
+        case undefined_error_i: Workspace::Refuse();
+        case range_error_i: Workspace::Refuse();
+        // Should never happen, but adding this to stop a compiler warning
+        default: Workspace::Refuse();
     }
 #else
     ++error_code; // only to stop compiler warning
@@ -98,8 +94,7 @@ template <typename T, typename = void> struct is_round_invocable : std::false_ty
 {
 };
 
-template <typename T>
-struct is_round_invocable<T, std::void_t<decltype(std::round(std::declval<T>()))>> : std::true_type
+template <typename T> struct is_round_invocable<T, std::void_t<decltype(std::round(std::declval<T>()))>> : std::true_type
 {
 };
 
@@ -129,7 +124,7 @@ template <typename T> struct Point
 
     template <typename T2> inline void Init(const T2 x_ = 0, const T2 y_ = 0, const z_type z_ = 0)
     {
-        if constexpr (std::is_integral_v<T> && is_round_invocable<T2>::value && !std::is_integral_v<T2>)
+        if constexpr (std::is_integral_v<T> && is_round_invocable<T2>::value && ! std::is_integral_v<T2>)
         {
             x = static_cast<T>(std::round(x_));
             y = static_cast<T>(std::round(y_));
@@ -181,7 +176,7 @@ template <typename T> struct Point
 
     template <typename T2> inline void Init(const T2 x_ = 0, const T2 y_ = 0)
     {
-        if constexpr (std::is_integral_v<T> && is_round_invocable<T2>::value && !std::is_integral_v<T2>)
+        if constexpr (std::is_integral_v<T> && is_round_invocable<T2>::value && ! std::is_integral_v<T2>)
         {
             x = static_cast<T>(std::round(x_));
             y = static_cast<T>(std::round(y_));
@@ -224,7 +219,7 @@ template <typename T> struct Point
 
     friend bool operator!=(const Point& a, const Point& b)
     {
-        return !(a == b);
+        return ! (a == b);
     }
 
     inline Point<T> operator-() const
@@ -251,9 +246,9 @@ template <typename T> struct Point
 
 // nb: using 'using' here (instead of typedef) as they can be used in templates
 using Point64 = Point<int64_t>;
-using PointD = Point<double>;
+using PointD  = Point<double>;
 
-template <typename T> using Path = ArenaVector<Point<T>>;
+template <typename T> using Path  = ArenaVector<Point<T>>;
 template <typename T> using Paths = ArenaVector<Path<T>>;
 
 template <typename T, typename T2 = T> Path<T>& operator<<(Path<T>& poly, const Point<T2>& p)
@@ -268,14 +263,13 @@ template <typename T> Paths<T>& operator<<(Paths<T>& polys, const Path<T>& p)
     return polys;
 }
 
-using Path64 = Path<int64_t>;
-using PathD = Path<double>;
+using Path64  = Path<int64_t>;
+using PathD   = Path<double>;
 using Paths64 = ArenaVector<Path64>;
-using PathsD = ArenaVector<PathD>;
+using PathsD  = ArenaVector<PathD>;
 
-static const Point64 InvalidPoint64 =
-    Point64((std::numeric_limits<int64_t>::max)(), (std::numeric_limits<int64_t>::max)());
-static const PointD InvalidPointD = PointD((std::numeric_limits<double>::max)(), (std::numeric_limits<double>::max)());
+static const Point64 InvalidPoint64 = Point64((std::numeric_limits<int64_t>::max)(), (std::numeric_limits<int64_t>::max)());
+static const PointD InvalidPointD   = PointD((std::numeric_limits<double>::max)(), (std::numeric_limits<double>::max)());
 
 template <typename T> static inline Point<T> MidPoint(const Point<T>& p1, const Point<T>& p2)
 {
@@ -290,7 +284,7 @@ template <typename T> static inline Point<T> MidPoint(const Point<T>& p1, const 
 template <typename T> struct Rect;
 
 using Rect64 = Rect<int64_t>;
-using RectD = Rect<double>;
+using RectD  = Rect<double>;
 
 template <typename T> struct Rect
 {
@@ -299,7 +293,9 @@ template <typename T> struct Rect
     T right;
     T bottom;
 
-    Rect(T l, T t, T r, T b) : left(l), top(t), right(r), bottom(b) {}
+    Rect(T l, T t, T r, T b) : left(l), top(t), right(r), bottom(b)
+    {
+    }
 
     Rect(bool is_valid = true)
     {
@@ -316,8 +312,7 @@ template <typename T> struct Rect
 
     static Rect<T> InvalidRect()
     {
-        return {(std::numeric_limits<T>::max)(), (std::numeric_limits<T>::max)(), std::numeric_limits<T>::lowest(),
-                std::numeric_limits<T>::lowest()};
+        return {(std::numeric_limits<T>::max)(), (std::numeric_limits<T>::max)(), std::numeric_limits<T>::lowest(), std::numeric_limits<T>::lowest()};
     }
 
     bool IsValid() const
@@ -383,8 +378,7 @@ template <typename T> struct Rect
 
     bool Intersects(const Rect<T>& rec) const
     {
-        return ((std::max)(left, rec.left) <= (std::min)(right, rec.right)) &&
-               ((std::max)(top, rec.top) <= (std::min)(bottom, rec.bottom));
+        return ((std::max)(left, rec.left) <= (std::min)(right, rec.right)) && ((std::max)(top, rec.top) <= (std::min)(bottom, rec.bottom));
     };
 
     bool operator==(const Rect<T>& other) const
@@ -394,9 +388,9 @@ template <typename T> struct Rect
 
     Rect<T>& operator+=(const Rect<T>& other)
     {
-        left = (std::min)(left, other.left);
-        top = (std::min)(top, other.top);
-        right = (std::max)(right, other.right);
+        left   = (std::min)(left, other.left);
+        top    = (std::min)(top, other.top);
+        right  = (std::max)(right, other.right);
         bottom = (std::max)(bottom, other.bottom);
         return *this;
     }
@@ -419,25 +413,25 @@ template <typename T1, typename T2> inline Rect<T1> ScaleRect(const Rect<T2>& re
 {
     Rect<T1> result;
 
-    if constexpr (std::is_integral_v<T1> && is_round_invocable<T2>::value && !std::is_integral_v<T2>)
+    if constexpr (std::is_integral_v<T1> && is_round_invocable<T2>::value && ! std::is_integral_v<T2>)
     {
-        result.left = static_cast<T1>(std::round(rect.left * scale));
-        result.top = static_cast<T1>(std::round(rect.top * scale));
-        result.right = static_cast<T1>(std::round(rect.right * scale));
+        result.left   = static_cast<T1>(std::round(rect.left * scale));
+        result.top    = static_cast<T1>(std::round(rect.top * scale));
+        result.right  = static_cast<T1>(std::round(rect.right * scale));
         result.bottom = static_cast<T1>(std::round(rect.bottom * scale));
     }
     else
     {
-        result.left = static_cast<T1>(rect.left * scale);
-        result.top = static_cast<T1>(rect.top * scale);
-        result.right = static_cast<T1>(rect.right * scale);
+        result.left   = static_cast<T1>(rect.left * scale);
+        result.top    = static_cast<T1>(rect.top * scale);
+        result.right  = static_cast<T1>(rect.right * scale);
         result.bottom = static_cast<T1>(rect.bottom * scale);
     }
     return result;
 }
 
 static const Rect64 InvalidRect64 = Rect64::InvalidRect();
-static const RectD InvalidRectD = RectD::InvalidRect();
+static const RectD InvalidRectD   = RectD::InvalidRect();
 
 template <typename T> Rect<T> GetBounds(const Path<T>& path)
 {
@@ -523,7 +517,7 @@ template <typename T, typename T2> Rect<T> GetBounds(const Paths<T2>& paths)
 
 template <typename T> std::ostream& operator<<(std::ostream& outstream, const Path<T>& path)
 {
-    if (!path.empty())
+    if (! path.empty())
     {
         auto pt = path.cbegin(), last = path.cend() - 1;
         while ((Workspace::Pulse(), pt != last))
@@ -540,8 +534,7 @@ template <typename T> std::ostream& operator<<(std::ostream& outstream, const Pa
     return outstream;
 }
 
-template <typename T1, typename T2>
-inline Path<T1> ScalePath(const Path<T2>& path, double scale_x, double scale_y, int& error_code)
+template <typename T1, typename T2> inline Path<T1> ScalePath(const Path<T2>& path, double scale_x, double scale_y, int& error_code)
 {
     Path<T1> result;
     if (scale_x == 0 || scale_y == 0)
@@ -557,19 +550,23 @@ inline Path<T1> ScalePath(const Path<T2>& path, double scale_x, double scale_y, 
 
     result.reserve(path.size());
 #ifdef USINGZ
-    std::transform(path.begin(), path.end(), back_inserter(result),
+    std::transform(path.begin(),
+                   path.end(),
+                   back_inserter(result),
                    [scale_x, scale_y](const auto& pt)
-                   {
-                       Workspace::Pulse();
-                       return Point<T1>(pt.x * scale_x, pt.y * scale_y, pt.z);
-                   });
+    {
+        Workspace::Pulse();
+        return Point<T1>(pt.x * scale_x, pt.y * scale_y, pt.z);
+    });
 #else
-    std::transform(path.begin(), path.end(), back_inserter(result),
+    std::transform(path.begin(),
+                   path.end(),
+                   back_inserter(result),
                    [scale_x, scale_y](const auto& pt)
-                   {
-                       Workspace::Pulse();
-                       return Point<T1>(static_cast<double>(pt.x) * scale_x, static_cast<double>(pt.y) * scale_y);
-                   });
+    {
+        Workspace::Pulse();
+        return Point<T1>(static_cast<double>(pt.x) * scale_x, static_cast<double>(pt.y) * scale_y);
+    });
 #endif
     return result;
 }
@@ -579,16 +576,14 @@ template <typename T1, typename T2> inline Path<T1> ScalePath(const Path<T2>& pa
     return ScalePath<T1, T2>(path, scale, scale, error_code);
 }
 
-template <typename T1, typename T2>
-inline Paths<T1> ScalePaths(const Paths<T2>& paths, double scale_x, double scale_y, int& error_code)
+template <typename T1, typename T2> inline Paths<T1> ScalePaths(const Paths<T2>& paths, double scale_x, double scale_y, int& error_code)
 {
     Paths<T1> result;
 
     if constexpr (std::is_integral_v<T1>)
     {
         RectD r = GetBounds<double, T2>(paths);
-        if ((r.left * scale_x) < min_coord || (r.right * scale_x) > max_coord || (r.top * scale_y) < min_coord ||
-            (r.bottom * scale_y) > max_coord)
+        if ((r.left * scale_x) < min_coord || (r.right * scale_x) > max_coord || (r.top * scale_y) < min_coord || (r.bottom * scale_y) > max_coord)
         {
             error_code |= range_error_i;
             DoError(range_error_i);
@@ -597,12 +592,14 @@ inline Paths<T1> ScalePaths(const Paths<T2>& paths, double scale_x, double scale
     }
 
     result.reserve(paths.size());
-    std::transform(paths.begin(), paths.end(), back_inserter(result),
+    std::transform(paths.begin(),
+                   paths.end(),
+                   back_inserter(result),
                    [=, &error_code](const auto& path)
-                   {
-                       Workspace::Pulse();
-                       return ScalePath<T1, T2>(path, scale_x, scale_y, error_code);
-                   });
+    {
+        Workspace::Pulse();
+        return ScalePath<T1, T2>(path, scale_x, scale_y, error_code);
+    });
     return result;
 }
 
@@ -615,24 +612,28 @@ template <typename T1, typename T2> inline Path<T1> TransformPath(const Path<T2>
 {
     Path<T1> result;
     result.reserve(path.size());
-    std::transform(path.cbegin(), path.cend(), std::back_inserter(result),
+    std::transform(path.cbegin(),
+                   path.cend(),
+                   std::back_inserter(result),
                    [](const Point<T2>& pt)
-                   {
-                       Workspace::Pulse();
-                       return Point<T1>(pt);
-                   });
+    {
+        Workspace::Pulse();
+        return Point<T1>(pt);
+    });
     return result;
 }
 
 template <typename T1, typename T2> inline Paths<T1> TransformPaths(const Paths<T2>& paths)
 {
     Paths<T1> result;
-    std::transform(paths.cbegin(), paths.cend(), std::back_inserter(result),
+    std::transform(paths.cbegin(),
+                   paths.cend(),
+                   std::back_inserter(result),
                    [](const Path<T2>& path)
-                   {
-                       Workspace::Pulse();
-                       return TransformPath<T1, T2>(path);
-                   });
+    {
+        Workspace::Pulse();
+        return TransformPath<T1, T2>(path);
+    });
     return result;
 }
 
@@ -657,13 +658,13 @@ template <typename T> inline Path<T> StripNearEqual(const Path<T>& path, double 
     result.emplace_back(first_pt);
     for (; (Workspace::Pulse(), path_iter != path.cend()); ++path_iter)
     {
-        if (!NearEqual(*path_iter, last_pt, max_dist_sqrd))
+        if (! NearEqual(*path_iter, last_pt, max_dist_sqrd))
         {
             last_pt = *path_iter;
             result.emplace_back(last_pt);
         }
     }
-    if (!is_closed_path)
+    if (! is_closed_path)
         return result;
     while ((Workspace::Pulse(), result.size() > 1 && NearEqual(result.back(), first_pt, max_dist_sqrd)))
         result.pop_back();
@@ -674,8 +675,7 @@ template <typename T> inline Paths<T> StripNearEqual(const Paths<T>& paths, doub
 {
     Paths<T> result;
     result.reserve(paths.size());
-    for (typename Paths<T>::const_iterator paths_citer = paths.cbegin();
-         (Workspace::Pulse(), paths_citer != paths.cend()); ++paths_citer)
+    for (typename Paths<T>::const_iterator paths_citer = paths.cbegin(); (Workspace::Pulse(), paths_citer != paths.cend()); ++paths_citer)
     {
         result.emplace_back(std::move(StripNearEqual(*paths_citer, max_dist_sqrd, is_closed_path)));
     }
@@ -693,8 +693,7 @@ template <typename T> inline void StripDuplicates(Path<T>& path, bool is_closed_
 
 template <typename T> inline void StripDuplicates(Paths<T>& paths, bool is_closed_path)
 {
-    for (typename Paths<T>::iterator paths_citer = paths.begin(); (Workspace::Pulse(), paths_citer != paths.end());
-         ++paths_citer)
+    for (typename Paths<T>::iterator paths_citer = paths.begin(); (Workspace::Pulse(), paths_citer != paths.end()); ++paths_citer)
     {
         StripDuplicates(*paths_citer, is_closed_path);
     }
@@ -814,8 +813,7 @@ template <typename T> inline int CrossProductSign(const Point<T>& pt1, const Poi
 #endif
 }
 
-template <typename T>
-inline bool IsCollinear(const Point<T>& pt1, const Point<T>& sharedPt, const Point<T>& pt2) // #777
+template <typename T> inline bool IsCollinear(const Point<T>& pt1, const Point<T>& sharedPt, const Point<T>& pt2) // #777
 {
     const auto a = sharedPt.x - pt1.x;
     const auto b = pt2.y - sharedPt.y;
@@ -828,8 +826,7 @@ inline bool IsCollinear(const Point<T>& pt1, const Point<T>& sharedPt, const Poi
 
 template <typename T> inline double CrossProduct(const Point<T>& pt1, const Point<T>& pt2, const Point<T>& pt3)
 {
-    return (static_cast<double>(pt2.x - pt1.x) * static_cast<double>(pt3.y - pt2.y) -
-            static_cast<double>(pt2.y - pt1.y) * static_cast<double>(pt3.x - pt2.x));
+    return (static_cast<double>(pt2.x - pt1.x) * static_cast<double>(pt3.y - pt2.y) - static_cast<double>(pt2.y - pt1.y) * static_cast<double>(pt3.x - pt2.x));
 }
 
 template <typename T> inline double CrossProduct(const Point<T>& vec1, const Point<T>& vec2)
@@ -839,8 +836,7 @@ template <typename T> inline double CrossProduct(const Point<T>& vec1, const Poi
 
 template <typename T> inline double DotProduct(const Point<T>& pt1, const Point<T>& pt2, const Point<T>& pt3)
 {
-    return (static_cast<double>(pt2.x - pt1.x) * static_cast<double>(pt3.x - pt2.x) +
-            static_cast<double>(pt2.y - pt1.y) * static_cast<double>(pt3.y - pt2.y));
+    return (static_cast<double>(pt2.x - pt1.x) * static_cast<double>(pt3.x - pt2.x) + static_cast<double>(pt2.y - pt1.y) * static_cast<double>(pt3.y - pt2.y));
 }
 
 template <typename T> inline double DotProduct(const Point<T>& vec1, const Point<T>& vec2)
@@ -853,8 +849,7 @@ template <typename T> inline double DistanceSqr(const Point<T> pt1, const Point<
     return Sqr(pt1.x - pt2.x) + Sqr(pt1.y - pt2.y);
 }
 
-template <typename T>
-inline double PerpendicDistFromLineSqrd(const Point<T>& pt, const Point<T>& line1, const Point<T>& line2)
+template <typename T> inline double PerpendicDistFromLineSqrd(const Point<T>& pt, const Point<T>& line1, const Point<T>& line2)
 {
     // perpendicular distance of point (x³,y³) = (Ax³ + By³ + C)/Sqrt(A² + B²)
     // see https://en.wikipedia.org/wiki/Perpendicular_distance
@@ -874,7 +869,7 @@ template <typename T> inline double Area(const Path<T>& path)
         return 0.0;
     double a = 0.0;
     typename Path<T>::const_iterator it1, it2 = path.cend() - 1, stop = it2;
-    if (!(cnt & 1))
+    if (! (cnt & 1))
         ++stop;
     for (it1 = path.cbegin(); (Workspace::Pulse(), it1 != stop);)
     {
@@ -891,8 +886,7 @@ template <typename T> inline double Area(const Path<T>& path)
 template <typename T> inline double Area(const Paths<T>& paths)
 {
     double a = 0.0;
-    for (typename Paths<T>::const_iterator paths_iter = paths.cbegin();
-         (Workspace::Pulse(), paths_iter != paths.cend()); ++paths_iter)
+    for (typename Paths<T>::const_iterator paths_iter = paths.cbegin(); (Workspace::Pulse(), paths_iter != paths.cend()); ++paths_iter)
     {
         a += Area<T>(*paths_iter);
     }
@@ -918,15 +912,13 @@ template <typename T> inline bool IsPositive(const Path<T>& poly)
 // See also CPP/BenchMark/GetIntersectPtBenchmark.cpp
 #define CC_MIN(x, y) ((x) > (y) ? (y) : (x))
 #define CC_MAX(x, y) ((x) < (y) ? (y) : (x))
-template <typename T>
-inline bool GetLineIntersectPt(const Point<T>& ln1a, const Point<T>& ln1b, const Point<T>& ln2a, const Point<T>& ln2b,
-                               Point<T>& ip)
+template <typename T> inline bool GetLineIntersectPt(const Point<T>& ln1a, const Point<T>& ln1b, const Point<T>& ln2a, const Point<T>& ln2b, Point<T>& ip)
 {
     double ln1dy = static_cast<double>(ln1b.y - ln1a.y);
     double ln1dx = static_cast<double>(ln1a.x - ln1b.x);
     double ln2dy = static_cast<double>(ln2b.y - ln2a.y);
     double ln2dx = static_cast<double>(ln2a.x - ln2b.x);
-    double det = (ln2dy * ln1dx) - (ln1dy * ln2dx);
+    double det   = (ln2dy * ln1dx) - (ln1dy * ln2dx);
     if (det == 0.0)
         return false;
     T bb0minx = CC_MIN(ln1a.x, ln1b.x);
@@ -942,10 +934,10 @@ inline bool GetLineIntersectPt(const Point<T>& ln1a, const Point<T>& ln1b, const
     {
         int64_t originx = (CC_MIN(bb0maxx, bb1maxx) + CC_MAX(bb0minx, bb1minx)) >> 1;
         int64_t originy = (CC_MIN(bb0maxy, bb1maxy) + CC_MAX(bb0miny, bb1miny)) >> 1;
-        double ln0c = (ln1dy * static_cast<double>(ln1a.x - originx)) + (ln1dx * static_cast<double>(ln1a.y - originy));
-        double ln1c = (ln2dy * static_cast<double>(ln2a.x - originx)) + (ln2dx * static_cast<double>(ln2a.y - originy));
-        double hitx = ((ln1dx * ln1c) - (ln2dx * ln0c)) / det;
-        double hity = ((ln2dy * ln0c) - (ln1dy * ln1c)) / det;
+        double ln0c     = (ln1dy * static_cast<double>(ln1a.x - originx)) + (ln1dx * static_cast<double>(ln1a.y - originy));
+        double ln1c     = (ln2dy * static_cast<double>(ln2a.x - originx)) + (ln2dx * static_cast<double>(ln2a.y - originy));
+        double hitx     = ((ln1dx * ln1c) - (ln2dx * ln0c)) / det;
+        double hity     = ((ln2dy * ln0c) - (ln1dy * ln1c)) / det;
 
         ip.x = originx + (T)nearbyint(hitx);
         ip.y = originy + (T)nearbyint(hity);
@@ -954,10 +946,10 @@ inline bool GetLineIntersectPt(const Point<T>& ln1a, const Point<T>& ln1b, const
     {
         double originx = (CC_MIN(bb0maxx, bb1maxx) + CC_MAX(bb0minx, bb1minx)) / 2.0;
         double originy = (CC_MIN(bb0maxy, bb1maxy) + CC_MAX(bb0miny, bb1miny)) / 2.0;
-        double ln0c = (ln1dy * static_cast<double>(ln1a.x - originx)) + (ln1dx * static_cast<double>(ln1a.y - originy));
-        double ln1c = (ln2dy * static_cast<double>(ln2a.x - originx)) + (ln2dx * static_cast<double>(ln2a.y - originy));
-        double hitx = ((ln1dx * ln1c) - (ln2dx * ln0c)) / det;
-        double hity = ((ln2dy * ln0c) - (ln1dy * ln1c)) / det;
+        double ln0c    = (ln1dy * static_cast<double>(ln1a.x - originx)) + (ln1dx * static_cast<double>(ln1a.y - originy));
+        double ln1c    = (ln2dy * static_cast<double>(ln2a.x - originx)) + (ln2dx * static_cast<double>(ln2a.y - originy));
+        double hitx    = ((ln1dx * ln1c) - (ln2dx * ln0c)) / det;
+        double hity    = ((ln2dy * ln0c) - (ln1dy * ln1c)) / det;
 
         ip.x = originx + static_cast<T>(hitx);
         ip.y = originy + static_cast<T>(hity);
@@ -968,9 +960,7 @@ inline bool GetLineIntersectPt(const Point<T>& ln1a, const Point<T>& ln1b, const
     return true;
 }
 #else
-template <typename T>
-inline bool GetLineIntersectPt(const Point<T>& ln1a, const Point<T>& ln1b, const Point<T>& ln2a, const Point<T>& ln2b,
-                               Point<T>& ip)
+template <typename T> inline bool GetLineIntersectPt(const Point<T>& ln1a, const Point<T>& ln1b, const Point<T>& ln2a, const Point<T>& ln2b, Point<T>& ip)
 {
     // https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
     double dx1 = static_cast<double>(ln1b.x - ln1a.x);
@@ -1018,19 +1008,18 @@ template <typename T> inline Point<T> ReflectPoint(const Point<T>& pt, const Poi
 
 template <typename T> inline int GetSign(const T& val)
 {
-    if (!val)
+    if (! val)
         return 0;
     return (val > 0) ? 1 : -1;
 }
 
-inline bool SegmentsIntersect(const Point64& seg1a, const Point64& seg1b, const Point64& seg2a, const Point64& seg2b,
-                              bool inclusive = false)
+inline bool SegmentsIntersect(const Point64& seg1a, const Point64& seg1b, const Point64& seg2a, const Point64& seg2b, bool inclusive = false)
 {
     double dy1 = static_cast<double>(seg1b.y - seg1a.y);
     double dx1 = static_cast<double>(seg1b.x - seg1a.x);
     double dy2 = static_cast<double>(seg2b.y - seg2a.y);
     double dx2 = static_cast<double>(seg2b.x - seg2a.x);
-    double cp = dy1 * dx2 - dy2 * dx1;
+    double cp  = dy1 * dx2 - dy2 * dx1;
     if (cp == 0)
         return false; // ie parallel segments
 
@@ -1080,15 +1069,13 @@ inline bool SegmentsIntersect(const Point64& seg1a, const Point64& seg1b, const 
     }
 }
 
-template <typename T>
-inline Point<T> GetClosestPointOnSegment(const Point<T>& offPt, const Point<T>& seg1, const Point<T>& seg2)
+template <typename T> inline Point<T> GetClosestPointOnSegment(const Point<T>& offPt, const Point<T>& seg1, const Point<T>& seg2)
 {
     if (seg1.x == seg2.x && seg1.y == seg2.y)
         return seg1;
     double dx = static_cast<double>(seg2.x - seg1.x);
     double dy = static_cast<double>(seg2.y - seg1.y);
-    double q =
-        (static_cast<double>(offPt.x - seg1.x) * dx + static_cast<double>(offPt.y - seg1.y) * dy) / (Sqr(dx) + Sqr(dy));
+    double q  = (static_cast<double>(offPt.x - seg1.x) * dx + static_cast<double>(offPt.y - seg1.y) * dy) / (Sqr(dx) + Sqr(dy));
     if (q < 0)
         q = 0;
     else if (q > 1)
@@ -1111,7 +1098,7 @@ template <typename T> inline PointInPolygonResult PointInPolygon(const Point<T>&
     if (polygon.size() < 3)
         return PointInPolygonResult::IsOutside;
 
-    int val = 0;
+    int val                                 = 0;
     typename Path<T>::const_iterator cbegin = polygon.cbegin(), first = cbegin, curr, prev;
     typename Path<T>::const_iterator cend = polygon.cend();
 
@@ -1176,7 +1163,7 @@ template <typename T> inline PointInPolygonResult PointInPolygon(const Point<T>&
             if ((d < 0) == is_above)
                 val = 1 - val;
         }
-        is_above = !is_above;
+        is_above = ! is_above;
         ++curr;
     }
 

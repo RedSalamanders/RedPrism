@@ -13,10 +13,12 @@
 // tree, a focus request goes to the HWND, and a UIA action asks for a frame the way pointer input does.
 class ChromeAccessibilitySite final : public DxUi::EmbeddedAccessibilitySite
 {
-  public:
-    ChromeAccessibilitySite(WindowAccessibilityRoot* root, HWND window, void* context,
-                            void (*requestFrame)(void*) noexcept) noexcept
-        : _root(root), _window(window), _context(context), _requestFrame(requestFrame)
+public:
+    ChromeAccessibilitySite(WindowAccessibilityRoot* root, HWND window, void* context, void (*requestFrame)(void*) noexcept) noexcept
+        : _root(root),
+          _window(window),
+          _context(context),
+          _requestFrame(requestFrame)
     {
     }
 
@@ -41,7 +43,7 @@ class ChromeAccessibilitySite final : public DxUi::EmbeddedAccessibilitySite
             return E_POINTER;
         }
         *result = nullptr;
-        if (!_root)
+        if (! _root)
         {
             return UIA_E_ELEMENTNOTAVAILABLE;
         }
@@ -69,14 +71,14 @@ class ChromeAccessibilitySite final : public DxUi::EmbeddedAccessibilitySite
     void Disconnect() noexcept
     {
         _root.reset();
-        _window = nullptr;
+        _window       = nullptr;
         _requestFrame = nullptr;
     }
 
-  private:
+private:
     wil::com_ptr_nothrow<WindowAccessibilityRoot> _root;
-    HWND _window = nullptr;
-    void* _context = nullptr;
+    HWND _window                          = nullptr;
+    void* _context                        = nullptr;
     void (*_requestFrame)(void*) noexcept = nullptr;
 };
 
@@ -163,17 +165,17 @@ constexpr std::uint64_t kChromeAccessibilityRuntimeId = 1;
 // A button or a checkbox is named by its caption; everything else interactive needs an explicit accessible name.
 [[nodiscard]] bool HasAccessibleName(const DxUi::Control& control) noexcept
 {
-    if (!control.GetAccessibleName().empty())
+    if (! control.GetAccessibleName().empty())
     {
         return true;
     }
     if (const auto* button = dynamic_cast<const DxUi::Button*>(&control))
     {
-        return !button->GetText().empty();
+        return ! button->GetText().empty();
     }
     if (const auto* checkbox = dynamic_cast<const DxUi::Checkbox*>(&control))
     {
-        return !checkbox->GetText().empty();
+        return ! checkbox->GetText().empty();
     }
     return false;
 }
@@ -181,13 +183,13 @@ constexpr std::uint64_t kChromeAccessibilityRuntimeId = 1;
 void CollectUnnamed(const DxUi::Control& control, const std::wstring& context, std::vector<std::wstring>& out)
 {
     const wchar_t* kind = InteractiveKind(control);
-    if (kind != nullptr && !HasAccessibleName(control))
+    if (kind != nullptr && ! HasAccessibleName(control))
     {
         out.push_back(std::wstring{kind} + L" under " + context);
     }
-    const std::wstring here = !control.GetAccessibleName().empty() ? std::wstring{control.GetAccessibleName()}
-                              : kind != nullptr                    ? std::wstring{kind}
-                                                                   : context;
+    const std::wstring here = ! control.GetAccessibleName().empty() ? std::wstring{control.GetAccessibleName()}
+                              : kind != nullptr                     ? std::wstring{kind}
+                                                                    : context;
     if (const auto* panel = dynamic_cast<const DxUi::Panel*>(&control))
     {
         for (const std::unique_ptr<DxUi::Control>& child : panel->GetChildren())
@@ -204,7 +206,7 @@ void CollectUnnamed(const DxUi::Control& control, const std::wstring& context, s
 void ChromeHost::AttachAccessibility() noexcept
 {
     DetachAccessibility();
-    if (_owner == nullptr || !_attached)
+    if (_owner == nullptr || ! _attached)
     {
         return;
     }
@@ -214,9 +216,8 @@ void ChromeHost::AttachAccessibility() noexcept
     {
         return;
     }
-    std::shared_ptr<ChromeAccessibilitySite> site{
-        new (std::nothrow) ChromeAccessibilitySite(root.get(), _owner, _requestContext, _requestFrame)};
-    if (!site)
+    std::shared_ptr<ChromeAccessibilitySite> site{new (std::nothrow) ChromeAccessibilitySite(root.get(), _owner, _requestContext, _requestFrame)};
+    if (! site)
     {
         _accessibilityStatus = E_OUTOFMEMORY;
         return;
@@ -237,18 +238,18 @@ void ChromeHost::AttachAccessibility() noexcept
     {
         root->SetChromeRoot(chrome.get());
     }
-    root->SetChromeHasFocus(!_canvasFocused && GetFocus() == _owner);
-    _accessibilityRoot = std::move(root);
-    _accessibilitySite = std::move(site);
+    root->SetChromeHasFocus(! _canvasFocused && GetFocus() == _owner);
+    _accessibilityRoot           = std::move(root);
+    _accessibilitySite           = std::move(site);
     _accessibilityPlacementDirty = false;
-    _accessibilityPreparations = _view.GetStatistics().preparations;
-    _accessibleStructureChanged = false;
-    _accessibilityRequested = false;
+    _accessibilityPreparations   = _view.GetStatistics().preparations;
+    _accessibleStructureChanged  = false;
+    _accessibilityRequested      = false;
 }
 
 void ChromeHost::DetachAccessibility() noexcept
 {
-    if (!_accessibilityRoot && !_accessibilitySite)
+    if (! _accessibilityRoot && ! _accessibilitySite)
     {
         return;
     }
@@ -273,14 +274,13 @@ void ChromeHost::DetachAccessibility() noexcept
 
 LRESULT ChromeHost::HandleGetObject(WPARAM wParam, LPARAM lParam) noexcept
 {
-    if (!_accessibilityRoot || _owner == nullptr || static_cast<LONG>(lParam) != UiaRootObjectId)
+    if (! _accessibilityRoot || _owner == nullptr || static_cast<LONG>(lParam) != UiaRootObjectId)
     {
         return 0;
     }
     // A client connecting reads the snapshot next: what waited while nobody listened is published first (RF-1001).
     PublishAccessibilityForClient();
-    return UiaReturnRawElementProvider(_owner, wParam, lParam,
-                                       static_cast<IRawElementProviderSimple*>(_accessibilityRoot.get()));
+    return UiaReturnRawElementProvider(_owner, wParam, lParam, static_cast<IRawElementProviderSimple*>(_accessibilityRoot.get()));
 }
 
 DxUi::EmbeddedAccessibilityPlacement ChromeHost::AccessibilityPlacement() const noexcept
@@ -290,12 +290,12 @@ DxUi::EmbeddedAccessibilityPlacement ChromeHost::AccessibilityPlacement() const 
     POINT origin{};
     if (_owner != nullptr && GetClientRect(_owner, &client) && ClientToScreen(_owner, &origin))
     {
-        placement.viewport.left = origin.x;
-        placement.viewport.top = origin.y;
-        placement.viewport.width = client.right - client.left;
+        placement.viewport.left   = origin.x;
+        placement.viewport.top    = origin.y;
+        placement.viewport.width  = client.right - client.left;
         placement.viewport.height = client.bottom - client.top;
     }
-    placement.hasKeyboardFocus = _owner != nullptr && !_canvasFocused && GetFocus() == _owner;
+    placement.hasKeyboardFocus = _owner != nullptr && ! _canvasFocused && GetFocus() == _owner;
     return placement;
 }
 
@@ -311,13 +311,13 @@ void ChromeHost::UpdateAccessibilityPlacement() noexcept
 void ChromeHost::FlushAccessibilityPlacement() noexcept
 {
     _accessibilityPlacementDirty = false;
-    if (!_accessibilitySite || !_attached)
+    if (! _accessibilitySite || ! _attached)
     {
         return;
     }
-    _accessibilityPreparations = _view.GetStatistics().preparations;
-    _accessibleStructureChanged = false;
-    _accessibilityRequested = false;
+    _accessibilityPreparations                           = _view.GetStatistics().preparations;
+    _accessibleStructureChanged                          = false;
+    _accessibilityRequested                              = false;
     const DxUi::EmbeddedAccessibilityPlacement placement = AccessibilityPlacement();
     if (_view.UpdateAccessibility(placement) == S_OK)
     {
@@ -341,13 +341,12 @@ bool ChromeHost::AccessibilityStaleForTest() const noexcept
 
 bool ChromeHost::AccessibilityListened() const noexcept
 {
-    return _accessibilityListenerForTest.has_value() ? _accessibilityListenerForTest.value()
-                                                     : UiaClientsAreListening() != FALSE;
+    return _accessibilityListenerForTest.has_value() ? _accessibilityListenerForTest.value() : UiaClientsAreListening() != FALSE;
 }
 
 void ChromeHost::PublishAccessibilityForClient() noexcept
 {
-    if (!_accessibilitySite || !_attached || !AccessibilityBehind())
+    if (! _accessibilitySite || ! _attached || ! AccessibilityBehind())
     {
         return;
     }
@@ -374,7 +373,7 @@ IRawElementProviderFragmentRoot* ChromeHost::AccessibilityRoot() noexcept
 std::vector<std::wstring> ChromeHost::UnnamedInteractiveControls() const
 {
     std::vector<std::wstring> gaps;
-    if (!_attached)
+    if (! _attached)
     {
         return gaps;
     }

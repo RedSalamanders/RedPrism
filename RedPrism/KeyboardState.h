@@ -28,7 +28,7 @@ inline Synthetic g_synthetic;
 inline void UseSynthetic(bool active) noexcept
 {
     Detail::g_synthetic.active = active;
-    Detail::g_synthetic.keys = {};
+    Detail::g_synthetic.keys   = {};
 }
 
 // A nested self-test owns its temporary keyboard, not the surrounding driver's state. Restore both the
@@ -36,7 +36,7 @@ inline void UseSynthetic(bool active) noexcept
 // this scope owns no Windows keyboard state and never changes an ordinary application's input policy.
 class ScopedSynthetic final
 {
-  public:
+public:
     ScopedSynthetic() noexcept : _previous(Detail::g_synthetic)
     {
         UseSynthetic(true);
@@ -45,12 +45,12 @@ class ScopedSynthetic final
     {
         Detail::g_synthetic = _previous;
     }
-    ScopedSynthetic(const ScopedSynthetic&) = delete;
+    ScopedSynthetic(const ScopedSynthetic&)            = delete;
     ScopedSynthetic& operator=(const ScopedSynthetic&) = delete;
-    ScopedSynthetic(ScopedSynthetic&&) = delete;
-    ScopedSynthetic& operator=(ScopedSynthetic&&) = delete;
+    ScopedSynthetic(ScopedSynthetic&&)                 = delete;
+    ScopedSynthetic& operator=(ScopedSynthetic&&)      = delete;
 
-  private:
+private:
     const Detail::Synthetic _previous;
 };
 

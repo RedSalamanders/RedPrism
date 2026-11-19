@@ -17,7 +17,7 @@ class SelectionOutlineGestureJob;
 // Moving consumes the source; the next original parent consumes its receipt before retaining roots.
 class SelectionOutlineGestureTransition final
 {
-  public:
+public:
     enum class ResultKind : std::uint8_t
     {
         SelectionOnly,
@@ -27,24 +27,39 @@ class SelectionOutlineGestureTransition final
     {
         return _kind;
     }
-    SelectionOutlineGestureTransition(const SelectionOutlineGestureTransition&) = delete;
+    SelectionOutlineGestureTransition(const SelectionOutlineGestureTransition&)            = delete;
     SelectionOutlineGestureTransition& operator=(const SelectionOutlineGestureTransition&) = delete;
-    SelectionOutlineGestureTransition& operator=(SelectionOutlineGestureTransition&&) = delete;
+    SelectionOutlineGestureTransition& operator=(SelectionOutlineGestureTransition&&)      = delete;
     SelectionOutlineGestureTransition(SelectionOutlineGestureTransition&& source) noexcept
-        : _family(std::exchange(source._family, nullptr)), _opening(source._opening), _terminal(source._terminal),
-          _minimumGeneration(source._minimumGeneration), _after(source._after), _editor(source._editor),
-          _history(source._history), _kind(source._kind)
+        : _family(std::exchange(source._family, nullptr)),
+          _opening(source._opening),
+          _terminal(source._terminal),
+          _minimumGeneration(source._minimumGeneration),
+          _after(source._after),
+          _editor(source._editor),
+          _history(source._history),
+          _kind(source._kind)
     {
     }
 
-  private:
+private:
     friend class SelectionOutlineGestureJob;
-    SelectionOutlineGestureTransition(const HostPolygonalInputJournal* family, std::uint64_t opening,
-                                      std::uint64_t terminal, std::uint64_t minimumGeneration,
-                                      DocumentReadAuthority after, HistoryRestoreAuthority editor,
-                                      DocumentHistory::Authority history, ResultKind kind) noexcept
-        : _family(family), _opening(opening), _terminal(terminal), _minimumGeneration(minimumGeneration), _after(after),
-          _editor(editor), _history(history), _kind(kind)
+    SelectionOutlineGestureTransition(const HostPolygonalInputJournal* family,
+                                      std::uint64_t opening,
+                                      std::uint64_t terminal,
+                                      std::uint64_t minimumGeneration,
+                                      DocumentReadAuthority after,
+                                      HistoryRestoreAuthority editor,
+                                      DocumentHistory::Authority history,
+                                      ResultKind kind) noexcept
+        : _family(family),
+          _opening(opening),
+          _terminal(terminal),
+          _minimumGeneration(minimumGeneration),
+          _after(after),
+          _editor(editor),
+          _history(history),
+          _kind(kind)
     {
     }
     const HostPolygonalInputJournal* _family;
@@ -76,7 +91,7 @@ struct SelectionOutlineGestureState
         DocumentHistory::Authority history;
         std::optional<LassoKind> newMarqueeKind;
         SelectionMode marqueeMode = SelectionMode::New;
-        bool initialPixels = false;
+        bool initialPixels        = false;
     };
     enum class Event
     {
@@ -95,7 +110,7 @@ struct SelectionOutlineGestureState
     };
     // Optional worker readiness probe for event-gated fixtures. Its context may hold immutable rasters
     // and events, never an Application, mutable session, UI or GPU owner.
-    void* workObserver = nullptr;
+    void* workObserver                                = nullptr;
     void (*workCheckpoint)(void*, WorkStage) noexcept = nullptr;
     unsigned residencyTries = 0, residencyRefreshes = 0;
     JobScheduler& scheduler;
@@ -103,14 +118,22 @@ struct SelectionOutlineGestureState
     HostSelectionGestureInput prefix;
     const std::uint64_t opening;
     const Limits limits;
-    SelectionOutlineGestureState(JobScheduler& jobs, DocumentSession& document, HostSelectionPressInput& input,
-                                 std::uint64_t identity, Limits admitted) noexcept
-        : scheduler(jobs), session(document), prefix(input), opening(identity), limits(admitted)
+    SelectionOutlineGestureState(
+        JobScheduler& jobs, DocumentSession& document, HostSelectionPressInput& input, std::uint64_t identity, Limits admitted) noexcept
+        : scheduler(jobs),
+          session(document),
+          prefix(input),
+          opening(identity),
+          limits(admitted)
     {
     }
-    SelectionOutlineGestureState(JobScheduler& jobs, DocumentSession& document, HostPolygonalInputJournal& input,
-                                 std::uint64_t identity, Limits admitted) noexcept
-        : scheduler(jobs), session(document), prefix(input, identity), opening(identity), limits(admitted)
+    SelectionOutlineGestureState(
+        JobScheduler& jobs, DocumentSession& document, HostPolygonalInputJournal& input, std::uint64_t identity, Limits admitted) noexcept
+        : scheduler(jobs),
+          session(document),
+          prefix(input, identity),
+          opening(identity),
+          limits(admitted)
     {
     }
     enum class WaitReason : std::uint8_t
@@ -120,22 +143,22 @@ struct SelectionOutlineGestureState
         Ordinal,
         Terminal
     };
-    WaitReason waitReason = WaitReason::None;
-    void* hostObserver = nullptr;
-    bool (*mayReplay)(void*, std::uint64_t) noexcept = nullptr;
+    WaitReason waitReason                                            = WaitReason::None;
+    void* hostObserver                                               = nullptr;
+    bool (*mayReplay)(void*, std::uint64_t) noexcept                 = nullptr;
     bool (*mayFinish)(void*, std::uint64_t, bool cancelled) noexcept = nullptr;
     // Owner-only selected-host admission, distinct from the pure readiness query. It may acquire only
     // the matching host barrier; no session/input mutation, source capture, UI dispatch or reentry.
     bool (*admitTerminal)(void*, std::uint64_t, bool cancelled) noexcept = nullptr;
     // Once per consumed owner batch, including no-change input. Signal readiness only, never dispatch UI.
-    void (*inputProgress)(void*, std::uint64_t) noexcept = nullptr;
-    std::uint64_t lastConsumedOrdinal = 0;
+    void (*inputProgress)(void*, std::uint64_t) noexcept              = nullptr;
+    std::uint64_t lastConsumedOrdinal                                 = 0;
     void (*pressResolved)(void*, std::uint64_t, bool closes) noexcept = nullptr;
-    bool endedByBackspace = false;
-    bool cancelled = false;
-    void* observer = nullptr;
-    void (*notify)(void*, Event) noexcept = nullptr;
-    SelectionOutlineGestureJob* controller = nullptr;
+    bool endedByBackspace                                             = false;
+    bool cancelled                                                    = false;
+    void* observer                                                    = nullptr;
+    void (*notify)(void*, Event) noexcept                             = nullptr;
+    SelectionOutlineGestureJob* controller                            = nullptr;
     // Optional exact source of a cache-derived admission. Fixture-only callers may supply fixed limits.
     std::optional<Admission> admissionSource;
     // Explicitly selected kind branches; preserving modes also require allowPreservingMarquee.
@@ -151,11 +174,11 @@ struct SelectionOutlineGestureState
     // Optional worker-only reached-resource fixture. Configured before the original resumes;
     // borrows only an event gate through workObserver, never an Application/session/device.
     void (*pixelFinalPreparedForTest)(void*, void* shutdownEvent) noexcept = nullptr;
-    SelectionPixelFinalFactory pixelFinalFactory = nullptr;
-    void* pixelFinalHost = nullptr;
-    std::uint32_t pixelFinalOwnerThread = 0; // Factory configuration is immutable from Submit through completion.
+    SelectionPixelFinalFactory pixelFinalFactory                           = nullptr;
+    void* pixelFinalHost                                                   = nullptr;
+    std::uint32_t pixelFinalOwnerThread                                    = 0; // Factory configuration is immutable from Submit through completion.
     std::optional<JobResult> pixelFinalOutcome;
-    bool pixelFinalClosed = false;
+    bool pixelFinalClosed            = false;
     bool pixelFinalWaitingForDisplay = false; // Owner-only phase observation; never publication authority.
 
     bool requireCapturedTarget = false;
@@ -167,8 +190,7 @@ struct SelectionOutlineGestureState
     unsigned maximumDrawingSamples = 0;
     std::uint64_t firstBudget = 0, remainingBudget = 0, openingBytes = 0;
     bool opened = false, waiting = false, completed = false, closed = false, clicked = false, aborted = false;
-    bool sameTicket = true, partition = false, inputAcknowledged = false, sourceCurrent = false, terminalLost = false,
-         overflowObserved = false;
+    bool sameTicket = true, partition = false, inputAcknowledged = false, sourceCurrent = false, terminalLost = false, overflowObserved = false;
     std::uint64_t terminalOrdinal = 0;
     std::atomic<bool> parentAcknowledged{false};
     JobResult outcome{};
@@ -184,14 +206,14 @@ struct SelectionOutlineGestureState
     }
     [[nodiscard]] std::optional<SelectionOutlineGestureTransition> TakeSuccessor() noexcept
     {
-        if (!completed || controller || !parentAcknowledged.load(std::memory_order_acquire))
+        if (! completed || controller || ! parentAcknowledged.load(std::memory_order_acquire))
             return std::nullopt;
         auto result = std::move(_successor);
         _successor.reset();
         return result;
     }
 
-  private:
+private:
     friend class SelectionOutlineGestureJob;
     std::optional<SelectionOutlineGestureTransition> _successor;
 };

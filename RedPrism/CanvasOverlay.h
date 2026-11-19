@@ -21,7 +21,7 @@
 // application, which owns the drags (Application::OnPointer).
 class CanvasOverlay final : public DxUi::Control
 {
-  public:
+public:
     struct Geometry
     {
         std::array<D2D1_POINT_2F, 8> handles{};
@@ -31,11 +31,11 @@ class CanvasOverlay final : public DxUi::Control
 
     using OutlineLoop = std::vector<D2D1_POINT_2F>;
 
-    CanvasOverlay() = default;
-    CanvasOverlay(const CanvasOverlay&) = delete;
+    CanvasOverlay()                                = default;
+    CanvasOverlay(const CanvasOverlay&)            = delete;
     CanvasOverlay& operator=(const CanvasOverlay&) = delete;
-    CanvasOverlay(CanvasOverlay&&) = delete;
-    CanvasOverlay& operator=(CanvasOverlay&&) = delete;
+    CanvasOverlay(CanvasOverlay&&)                 = delete;
+    CanvasOverlay& operator=(CanvasOverlay&&)      = delete;
 
     // A lasso outline being drawn: freehand or polygonal corners (the polygonal one with a rubber-band cursor),
     // or the Marquee's box as four corners.
@@ -53,8 +53,7 @@ class CanvasOverlay final : public DxUi::Control
     bool SetGuides(const std::vector<float>& xs, const std::vector<float>& ys);
     void SetSelectionOutline(std::vector<OutlineLoop> loops, std::optional<std::uint64_t> memoryBytes = std::nullopt);
     // The old reference buffers move into the original admitted worker payload; no owner-side free/copy.
-    [[nodiscard]] bool SetPreparedSelectionOutline(PreparedSelectionOutline outline,
-                                                   std::vector<OutlineLoop>& retired) noexcept;
+    [[nodiscard]] bool SetPreparedSelectionOutline(PreparedSelectionOutline outline, std::vector<OutlineLoop>& retired) noexcept;
     [[nodiscard]] std::optional<std::uint64_t> LegacySelectionOutlineMemoryOwner() const noexcept
     {
         return _outline.empty() ? std::optional<std::uint64_t>{0} : _legacyOutlineBytes;
@@ -62,24 +61,23 @@ class CanvasOverlay final : public DxUi::Control
     bool SetSelectionMapping(D2D1_POINT_2F originDip, float scale) noexcept;
     [[nodiscard]] D2D1_MATRIX_3X2_F SelectionMappingForTest() const noexcept
     {
-        return D2D1::Matrix3x2F::Scale(_selectionScale, _selectionScale) *
-               D2D1::Matrix3x2F::Translation(_selectionOrigin.x, _selectionOrigin.y);
+        return D2D1::Matrix3x2F::Scale(_selectionScale, _selectionScale) * D2D1::Matrix3x2F::Translation(_selectionOrigin.x, _selectionOrigin.y);
     }
     // Diagnostic counters only. No callback can reenter/destroy the overlay during a timed interval.
     struct SelectionTimingForTest final
     {
-        std::uint64_t createTicks = 0;
-        std::uint64_t appendTicks = 0;
-        std::uint64_t closeTicks = 0;
+        std::uint64_t createTicks    = 0;
+        std::uint64_t appendTicks    = 0;
+        std::uint64_t closeTicks     = 0;
         std::uint64_t solidDrawTicks = 0;
-        std::uint64_t dashDrawTicks = 0;
-        std::uint64_t builds = 0;
-        std::uint64_t drawPairs = 0;
+        std::uint64_t dashDrawTicks  = 0;
+        std::uint64_t builds         = 0;
+        std::uint64_t drawPairs      = 0;
     };
     void EnableSelectionTimingForTest(bool enabled) noexcept
     {
         _selectionTimingEnabledForTest = enabled;
-        _selectionTimingForTest = {};
+        _selectionTimingForTest        = {};
     }
     [[nodiscard]] SelectionTimingForTest SelectionTimingStateForTest() const noexcept
     {
@@ -88,9 +86,9 @@ class CanvasOverlay final : public DxUi::Control
     struct SelectionResourcesForTest
     {
         std::uint64_t pathsBuilt = 0;
-        bool hasPath = false;
-        bool fixedSolid = false;
-        bool fixedDashes = false;
+        bool hasPath             = false;
+        bool fixedSolid          = false;
+        bool fixedDashes         = false;
         std::array<float, 2> dashes{};
     };
     [[nodiscard]] SelectionResourcesForTest SelectionResourcesStateForTest() const noexcept;
@@ -118,7 +116,7 @@ class CanvasOverlay final : public DxUi::Control
     struct BrushCursor
     {
         D2D1_POINT_2F center{};
-        float radius = 0;
+        float radius   = 0;
         float hardness = 1;
     };
     bool SetBrushCursor(const std::optional<BrushCursor>& cursor) noexcept;
@@ -130,7 +128,7 @@ class CanvasOverlay final : public DxUi::Control
         bool ellipse = false;
         D2D1_RECT_F rect{};
         float cornerRadius = 0;
-        uint32_t argb = 0xFF000000u;
+        uint32_t argb      = 0xFF000000u;
     };
     bool SetShapeDraft(const std::optional<ShapeDraftOverlay>& draft) noexcept;
     // The crop frame (DIPs relative to the overlay): everything outside it dims.
@@ -140,7 +138,7 @@ class CanvasOverlay final : public DxUi::Control
     {
         D2D1_POINT_2F center{};
         uint32_t originalArgb = 0xFF000000u;
-        uint32_t sampledArgb = 0xFF000000u;
+        uint32_t sampledArgb  = 0xFF000000u;
     };
     bool SetSampleRing(const std::optional<SampleRing>& ring) noexcept;
     // Clone Stamp's source crosshair.
@@ -154,10 +152,9 @@ class CanvasOverlay final : public DxUi::Control
     [[nodiscard]] D2D1_RECT_F GetHitBounds() const noexcept override;
     // The crop frame clipped to the overlay's bounds, or nothing when the bounds are empty or inverted (a window
     // shorter than the chrome around the hole) or the frame misses them (RF-413).
-    [[nodiscard]] static std::optional<D2D1_RECT_F> ShadeFrame(const D2D1_RECT_F& bounds,
-                                                               const D2D1_RECT_F& frame) noexcept;
+    [[nodiscard]] static std::optional<D2D1_RECT_F> ShadeFrame(const D2D1_RECT_F& bounds, const D2D1_RECT_F& frame) noexcept;
 
-  private:
+private:
     void PaintSelection(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const;
     void PaintDraft(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const;
     void PaintBrushCursor(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const;
@@ -167,7 +164,7 @@ class CanvasOverlay final : public DxUi::Control
     // The whole dash step (0-7) of the phase.
     [[nodiscard]] std::size_t AntStep() const noexcept
     {
-        const double step = std::isfinite(_antPhase) ? std::floor(static_cast<double>(_antPhase)) : 0.0;
+        const double step     = std::isfinite(_antPhase) ? std::floor(static_cast<double>(_antPhase)) : 0.0;
         const long long whole = static_cast<long long>(std::fmod(step, 8.0));
         return static_cast<std::size_t>((whole + 8) % 8);
     }
@@ -200,8 +197,8 @@ class CanvasOverlay final : public DxUi::Control
     // One dash style per step of the 8 DIP cycle, made on first use (RF-408).
     mutable std::array<wil::com_ptr_nothrow<ID2D1StrokeStyle1>, 8> _antStyles;
     mutable std::uint64_t _selectionPathsBuilt = 0;
-    bool _selectionTimingEnabledForTest = false;
+    bool _selectionTimingEnabledForTest        = false;
     mutable SelectionTimingForTest _selectionTimingForTest;
     mutable bool _outlineDirty = false;
-    float _antPhase = 0.0f;
+    float _antPhase            = 0.0f;
 };

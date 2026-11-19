@@ -14,30 +14,41 @@ enum class FloatingMergeStage : std::uint8_t
 };
 struct FloatingMergeObserver final
 {
-    void* context = nullptr;
+    void* context                                 = nullptr;
     void (*checkpoint)(void*, FloatingMergeStage) = nullptr;
 };
 
 class FloatingMergeInput final
 {
-  public:
-    FloatingMergeInput(const FloatingMergeInput&) = delete;
+public:
+    FloatingMergeInput(const FloatingMergeInput&)            = delete;
     FloatingMergeInput& operator=(const FloatingMergeInput&) = delete;
     FloatingMergeInput(FloatingMergeInput&& source) noexcept
-        : _authority(std::move(source._authority)), _source(std::move(source._source)),
-          _history(std::move(source._history)), _edit(std::move(source._edit)), _restore(std::move(source._restore)),
-          _revision(source._revision), _valid(std::exchange(source._valid, false))
+        : _authority(std::move(source._authority)),
+          _source(std::move(source._source)),
+          _history(std::move(source._history)),
+          _edit(std::move(source._edit)),
+          _restore(std::move(source._restore)),
+          _revision(source._revision),
+          _valid(std::exchange(source._valid, false))
     {
     }
     FloatingMergeInput& operator=(FloatingMergeInput&&) = delete;
 
-  private:
+private:
     friend class DocumentSession;
-    FloatingMergeInput(ImageImportAuthority authority, CanvasDocument source, DocumentHistory::StateView history,
-                       TransformEdit edit, std::shared_ptr<PreparedFloatingRestore> restore,
+    FloatingMergeInput(ImageImportAuthority authority,
+                       CanvasDocument source,
+                       DocumentHistory::StateView history,
+                       TransformEdit edit,
+                       std::shared_ptr<PreparedFloatingRestore> restore,
                        std::uint64_t revision) noexcept
-        : _authority(std::move(authority)), _source(std::move(source)), _history(std::move(history)),
-          _edit(std::move(edit)), _restore(std::move(restore)), _revision(revision)
+        : _authority(std::move(authority)),
+          _source(std::move(source)),
+          _history(std::move(history)),
+          _edit(std::move(edit)),
+          _restore(std::move(restore)),
+          _revision(revision)
     {
     }
     ImageImportAuthority _authority;
@@ -54,19 +65,26 @@ class FloatingMergeInput final
 // restoration, after acknowledgement. All replaced CPU owners remain in this object for worker retirement.
 class PreparedFloatingMerge final
 {
-  public:
-    PreparedFloatingMerge(const PreparedFloatingMerge&) = delete;
+public:
+    PreparedFloatingMerge(const PreparedFloatingMerge&)            = delete;
     PreparedFloatingMerge& operator=(const PreparedFloatingMerge&) = delete;
-    PreparedFloatingMerge(PreparedFloatingMerge&&) noexcept = default;
-    PreparedFloatingMerge& operator=(PreparedFloatingMerge&&) = delete;
+    PreparedFloatingMerge(PreparedFloatingMerge&&) noexcept        = default;
+    PreparedFloatingMerge& operator=(PreparedFloatingMerge&&)      = delete;
 
-  private:
+private:
     friend class DocumentSession;
-    PreparedFloatingMerge(ImageImportAuthority authority, CanvasDocument source, DocumentHistory::StateView history,
-                          TransformEdit edit, std::shared_ptr<PreparedFloatingRestore> restore,
+    PreparedFloatingMerge(ImageImportAuthority authority,
+                          CanvasDocument source,
+                          DocumentHistory::StateView history,
+                          TransformEdit edit,
+                          std::shared_ptr<PreparedFloatingRestore> restore,
                           std::uint64_t revision) noexcept
-        : _authority(std::move(authority)), _source(std::move(source)), _history(std::move(history)),
-          _edit(std::move(edit)), _restore(std::move(restore)), _revision(revision)
+        : _authority(std::move(authority)),
+          _source(std::move(source)),
+          _history(std::move(history)),
+          _edit(std::move(edit)),
+          _restore(std::move(restore)),
+          _revision(revision)
     {
     }
     ImageImportAuthority _authority;

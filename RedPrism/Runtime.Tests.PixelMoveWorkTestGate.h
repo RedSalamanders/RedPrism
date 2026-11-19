@@ -28,10 +28,10 @@ struct PixelMoveWorkTestGate final
 {
     static constexpr unsigned int kMessage = WM_APP + 54;
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    PixelMoveWorkTestKind kind = PixelMoveWorkTestKind::Preview;
-    bool afterPreparation = false;
-    bool throwAdmissionFailure = false;
-    bool throwCaptureFailure = false;
+    PixelMoveWorkTestKind kind  = PixelMoveWorkTestKind::Preview;
+    bool afterPreparation       = false;
+    bool throwAdmissionFailure  = false;
+    bool throwCaptureFailure    = false;
     bool throwAllocationFailure = false;
     JobResult result;
     std::optional<RasterEditStatus> status;
@@ -45,8 +45,8 @@ struct PixelMoveWorkTestGate final
     std::atomic<unsigned int> targetCapturesOnWorker{0};
     std::atomic<std::uint64_t> capturedImageNameUnits{0};
     std::atomic<std::uint64_t> capturedMaskNameUnits{0};
-    bool rootOnlyCapturedOnOwner = false;
-    bool captureReservationHeld = false;
+    bool rootOnlyCapturedOnOwner   = false;
+    bool captureReservationHeld    = false;
     std::uint64_t reservationBytes = 0;
 };
 #pragma warning(pop)

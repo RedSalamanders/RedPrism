@@ -43,10 +43,9 @@ enum class ContinuationRetirement
 #pragma warning(disable : 4625 4626)
 template <typename Request> class ContinuationQueue final
 {
-    static_assert(std::is_nothrow_move_constructible_v<Request> && std::is_nothrow_move_assignable_v<Request> &&
-                  std::is_nothrow_destructible_v<Request>);
+    static_assert(std::is_nothrow_move_constructible_v<Request> && std::is_nothrow_move_assignable_v<Request> && std::is_nothrow_destructible_v<Request>);
 
-  public:
+public:
     static constexpr std::size_t kCapacity = 8;
     struct Entry final
     {
@@ -67,8 +66,7 @@ template <typename Request> class ContinuationQueue final
 #pragma warning(pop)
 
     // On refusal, the caller retains its request and must report a notice. A multi-file drop is one Request.
-    [[nodiscard]] ContinuationAdmission Enqueue(std::uint64_t documentSerial, std::uint64_t ordinal,
-                                                ContinuationKind kind, Request& input) noexcept
+    [[nodiscard]] ContinuationAdmission Enqueue(std::uint64_t documentSerial, std::uint64_t ordinal, ContinuationKind kind, Request& input) noexcept
     {
         return Enqueue(documentSerial, ordinal, kind, input, Discard);
     }
@@ -78,8 +76,8 @@ template <typename Request> class ContinuationQueue final
     // Receipt-owning callers use these overloads for coalescing, stale drops and explicit teardown; the count-only
     // forms are for requests without an externally observed result. A callback never runs on refused admission.
     template <typename Retire>
-    [[nodiscard]] ContinuationAdmission Enqueue(std::uint64_t documentSerial, std::uint64_t ordinal,
-                                                ContinuationKind kind, Request& input, Retire&& retire) noexcept
+    [[nodiscard]] ContinuationAdmission Enqueue(
+        std::uint64_t documentSerial, std::uint64_t ordinal, ContinuationKind kind, Request& input, Retire&& retire) noexcept
     {
         static_assert(std::is_nothrow_invocable_v<Retire&, Entry&&, ContinuationRetirement>);
         if (ordinal == 0 || ordinal <= _lastOrdinal)
@@ -89,11 +87,10 @@ template <typename Request> class ContinuationQueue final
         if (_count != 0 && kind == ContinuationKind::WandNew)
         {
             const std::size_t tail = (_head + _count - 1) % kCapacity;
-            const auto& previous = *_entries[tail];
+            const auto& previous   = *_entries[tail];
             // A stroke or another history input accepted between the clicks prevents coalescing even though
             // strokes have their own replay storage. Add/Subtract/Intersect always retain their individual order.
-            if (previous.kind == ContinuationKind::WandNew && previous.documentSerial == documentSerial &&
-                ordinal - previous.ordinal == 1)
+            if (previous.kind == ContinuationKind::WandNew && previous.documentSerial == documentSerial && ordinal - previous.ordinal == 1)
             {
                 Entry superseded = std::move(_entries[tail].value());
                 _entries[tail].emplace(Entry{documentSerial, ordinal, kind, std::move(input)});
@@ -118,9 +115,8 @@ template <typename Request> class ContinuationQueue final
     // The caller chooses which kinds are safe to coalesce; refusal never invokes either callback or moves input.
     // Neither callback may mutate/reenter this queue. Equivalent borrows its arguments only during this call.
     template <typename Retire, typename Equivalent>
-    [[nodiscard]] ContinuationAdmission EnqueueAdjacent(std::uint64_t documentSerial, std::uint64_t ordinal,
-                                                        ContinuationKind kind, Request& input, Retire&& retire,
-                                                        Equivalent&& equivalent) noexcept
+    [[nodiscard]] ContinuationAdmission EnqueueAdjacent(
+        std::uint64_t documentSerial, std::uint64_t ordinal, ContinuationKind kind, Request& input, Retire&& retire, Equivalent&& equivalent) noexcept
     {
         static_assert(std::is_nothrow_invocable_v<Retire&, Entry&&, ContinuationRetirement>);
         static_assert(std::is_nothrow_invocable_r_v<bool, Equivalent&, const Request&, const Request&>);
@@ -132,9 +128,8 @@ template <typename Request> class ContinuationQueue final
         if (_count != 0)
         {
             const std::size_t tail = (_head + _count - 1) % kCapacity;
-            const Entry& previous = _entries[tail].value();
-            if (previous.kind == kind && previous.documentSerial == documentSerial && ordinal - previous.ordinal == 1 &&
-                equivalent(previous.input, input))
+            const Entry& previous  = _entries[tail].value();
+            if (previous.kind == kind && previous.documentSerial == documentSerial && ordinal - previous.ordinal == 1 && equivalent(previous.input, input))
             {
                 Entry superseded = std::move(_entries[tail].value());
                 _entries[tail].emplace(Entry{documentSerial, ordinal, kind, std::move(input)});
@@ -181,8 +176,8 @@ template <typename Request> class ContinuationQueue final
             for (std::size_t next = offset + 1; next < _count; ++next)
             {
                 const std::size_t from = (_head + next) % kCapacity;
-                const std::size_t to = (_head + next - 1) % kCapacity;
-                _entries[to] = std::move(_entries[from]);
+                const std::size_t to   = (_head + next - 1) % kCapacity;
+                _entries[to]           = std::move(_entries[from]);
                 _entries[from].reset();
             }
             --_count;
@@ -205,8 +200,7 @@ template <typename Request> class ContinuationQueue final
         return TakeReady(currentDocumentSerial, historyBusy, Discard);
     }
 
-    template <typename Retire>
-    [[nodiscard]] Taken TakeReady(std::uint64_t currentDocumentSerial, bool historyBusy, Retire&& retire) noexcept
+    template <typename Retire> [[nodiscard]] Taken TakeReady(std::uint64_t currentDocumentSerial, bool historyBusy, Retire&& retire) noexcept
     {
         static_assert(std::is_nothrow_invocable_v<Retire&, Entry&&, ContinuationRetirement>);
         Taken result;
@@ -217,7 +211,7 @@ template <typename Request> class ContinuationQueue final
         while (_count != 0)
         {
             auto entry = std::exchange(_entries[_head], std::nullopt);
-            _head = (_head + 1) % kCapacity;
+            _head      = (_head + 1) % kCapacity;
             --_count;
             if (entry->documentSerial != currentDocumentSerial)
             {
@@ -246,11 +240,11 @@ template <typename Request> class ContinuationQueue final
         while (_count != 0)
         {
             auto entry = std::exchange(_entries[_head], std::nullopt);
-            _head = (_head + 1) % kCapacity;
+            _head      = (_head + 1) % kCapacity;
             --_count;
             retire(std::move(entry.value()), ContinuationRetirement::Cancelled);
         }
-        _head = 0;
+        _head  = 0;
         _count = 0;
         return removed;
     }
@@ -260,8 +254,7 @@ template <typename Request> class ContinuationQueue final
     // A missing key (or ordinal zero) has Clear semantics. Retirement follows the original FIFO order.
     // Callbacks must not reenter or mutate this queue. The survivor keeps its request, receipt and admission
     // lease without copying. The ordinal watermark is retained.
-    template <typename Retire>
-    [[nodiscard]] std::size_t ClearExcept(std::uint64_t documentSerial, std::uint64_t ordinal, Retire&& retire) noexcept
+    template <typename Retire> [[nodiscard]] std::size_t ClearExcept(std::uint64_t documentSerial, std::uint64_t ordinal, Retire&& retire) noexcept
     {
         static_assert(std::is_nothrow_invocable_v<Retire&, Entry&&, ContinuationRetirement>);
         if (ordinal == 0)
@@ -273,7 +266,7 @@ template <typename Request> class ContinuationQueue final
         for (std::size_t offset = 0; offset < _count; ++offset)
         {
             const std::size_t slot = (_head + offset) % kCapacity;
-            const Entry& entry = _entries[slot].value();
+            const Entry& entry     = _entries[slot].value();
             if (entry.documentSerial == documentSerial && entry.ordinal == ordinal)
             {
                 preserveOffset = offset;
@@ -300,7 +293,7 @@ template <typename Request> class ContinuationQueue final
             retire(std::move(entry.value()), ContinuationRetirement::Cancelled);
         }
 
-        _head = 0;
+        _head  = 0;
         _count = 1;
         _entries[0].emplace(std::move(preserved.value()));
         return originalCount - 1;
@@ -311,12 +304,14 @@ template <typename Request> class ContinuationQueue final
         return _count;
     }
 
-  private:
-    static void Discard(Entry&&, ContinuationRetirement) noexcept {}
+private:
+    static void Discard(Entry&&, ContinuationRetirement) noexcept
+    {
+    }
 
     std::array<std::optional<Entry>, kCapacity> _entries;
-    std::size_t _head = 0;
-    std::size_t _count = 0;
+    std::size_t _head          = 0;
+    std::size_t _count         = 0;
     std::uint64_t _lastOrdinal = 0;
 };
 #pragma warning(pop)

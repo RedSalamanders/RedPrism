@@ -32,7 +32,7 @@ enum class JobStatus
 
 struct JobResult final
 {
-    JobStatus status = JobStatus::Finished;
+    JobStatus status   = JobStatus::Finished;
     std::int32_t error = 0; // HRESULT when status is Failed
 };
 
@@ -76,14 +76,14 @@ struct JobOptions final
 
 struct JobTicket final
 {
-    std::size_t slot = 128;
-    std::uint64_t generation = 0;
+    std::size_t slot                                               = 128;
+    std::uint64_t generation                                       = 0;
     [[nodiscard]] bool operator==(const JobTicket&) const noexcept = default;
 };
 
 struct JobEventTicket final
 {
-    std::size_t slot = 32;
+    std::size_t slot         = 32;
     std::uint64_t generation = 0;
 };
 
@@ -92,9 +92,9 @@ struct JobEventTicket final
 // Scheduler lifetime and slot generation prevent foreign, stale and reused-slot release.
 struct RetainedMemoryTicket final
 {
-    std::size_t slot = 64;
-    std::uint64_t generation = 0;
-    std::uint64_t owner = 0;
+    std::size_t slot                                                          = 64;
+    std::uint64_t generation                                                  = 0;
+    std::uint64_t owner                                                       = 0;
     [[nodiscard]] bool operator==(const RetainedMemoryTicket&) const noexcept = default;
 };
 
@@ -104,10 +104,10 @@ struct RetainedMemoryTicket final
 // handle survive scheduler Close, without retaining a scheduler, HWND, document or graphics resource.
 class SharedRetainedMemoryLease final
 {
-  public:
+public:
     SharedRetainedMemoryLease() noexcept = default;
     ~SharedRetainedMemoryLease();
-    SharedRetainedMemoryLease(const SharedRetainedMemoryLease&) = delete;
+    SharedRetainedMemoryLease(const SharedRetainedMemoryLease&)            = delete;
     SharedRetainedMemoryLease& operator=(const SharedRetainedMemoryLease&) = delete;
     SharedRetainedMemoryLease(SharedRetainedMemoryLease&& other) noexcept;
     SharedRetainedMemoryLease& operator=(SharedRetainedMemoryLease&& other) noexcept;
@@ -124,13 +124,13 @@ class SharedRetainedMemoryLease final
     // to charge acknowledged graphs until its drain consumes the generation-checked acknowledgement.
     [[nodiscard]] std::uint64_t ResidentBytes() const noexcept;
 
-  private:
+private:
     struct State;
     std::shared_ptr<State> _state;
-    std::size_t _slot = 64;
-    std::size_t _part = 0;
+    std::size_t _slot         = 64;
+    std::size_t _part         = 0;
     std::uint64_t _generation = 0;
-    std::uint64_t _bytes = 0;
+    std::uint64_t _bytes      = 0;
     friend class JobScheduler;
 };
 
@@ -154,7 +154,7 @@ struct JobNotice final
 struct JobObserver final
 {
     void (*notify)(void*, JobNotice) noexcept = nullptr;
-    void* context = nullptr;
+    void* context                             = nullptr;
 };
 
 enum class JobExecutionBoundary : std::uint8_t
@@ -187,7 +187,7 @@ struct JobExecutionNotice final
 struct JobExecutionObserver final
 {
     void (*notify)(void*, JobExecutionNotice) noexcept = nullptr;
-    void* context = nullptr;
+    void* context                                      = nullptr;
     // Separately opt in to the first actual true cancellation check in each useful Run. Existing body-only
     // observers receive exactly their original boundaries. No clock/TLS diagnostic work on false checks.
     void (*cancellationObserved)(void*, JobExecutionNotice) noexcept = nullptr;
@@ -199,7 +199,7 @@ struct JobExecutionObserver final
 #pragma warning(disable : 4626 5027)
 class JobContext final
 {
-  public:
+public:
     Executor& executor;
     CancelToken cancellation;
     void* const shutdownEvent; // borrowed manual-reset HANDLE, valid only during Run
@@ -211,14 +211,19 @@ class JobContext final
     void ReportProgress(unsigned int percent) const noexcept;
 
     using Report = void (*)(void*, unsigned int) noexcept;
-    JobContext(Executor& execution, CancelToken token, void* event, Report report, void* context,
-               std::uint64_t reserved = 0, bool externalRetirement = false) noexcept
-        : executor(execution), cancellation(token), shutdownEvent(event), reservedMemoryBytes(reserved),
-          deferredRetirement(externalRetirement), _report(report), _context(context)
+    JobContext(
+        Executor& execution, CancelToken token, void* event, Report report, void* context, std::uint64_t reserved = 0, bool externalRetirement = false) noexcept
+        : executor(execution),
+          cancellation(token),
+          shutdownEvent(event),
+          reservedMemoryBytes(reserved),
+          deferredRetirement(externalRetirement),
+          _report(report),
+          _context(context)
     {
     }
 
-  private:
+private:
     Report _report;
     void* _context;
 };
@@ -228,7 +233,7 @@ class JobScheduler;
 
 class Job
 {
-  public:
+public:
     virtual ~Job() = default;
     // Only bad_alloc is translated by the runner, to a failed operation. Other unexpected exceptions retain
     // the process crash policy. Kernels themselves do not catch. Compute/recorder producers join before return.
@@ -245,12 +250,16 @@ class Job
     // The original record,
     // FIFO and complete reservation remain held. Owner resumes a retirement stage only after external users
     // acknowledge. Close instead retains the existing joined owner/final-worker cleanup protocol.
-    virtual void RetireWorkerStage(JobContext&, JobResult) noexcept {}
+    virtual void RetireWorkerStage(JobContext&, JobResult) noexcept
+    {
+    }
     // Exact final joined shutdown callback only, before this wrapper's owner-affine detachment. Every
     // compute/recorder producer has joined. May transfer its descriptor-reserved accounting into a
     // preallocated retirement owner; cannot capture sources, apply, publish, resume, submit or pump.
     // Normal completion uses the exact terminal Completed callback instead. Default has no accounting owner.
-    virtual void RetainJoinedRetirement(JobScheduler&, JobTicket) noexcept {}
+    virtual void RetainJoinedRetirement(JobScheduler&, JobTicket) noexcept
+    {
+    }
     // Owner thread after a successful worker stage, before final apply. Returning true retains this job, its
     // ticket, reservation and FIFO position until Resume. Failed/cancelled stages skip this hook. Resume may
     // be requested here; the next worker stage cannot start until this hook returns. A false return finalizes.
@@ -274,12 +283,14 @@ class Job
     virtual void Completed(JobResult result) noexcept = 0;
     // May run concurrently with Run. Read only the supplied percentage, immutable inputs, published atomics
     // and UI-owned state; never read or mutate the worker's unfinished result.
-    virtual void Progress(unsigned int) noexcept {}
+    virtual void Progress(unsigned int) noexcept
+    {
+    }
 };
 
 class UiAction
 {
-  public:
+public:
     virtual ~UiAction() = default;
     // UI thread, at most one action per outer loop pass. Revalidate the captured session/target here before
     // opening a modal. A modal may dispatch messages but cannot recursively drain completions or actions.
@@ -291,25 +302,27 @@ class UiAction
 // before unregister/Close. Pump runs outside message dispatch and must not wait, show a modal or drain again.
 class OwnerWorkPump
 {
-  public:
-    virtual ~OwnerWorkPump() = default;
+public:
+    virtual ~OwnerWorkPump()                               = default;
     [[nodiscard]] virtual bool HasPending() const noexcept = 0;
-    [[nodiscard]] virtual bool HasReady() const noexcept = 0;
-    virtual void Pump() noexcept = 0;
+    [[nodiscard]] virtual bool HasReady() const noexcept   = 0;
+    virtual void Pump() noexcept                           = 0;
 };
 
 class JobScheduler final
 {
-  public:
-    static constexpr std::size_t kCapacity = 128;
-    static constexpr std::size_t kUiActionCapacity = 8;
+public:
+    static constexpr std::size_t kCapacity               = 128;
+    static constexpr std::size_t kUiActionCapacity       = 8;
     static constexpr std::size_t kRetainedMemoryCapacity = 64;
     JobScheduler() noexcept;
     ~JobScheduler();
-    JobScheduler(const JobScheduler&) = delete;
+    JobScheduler(const JobScheduler&)            = delete;
     JobScheduler& operator=(const JobScheduler&) = delete;
 
-    [[nodiscard]] std::int32_t Initialize(unsigned int threads = 0, JobObserver observer = {}, MemorySource memory = {},
+    [[nodiscard]] std::int32_t Initialize(unsigned int threads           = 0,
+                                          JobObserver observer           = {},
+                                          MemorySource memory            = {},
                                           JobExecutionObserver execution = {}) noexcept;
     // Owner startup only, outside callbacks and before any admitted record. Failure leaves recording disabled.
     // No second scheduler or memory budget. GPU APIs remain private to the opted-in RedPrism recorder job.
@@ -340,8 +353,7 @@ class JobScheduler final
     // outputBytes to a persistent immutable lease; keep the remaining originally admitted bytes, job and
     // terminal retained slot for later useful stages. No allocation, query, new admission or FIFO change.
     // All producers of this output must have joined. This supplies accounting, never mutation authority.
-    [[nodiscard]] std::int32_t RetainContinuingOutputMemory(JobTicket original, std::uint64_t outputBytes,
-                                                            SharedRetainedMemoryLease& output) noexcept;
+    [[nodiscard]] std::int32_t RetainContinuingOutputMemory(JobTicket original, std::uint64_t outputBytes, SharedRetainedMemoryLease& output) noexcept;
     // Exact terminal callback or the joined Close retirement hook, including failed/cancelled jobs. Transfers
     // the entire original reservation to a preallocated owner with a descriptor-reserved slot. This is only
     // accounting for final destruction/weak-control ownership; no useful-work or publication authority and
@@ -352,25 +364,31 @@ class JobScheduler final
     // This query performs no admission, transfer or publication authorization.
     // Two immutable phase leases from one descriptor-reserved slot. Both must be empty and distinct;
     // 0 < outputBytes < the whole original reservation. No allocation, query or extra admission.
-    [[nodiscard]] std::int32_t RetainPartitionedMemory(JobTicket original, std::uint64_t outputBytes,
+    [[nodiscard]] std::int32_t RetainPartitionedMemory(JobTicket original,
+                                                       std::uint64_t outputBytes,
                                                        SharedRetainedMemoryLease& output,
                                                        SharedRetainedMemoryLease& temporary) noexcept;
-    [[nodiscard]] std::int32_t RetainPartitionedPublicationMemory(JobTicket original, std::uint64_t outputBytes,
+    [[nodiscard]] std::int32_t RetainPartitionedPublicationMemory(JobTicket original,
+                                                                  std::uint64_t outputBytes,
                                                                   SharedRetainedMemoryLease& output,
                                                                   SharedRetainedMemoryLease& temporary) noexcept;
-    [[nodiscard]] std::int32_t RetainPartitionedRetirementMemory(JobTicket original, std::uint64_t outputBytes,
+    [[nodiscard]] std::int32_t RetainPartitionedRetirementMemory(JobTicket original,
+                                                                 std::uint64_t outputBytes,
                                                                  SharedRetainedMemoryLease& output,
                                                                  SharedRetainedMemoryLease& temporary) noexcept;
     // Persistent publication output does not consume a temporary slot after its sibling retires.
     // Same original admission/callback/status authority and immutable byte partition. Worker reset publishes
     // only an aggregate byte acknowledgement; it cannot address a reused slot. No allocation/query at transfer.
-    [[nodiscard]] std::int32_t RetainPersistentOutputMemory(JobTicket original, std::uint64_t outputBytes,
+    [[nodiscard]] std::int32_t RetainPersistentOutputMemory(JobTicket original,
+                                                            std::uint64_t outputBytes,
                                                             SharedRetainedMemoryLease& output,
                                                             SharedRetainedMemoryLease& temporary) noexcept;
-    [[nodiscard]] std::int32_t RetainPersistentOutputPublicationMemory(JobTicket original, std::uint64_t outputBytes,
+    [[nodiscard]] std::int32_t RetainPersistentOutputPublicationMemory(JobTicket original,
+                                                                       std::uint64_t outputBytes,
                                                                        SharedRetainedMemoryLease& output,
                                                                        SharedRetainedMemoryLease& temporary) noexcept;
-    [[nodiscard]] std::int32_t RetainPersistentOutputRetirementMemory(JobTicket original, std::uint64_t outputBytes,
+    [[nodiscard]] std::int32_t RetainPersistentOutputRetirementMemory(JobTicket original,
+                                                                      std::uint64_t outputBytes,
                                                                       SharedRetainedMemoryLease& output,
                                                                       SharedRetainedMemoryLease& temporary) noexcept;
     [[nodiscard]] bool OwnsRetainedMemoryEndpoint(const SharedRetainedMemoryLease& retained) const noexcept;
@@ -378,8 +396,7 @@ class JobScheduler final
     // Samples current physical/commit memory before new graph allocations. The original retained slot,
     // generation and last-reader acknowledgement stay unchanged; no replacement ticket or early refund.
     // No-op growth queries nothing. A failed sample/admission/revalidation changes no charge or lease bytes.
-    [[nodiscard]] std::int32_t IncreaseRetainedReservation(SharedRetainedMemoryLease& retained,
-                                                           std::uint64_t totalBytes) noexcept;
+    [[nodiscard]] std::int32_t IncreaseRetainedReservation(SharedRetainedMemoryLease& retained, std::uint64_t totalBytes) noexcept;
     // Owner only, once the borrowed cache is detached and its whole graph is queued for worker retirement.
     // The release sink's in-flight bytes then protect admission until destruction is acknowledged. Close's
     // owner hook performs this cleanup before final worker retirement; Close invalidates residual tickets.
@@ -412,8 +429,7 @@ class JobScheduler final
     // Device/event sources share the scheduler's one wait pool (32 registrations, including memory pressure).
     // Register and Remove are owner startup/teardown operations outside callbacks; Remove joins the callback.
     // Handles/contexts remain borrowed until Remove or Close returns. Event callbacks publish only readiness.
-    [[nodiscard]] std::int32_t RegisterEventWait(void* event, void (*callback)(void*) noexcept, void* context,
-                                                 JobEventTicket& ticket) noexcept;
+    [[nodiscard]] std::int32_t RegisterEventWait(void* event, void (*callback)(void*) noexcept, void* context, JobEventTicket& ticket) noexcept;
     [[nodiscard]] bool RearmEventWait(JobEventTicket ticket, std::uint32_t timeoutMs = 0) noexcept;
     [[nodiscard]] bool RemoveEventWait(JobEventTicket ticket) noexcept;
     [[nodiscard]] bool PostUiAction(std::unique_ptr<UiAction>& action) noexcept;
@@ -430,9 +446,9 @@ class JobScheduler final
     // producers before destroying their inputs, results, intrusive nodes, events or COM pool lifetime.
     struct CloseHooks final
     {
-        void (*owner)(void*) noexcept = nullptr;
+        void (*owner)(void*) noexcept  = nullptr;
         void (*worker)(void*) noexcept = nullptr;
-        void* context = nullptr;
+        void* context                  = nullptr;
     };
     // Borrowed context outlives this call. Hooks cannot submit, pump, wait or reenter Close. After producer join
     // each original job may retain destruction accounting, then job wrappers die and the owner detaches
@@ -447,11 +463,11 @@ class JobScheduler final
     struct UiReadiness final
     {
         std::uint32_t completions = 0;
-        std::uint32_t actions = 0;
-        bool source = false;
-        bool resumes = false;
-        bool owner = false;
-        bool memory = false;
+        std::uint32_t actions     = 0;
+        bool source               = false;
+        bool resumes              = false;
+        bool owner                = false;
+        bool memory               = false;
     };
     // Owner-only diagnostic snapshot. It consumes no readiness and never pumps or waits.
     [[nodiscard]] UiReadiness UiReadinessForTest() const noexcept;
@@ -467,18 +483,20 @@ class JobScheduler final
 
     using Apply = void (*)(void*, Job&, JobResult) noexcept;
 
-  private:
-    [[nodiscard]] std::int32_t RetainMemoryImpl(JobTicket job, RetainedMemoryTicket& retained, bool publication,
-                                                bool retirement = false) noexcept;
-    [[nodiscard]] std::int32_t RetainSharedMemoryImpl(JobTicket job, SharedRetainedMemoryLease& retained,
-                                                      bool publication, bool retirement = false) noexcept;
-    [[nodiscard]] std::int32_t RetainPartitionedMemoryImpl(JobTicket original, std::uint64_t outputBytes,
+private:
+    [[nodiscard]] std::int32_t RetainMemoryImpl(JobTicket job, RetainedMemoryTicket& retained, bool publication, bool retirement = false) noexcept;
+    [[nodiscard]] std::int32_t RetainSharedMemoryImpl(JobTicket job, SharedRetainedMemoryLease& retained, bool publication, bool retirement = false) noexcept;
+    [[nodiscard]] std::int32_t RetainPartitionedMemoryImpl(JobTicket original,
+                                                           std::uint64_t outputBytes,
                                                            SharedRetainedMemoryLease& output,
-                                                           SharedRetainedMemoryLease& temporary, bool publication,
+                                                           SharedRetainedMemoryLease& temporary,
+                                                           bool publication,
                                                            bool retirement) noexcept;
-    [[nodiscard]] std::int32_t RetainPersistentOutputMemoryImpl(JobTicket original, std::uint64_t outputBytes,
+    [[nodiscard]] std::int32_t RetainPersistentOutputMemoryImpl(JobTicket original,
+                                                                std::uint64_t outputBytes,
                                                                 SharedRetainedMemoryLease& output,
-                                                                SharedRetainedMemoryLease& temporary, bool publication,
+                                                                SharedRetainedMemoryLease& temporary,
+                                                                bool publication,
                                                                 bool retirement) noexcept;
     struct Impl;
     std::unique_ptr<Impl> _impl;
@@ -488,8 +506,8 @@ class JobScheduler final
 
 struct MessagePumpResult final
 {
-    bool quit = false;
-    int exitCode = 0;
+    bool quit                = false;
+    int exitCode             = 0;
     std::uint32_t dispatched = 0;
 };
 
@@ -497,8 +515,7 @@ struct MessagePumpResult final
 using MessageDispatch = void (*)(void*, void* nativeMessage) noexcept;
 [[nodiscard]] MessagePumpResult PumpMessages(MessageDispatch dispatch = nullptr, void* context = nullptr) noexcept;
 // Default apply invokes Job::Completed. Progress and final nodes are drained FIFO. Reentrant calls do nothing.
-[[nodiscard]] std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply = nullptr,
-                                           void* context = nullptr) noexcept;
+[[nodiscard]] std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply = nullptr, void* context = nullptr) noexcept;
 [[nodiscard]] bool RunUiActions(JobScheduler& scheduler) noexcept;
 
 enum class SettleResult
@@ -511,6 +528,9 @@ enum class SettleResult
 
 // Harness/headless use only, never a UI command. Pumps the same messages, completions and actions as the host,
 // then waits on the event and message queue. timeoutMs is a failure bound, not a performance assertion.
-[[nodiscard]] SettleResult SettleJobs(JobScheduler& scheduler, std::uint32_t timeoutMs,
-                                      MessageDispatch dispatch = nullptr, void* context = nullptr,
-                                      JobScheduler::Apply apply = nullptr, void* applyContext = nullptr) noexcept;
+[[nodiscard]] SettleResult SettleJobs(JobScheduler& scheduler,
+                                      std::uint32_t timeoutMs,
+                                      MessageDispatch dispatch  = nullptr,
+                                      void* context             = nullptr,
+                                      JobScheduler::Apply apply = nullptr,
+                                      void* applyContext        = nullptr) noexcept;

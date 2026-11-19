@@ -13,8 +13,8 @@
 
 namespace
 {
-constexpr int kWidth = 97;
-constexpr int kHeight = 65;
+constexpr int kWidth   = 97;
+constexpr int kHeight  = 65;
 constexpr int kThreads = 8;
 constexpr int kRepeats = 12;
 
@@ -40,7 +40,7 @@ std::uint8_t Expected(int x, int y, int channel) noexcept
 Raster Source(RasterFormat format)
 {
     const int channels = format == RasterFormat::Gray8 ? 1 : 4;
-    const auto make = [channels, format](int width, int height, bool tile)
+    const auto make    = [channels, format](int width, int height, bool tile)
     {
         std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width * height * channels));
         for (int y = 0; y < height; ++y)
@@ -49,15 +49,14 @@ Raster Source(RasterFormat format)
             {
                 for (int c = 0; c < channels; ++c)
                 {
-                    bytes[static_cast<std::size_t>((y * width + x) * channels + c)] = static_cast<std::uint8_t>(
-                        (x * (tile ? 7 : 3) + y * (tile ? 11 : 5) + c * (tile ? 13 : 17)) % 256);
+                    bytes[static_cast<std::size_t>((y * width + x) * channels + c)] =
+                        static_cast<std::uint8_t>((x * (tile ? 7 : 3) + y * (tile ? 11 : 5) + c * (tile ? 13 : 17)) % 256);
                 }
             }
         }
         return Raster::Make(width, height, format, bytes.data(), bytes.size());
     };
-    return Raster::MakeSparse(kWidth, kHeight, format, make(31, 29, false), -5, 7,
-                              {RasterTile{21, 15, make(33, 23, true), 2, 1, 13, 17}}, 47);
+    return Raster::MakeSparse(kWidth, kHeight, format, make(31, 29, false), -5, 7, {RasterTile{21, 15, make(33, 23, true), 2, 1, 13, 17}}, 47);
 }
 
 bool CheckPixels(const Raster& raster, const std::uint8_t* pixels)
@@ -93,8 +92,7 @@ bool CheckRegion(const Raster& raster)
         {
             for (int c = 0; c < raster.Channels(); ++c)
             {
-                if (region[static_cast<std::size_t>(y * stride + x * raster.Channels() + c)] !=
-                    Expected(x - 1, y - 1, c))
+                if (region[static_cast<std::size_t>(y * stride + x * raster.Channels() + c)] != Expected(x - 1, y - 1, c))
                 {
                     return false;
                 }
@@ -113,9 +111,9 @@ bool CheckRegion(const Raster& raster)
 
 bool CheckThumbnail(const Raster& raster)
 {
-    constexpr int kThumbnailWidth = 23;
+    constexpr int kThumbnailWidth  = 23;
     constexpr int kThumbnailHeight = 15;
-    const Raster thumb = Raster::MakeThumbnail(raster, kThumbnailWidth);
+    const Raster thumb             = Raster::MakeThumbnail(raster, kThumbnailWidth);
     if (thumb.Width() != kThumbnailWidth || thumb.Height() != kThumbnailHeight)
     {
         return false;
@@ -131,8 +129,7 @@ bool CheckThumbnail(const Raster& raster)
         {
             for (int c = 0; c < raster.Channels(); ++c)
             {
-                if (pixels[y * thumb.Stride() + x * raster.Channels() + c] !=
-                    Expected(x * kWidth / kThumbnailWidth, y * kHeight / kThumbnailHeight, c))
+                if (pixels[y * thumb.Stride() + x * raster.Channels() + c] != Expected(x * kWidth / kThumbnailWidth, y * kHeight / kThumbnailHeight, c))
                 {
                     return false;
                 }
@@ -148,11 +145,10 @@ int RunRasterConcurrencyTests(int rounds)
     for (int round = 0; round < rounds; ++round)
     {
         const Raster raster = Source(round % 2 == 0 ? RasterFormat::Gray8 : RasterFormat::Bgra8888);
-        const Raster sibling = Raster::MakeSparse(kWidth, kHeight, raster.Format(), raster.Base(), raster.BaseX(),
-                                                  raster.BaseY(), raster.Tiles(), raster.Fill());
+        const Raster sibling =
+            Raster::MakeSparse(kWidth, kHeight, raster.Format(), raster.Base(), raster.BaseX(), raster.BaseY(), raster.Tiles(), raster.Fill());
         const bool sharedBase = round % 4 >= 2;
-        if (raster.IsMaterialized() || raster.ByteSize() != 0 || sibling.IsMaterialized() || sibling.ByteSize() != 0 ||
-            raster.Base() != sibling.Base())
+        if (raster.IsMaterialized() || raster.ByteSize() != 0 || sibling.IsMaterialized() || sibling.ByteSize() != 0 || raster.Base() != sibling.Base())
         {
             std::printf("FAIL sparse.concurrent-starts-unassembled\n");
             return 1;
@@ -166,43 +162,38 @@ int RunRasterConcurrencyTests(int rounds)
         {
             for (int thread = 0; thread < kThreads; ++thread)
             {
-                threads.emplace_back(
-                    [&, thread, owned = sharedBase && thread % 2 != 0 ? sibling : raster]
+                threads.emplace_back([&, thread, owned = sharedBase && thread % 2 != 0 ? sibling : raster]
+                {
+                    start.wait();
+                    bool valid = true;
+                    for (int repeat = 0; repeat < kRepeats; ++repeat)
                     {
-                        start.wait();
-                        bool valid = true;
-                        for (int repeat = 0; repeat < kRepeats; ++repeat)
+                        if (thread < kThreads / 2)
                         {
-                            if (thread < kThreads / 2)
-                            {
-                                const std::uint8_t* pixels = owned.Data();
-                                valid &= CheckPixels(owned, pixels);
-                                valid &= pointers[static_cast<std::size_t>(thread)] == nullptr ||
-                                         pointers[static_cast<std::size_t>(thread)] == pixels;
-                                pointers[static_cast<std::size_t>(thread)] = pixels;
-                            }
-                            else
-                            {
-                                valid &= CheckRegion(owned) && CheckThumbnail(owned);
-                            }
-                            const bool published = owned.IsMaterialized();
-                            const std::size_t bytes = owned.ByteSize();
-                            const std::size_t fullSize = static_cast<std::size_t>(owned.Stride() * owned.Height());
-                            valid &= published ? bytes == fullSize : bytes == 0 || bytes == fullSize;
-                            valid &=
-                                owned.Identity() == (sharedBase && thread % 2 != 0 ? sibling : raster).Identity() &&
-                                owned.IsSparse();
-                            int storageCount = 0;
-                            owned.ForEachStorage(
-                                [&](const Raster& storage)
-                                {
-                                    (void)storage.ByteSize();
-                                    ++storageCount;
-                                });
-                            valid &= storageCount == 3;
+                            const std::uint8_t* pixels = owned.Data();
+                            valid &= CheckPixels(owned, pixels);
+                            valid &= pointers[static_cast<std::size_t>(thread)] == nullptr || pointers[static_cast<std::size_t>(thread)] == pixels;
+                            pointers[static_cast<std::size_t>(thread)] = pixels;
                         }
-                        passed[static_cast<std::size_t>(thread)] = valid;
-                    });
+                        else
+                        {
+                            valid &= CheckRegion(owned) && CheckThumbnail(owned);
+                        }
+                        const bool published       = owned.IsMaterialized();
+                        const std::size_t bytes    = owned.ByteSize();
+                        const std::size_t fullSize = static_cast<std::size_t>(owned.Stride() * owned.Height());
+                        valid &= published ? bytes == fullSize : bytes == 0 || bytes == fullSize;
+                        valid &= owned.Identity() == (sharedBase && thread % 2 != 0 ? sibling : raster).Identity() && owned.IsSparse();
+                        int storageCount = 0;
+                        owned.ForEachStorage([&](const Raster& storage)
+                        {
+                            (void)storage.ByteSize();
+                            ++storageCount;
+                        });
+                        valid &= storageCount == 3;
+                    }
+                    passed[static_cast<std::size_t>(thread)] = valid;
+                });
             }
         }
         catch (const std::system_error& error)
@@ -225,8 +216,7 @@ int RunRasterConcurrencyTests(int rounds)
         for (int thread = 0; thread < kThreads; ++thread)
         {
             const Raster& target = sharedBase && thread % 2 != 0 ? sibling : raster;
-            if (!passed[static_cast<std::size_t>(thread)] ||
-                (thread < kThreads / 2 && pointers[static_cast<std::size_t>(thread)] != target.Data()))
+            if (! passed[static_cast<std::size_t>(thread)] || (thread < kThreads / 2 && pointers[static_cast<std::size_t>(thread)] != target.Data()))
             {
                 std::printf("FAIL sparse.concurrent-readers round=%d thread=%d\n", round, thread);
                 return 1;
@@ -238,7 +228,7 @@ int RunRasterConcurrencyTests(int rounds)
             return 1;
         }
         const Raster survivor = raster;
-        if (!CheckPixels(survivor, pointers[0]) || !CheckRegion(survivor))
+        if (! CheckPixels(survivor, pointers[0]) || ! CheckRegion(survivor))
         {
             std::printf("FAIL sparse.concurrent-published-lifetime\n");
             return 1;

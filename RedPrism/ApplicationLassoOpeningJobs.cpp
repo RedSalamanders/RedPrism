@@ -36,9 +36,8 @@ struct LassoOpeningPayload final : DeferredReleaseNode
     std::optional<PreparedLassoOpening> prepared;
     explicit LassoOpeningPayload(std::uint64_t declared) noexcept
     {
-        bytes = (std::max)(declared, kDeferredReleaseThreshold);
-        destroy = [](DeferredReleaseNode* node) noexcept
-        { const std::unique_ptr<LassoOpeningPayload> owned(static_cast<LassoOpeningPayload*>(node)); };
+        bytes   = (std::max)(declared, kDeferredReleaseThreshold);
+        destroy = [](DeferredReleaseNode* node) noexcept { const std::unique_ptr<LassoOpeningPayload> owned(static_cast<LassoOpeningPayload*>(node)); };
     }
 };
 #pragma warning(pop)
@@ -47,7 +46,7 @@ struct RetireLassoOpeningPayload final
 {
     void operator()(LassoOpeningPayload* value) const noexcept
     {
-        if (value && !TryDeferRelease(*value, DeferredReleasePolicy::AlwaysOnOwner))
+        if (value && ! TryDeferRelease(*value, DeferredReleasePolicy::AlwaysOnOwner))
         {
             const std::unique_ptr<LassoOpeningPayload> owned(value);
         }
@@ -61,10 +60,13 @@ struct RetireLassoOpeningPayload final
 #pragma warning(disable : 4625 4626 5027)
 class Application::LassoOpeningJob final : public Job
 {
-  public:
-    LassoOpeningJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t opening, std::uint32_t blocks,
-                    std::uint64_t declared) noexcept
-        : _owner(owner), _stamp(stamp), _opening(opening), _blocks(blocks), _declared(declared),
+public:
+    LassoOpeningJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t opening, std::uint32_t blocks, std::uint64_t declared) noexcept
+        : _owner(owner),
+          _stamp(stamp),
+          _opening(opening),
+          _blocks(blocks),
+          _declared(declared),
           _gate(owner._processingTestProbe ? owner._processingTestProbe->lassoWork : nullptr),
           _ownerThread(_gate ? GetCurrentThreadId() : 0)
     {
@@ -73,13 +75,13 @@ class Application::LassoOpeningJob final : public Job
     {
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
-        if (!_payload)
+        if (! _payload)
         {
-            auto payload = std::make_unique<LassoOpeningPayload>(_declared);
+            auto payload    = std::make_unique<LassoOpeningPayload>(_declared);
             payload->memory = SharedPublicationMemory::CreateForWork(PreparedLassoOpening::MemoryBytes(_blocks));
-            if (!payload->memory)
+            if (! payload->memory)
                 return {JobStatus::Failed, E_OUTOFMEMORY};
-            payload->gate = _gate;
+            payload->gate        = _gate;
             payload->ownerThread = _ownerThread;
             _payload.reset(payload.release());
             if (_gate)
@@ -89,10 +91,9 @@ class Application::LassoOpeningJob final : public Job
             }
             return {}; // Original complete admission precedes the owner capture.
         }
-        if (!_payload->input)
+        if (! _payload->input)
             return {JobStatus::Failed, E_UNEXPECTED};
-        auto prepared = DocumentSession::PrepareLassoOpening(std::move(_payload->input.value()), _blocks,
-                                                             context.cancellation, _payload->memory);
+        auto prepared = DocumentSession::PrepareLassoOpening(std::move(_payload->input.value()), _blocks, context.cancellation, _payload->memory);
         _payload->input.reset();
         if (prepared)
             _payload->prepared.emplace(std::move(prepared.value()));
@@ -109,21 +110,20 @@ class Application::LassoOpeningJob final : public Job
     }
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (result.status != JobStatus::Finished || _captured || !Current() || !_payload)
+        if (result.status != JobStatus::Finished || _captured || ! Current() || ! _payload)
             return false;
         const auto* captured = _owner._lassoInput.CapturedContext(_opening);
-        const auto first = _owner._lassoInput.Peek(_opening);
-        if (!captured || !first || first->action != HostLassoInput::Action::Down ||
-            captured->kind != (captured->kind == LassoKind::Rectangle || captured->kind == LassoKind::Ellipse
-                                   ? _owner._session.marqueeKind
-                                   : _owner._session.lassoKind))
+        const auto first     = _owner._lassoInput.Peek(_opening);
+        if (! captured || ! first || first->action != HostLassoInput::Action::Down ||
+            captured->kind !=
+                (captured->kind == LassoKind::Rectangle || captured->kind == LassoKind::Ellipse ? _owner._session.marqueeKind : _owner._session.lassoKind))
         {
             _captureError = E_ABORT;
             return false;
         }
         const bool marquee = captured->kind == LassoKind::Rectangle || captured->kind == LassoKind::Ellipse;
-        auto input = _owner._session.PrepareLassoOpeningInput(first->sample.point, captured->mode, marquee);
-        if (!input)
+        auto input         = _owner._session.PrepareLassoOpeningInput(first->sample.point, captured->mode, marquee);
+        if (! input)
         {
             _captureError = E_ABORT;
             return false;
@@ -132,7 +132,7 @@ class Application::LassoOpeningJob final : public Job
         if (_gate)
             _gate->openingCaptures.fetch_add(1);
         _captured = true;
-        if (!_owner._jobs.Resume(ticket))
+        if (! _owner._jobs.Resume(ticket))
             std::terminate();
         return true;
     }
@@ -143,45 +143,42 @@ class Application::LassoOpeningJob final : public Job
     }
     void Completed(JobResult result) noexcept override
     {
-        auto outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
-                       : result.status == JobStatus::Failed  ? HostOutcome::Failed
-                                                             : HostOutcome::Succeeded;
+        auto outcome  = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
+                        : result.status == JobStatus::Failed  ? HostOutcome::Failed
+                                                              : HostOutcome::Succeeded;
         HRESULT error = result.error;
         if (_owner._lassoCancelledOpening == _opening || _owner._historyWork.CancelRequested(_stamp))
         {
             outcome = HostOutcome::Cancelled;
-            error = E_ABORT;
+            error   = E_ABORT;
         }
-        else if (!Current())
+        else if (! Current())
         {
             outcome = HostOutcome::Stale;
-            error = E_ABORT;
+            error   = E_ABORT;
         }
         else if (FAILED(_captureError))
         {
             outcome = _captureError == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed;
-            error = _captureError;
+            error   = _captureError;
         }
         if (outcome == HostOutcome::Succeeded)
         {
-            const auto bound = _payload && _payload->memory
-                                   ? _payload->memory->BindAfterCompletedWork(_owner._jobs, _ticket)
-                                   : E_UNEXPECTED;
+            const auto bound = _payload && _payload->memory ? _payload->memory->BindAfterCompletedWork(_owner._jobs, _ticket) : E_UNEXPECTED;
             if (FAILED(bound))
             {
                 outcome = HostOutcome::Failed;
-                error = bound;
+                error   = bound;
             }
-            else if (!_payload->prepared ||
-                     !_owner._session.ApplyPreparedLassoOpeningIfCurrent(_payload->prepared.value()))
+            else if (! _payload->prepared || ! _owner._session.ApplyPreparedLassoOpeningIfCurrent(_payload->prepared.value()))
             {
                 outcome = HostOutcome::Stale;
-                error = E_ABORT;
+                error   = E_ABORT;
             }
             else
             {
                 _owner._lassoAcquiredOpening = _opening;
-                _owner._lassoSessionOpening = _owner._session.LassoOpeningForWork();
+                _owner._lassoSessionOpening  = _owner._session.LassoOpeningForWork();
             }
         }
         BindRetirement();
@@ -194,17 +191,15 @@ class Application::LassoOpeningJob final : public Job
         _owner.ResumeHostHistory(_stamp, outcome, error);
     }
 
-  private:
+private:
     bool Current() const noexcept
     {
-        return !_owner._shutdownStarted && _owner._lassoOpeningStamp == _stamp &&
-               _owner._historyWork.IsCurrent(_stamp) && !_owner._historyWork.CancelRequested(_stamp) &&
-               _owner.LassoInputCurrentOwner(_opening);
+        return ! _owner._shutdownStarted && _owner._lassoOpeningStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
+               ! _owner._historyWork.CancelRequested(_stamp) && _owner.LassoInputCurrentOwner(_opening);
     }
     void BindRetirement() noexcept
     {
-        if (_payload && _payload->memory && !_payload->memory->IsBound() &&
-            FAILED(_payload->memory->BindForRetirement(_owner._jobs, _ticket)))
+        if (_payload && _payload->memory && ! _payload->memory->IsBound() && FAILED(_payload->memory->BindForRetirement(_owner._jobs, _ticket)))
             std::terminate();
     }
     Application& _owner;
@@ -217,7 +212,7 @@ class Application::LassoOpeningJob final : public Job
     const std::uint32_t _ownerThread;
     JobTicket _ticket;
     HRESULT _captureError = S_OK;
-    bool _captured = false;
+    bool _captured        = false;
 };
 #pragma warning(pop)
 
@@ -225,31 +220,29 @@ HRESULT Application::StartLassoOpening(std::uint64_t opening) noexcept
 {
     if (PolygonalInputOwner(opening))
         return StartPolygonalDrawing(opening);
-    if (!_activeHostRequest || _lassoOpeningTicket || !LassoInputCurrentOwner(opening) ||
-        !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+    if (! _activeHostRequest || _lassoOpeningTicket || ! LassoInputCurrentOwner(opening) ||
+        ! _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
         return E_ABORT;
     constexpr std::uint32_t blocks = 131071;
-    const auto arena = PreparedLassoOpening::MemoryBytes(blocks);
-    const std::uint64_t extra = sizeof(LassoOpeningJob) + sizeof(LassoOpeningPayload) + sizeof(HostLassoInput) +
-                                SharedPublicationMemory::OwnershipAllowance() + 8192;
-    if (!arena || arena > (std::numeric_limits<std::uint64_t>::max)() - extra)
+    const auto arena               = PreparedLassoOpening::MemoryBytes(blocks);
+    const std::uint64_t extra =
+        sizeof(LassoOpeningJob) + sizeof(LassoOpeningPayload) + sizeof(HostLassoInput) + SharedPublicationMemory::OwnershipAllowance() + 8192;
+    if (! arena || arena > (std::numeric_limits<std::uint64_t>::max)() - extra)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    _lassoOpeningStamp =
-        _historyWork.Begin(_session.DocumentSerial(), _activeHostRequest->ordinal, HistoryWorkKind::Selection);
-    if (!_lassoOpeningStamp)
+    _lassoOpeningStamp = _historyWork.Begin(_session.DocumentSerial(), _activeHostRequest->ordinal, HistoryWorkKind::Selection);
+    if (! _lassoOpeningStamp)
         return E_UNEXPECTED;
     HRESULT result;
     try
     {
-        std::unique_ptr<Job> job =
-            std::make_unique<LassoOpeningJob>(*this, *_lassoOpeningStamp, opening, blocks, arena + extra);
+        std::unique_ptr<Job> job = std::make_unique<LassoOpeningJob>(*this, *_lassoOpeningStamp, opening, blocks, arena + extra);
         JobTicket ticket;
         result = _jobs.Submit(job,
-                              {.kind = JobClass::Selection,
-                               .serialKey = _session.DocumentSerial(),
-                               .memoryBytes = arena + extra,
-                               .deferredRetirement = true,
-                               .allowMemoryWaiting = false,
+                              {.kind                  = JobClass::Selection,
+                               .serialKey             = _session.DocumentSerial(),
+                               .memoryBytes           = arena + extra,
+                               .deferredRetirement    = true,
+                               .allowMemoryWaiting    = false,
                                .reserveRetainedMemory = true},
                               ticket);
         if (SUCCEEDED(result))
@@ -266,7 +259,7 @@ HRESULT Application::StartLassoOpening(std::uint64_t opening) noexcept
         _lassoOpeningStamp.reset();
         return result;
     }
-    _hostCommitStamp = _lassoOpeningStamp;
+    _hostCommitStamp       = _lassoOpeningStamp;
     _hostAfterPrerequisite = HostStage::Complete;
     return S_OK;
 }

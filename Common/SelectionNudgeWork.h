@@ -15,7 +15,7 @@ enum class SelectionNudgeStage : std::uint8_t
 };
 struct SelectionNudgeObserver final
 {
-    void* context = nullptr;
+    void* context                                                          = nullptr;
     void (*checkpoint)(void*, SelectionNudgeStage, std::uint64_t) noexcept = nullptr;
 };
 
@@ -23,19 +23,27 @@ struct SelectionNudgeObserver final
 // existing at-most-1024-work cancellation checkpoints. A selected admitted lifetime uses deferred geometry
 // destruction and retains that lifetime through the last weak storage control. Empty lifetime keeps the
 // existing numeric/nudge reference construction. Finite offsets only; no session/device access.
-[[nodiscard]] std::optional<SelectionLoops> TranslateSelectionLoopsForWork(
-    const SelectionLoops& source, double dx, double dy, CancelToken cancellation = {},
-    SelectionNudgeObserver observer = {}, std::shared_ptr<const void> geometryLifetime = {});
+[[nodiscard]] std::optional<SelectionLoops> TranslateSelectionLoopsForWork(const SelectionLoops& source,
+                                                                           double dx,
+                                                                           double dy,
+                                                                           CancelToken cancellation                     = {},
+                                                                           SelectionNudgeObserver observer              = {},
+                                                                           std::shared_ptr<const void> geometryLifetime = {});
 
 class SelectionNudgeInput final
 {
-  public:
-    SelectionNudgeInput(const SelectionNudgeInput&) = delete;
+public:
+    SelectionNudgeInput(const SelectionNudgeInput&)            = delete;
     SelectionNudgeInput& operator=(const SelectionNudgeInput&) = delete;
     SelectionNudgeInput(SelectionNudgeInput&& source) noexcept
-        : _authority(std::move(source._authority)), _token(std::move(source._token)),
-          _history(std::move(source._history)), _document(std::move(source._document)),
-          _active(std::move(source._active)), _opening(source._opening), _dx(source._dx), _dy(source._dy),
+        : _authority(std::move(source._authority)),
+          _token(std::move(source._token)),
+          _history(std::move(source._history)),
+          _document(std::move(source._document)),
+          _active(std::move(source._active)),
+          _opening(source._opening),
+          _dx(source._dx),
+          _dy(source._dy),
           _valid(std::exchange(source._valid, false))
     {
     }
@@ -44,26 +52,37 @@ class SelectionNudgeInput final
         if (this != &source)
         {
             _authority = std::move(source._authority);
-            _token = std::move(source._token);
-            _history = std::move(source._history);
-            _document = std::move(source._document);
-            _active = std::move(source._active);
-            _opening = source._opening;
-            _dx = source._dx;
-            _dy = source._dy;
-            _valid = std::exchange(source._valid, false);
+            _token     = std::move(source._token);
+            _history   = std::move(source._history);
+            _document  = std::move(source._document);
+            _active    = std::move(source._active);
+            _opening   = source._opening;
+            _dx        = source._dx;
+            _dy        = source._dy;
+            _valid     = std::exchange(source._valid, false);
         }
         return *this;
     }
 
-  private:
+private:
     friend class DocumentSession;
     friend class PreparedSelectionNudge;
-    SelectionNudgeInput(HistoryRestoreAuthority authority, JobToken token, DocumentHistory::StateView history,
-                        CanvasDocument document, std::optional<Guid> active, std::uint64_t opening, int dx,
+    SelectionNudgeInput(HistoryRestoreAuthority authority,
+                        JobToken token,
+                        DocumentHistory::StateView history,
+                        CanvasDocument document,
+                        std::optional<Guid> active,
+                        std::uint64_t opening,
+                        int dx,
                         int dy) noexcept
-        : _authority(std::move(authority)), _token(std::move(token)), _history(std::move(history)),
-          _document(std::move(document)), _active(std::move(active)), _opening(opening), _dx(dx), _dy(dy)
+        : _authority(std::move(authority)),
+          _token(std::move(token)),
+          _history(std::move(history)),
+          _document(std::move(document)),
+          _active(std::move(active)),
+          _opening(opening),
+          _dx(dx),
+          _dy(dy)
     {
     }
     HistoryRestoreAuthority _authority;
@@ -79,19 +98,19 @@ class SelectionNudgeInput final
 
 class PreparedSelectionNudge final
 {
-  public:
-    PreparedSelectionNudge(const PreparedSelectionNudge&) = delete;
-    PreparedSelectionNudge& operator=(const PreparedSelectionNudge&) = delete;
-    PreparedSelectionNudge(PreparedSelectionNudge&&) noexcept = default;
+public:
+    PreparedSelectionNudge(const PreparedSelectionNudge&)                = delete;
+    PreparedSelectionNudge& operator=(const PreparedSelectionNudge&)     = delete;
+    PreparedSelectionNudge(PreparedSelectionNudge&&) noexcept            = default;
     PreparedSelectionNudge& operator=(PreparedSelectionNudge&&) noexcept = default;
-    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
-        DocumentHistory::ResidencyPermit& permit) noexcept;
-    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
-                                               DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(DocumentHistory::ResidencyPermit& permit) noexcept;
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
 
-  private:
+private:
     friend class DocumentSession;
-    explicit PreparedSelectionNudge(SelectionNudgeInput input) noexcept : _input(std::move(input)) {}
+    explicit PreparedSelectionNudge(SelectionNudgeInput input) noexcept : _input(std::move(input))
+    {
+    }
     SelectionNudgeInput _input;
     std::optional<CanvasDocument> _document;
     std::optional<DocumentHistory::Publication> _history;

@@ -77,10 +77,10 @@ void EmitCommandLineText(const std::wstring& text, bool error, bool quiet) noexc
 {
     HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
     bool attached = false;
-    if (!output || output == INVALID_HANDLE_VALUE)
+    if (! output || output == INVALID_HANDLE_VALUE)
     {
         attached = AttachConsole(ATTACH_PARENT_PROCESS) != FALSE;
-        output = attached ? GetStdHandle(STD_OUTPUT_HANDLE) : nullptr;
+        output   = attached ? GetStdHandle(STD_OUTPUT_HANDLE) : nullptr;
     }
     if (output && output != INVALID_HANDLE_VALUE)
     {
@@ -88,18 +88,16 @@ void EmitCommandLineText(const std::wstring& text, bool error, bool quiet) noexc
         if (GetConsoleMode(output, &mode))
         {
             const std::wstring console = L"\n" + text;
-            DWORD written = 0;
+            DWORD written              = 0;
             (void)WriteConsoleW(output, console.c_str(), static_cast<DWORD>(console.size()), &written, nullptr);
         }
         else
         {
-            const int bytes = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0,
-                                                  nullptr, nullptr);
+            const int bytes = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
             std::string utf8(static_cast<size_t>(bytes > 0 ? bytes : 0), '\0');
             if (bytes > 0)
             {
-                (void)WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), utf8.data(), bytes,
-                                          nullptr, nullptr);
+                (void)WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), utf8.data(), bytes, nullptr, nullptr);
                 DWORD written = 0;
                 (void)WriteFile(output, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
             }
@@ -116,8 +114,7 @@ void EmitCommandLineText(const std::wstring& text, bool error, bool quiet) noexc
         return;
     }
     const std::wstring caption = LoadStringResource(nullptr, IDS_COMMAND_LINE_CAPTION);
-    MessageBoxW(nullptr, text.c_str(), caption.c_str(),
-                static_cast<UINT>(MB_OK | (error ? MB_ICONERROR : MB_ICONINFORMATION)));
+    MessageBoxW(nullptr, text.c_str(), caption.c_str(), static_cast<UINT>(MB_OK | (error ? MB_ICONERROR : MB_ICONINFORMATION)));
 }
 
 int RunWorkerCrashProbe() noexcept
@@ -133,33 +130,32 @@ int RunWorkerCrashProbe() noexcept
     }
 #pragma warning(pop)
     probe;
-    if (!probe.ready)
+    if (! probe.ready)
     {
         return 1;
     }
     WorkerPool pool;
-    const HRESULT started = pool.Initialize(
-        2,
-        [](void* context, WorkPriority, CancelToken) noexcept
+    const HRESULT started = pool.Initialize(2,
+                                            [](void* context, WorkPriority, CancelToken) noexcept
+    {
+        auto& state              = *static_cast<Probe*>(context);
+        const unsigned int index = state.started.fetch_add(1);
+        if (index == 1)
         {
-            auto& state = *static_cast<Probe*>(context);
-            const unsigned int index = state.started.fetch_add(1);
-            if (index == 1)
-            {
-                (void)SetEvent(state.ready.get());
-            }
-            if (WaitForSingleObject(state.ready.get(), 5000) != WAIT_OBJECT_0)
-            {
-                ExitProcess(1);
-            }
-            if (index == 0)
-            {
-                std::terminate(); // verifies the per-worker UCRT handler as well as competing faults
-            }
-            CrashDumps::RaiseProbeCrash();
-        },
-        &probe);
-    if (FAILED(started) || !pool.Wake(WorkPriority::High) || !pool.Wake(WorkPriority::High))
+            (void)SetEvent(state.ready.get());
+        }
+        if (WaitForSingleObject(state.ready.get(), 5000) != WAIT_OBJECT_0)
+        {
+            ExitProcess(1);
+        }
+        if (index == 0)
+        {
+            std::terminate(); // verifies the per-worker UCRT handler as well as competing faults
+        }
+        CrashDumps::RaiseProbeCrash();
+    },
+                                            &probe);
+    if (FAILED(started) || ! pool.Wake(WorkPriority::High) || ! pool.Wake(WorkPriority::High))
     {
         return 1;
     }
@@ -174,13 +170,13 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
 
     int argumentCount = 0;
     wil::unique_hlocal_ptr<wchar_t*[]> arguments{CommandLineToArgvW(GetCommandLineW(), &argumentCount)};
-    if (!arguments)
+    if (! arguments)
     {
         return 1;
     }
 
     const RedPrismCommandLineScan commandLineScan = RedPrismScanCommandLine(arguments.get(), argumentCount);
-    const bool selfTest = commandLineScan.selfTest;
+    const bool selfTest                           = commandLineScan.selfTest;
     if (commandLineScan.help)
     {
         EmitCommandLineText(RedPrismFormatCommandLineHelp(), false, selfTest);
@@ -188,24 +184,20 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     }
     if (const wchar_t* unknown = RedPrismFindUnknownArgument(arguments.get(), argumentCount))
     {
-        EmitCommandLineText(FormatStringResource(nullptr, IDS_ERROR_UNKNOWN_ARGUMENT, std::wstring_view{unknown}) +
-                                L"\n",
-                            true, selfTest);
+        EmitCommandLineText(FormatStringResource(nullptr, IDS_ERROR_UNKNOWN_ARGUMENT, std::wstring_view{unknown}) + L"\n", true, selfTest);
         return 2;
     }
 
     RedPrismCommandLine parsed{};
     const wchar_t* errorToken = nullptr;
-    if (!RedPrismParseCommandLine(arguments.get(), argumentCount, parsed, &errorToken))
+    if (! RedPrismParseCommandLine(arguments.get(), argumentCount, parsed, &errorToken))
     {
-        EmitCommandLineText(FormatStringResource(nullptr, IDS_ERROR_UNKNOWN_ARGUMENT,
-                                                 std::wstring_view{errorToken ? errorToken : L""}) +
-                                L"\n",
-                            true, selfTest);
+        EmitCommandLineText(
+            FormatStringResource(nullptr, IDS_ERROR_UNKNOWN_ARGUMENT, std::wstring_view{errorToken ? errorToken : L""}) + L"\n", true, selfTest);
         return 2;
     }
 
-#if !defined(REDPRISM_ENABLE_TESTS)
+#if ! defined(REDPRISM_ENABLE_TESTS)
     if (parsed.selfTest || parsed.crashProbeDirectory != nullptr)
     {
         return 2;
@@ -215,8 +207,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     // Settings, the language, and the user's real crash folder belong to ordinary runs: every harness switch
     // (self-test, a screenshot, a demo, a benchmark) keeps the defaults (dark chrome, English) and its own crash
     // dumps out of the user's directories (RF-708).
-    const bool harness =
-        parsed.selfTest || parsed.bench != nullptr || parsed.screenshotPath != nullptr || parsed.demo != nullptr;
+    const bool harness = parsed.selfTest || parsed.bench != nullptr || parsed.screenshotPath != nullptr || parsed.demo != nullptr;
 
     if (harness || parsed.crashProbeDirectory != nullptr)
     {
@@ -238,9 +229,8 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     const KernelSelection kernelSelection = InitializeKernels(parsed.isa);
     if (kernelSelection != KernelSelection::Selected)
     {
-        const UINT messageId = kernelSelection == KernelSelection::UnsupportedHardware
-                                   ? IDS_ERROR_KERNEL_ISA_UNSUPPORTED
-                                   : IDS_ERROR_KERNEL_ISA_NOT_IMPLEMENTED;
+        const UINT messageId =
+            kernelSelection == KernelSelection::UnsupportedHardware ? IDS_ERROR_KERNEL_ISA_UNSUPPORTED : IDS_ERROR_KERNEL_ISA_NOT_IMPLEMENTED;
         const bool quiet = harness || parsed.crashProbeDirectory != nullptr;
         EmitCommandLineText(FormatStringResource(nullptr, messageId, KernelIsaName(parsed.isa)) + L"\n", true, quiet);
         return 2;
@@ -278,12 +268,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     if (parsed.selfTest)
     {
         (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
-        const ULONGLONG standaloneStarted = GetTickCount64();
+        const ULONGLONG standaloneStarted  = GetTickCount64();
         const auto traceStandaloneSelfTest = [standaloneStarted](const char* name) noexcept
-        {
-            std::printf("BEGIN self-test.%s elapsed_ms=%llu\n", name,
-                        static_cast<unsigned long long>(GetTickCount64() - standaloneStarted));
-        };
+        { std::printf("BEGIN self-test.%s elapsed_ms=%llu\n", name, static_cast<unsigned long long>(GetTickCount64() - standaloneStarted)); };
         traceStandaloneSelfTest("RunStandaloneSelectionOutlineGpuHostSelfTest");
         if (const int failed = Application::RunStandaloneSelectionOutlineGpuHostSelfTest(instance); failed != 0)
             return failed;
@@ -474,16 +461,15 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
 #endif
 #if defined(REDPRISM_ENABLE_TESTS)
     // Declared before Application so this observation follows its natural destruction.
-    const auto selfTestLifetime = wil::scope_exit(
-        [selfTest = parsed.selfTest]() noexcept
-        {
-            if (selfTest)
-                std::printf("END self-test.ApplicationLifetime\n");
-        });
+    const auto selfTestLifetime = wil::scope_exit([selfTest = parsed.selfTest]() noexcept
+    {
+        if (selfTest)
+            std::printf("END self-test.ApplicationLifetime\n");
+    });
 #endif
-    const std::unique_ptr<Application> application{new (std::nothrow) Application(
-        instance, forceWarp, parsed.screenshotPath, parsed.screenshotDpi, parsed.demo, parsed.bench)};
-    if (!application)
+    const std::unique_ptr<Application> application{
+        new (std::nothrow) Application(instance, forceWarp, parsed.screenshotPath, parsed.screenshotDpi, parsed.demo, parsed.bench)};
+    if (! application)
     {
         return 1;
     }
@@ -491,12 +477,11 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     AppSettings settings;
     std::wstring settingsPath;
     wil::unique_hmodule satellite;
-    const auto shutdown = wil::scope_exit(
-        [&]() noexcept
-        {
-            application->Shutdown();
-            SetStringResourceSatellite(nullptr);
-        });
+    const auto shutdown = wil::scope_exit([&]() noexcept
+    {
+        application->Shutdown();
+        SetStringResourceSatellite(nullptr);
+    });
     if (harness)
     {
         settings.theme = ThemePreference::Dark;
@@ -504,18 +489,17 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     else
     {
         settingsPath = SettingsStore::DefaultPath(kDebugBuild);
-        if (!settingsPath.empty())
+        if (! settingsPath.empty())
         {
             const SettingsLoadResult loaded = SettingsStore::LoadCold(settingsPath);
-            settings = loaded.settings;
+            settings                        = loaded.settings;
             if (loaded.status == SettingsLoadStatus::Invalid)
             {
-                OutputDebugStringW(
-                    L"The settings file was not a settings document: backed up and replaced by the template.\n");
+                OutputDebugStringW(L"The settings file was not a settings document: backed up and replaced by the template.\n");
             }
         }
-        satellite.reset(Localization::LoadSatelliteModule(Localization::SatelliteCandidates(
-            Localization::ExecutableDirectory(), settings.language, Localization::SystemUiLanguages())));
+        satellite.reset(Localization::LoadSatelliteModule(
+            Localization::SatelliteCandidates(Localization::ExecutableDirectory(), settings.language, Localization::SystemUiLanguages())));
         SetStringResourceSatellite(satellite.get());
         // A crash last time: say where the report went (nothing is uploaded) and offer its folder.
         if (const std::optional<std::wstring> pending = CrashDumps::TakePending(crashDirectory); pending.has_value())
@@ -533,11 +517,11 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     application->UseSettings(std::move(settingsPath), settings);
 
     const HRESULT processing = application->InitializeProcessing();
-    int exitCode = 1;
+    int exitCode             = 1;
     if (SUCCEEDED(processing))
     {
         const std::span<const std::wstring_view> inputPaths{parsed.inputPaths.data(), parsed.inputPathCount};
-        if (parsed.inputPathCount != 0 && !application->OpenCommandLinePaths(inputPaths))
+        if (parsed.inputPathCount != 0 && ! application->OpenCommandLinePaths(inputPaths))
         {
             OutputDebugStringW(L"Command-line paths could not be queued.\n");
         }
@@ -545,9 +529,8 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         else if (parsed.selfTest)
         {
             const ULONGLONG selfTestStarted = GetTickCount64();
-            exitCode = application->RunSelfTest();
-            std::printf("END self-test.body result=%d elapsed_ms=%llu\n", exitCode,
-                        static_cast<unsigned long long>(GetTickCount64() - selfTestStarted));
+            exitCode                        = application->RunSelfTest();
+            std::printf("END self-test.body result=%d elapsed_ms=%llu\n", exitCode, static_cast<unsigned long long>(GetTickCount64() - selfTestStarted));
         }
 #endif
         else if (parsed.bench != nullptr)
@@ -568,22 +551,16 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     application->Shutdown();
 #if defined(REDPRISM_ENABLE_TESTS)
     if (parsed.selfTest)
-        std::printf("END self-test.Shutdown elapsed_ms=%llu\n",
-                    static_cast<unsigned long long>(GetTickCount64() - shutdownStarted));
+        std::printf("END self-test.Shutdown elapsed_ms=%llu\n", static_cast<unsigned long long>(GetTickCount64() - shutdownStarted));
 #endif
-    if (exitCode != 0 && !parsed.selfTest && parsed.bench == nullptr && parsed.screenshotPath == nullptr)
+    if (exitCode != 0 && ! parsed.selfTest && parsed.bench == nullptr && parsed.screenshotPath == nullptr)
     {
         UINT messageId = IDS_ERROR_START_GENERIC;
         switch (exitCode)
         {
-        case 2:
-            messageId = IDS_ERROR_START_WINDOW;
-            break;
-        case 5:
-            messageId = IDS_ERROR_START_GRAPHICS;
-            break;
-        default:
-            break;
+            case 2: messageId = IDS_ERROR_START_WINDOW; break;
+            case 5: messageId = IDS_ERROR_START_GRAPHICS; break;
+            default: break;
         }
         const std::wstring message = LoadStringResource(nullptr, messageId);
         const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);

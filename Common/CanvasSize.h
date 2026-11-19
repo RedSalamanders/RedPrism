@@ -22,14 +22,14 @@ enum class CanvasUnit : std::uint8_t
 // relative to the current size or absolute, with the original ratio locked or free.
 struct CanvasSizeDraft
 {
-    int originalWidth = 1;
+    int originalWidth  = 1;
     int originalHeight = 1;
-    double resolution = 72;
-    double width = 1;
-    double height = 1;
-    bool relative = false;
-    bool locked = false;
-    CanvasUnit unit = CanvasUnit::Pixels;
+    double resolution  = 72;
+    double width       = 1;
+    double height      = 1;
+    bool relative      = false;
+    bool locked        = false;
+    CanvasUnit unit    = CanvasUnit::Pixels;
 
     CanvasSizeDraft() = default;
     CanvasSizeDraft(int width, int height, double resolution) noexcept;
@@ -44,14 +44,14 @@ struct CanvasSizeDraft
 
 struct CanvasExtensionColor
 {
-    double red = 0;
+    double red   = 0;
     double green = 0;
-    double blue = 0;
+    double blue  = 0;
 };
 
 struct CanvasSizeOptions
 {
-    int width = 1;
+    int width  = 1;
     int height = 1;
     int anchor = 4; // row-major, top-left through bottom-right
     std::optional<CanvasExtensionColor> fill;
@@ -64,14 +64,14 @@ struct CanvasSizeOptions
 // The Image Size sheet's numbers (legacy ImageSizeSheet): pixels, resolution, unit, the locked ratio and resample.
 struct ImageSizeDraft
 {
-    int originalWidth = 1;
-    int originalHeight = 1;
-    double width = 1;
-    double height = 1;
-    double resolution = 72;
-    bool locked = true;
-    bool resample = true;
-    CanvasUnit unit = CanvasUnit::Pixels;
+    int originalWidth      = 1;
+    int originalHeight     = 1;
+    double width           = 1;
+    double height          = 1;
+    double resolution      = 72;
+    bool locked            = true;
+    bool resample          = true;
+    CanvasUnit unit        = CanvasUnit::Pixels;
     LayerSampling sampling = LayerSampling::High;
 
     ImageSizeDraft() = default;
@@ -91,9 +91,9 @@ struct ImageSizeDraft
 
 struct ImageSizeOptions
 {
-    int width = 1;
-    int height = 1;
-    double resolution = 72;
+    int width              = 1;
+    int height             = 1;
+    double resolution      = 72;
     LayerSampling sampling = LayerSampling::High;
 };
 
@@ -119,27 +119,39 @@ enum class ResizeStatus : std::uint8_t
 // Every layer and placed mask translated by the anchor's offset onto a canvas of the new size, the content kept
 // unscaled and unclipped; a colored extension (when growing) is a bottom layer `Canvas Extension` of the new size
 // with the old canvas cut out, so the old transparency stays. The selection outline is dropped.
-[[nodiscard]] ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions& options,
-                                        CanvasDocument& result, const CancelToken& cancellation = {},
+[[nodiscard]] ResizeStatus ResizeCanvas(const CanvasDocument& source,
+                                        const CanvasSizeOptions& options,
+                                        CanvasDocument& result,
+                                        const CancelToken& cancellation                                    = {},
                                         const std::shared_ptr<const SharedPublicationMemory>& outputMemory = {});
 
 // Every layer rasterized at the new document scale: its transformed pixels drawn upright into the box its corners
 // span (a nonuniformly scaled rotated layer shears, which width/height/angle cannot hold), the transform reset to
 // that box with the chosen sampling; masks on their own placement and uniform masks keep their pixels with the
 // placement scaled, other masks rasterize the same way. The same size changes only the resolution.
-[[nodiscard]] ResizeStatus ResizeImage(const CanvasDocument& source, const ImageSizeOptions& options,
-                                       CanvasDocument& result, const CancelToken& cancellation = {},
+[[nodiscard]] ResizeStatus ResizeImage(const CanvasDocument& source,
+                                       const ImageSizeOptions& options,
+                                       CanvasDocument& result,
+                                       const CancelToken& cancellation                                    = {},
                                        const std::shared_ptr<const SharedPublicationMemory>& outputMemory = {});
 
 // `image` drawn through `pixelToTarget` (image pixel → target pixel) into a transparent BGRA target of the given
 // size: Nearest picks the nearest source pixel, Smooth samples bilinearly, High also averages a grid of samples per
 // target pixel when the map shrinks the image. Pixels the source does not reach stay transparent. Empty when memory
 // runs out, the source's pixels cannot be read, or cancellation is requested.
-[[nodiscard]] Raster RenderPlacedImage(const Raster& image, const Affine2& pixelToTarget, int width, int height,
-                                       LayerSampling sampling, const CancelToken& cancellation = {},
+[[nodiscard]] Raster RenderPlacedImage(const Raster& image,
+                                       const Affine2& pixelToTarget,
+                                       int width,
+                                       int height,
+                                       LayerSampling sampling,
+                                       const CancelToken& cancellation                                    = {},
                                        const std::shared_ptr<const SharedPublicationMemory>& outputMemory = {});
 // The Gray8 counterpart for a mask: pixels the mask does not reach take `background`.
-[[nodiscard]] Raster RenderPlacedMask(const Raster& mask, const Affine2& pixelToTarget, int width, int height,
-                                      LayerSampling sampling, std::uint8_t background,
-                                      const CancelToken& cancellation = {},
+[[nodiscard]] Raster RenderPlacedMask(const Raster& mask,
+                                      const Affine2& pixelToTarget,
+                                      int width,
+                                      int height,
+                                      LayerSampling sampling,
+                                      std::uint8_t background,
+                                      const CancelToken& cancellation                                    = {},
                                       const std::shared_ptr<const SharedPublicationMemory>& outputMemory = {});

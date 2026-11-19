@@ -19,25 +19,42 @@ enum class ClipboardCommandKind : std::uint8_t
 // closure but does not finish a live warp. No worker consults those live drafts or the session clipboard.
 class ClipboardCommandInput final
 {
-  public:
-    ClipboardCommandInput(const ClipboardCommandInput&) = delete;
+public:
+    ClipboardCommandInput(const ClipboardCommandInput&)            = delete;
     ClipboardCommandInput& operator=(const ClipboardCommandInput&) = delete;
     ClipboardCommandInput(ClipboardCommandInput&& source) noexcept
-        : _kind(source._kind), _token(std::move(source._token)), _copy(std::move(source._copy)),
-          _clear(std::move(source._clear)), _document(std::move(source._document)),
-          _history(std::move(source._history)), _active(std::move(source._active)), _crop(source._crop),
-          _clipboardSerial(source._clipboardSerial), _mask(source._mask), _valid(std::exchange(source._valid, false))
+        : _kind(source._kind),
+          _token(std::move(source._token)),
+          _copy(std::move(source._copy)),
+          _clear(std::move(source._clear)),
+          _document(std::move(source._document)),
+          _history(std::move(source._history)),
+          _active(std::move(source._active)),
+          _crop(source._crop),
+          _clipboardSerial(source._clipboardSerial),
+          _mask(source._mask),
+          _valid(std::exchange(source._valid, false))
     {
     }
     ClipboardCommandInput& operator=(ClipboardCommandInput&&) = delete;
 
-  private:
+private:
     friend class DocumentSession;
     friend class PreparedClipboardCommand;
-    ClipboardCommandInput(ClipboardCommandKind kind, JobToken token, CopyPixelsInput copy, std::optional<Guid> active,
-                          std::optional<CropRect> crop, std::uint64_t clipboardSerial, bool mask) noexcept
-        : _kind(kind), _token(std::move(token)), _copy(std::move(copy)), _active(active), _crop(crop),
-          _clipboardSerial(clipboardSerial), _mask(mask)
+    ClipboardCommandInput(ClipboardCommandKind kind,
+                          JobToken token,
+                          CopyPixelsInput copy,
+                          std::optional<Guid> active,
+                          std::optional<CropRect> crop,
+                          std::uint64_t clipboardSerial,
+                          bool mask) noexcept
+        : _kind(kind),
+          _token(std::move(token)),
+          _copy(std::move(copy)),
+          _active(active),
+          _crop(crop),
+          _clipboardSerial(clipboardSerial),
+          _mask(mask)
     {
     }
     ClipboardCommandKind _kind;
@@ -57,11 +74,11 @@ class ClipboardCommandInput final
 // aggregate. Failed preparation/validation leaves private clipboard, document and history untouched.
 class PreparedClipboardCommand final
 {
-  public:
-    PreparedClipboardCommand(const PreparedClipboardCommand&) = delete;
+public:
+    PreparedClipboardCommand(const PreparedClipboardCommand&)            = delete;
     PreparedClipboardCommand& operator=(const PreparedClipboardCommand&) = delete;
-    PreparedClipboardCommand(PreparedClipboardCommand&&) noexcept = default;
-    PreparedClipboardCommand& operator=(PreparedClipboardCommand&&) = delete;
+    PreparedClipboardCommand(PreparedClipboardCommand&&) noexcept        = default;
+    PreparedClipboardCommand& operator=(PreparedClipboardCommand&&)      = delete;
     // Stable new pixels before and after publication, for the subsequent admitted OS encoding stage.
     [[nodiscard]] const PixelClipboard& Clipboard() const noexcept
     {
@@ -72,9 +89,11 @@ class PreparedClipboardCommand final
         return _history.has_value();
     }
 
-  private:
+private:
     friend class DocumentSession;
-    explicit PreparedClipboardCommand(ClipboardCommandInput input) noexcept : _input(std::move(input)) {}
+    explicit PreparedClipboardCommand(ClipboardCommandInput input) noexcept : _input(std::move(input))
+    {
+    }
     ClipboardCommandInput _input;
     std::optional<PixelClipboard> _clipboard, _copied;
     std::optional<CanvasDocument> _document, _retiredDisplay;

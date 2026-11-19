@@ -19,20 +19,17 @@ struct PreparedLayerRowsMemoryNode;
 #pragma warning(disable : 4324)
 class PreparedLayerRows final : public DxUi::IPreparedTreeAccessibilityRows, public DeferredReleaseNode
 {
-  public:
+public:
     // Include this fixed wrapper/control-block allowance in the original admission before worker Create.
     static constexpr std::uint64_t FirstItemIdentity = std::uint64_t{1} << 32;
     [[nodiscard]] static std::uint64_t OwnershipAllowance(std::size_t layerCount) noexcept;
-    [[nodiscard]] static std::shared_ptr<PreparedLayerRows> Create(LayerRowsWork::Handle rows,
-                                                                   std::uint64_t retirementBound,
-                                                                   std::uint64_t documentSerial,
-                                                                   std::uint64_t firstItemId,
-                                                                   const PreparedLayerRows* previous);
+    [[nodiscard]] static std::shared_ptr<PreparedLayerRows> Create(
+        LayerRowsWork::Handle rows, std::uint64_t retirementBound, std::uint64_t documentSerial, std::uint64_t firstItemId, const PreparedLayerRows* previous);
 
-    PreparedLayerRows(const PreparedLayerRows&) = delete;
+    PreparedLayerRows(const PreparedLayerRows&)            = delete;
     PreparedLayerRows& operator=(const PreparedLayerRows&) = delete;
-    PreparedLayerRows(PreparedLayerRows&&) = delete;
-    PreparedLayerRows& operator=(PreparedLayerRows&&) = delete;
+    PreparedLayerRows(PreparedLayerRows&&)                 = delete;
+    PreparedLayerRows& operator=(PreparedLayerRows&&)      = delete;
 
     [[nodiscard]] std::span<const HierarchyEntry> Rows() const noexcept;
     [[nodiscard]] std::span<const std::wstring> DisplayText() const noexcept;
@@ -42,16 +39,14 @@ class PreparedLayerRows final : public DxUi::IPreparedTreeAccessibilityRows, pub
     [[nodiscard]] std::optional<std::size_t> FindVisibleItem(std::uint64_t itemId) const noexcept;
 
     [[nodiscard]] std::size_t GetCount() const noexcept override;
-    [[nodiscard]] std::optional<DxUi::TreeAccessibilityItemView> GetItem(
-        std::size_t visibleIndex) const noexcept override;
+    [[nodiscard]] std::optional<DxUi::TreeAccessibilityItemView> GetItem(std::size_t visibleIndex) const noexcept override;
     [[nodiscard]] std::optional<DxUi::TreeAccessibilityItemView> FindItem(std::uint64_t itemId) const noexcept override;
 
     // Call from the successful owner completion, before exposing this wrapper to any reader.
     [[nodiscard]] std::int32_t BindMemory(JobScheduler& scheduler, JobTicket ticket) noexcept;
     // Original admitted parent binds its worker-preallocated shared memory after useful work joins.
     // A valid complete bound is required before sealing. This accounting creates no UI/history authority.
-    [[nodiscard]] std::int32_t BindPublicationMemory(
-        const std::shared_ptr<const SharedPublicationMemory>& memory) noexcept;
+    [[nodiscard]] std::int32_t BindPublicationMemory(const std::shared_ptr<const SharedPublicationMemory>& memory) noexcept;
     // Seals the memory transfer before publication. A wrapper without its retained admission cannot be published.
     [[nodiscard]] bool SealForPublication() noexcept;
 
@@ -59,7 +54,7 @@ class PreparedLayerRows final : public DxUi::IPreparedTreeAccessibilityRows, pub
     [[nodiscard]] std::uint64_t MemoryBytes() const noexcept;
     [[nodiscard]] std::uint64_t ResidentBytes() const noexcept;
 
-  private:
+private:
     PreparedLayerRows(LayerRowsWork::Handle rows, std::uint64_t retirementBound) noexcept;
     ~PreparedLayerRows() override = default;
 
@@ -75,7 +70,7 @@ class PreparedLayerRows final : public DxUi::IPreparedTreeAccessibilityRows, pub
     };
     struct VisibleIdentity final
     {
-        std::uint64_t itemId = 0;
+        std::uint64_t itemId     = 0;
         std::size_t visibleIndex = 0;
     };
 
@@ -83,9 +78,9 @@ class PreparedLayerRows final : public DxUi::IPreparedTreeAccessibilityRows, pub
     std::unique_ptr<LayerIdentity[]> _layerIdentities;
     std::unique_ptr<std::uint64_t[]> _visibleItemIds;
     std::unique_ptr<VisibleIdentity[]> _visibleLookup;
-    std::size_t _layerCount = 0;
-    std::uint64_t _documentSerial = 0;
+    std::size_t _layerCount              = 0;
+    std::uint64_t _documentSerial        = 0;
     PreparedLayerRowsMemoryNode* _memory = nullptr; // Object and control block hold independent roles.
-    bool _sealedForPublication = false;
+    bool _sealedForPublication           = false;
 };
 #pragma warning(pop)

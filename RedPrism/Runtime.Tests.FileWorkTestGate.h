@@ -20,7 +20,7 @@ struct FileWorkTestGate final
 {
     static constexpr std::uint32_t kMessage = WM_APP + 0x4B4;
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    bool afterPreparation = false;
+    bool afterPreparation       = false;
     bool throwAllocationFailure = false;
     JobResult result;
     std::atomic<unsigned int> visits{0};

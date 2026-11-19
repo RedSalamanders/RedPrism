@@ -11,7 +11,7 @@
 namespace CrashDumps
 {
 inline constexpr std::size_t kPathCapacity = 1024; // wchar_t, the buffers the crash path formats into
-inline constexpr std::size_t kKeepNewest = 10;     // dumps kept per directory
+inline constexpr std::size_t kKeepNewest   = 10;   // dumps kept per directory
 
 // <LocalAppData>\RedPrism\Crashes; empty when the known folder is unavailable.
 [[nodiscard]] std::wstring DefaultDirectory();
@@ -19,8 +19,7 @@ inline constexpr std::size_t kKeepNewest = 10;     // dumps kept per directory
 // Writes <directory>\RedPrism-<yyyyMMdd-HHmmss>-<pid>.dmp for the running process, with the exception when given
 // (a snapshot without one). Creates the directory tree. Uses no heap, so an exception filter may call it.
 // `pathOut` receives the file written; false leaves nothing behind.
-[[nodiscard]] bool WriteMiniDump(const wchar_t* directory, _EXCEPTION_POINTERS* exception, wchar_t* pathOut,
-                                 std::size_t pathCapacity) noexcept;
+[[nodiscard]] bool WriteMiniDump(const wchar_t* directory, _EXCEPTION_POINTERS* exception, wchar_t* pathOut, std::size_t pathCapacity) noexcept;
 
 // The marker a crash leaves for the next start: <directory>\pending.txt holding the dump path as UTF-8.
 [[nodiscard]] bool RecordPending(const wchar_t* directory, const wchar_t* dumpPath) noexcept;

@@ -40,17 +40,16 @@ enum class PickerTarget : std::uint8_t
 // every event has its receiver.
 class ChromeEvents
 {
-  public:
+public:
     // A menu row, a rail tool, a palette hot zone or a Command List row.
     virtual void OnCommand(int command) noexcept = 0;
     // The layers panel: a row selected, a folder expanded or collapsed, a row double-clicked (the host renames it), a
     // row dragged (`parent` is the target's parent for Before and After and is ignored for Inside, where the target is
     // the folder; the document move is PlaceLayer).
-    virtual void OnLayerSelected(Guid id) noexcept = 0;
-    virtual void OnLayerExpanded(Guid id, bool expanded) noexcept = 0;
-    virtual void OnLayerInvoked(Guid id) noexcept = 0;
-    virtual void OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
-                                  DxUi::TreeDropPlace place) noexcept = 0;
+    virtual void OnLayerSelected(Guid id) noexcept                                                                          = 0;
+    virtual void OnLayerExpanded(Guid id, bool expanded) noexcept                                                           = 0;
+    virtual void OnLayerInvoked(Guid id) noexcept                                                                           = 0;
+    virtual void OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent, DxUi::TreeDropPlace place) noexcept = 0;
     // The Rename Layer card closed: the committed name, nullopt on cancel.
     virtual void OnRename(std::optional<std::wstring_view> name) noexcept = 0;
     // The active layer's opacity in 0…1 from the layers panel's stepper: typing previews, Enter, focus loss and the
@@ -65,19 +64,19 @@ class ChromeEvents
     // index, 0 or 1 for a flag).
     virtual void OnTransformAction(TransformAction action, double value) noexcept = 0;
     virtual void OnSelectionAction(SelectionAction action, double value) noexcept = 0;
-    virtual void OnBrushAction(BrushAction action, double value) noexcept = 0;
-    virtual void OnGradientAction(GradientAction action, double value) noexcept = 0;
-    virtual void OnShapeAction(ShapeAction action, double value) noexcept = 0;
-    virtual void OnCropAction(CropAction action, double value) noexcept = 0;
-    virtual void OnAdjustAction(AdjustAction action, double value) noexcept = 0;
-    virtual void OnSizeAction(SizeAction action, double value) noexcept = 0;
+    virtual void OnBrushAction(BrushAction action, double value) noexcept         = 0;
+    virtual void OnGradientAction(GradientAction action, double value) noexcept   = 0;
+    virtual void OnShapeAction(ShapeAction action, double value) noexcept         = 0;
+    virtual void OnCropAction(CropAction action, double value) noexcept           = 0;
+    virtual void OnAdjustAction(AdjustAction action, double value) noexcept       = 0;
+    virtual void OnSizeAction(SizeAction action, double value) noexcept           = 0;
     // The adjustment panel's drawn editors: the curve's points after an edit, a spectrum band handle at `degrees`.
     virtual void OnCurveChanged(std::vector<CurvePoint> points) noexcept = 0;
-    virtual void OnBandChanged(int index, double degrees) noexcept = 0;
+    virtual void OnBandChanged(int index, double degrees) noexcept       = 0;
 
-  protected:
-    ChromeEvents() = default;
-    ChromeEvents(const ChromeEvents&) = default;
+protected:
+    ChromeEvents()                               = default;
+    ChromeEvents(const ChromeEvents&)            = default;
     ChromeEvents& operator=(const ChromeEvents&) = default;
-    ~ChromeEvents() = default;
+    ~ChromeEvents()                              = default;
 };

@@ -13,9 +13,11 @@
 // publishing any reader; failed allocations may consume a serial. No pixel/owner pointer is retained here.
 class RasterStorageSerial final
 {
-  public:
-    explicit RasterStorageSerial(std::uint64_t next = 1) noexcept : _next(next) {}
-    RasterStorageSerial(const RasterStorageSerial&) = delete;
+public:
+    explicit RasterStorageSerial(std::uint64_t next = 1) noexcept : _next(next)
+    {
+    }
+    RasterStorageSerial(const RasterStorageSerial&)            = delete;
     RasterStorageSerial& operator=(const RasterStorageSerial&) = delete;
     [[nodiscard]] std::uint64_t Allocate() noexcept
     {
@@ -29,16 +31,16 @@ class RasterStorageSerial final
         return 0;
     }
 
-  private:
+private:
     static_assert(std::atomic<std::uint64_t>::is_always_lock_free);
     std::atomic<std::uint64_t> _next;
 };
 
 struct RasterResidencyChange final
 {
-    std::uint64_t storageSerial = 0;
-    std::uint64_t epoch = 0;
-    std::uint64_t residentSelfBytes = 0;
+    std::uint64_t storageSerial                                                = 0;
+    std::uint64_t epoch                                                        = 0;
+    std::uint64_t residentSelfBytes                                            = 0;
     [[nodiscard]] bool operator==(const RasterResidencyChange&) const noexcept = default;
 };
 
@@ -50,7 +52,7 @@ template <std::size_t Capacity> class RasterResidencyJournal final
 {
     static_assert(Capacity > 0 && Capacity <= 4096);
 
-  public:
+public:
     enum class CopyResult : std::uint8_t
     {
         Complete,
@@ -61,11 +63,13 @@ template <std::size_t Capacity> class RasterResidencyJournal final
     };
     struct CopyObserver final
     {
-        void* context = nullptr;
+        void* context                               = nullptr;
         void (*copied)(void*, std::size_t) noexcept = nullptr;
     };
-    explicit RasterResidencyJournal(std::uint64_t epoch = 1) noexcept : _epoch(epoch) {}
-    RasterResidencyJournal(const RasterResidencyJournal&) = delete;
+    explicit RasterResidencyJournal(std::uint64_t epoch = 1) noexcept : _epoch(epoch)
+    {
+    }
+    RasterResidencyJournal(const RasterResidencyJournal&)            = delete;
     RasterResidencyJournal& operator=(const RasterResidencyJournal&) = delete;
     [[nodiscard]] std::uint64_t Epoch() const noexcept
     {
@@ -73,24 +77,26 @@ template <std::size_t Capacity> class RasterResidencyJournal final
     }
     [[nodiscard]] bool Append(std::uint64_t storageSerial, std::uint64_t residentSelfBytes) noexcept
     {
-        if (!_epoch || _epoch == (std::numeric_limits<std::uint64_t>::max)() || !storageSerial || !residentSelfBytes)
+        if (! _epoch || _epoch == (std::numeric_limits<std::uint64_t>::max)() || ! storageSerial || ! residentSelfBytes)
             return false;
-        const auto next = _epoch + 1;
+        const auto next                                     = _epoch + 1;
         _records[static_cast<std::size_t>(next % Capacity)] = {storageSerial, next, residentSelfBytes};
-        _epoch = next;
+        _epoch                                              = next;
         return true;
     }
     // Output is worker scratch: refused/cancelled copies may write a prefix, but publishedCount stays zero.
     // Only Complete exposes the entire exact contiguous suffix through publishedCount. Empty suffix costs
     // no allocation or scan. Copying checks cancellation at every bounded record.
-    [[nodiscard]] CopyResult CopySince(std::uint64_t afterEpoch, std::span<RasterResidencyChange> output,
-                                       std::size_t& publishedCount, CancelToken cancellation = {},
-                                       CopyObserver observer = {}) const noexcept
+    [[nodiscard]] CopyResult CopySince(std::uint64_t afterEpoch,
+                                       std::span<RasterResidencyChange> output,
+                                       std::size_t& publishedCount,
+                                       CancelToken cancellation = {},
+                                       CopyObserver observer    = {}) const noexcept
     {
         publishedCount = 0;
         if (cancellation.IsCancelled())
             return CopyResult::Cancelled;
-        if (!_epoch || !afterEpoch || afterEpoch > _epoch)
+        if (! _epoch || ! afterEpoch || afterEpoch > _epoch)
             return CopyResult::InvalidWitness;
         const auto needed = _epoch - afterEpoch;
         if (needed > Capacity)
@@ -101,9 +107,9 @@ template <std::size_t Capacity> class RasterResidencyJournal final
         {
             if (cancellation.IsCancelled())
                 return CopyResult::Cancelled;
-            const auto epoch = afterEpoch + index + 1;
+            const auto epoch   = afterEpoch + index + 1;
             const auto& record = _records[static_cast<std::size_t>(epoch % Capacity)];
-            if (record.epoch != epoch || !record.storageSerial || !record.residentSelfBytes)
+            if (record.epoch != epoch || ! record.storageSerial || ! record.residentSelfBytes)
                 return CopyResult::Overwritten;
             output[index] = record;
             if (observer.copied)
@@ -115,7 +121,7 @@ template <std::size_t Capacity> class RasterResidencyJournal final
         return CopyResult::Complete;
     }
 
-  private:
+private:
     std::array<RasterResidencyChange, Capacity> _records{};
     std::uint64_t _epoch;
 };

@@ -14,8 +14,8 @@
 struct DocumentFixture final
 {
     Guid id;
-    int width = 1;
-    int height = 1;
+    int width         = 1;
+    int height        = 1;
     double resolution = 72;
     std::vector<ImageLayer> layers;
     std::optional<DocumentSelection> selection;
@@ -23,9 +23,9 @@ struct DocumentFixture final
     [[nodiscard]] static DocumentFixture Copy(const CanvasDocument& source)
     {
         DocumentFixture result;
-        result.id = source.id;
-        result.width = source.width;
-        result.height = source.height;
+        result.id         = source.id;
+        result.width      = source.width;
+        result.height     = source.height;
         result.resolution = source.resolution;
         result.layers.assign(source.layers.begin(), source.layers.end());
         result.selection = source.selection;
@@ -41,32 +41,31 @@ struct DocumentFixture final
     [[nodiscard]] CanvasDocument Seal() &&
     {
         const auto capacity = layers.capacity();
-        auto builder = RecordRoot<ImageLayer>::Builder::Adopt(std::move(layers), capacity);
-        if (!builder)
+        auto builder        = RecordRoot<ImageLayer>::Builder::Adopt(std::move(layers), capacity);
+        if (! builder)
             std::terminate();
         auto root = builder.value().Seal();
-        if (!root)
+        if (! root)
             std::terminate();
         CanvasDocument result;
-        result.id = id;
-        result.width = width;
-        result.height = height;
+        result.id         = id;
+        result.width      = width;
+        result.height     = height;
         result.resolution = resolution;
-        result.layers = std::move(root.value());
-        result.selection = std::move(selection);
+        result.layers     = std::move(root.value());
+        result.selection  = std::move(selection);
         return result;
     }
 };
 
 template <typename Edit> void EditLayerRecordsForTest(DocumentSession& session, Edit&& edit)
 {
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            auto fixture = DocumentFixture::Copy(document);
-            std::invoke(std::forward<Edit>(edit), fixture);
-            document = std::move(fixture).Seal();
-        });
+    session.EditForTest([&](CanvasDocument& document)
+    {
+        auto fixture = DocumentFixture::Copy(document);
+        std::invoke(std::forward<Edit>(edit), fixture);
+        document = std::move(fixture).Seal();
+    });
 }
 
 template <typename Edit> void EditDocumentFixture(CanvasDocument& document, Edit&& edit)

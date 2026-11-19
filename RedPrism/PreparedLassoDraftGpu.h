@@ -21,13 +21,13 @@
 // fence acknowledgement or a producer join. Device removal alone never authorizes unrelated retirement.
 class PreparedLassoDraftGpu final
 {
-  public:
+public:
     using GridKey = PreparedLassoDraftRaster::GridKey;
     struct Views final
     {
         ID3D11ShaderResourceView* color = nullptr;
-        unsigned int width = 0;
-        unsigned int height = 0;
+        unsigned int width              = 0;
+        unsigned int height             = 0;
         [[nodiscard]] explicit operator bool() const noexcept
         {
             return color != nullptr;
@@ -35,27 +35,33 @@ class PreparedLassoDraftGpu final
     };
     struct Observer final
     {
-        void* context = nullptr;
+        void* context                                           = nullptr;
         void (*afterResourceCall)(void*, unsigned int) noexcept = nullptr;
     };
     PreparedLassoDraftGpu() noexcept = default;
     ~PreparedLassoDraftGpu();
-    PreparedLassoDraftGpu(const PreparedLassoDraftGpu&) = delete;
+    PreparedLassoDraftGpu(const PreparedLassoDraftGpu&)            = delete;
     PreparedLassoDraftGpu& operator=(const PreparedLassoDraftGpu&) = delete;
-    [[nodiscard]] static std::int32_t GpuMemoryBytes(unsigned int width, unsigned int height,
-                                                     std::uint64_t& output) noexcept;
+    [[nodiscard]] static std::int32_t GpuMemoryBytes(unsigned int width, unsigned int height, std::uint64_t& output) noexcept;
     // A refusal keeps the caller's reservation and this empty graph unchanged. Capture creates no resource.
-    [[nodiscard]] HRESULT CaptureOwner(ID3D11Device* device, ID3D11DeviceContext* immediate, std::uint64_t generation,
+    [[nodiscard]] HRESULT CaptureOwner(ID3D11Device* device,
+                                       ID3D11DeviceContext* immediate,
+                                       std::uint64_t generation,
                                        GpuResidencyReservation& reservation) noexcept;
-    [[nodiscard]] HRESULT CreateOnWorker(PreparedLassoDraftRaster raster, CancelToken cancellation = {},
-                                         Observer observer = {}) noexcept;
+    [[nodiscard]] HRESULT CreateOnWorker(PreparedLassoDraftRaster raster, CancelToken cancellation = {}, Observer observer = {}) noexcept;
     // All source/view/device values must still match the current requested display. A stale candidate
     // remains unpublished and retains its original charge for worker retirement.
-    [[nodiscard]] HRESULT PublishOwner(ID3D11Device* device, ID3D11DeviceContext* immediate, std::uint64_t generation,
-                                       const BoundedLassoGesture::Display& source, const GridKey& grid) noexcept;
+    [[nodiscard]] HRESULT PublishOwner(ID3D11Device* device,
+                                       ID3D11DeviceContext* immediate,
+                                       std::uint64_t generation,
+                                       const BoundedLassoGesture::Display& source,
+                                       const GridKey& grid) noexcept;
     // One bounded color-view borrow. No allocation, COM query, resource creation, pixel copying or point walk.
-    [[nodiscard]] Views BorrowOwner(ID3D11Device* device, ID3D11DeviceContext* immediate, std::uint64_t generation,
-                                    const BoundedLassoGesture::Display& source, const GridKey& grid) const noexcept;
+    [[nodiscard]] Views BorrowOwner(ID3D11Device* device,
+                                    ID3D11DeviceContext* immediate,
+                                    std::uint64_t generation,
+                                    const BoundedLassoGesture::Display& source,
+                                    const GridKey& grid) const noexcept;
     [[nodiscard]] bool DetachOwner() noexcept;
     [[nodiscard]] bool RetireDetachedOnWorker() noexcept;
     [[nodiscard]] bool RetireUnpublishedOnWorker() noexcept;
@@ -67,7 +73,7 @@ class PreparedLassoDraftGpu final
     [[nodiscard]] bool RestrictConcurrencyForTest() noexcept;
     [[nodiscard]] bool SetResourceFailureForTest(unsigned int call, HRESULT error = E_FAIL) noexcept;
 
-  private:
+private:
     enum class Phase : std::uint8_t
     {
         Empty,
@@ -80,8 +86,11 @@ class PreparedLassoDraftGpu final
         Retired
     };
     [[nodiscard]] bool IsOwner() const noexcept;
-    [[nodiscard]] bool Matches(ID3D11Device* device, ID3D11DeviceContext* immediate, std::uint64_t generation,
-                               const BoundedLassoGesture::Display& source, const GridKey& grid) const noexcept;
+    [[nodiscard]] bool Matches(ID3D11Device* device,
+                               ID3D11DeviceContext* immediate,
+                               std::uint64_t generation,
+                               const BoundedLassoGesture::Display& source,
+                               const GridKey& grid) const noexcept;
     [[nodiscard]] bool RetireForWork(Phase expected) noexcept;
     // Declaration order retains admission after graphics and CPU-source owners; actual cleanup is explicit.
     GpuResidencyReservation _reservation;
@@ -92,11 +101,11 @@ class PreparedLassoDraftGpu final
     wil::com_ptr_nothrow<ID3D11Texture2D> _texture;
     wil::com_ptr_nothrow<ID3D11ShaderResourceView> _view;
     std::atomic<Phase> _phase{Phase::Empty};
-    std::uint64_t _generation = 0;
-    std::uint32_t _ownerThread = 0;
-    HRESULT _result = E_PENDING;
-    HRESULT _failureResult = E_FAIL;
-    unsigned int _failureCall = 2;
+    std::uint64_t _generation   = 0;
+    std::uint32_t _ownerThread  = 0;
+    HRESULT _result             = E_PENDING;
+    HRESULT _failureResult      = E_FAIL;
+    unsigned int _failureCall   = 2;
     unsigned int _resourceCalls = 0;
-    bool _concurrentCreates = false;
+    bool _concurrentCreates     = false;
 };

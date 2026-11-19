@@ -16,8 +16,8 @@ namespace
 {
 bool RetryableUtilityFailure(HRESULT result) noexcept
 {
-    return result == E_ABORT || result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET ||
-           result == DXGI_ERROR_DEVICE_HUNG || result == DXGI_ERROR_DRIVER_INTERNAL_ERROR;
+    return result == E_ABORT || result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET || result == DXGI_ERROR_DEVICE_HUNG ||
+           result == DXGI_ERROR_DRIVER_INTERNAL_ERROR;
 }
 HRESULT UtilityResultError(JobResult result) noexcept
 {
@@ -61,29 +61,30 @@ struct RecordedDocumentReadbackJob::Root final : DeferredReleaseNode, GpuReadbac
     const std::uint32_t ownerThread;
     RecordedDocumentReadbackJob* parent;
     bool streamInitialized = false;
-    bool streamRetired = false;
-    bool graphExcluded = false;
+    bool streamRetired     = false;
+    bool graphExcluded     = false;
 
-    Root(std::shared_ptr<SharedPublicationMemory> accounting, std::uint64_t allowance, std::uint32_t owner,
-         RecordedDocumentReadbackJob& original) noexcept
-        : memory(std::move(accounting)), ownerThread(owner), parent(&original)
+    Root(std::shared_ptr<SharedPublicationMemory> accounting, std::uint64_t allowance, std::uint32_t owner, RecordedDocumentReadbackJob& original) noexcept
+        : memory(std::move(accounting)),
+          ownerThread(owner),
+          parent(&original)
     {
-        bytes = allowance;
+        bytes   = allowance;
         destroy = [](DeferredReleaseNode* node) noexcept
         {
             auto* root = static_cast<Root*>(node);
             if (GetCurrentThreadId() == root->ownerThread)
                 std::terminate();
-            if (root->streamInitialized && !root->streamRetired)
+            if (root->streamInitialized && ! root->streamRetired)
             {
-                if (!root->stream.RetireForWork())
+                if (! root->stream.RetireForWork())
                     std::terminate();
                 root->streamRetired = true;
             }
             if (root->graph)
             {
                 const bool retired = root->graph->RetireForWork() || root->graph->RetireUnpublishedForWork();
-                if (!retired)
+                if (! retired)
                     std::terminate();
                 root->graph.reset();
             }
@@ -92,13 +93,13 @@ struct RecordedDocumentReadbackJob::Root final : DeferredReleaseNode, GpuReadbac
     }
     void ReadbackReady(JobTicket ticket, GpuReadbackRows rows, HRESULT result) noexcept override
     {
-        if (!parent)
+        if (! parent)
             std::terminate(); // Queue notifications joined before wrapper detachment.
         parent->ReadbackReady(ticket, rows, result);
     }
     HRESULT RecordReadbackSource(ID3D11Texture2D*& source, D3D11_BOX& box) noexcept override
     {
-        if (!parent)
+        if (! parent)
             std::terminate();
         return parent->RecordReadbackSource(source, box);
     }
@@ -107,16 +108,27 @@ struct RecordedDocumentReadbackJob::Root final : DeferredReleaseNode, GpuReadbac
 
 #pragma warning(pop)
 
-RecordedDocumentReadbackJob::RecordedDocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue,
-                                                         GpuCommandPump& commands, UtilityReadbackOwnerService& owners,
+RecordedDocumentReadbackJob::RecordedDocumentReadbackJob(JobScheduler& scheduler,
+                                                         GpuWorkQueue& queue,
+                                                         GpuCommandPump& commands,
+                                                         UtilityReadbackOwnerService& owners,
                                                          GpuResidencyBudget& gpuBudget,
                                                          UtilityReadbackAdmission::Envelope envelope,
-                                                         GpuResidencyReservation originalGpuCharge, D3D11_BOX region,
+                                                         GpuResidencyReservation originalGpuCharge,
+                                                         D3D11_BOX region,
                                                          bool software,
                                                          RecordedReadbackCaptureKind captureKind) noexcept
-    : _scheduler(scheduler), _queue(queue), _commands(commands), _owners(owners), _gpuBudget(gpuBudget),
-      _envelope(envelope), _gpuCharge(std::move(originalGpuCharge)), _captureKind(captureKind),
-      _ownerThread(GetCurrentThreadId()), _cpuAdmissionBytes(envelope.cpuBytes), _region(region),
+    : _scheduler(scheduler),
+      _queue(queue),
+      _commands(commands),
+      _owners(owners),
+      _gpuBudget(gpuBudget),
+      _envelope(envelope),
+      _gpuCharge(std::move(originalGpuCharge)),
+      _captureKind(captureKind),
+      _ownerThread(GetCurrentThreadId()),
+      _cpuAdmissionBytes(envelope.cpuBytes),
+      _region(region),
       _softwareMemoryAdmitted(software)
 {
 }
@@ -124,16 +136,15 @@ RecordedDocumentReadbackJob::RecordedDocumentReadbackJob(JobScheduler& scheduler
 RecordedDocumentReadbackJob::~RecordedDocumentReadbackJob()
 {
     assert(IsOwner());
-    if (_serviceAttached || _sourceAttached || _rows.data || _graphPublished ||
-        (!_graphicsRetired && !_joinedDestruction))
+    if (_serviceAttached || _sourceAttached || _rows.data || _graphPublished || (! _graphicsRetired && ! _joinedDestruction))
         std::terminate();
     if (_root)
     {
         // The actual application Close hook closes queued copy/map owners before the final MTA drain.
         // Root survives wrapper destruction, including the original stream's receiver lifetime exclusion.
-        auto* root = std::exchange(_root, nullptr);
+        auto* root   = std::exchange(_root, nullptr);
         root->parent = nullptr;
-        if (!TryDeferRelease(*root, DeferredReleasePolicy::AlwaysOnOwner))
+        if (! TryDeferRelease(*root, DeferredReleasePolicy::AlwaysOnOwner))
             std::terminate();
     }
 }
@@ -145,29 +156,24 @@ bool RecordedDocumentReadbackJob::IsOwner() const noexcept
 
 bool RecordedDocumentReadbackJob::ReadbackGraphicsRetiredOwner() const noexcept
 {
-    return IsOwner() && _root && _graphicsRetired && !_graphPrepared && !_graphPublished && !_sourceAttached &&
-           !_rows.data && !_gpuCharge && !_root->graph && !_root->captured && !_root->retiredCapture &&
-           !_root->device && (!_streamInitialized || _streamRetired);
+    return IsOwner() && _root && _graphicsRetired && ! _graphPrepared && ! _graphPublished && ! _sourceAttached && ! _rows.data && ! _gpuCharge &&
+           ! _root->graph && ! _root->captured && ! _root->retiredCapture && ! _root->device && (! _streamInitialized || _streamRetired);
 }
 
 std::uint64_t RecordedDocumentReadbackJob::RequiredMemory(D3D11_BOX region) noexcept
 {
-    if (region.front != 0 || region.back != 1 || region.right <= region.left || region.bottom <= region.top ||
-        region.right - region.left > kMaxCanvasSide || region.bottom - region.top > kMaxCanvasSide)
+    if (region.front != 0 || region.back != 1 || region.right <= region.left || region.bottom <= region.top || region.right - region.left > kMaxCanvasSide ||
+        region.bottom - region.top > kMaxCanvasSide)
         return 0;
     const auto bytes = static_cast<std::uint64_t>(region.right - region.left) * (region.bottom - region.top) * 4;
-    return bytes <= (std::numeric_limits<std::size_t>::max)()
-               ? PixelBuffer::RequiredBytes(static_cast<std::size_t>(bytes))
-               : 0;
+    return bytes <= (std::numeric_limits<std::size_t>::max)() ? PixelBuffer::RequiredBytes(static_cast<std::size_t>(bytes)) : 0;
 }
 
 bool RecordedDocumentReadbackJob::ValidRegion() const noexcept
 {
-    return _root && _root->document.width > 0 && _root->document.height > 0 &&
-           _root->document.width <= kMaxCanvasSide && _root->document.height <= kMaxCanvasSide &&
-           RequiredMemory(_region) && _region.right <= static_cast<unsigned int>(_root->document.width) &&
-           _region.bottom <= static_cast<unsigned int>(_root->document.height) && _envelope.tileSide &&
-           _envelope.tileSide <= GpuWorkQueue::kMaxReadbackSide;
+    return _root && _root->document.width > 0 && _root->document.height > 0 && _root->document.width <= kMaxCanvasSide &&
+           _root->document.height <= kMaxCanvasSide && RequiredMemory(_region) && _region.right <= static_cast<unsigned int>(_root->document.width) &&
+           _region.bottom <= static_cast<unsigned int>(_root->document.height) && _envelope.tileSide && _envelope.tileSide <= GpuWorkQueue::kMaxReadbackSide;
 }
 
 bool RecordedDocumentReadbackJob::LastRegion() const noexcept
@@ -184,31 +190,28 @@ JobResult RecordedDocumentReadbackJob::Run(JobContext& context)
 {
     if (_phase == Phase::Opening)
     {
-        if (!context.deferredRetirement || context.reservedMemoryBytes < _envelope.cpuBytes || !_envelope.cpuBytes ||
-            !RequiredMemory(_region) ||
-            (_captureKind != RecordedReadbackCaptureKind::Gpu &&
-             _captureKind != RecordedReadbackCaptureKind::CpuOnly) ||
-            (_captureKind == RecordedReadbackCaptureKind::Gpu && !_envelope.gpuBytes))
+        if (! context.deferredRetirement || context.reservedMemoryBytes < _envelope.cpuBytes || ! _envelope.cpuBytes || ! RequiredMemory(_region) ||
+            (_captureKind != RecordedReadbackCaptureKind::Gpu && _captureKind != RecordedReadbackCaptureKind::CpuOnly) ||
+            (_captureKind == RecordedReadbackCaptureKind::Gpu && ! _envelope.gpuBytes))
             return {JobStatus::Failed, E_INVALIDARG};
         // This accounting node must exist before Root or any source/device/output allocation.
         _memory = SharedPublicationMemory::CreateForWork();
-        _root = std::make_unique<Root>(_memory, _envelope.cpuBytes, _ownerThread, *this).release();
+        _root   = std::make_unique<Root>(_memory, _envelope.cpuBytes, _ownerThread, *this).release();
         return PrepareReadbackOpening(context);
     }
-    if (!_root)
+    if (! _root)
         return {JobStatus::Failed, E_UNEXPECTED};
     if (_phase == Phase::Preparing)
     {
         if (_resetOutput)
         {
             ResetReadback();
-            _root->image = {};
-            _root->pixels = {};
+            _root->image    = {};
+            _root->pixels   = {};
             _root->document = _root->originalDocument;
-            _resetOutput = false;
+            _resetOutput    = false;
         }
-        if (!ValidRegion() || context.reservedMemoryBytes < _cpuAdmissionBytes ||
-            context.reservedMemoryBytes < RequiredMemory(_region))
+        if (! ValidRegion() || context.reservedMemoryBytes < _cpuAdmissionBytes || context.reservedMemoryBytes < RequiredMemory(_region))
             return {JobStatus::Failed, E_INVALIDARG};
         const auto prepared = PrepareReadbackSnapshot(_root->document, context);
         if (prepared.status != JobStatus::Finished)
@@ -216,7 +219,7 @@ JobResult RecordedDocumentReadbackJob::Run(JobContext& context)
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
         const auto size = static_cast<std::size_t>(_region.right - _region.left) * (_region.bottom - _region.top) * 4;
-        if (!_root->pixels)
+        if (! _root->pixels)
             _root->pixels = PixelBuffer::TryAllocate(size);
         return _root->pixels ? JobResult{} : JobResult{JobStatus::Failed, E_OUTOFMEMORY};
     }
@@ -224,19 +227,18 @@ JobResult RecordedDocumentReadbackJob::Run(JobContext& context)
     {
         if (FAILED(_recordingFailure))
             return {JobStatus::Failed, _recordingFailure};
-        if (!_root->graph)
+        if (! _root->graph)
             _root->graph = std::make_unique<RecordedUtilityGraph>(_ownerThread);
-        const HRESULT recorded =
-            !_graphPrepared ? _root->graph->PrepareForWork(_root->device.get(), _root->document, CurrentRegion(),
-                                                           _root->stream, context.cancellation)
-                            : _root->graph->RecordNextForWork(CurrentRegion(), _root->stream, context.cancellation);
+        const HRESULT recorded = ! _graphPrepared
+                                     ? _root->graph->PrepareForWork(_root->device.get(), _root->document, CurrentRegion(), _root->stream, context.cancellation)
+                                     : _root->graph->RecordNextForWork(CurrentRegion(), _root->stream, context.cancellation);
         return FAILED(recorded) ? JobResult{JobStatus::Failed, recorded} : JobResult{};
     }
     if (_phase == Phase::Copying)
     {
         if (FAILED(_attemptFailure))
             return {}; // Owner decides recovery only after the actual failed-copy acknowledgement.
-        if (!_rows.data || _rows.width != _width || _rows.height != _height || !_root->pixels)
+        if (! _rows.data || _rows.width != _width || _rows.height != _height || ! _root->pixels)
             return {JobStatus::Failed, E_UNEXPECTED};
         const auto stride = static_cast<std::size_t>(_region.right - _region.left) * 4;
         for (unsigned int y = 0; y < _height; ++y)
@@ -248,17 +250,18 @@ JobResult RecordedDocumentReadbackJob::Run(JobContext& context)
                         static_cast<std::size_t>(_width) * 4);
         }
         _copiedPixels += static_cast<std::uint64_t>(_width) * _height;
-        context.ReportProgress(static_cast<unsigned int>(
-            _copiedPixels * 100 /
-            (static_cast<std::uint64_t>(_region.right - _region.left) * (_region.bottom - _region.top))));
+        context.ReportProgress(
+            static_cast<unsigned int>(_copiedPixels * 100 / (static_cast<std::uint64_t>(_region.right - _region.left) * (_region.bottom - _region.top))));
         if (LastRegion())
         {
             _root->image = Raster::Adopt(static_cast<int>(_region.right - _region.left),
-                                         static_cast<int>(_region.bottom - _region.top), RasterFormat::Bgra8888,
-                                         std::move(_root->pixels), _memory);
-            if (!_root->image.HasStorage())
+                                         static_cast<int>(_region.bottom - _region.top),
+                                         RasterFormat::Bgra8888,
+                                         std::move(_root->pixels),
+                                         _memory);
+            if (! _root->image.HasStorage())
                 return {JobStatus::Failed, E_UNEXPECTED};
-            if (!ProcessReadbackDetached())
+            if (! ProcessReadbackDetached())
                 return ProcessReadback(_root->image, context);
         }
         return {};
@@ -270,17 +273,17 @@ JobResult RecordedDocumentReadbackJob::Run(JobContext& context)
 
 void RecordedDocumentReadbackJob::RetireGraphicsForWork() noexcept
 {
-    if (!_root || IsOwner())
+    if (! _root || IsOwner())
         std::terminate();
     if (_root->graph)
     {
         const bool retired = _root->graph->RetireForWork() || _root->graph->RetireUnpublishedForWork();
-        if (!retired)
+        if (! retired)
             std::terminate();
         _root->graph.reset();
         _root->graphExcluded = false;
     }
-    _root->captured = {};
+    _root->captured       = {};
     _root->retiredCapture = {};
     _root->device.reset();
 }
@@ -291,15 +294,15 @@ void RecordedDocumentReadbackJob::RetireWorkerStage(JobContext& context, JobResu
     // reading cancellation from the owner while the recorder runs must not race a wrapper assignment.
     if (_phase == Phase::Opening)
         _cancellation = context.cancellation;
-    if (!_root)
+    if (! _root)
         return;
     if (_phase == Phase::Recording)
         _root->stream.FinishProducerForWork(UtilityResultError(result));
     else if (_phase == Phase::RetireTransport)
     {
-        if (!_root->stream.RetireForWork())
+        if (! _root->stream.RetireForWork())
             std::terminate();
-        _root->streamRetired = true;
+        _root->streamRetired  = true;
         _root->retiredCapture = {}; // Captured command source references die on Compute.
     }
     else if (_phase == Phase::RetireGraphics)
@@ -314,7 +317,7 @@ void RecordedDocumentReadbackJob::ResumeOwner(Phase next, JobExecutionLane lane)
     if (next == Phase::Detached)
         _detachedReady = false;
     _phase = next;
-    if (!_scheduler.Resume(_ticket, lane))
+    if (! _scheduler.Resume(_ticket, lane))
         std::terminate();
 }
 
@@ -325,32 +328,31 @@ void RecordedDocumentReadbackJob::RememberFailureOwner(JobResult result) noexcep
     const HRESULT error = UtilityResultError(result);
     if (SUCCEEDED(_attemptFailure))
         _attemptFailure = error;
-    if (_terminal.status == JobStatus::Finished &&
-        (result.status == JobStatus::Cancelled || !RetryableUtilityFailure(error)))
+    if (_terminal.status == JobStatus::Finished && (result.status == JobStatus::Cancelled || ! RetryableUtilityFailure(error)))
         _terminal = result;
 }
 
 void RecordedDocumentReadbackJob::ReleaseRowsOwner() noexcept
 {
-    if (_rows.data && !_queue.ReleaseMapped(_rows.lease))
+    if (_rows.data && ! _queue.ReleaseMapped(_rows.lease))
         std::terminate();
-    _rows = {};
+    _rows      = {};
     _rowsReady = false;
 }
 
 void RecordedDocumentReadbackJob::ExcludeGraphOwner() noexcept
 {
-    if (!_graphPublished)
+    if (! _graphPublished)
         return;
-    if (!_root || !_root->graph || !_root->graph->ExcludeRegionOwner())
+    if (! _root || ! _root->graph || ! _root->graph->ExcludeRegionOwner())
         std::terminate();
     _root->graphExcluded = true;
-    _graphPublished = false;
+    _graphPublished      = false;
 }
 
 void RecordedDocumentReadbackJob::BeginGraphicsRetirementOwner(AfterGraphics next) noexcept
 {
-    assert(!_sourceAttached && !_rows.data);
+    assert(! _sourceAttached && ! _rows.data);
     ExcludeGraphOwner();
     _afterGraphics = next;
     if (_root)
@@ -363,15 +365,14 @@ HRESULT RecordedDocumentReadbackJob::ReserveCurrentGraphicsOwner(ID3D11Device* c
 {
     GpuCapabilities::VideoMemorySnapshot snapshot;
     RETURN_IF_FAILED(GpuCapabilities::QueryVideoMemorySnapshot(current, snapshot));
-    const auto& segment =
-        _deviceSoftware && snapshot.nonLocal.available && snapshot.nonLocal.budget ? snapshot.nonLocal : snapshot.local;
-    if (!segment.available || !segment.budget)
+    const auto& segment = _deviceSoftware && snapshot.nonLocal.available && snapshot.nonLocal.budget ? snapshot.nonLocal : snapshot.local;
+    if (! segment.available || ! segment.budget)
         return E_OUTOFMEMORY;
     const GpuResidencySnapshot fresh{_queue.DeviceGeneration(), segment.budget, segment.currentUsage};
     GpuResidencyAdmission decision;
     if (_gpuCharge)
     {
-        if (!_gpuCharge.BelongsTo(_gpuBudget) || _gpuCharge.Bytes() != _envelope.gpuBytes)
+        if (! _gpuCharge.BelongsTo(_gpuBudget) || _gpuCharge.Bytes() != _envelope.gpuBytes)
             return E_INVALIDARG;
         if (_gpuCharge.DeviceGeneration() == fresh.deviceGeneration)
         {
@@ -383,7 +384,7 @@ HRESULT RecordedDocumentReadbackJob::ReserveCurrentGraphicsOwner(ID3D11Device* c
                 return E_OUTOFMEMORY;
             return _gpuBudget.IncreaseOwner(_gpuCharge, _envelope.gpuBytes, fresh, decision) ? S_OK : E_OUTOFMEMORY;
         }
-        if (_root->graph || (_streamInitialized && !_streamRetired))
+        if (_root->graph || (_streamInitialized && ! _streamRetired))
             return E_ABORT;
         _gpuCharge.ResetOwner(); // Original has no resource users, or actual graph retirement acknowledged.
     }
@@ -393,16 +394,16 @@ HRESULT RecordedDocumentReadbackJob::ReserveCurrentGraphicsOwner(ID3D11Device* c
 
 HRESULT RecordedDocumentReadbackJob::CaptureCurrentGraphicsOwner(bool recovery) noexcept
 {
-    if (!_root || _root->captured || _root->device || !_graphicsRetired)
+    if (! _root || _root->captured || _root->device || ! _graphicsRetired)
         return E_UNEXPECTED;
     RETURN_IF_FAILED(PrepareReadbackDevice(recovery ? _attemptFailure : S_OK));
     RETURN_IF_FAILED(_queue.CaptureCompletionContext(_root->captured));
-    _graphicsRetired = false; // Retain even a partially captured opening through actual worker destruction.
-    ID3D11Device* device = nullptr;
+    _graphicsRetired               = false; // Retain even a partially captured opening through actual worker destruction.
+    ID3D11Device* device           = nullptr;
     ID3D11DeviceContext* immediate = nullptr;
     RETURN_IF_FAILED(_queue.BorrowCurrentContextOwner(_root->captured, device, immediate));
     RETURN_IF_FAILED(QueryUtilitySoftwareDeviceOwner(device, _deviceSoftware));
-    if (_deviceSoftware && !_softwareMemoryAdmitted)
+    if (_deviceSoftware && ! _softwareMemoryAdmitted)
     {
         if (_envelope.gpuBytes > (std::numeric_limits<std::uint64_t>::max)() - _envelope.cpuBytes)
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
@@ -410,8 +411,8 @@ HRESULT RecordedDocumentReadbackJob::CaptureCurrentGraphicsOwner(bool recovery) 
         // Fresh actual physical/commit admission before a replacement WARP graph creates CPU-backed resources.
         // This is the same acknowledged ticket/retained slot; refusal preserves the original reservation.
         RETURN_IF_FAILED(static_cast<HRESULT>(_scheduler.IncreaseReservation(_ticket, total)));
-        _cpuAdmissionBytes = total;
-        _root->bytes = total;
+        _cpuAdmissionBytes      = total;
+        _root->bytes            = total;
         _softwareMemoryAdmitted = true;
     }
     RETURN_IF_FAILED(ReserveCurrentGraphicsOwner(device));
@@ -420,10 +421,10 @@ HRESULT RecordedDocumentReadbackJob::CaptureCurrentGraphicsOwner(bool recovery) 
     {
         RETURN_IF_FAILED(_root->stream.RestartDeviceOwner(_queue, _root->captured));
         _streamRetired = _root->streamRetired = false;
-        _transportAuthorized = false;
+        _transportAuthorized                  = false;
     }
     _deviceGeneration = _root->captured.DeviceGeneration();
-    _graphicsRetired = false;
+    _graphicsRetired  = false;
     return S_OK;
 }
 
@@ -433,7 +434,7 @@ void RecordedDocumentReadbackJob::BeginFailureRetirementOwner() noexcept
         _terminal = {JobStatus::Cancelled};
     if (_sourceAttached)
     {
-        if (!_stopOffered && !_commands.StopSourceOwner(_source))
+        if (! _stopOffered && ! _commands.StopSourceOwner(_source))
             std::terminate();
         _stopOffered = true;
         // An original healthy quarantine stays dormant until its actual event/device/Close acknowledgement.
@@ -441,7 +442,7 @@ void RecordedDocumentReadbackJob::BeginFailureRetirementOwner() noexcept
         _scheduler.NotifyOwnerWork();
         return;
     }
-    if (_streamInitialized && !_streamRetired)
+    if (_streamInitialized && ! _streamRetired)
     {
         _root->stream.RequestStopOwner();
         // A failed attach has no admitted command receiver. Dispatch the empty original producer stage so
@@ -450,17 +451,16 @@ void RecordedDocumentReadbackJob::BeginFailureRetirementOwner() noexcept
         return;
     }
     const bool beforeDetached = _phase != Phase::Detached && _phase != Phase::Complete;
-    BeginGraphicsRetirementOwner((_terminal.status == JobStatus::Finished && beforeDetached &&
-                                  RetryableUtilityFailure(_attemptFailure) && _restarts < 2)
+    BeginGraphicsRetirementOwner((_terminal.status == JobStatus::Finished && beforeDetached && RetryableUtilityFailure(_attemptFailure) && _restarts < 2)
                                      ? AfterGraphics::Recover
                                      : AfterGraphics::Complete);
 }
 
 void RecordedDocumentReadbackJob::DetachServiceOwner() noexcept
 {
-    if (!_serviceAttached)
+    if (! _serviceAttached)
         return;
-    if (!_owners.DetachOwner(_ticket, *this))
+    if (! _owners.DetachOwner(_ticket, *this))
         std::terminate();
     _serviceAttached = false;
 }
@@ -471,9 +471,9 @@ void RecordedDocumentReadbackJob::FinishOwner(JobResult result) noexcept
         _terminal = result;
     if (_terminal.status == JobStatus::Finished && FAILED(_attemptFailure))
         _terminal = {JobStatus::Failed, _attemptFailure};
-    _phase = Phase::Complete;
+    _phase         = Phase::Complete;
     _detachedReady = false;
-    if (!_graphicsRetired || _sourceAttached || _rows.data)
+    if (! _graphicsRetired || _sourceAttached || _rows.data)
         std::terminate();
     _gpuCharge.ResetOwner();
     DetachServiceOwner();
@@ -481,17 +481,16 @@ void RecordedDocumentReadbackJob::FinishOwner(JobResult result) noexcept
 
 bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket original) noexcept
 {
-    if (!IsOwner() || (_ticket.generation && _ticket != original))
+    if (! IsOwner() || (_ticket.generation && _ticket != original))
         std::terminate();
     _ticket = original;
     RememberFailureOwner(result);
     if (_phase == Phase::Opening)
     {
-        const bool gpuAdmission =
-            _captureKind == RecordedReadbackCaptureKind::Gpu
-                ? _gpuCharge && _gpuCharge.BelongsTo(_gpuBudget) && _gpuCharge.Bytes() == _envelope.gpuBytes
-                : !_gpuCharge;
-        if (!_root || result.status != JobStatus::Finished || !gpuAdmission)
+        const bool gpuAdmission = _captureKind == RecordedReadbackCaptureKind::Gpu
+                                      ? _gpuCharge && _gpuCharge.BelongsTo(_gpuBudget) && _gpuCharge.Bytes() == _envelope.gpuBytes
+                                      : ! _gpuCharge;
+        if (! _root || result.status != JobStatus::Finished || ! gpuAdmission)
         {
             if (result.status == JobStatus::Finished)
                 _terminal = {JobStatus::Failed, E_INVALIDARG};
@@ -503,17 +502,17 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
             FinishOwner(result);
             return false;
         }
-        if (!_owners.AttachOwner(original, *this))
+        if (! _owners.AttachOwner(original, *this))
         {
             _terminal = {JobStatus::Failed, E_OUTOFMEMORY};
             BeginGraphicsRetirementOwner(AfterGraphics::Complete);
             return true;
         }
-        _serviceAttached = true;
+        _serviceAttached       = true;
         const HRESULT captured = CaptureReadbackDocument(_root->originalDocument);
         if (FAILED(captured))
         {
-            _terminal = {JobStatus::Failed, captured};
+            _terminal       = {JobStatus::Failed, captured};
             _attemptFailure = captured;
             BeginGraphicsRetirementOwner(AfterGraphics::Complete);
         }
@@ -530,8 +529,7 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
         else
         {
             const auto bounds = _root->originalDocument.layers.OwnershipBounds();
-            if (_root->originalDocument.RetirementMemoryBytes() > _envelope.sourceBytes ||
-                (!bounds && _root->originalDocument.layers.Identity()) ||
+            if (_root->originalDocument.RetirementMemoryBytes() > _envelope.sourceBytes || (! bounds && _root->originalDocument.layers.Identity()) ||
                 (bounds && bounds->rasterNodes > _envelope.rasterNodes))
             {
                 _terminal = {JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)};
@@ -546,7 +544,7 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
     if (_phase == Phase::RetireGraphics)
     {
         _graphicsRetired = true;
-        _graphPrepared = false;
+        _graphPrepared   = false;
         _gpuCharge.ResetOwner(); // Worker destruction completed; no context/copy/row owner remains.
         if (_terminal.status != JobStatus::Finished || result.status != JobStatus::Finished)
         {
@@ -558,17 +556,17 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
             const HRESULT captured = CaptureCurrentGraphicsOwner(true);
             if (FAILED(captured))
             {
-                _terminal = {JobStatus::Failed, captured};
+                _terminal       = {JobStatus::Failed, captured};
                 _attemptFailure = captured;
                 BeginGraphicsRetirementOwner(AfterGraphics::Complete);
                 return true;
             }
             ++_restarts;
-            _x = _y = 0;
-            _copiedPixels = 0;
+            _x = _y         = 0;
+            _copiedPixels   = 0;
             _attemptFailure = S_OK;
-            _stopOffered = false;
-            _resetOutput = true;
+            _stopOffered    = false;
+            _resetOutput    = true;
             ResumeOwner(Phase::Preparing);
             return true;
         }
@@ -598,17 +596,16 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
     if (_phase == Phase::RetireTransport)
     {
         _streamRetired = true;
-        if (_terminal.status != JobStatus::Finished || FAILED(_attemptFailure) ||
-            _deviceGeneration != _queue.DeviceGeneration())
+        if (_terminal.status != JobStatus::Finished || FAILED(_attemptFailure) || _deviceGeneration != _queue.DeviceGeneration())
         {
             if (SUCCEEDED(_attemptFailure))
                 _attemptFailure = E_ABORT;
             BeginFailureRetirementOwner();
             return true;
         }
-        ID3D11Device* device = nullptr;
+        ID3D11Device* device           = nullptr;
         ID3D11DeviceContext* immediate = nullptr;
-        HRESULT status = _queue.BorrowCurrentContextOwner(_root->captured, device, immediate);
+        HRESULT status                 = _queue.BorrowCurrentContextOwner(_root->captured, device, immediate);
         if (SUCCEEDED(status))
             status = _root->graph->PublishRegionOwner(immediate);
         if (FAILED(status))
@@ -619,7 +616,7 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
         else
         {
             _graphPublished = true;
-            _phase = Phase::AwaitCopySlot;
+            _phase          = Phase::AwaitCopySlot;
             _scheduler.NotifyOwnerWork();
         }
         return true;
@@ -628,8 +625,7 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
     {
         ReleaseRowsOwner(); // Even a skipped/cancelled body acknowledges the actual lent map after join.
         ExcludeGraphOwner();
-        if (_terminal.status != JobStatus::Finished || FAILED(_attemptFailure) ||
-            _deviceGeneration != _queue.DeviceGeneration())
+        if (_terminal.status != JobStatus::Finished || FAILED(_attemptFailure) || _deviceGeneration != _queue.DeviceGeneration())
         {
             if (SUCCEEDED(_attemptFailure))
                 _attemptFailure = E_ABORT;
@@ -652,8 +648,7 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
                     ResumeOwner(Phase::Detached);
             }
             else
-                BeginGraphicsRetirementOwner(ProcessReadbackDetached() ? AfterGraphics::Detached
-                                                                       : AfterGraphics::Complete);
+                BeginGraphicsRetirementOwner(ProcessReadbackDetached() ? AfterGraphics::Detached : AfterGraphics::Complete);
         }
         else
         {
@@ -677,7 +672,7 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
                 return true;
             _detachedReady = false;
         }
-        if (!_graphicsRetired)
+        if (! _graphicsRetired)
         {
             BeginGraphicsRetirementOwner(AfterGraphics::Complete);
             return true;
@@ -692,9 +687,9 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
     }
     if (_phase == Phase::Preparing)
     {
-        _width = (std::min)(_envelope.tileSide, _region.right - _region.left - _x);
+        _width  = (std::min)(_envelope.tileSide, _region.right - _region.left - _x);
         _height = (std::min)(_envelope.tileSide, _region.bottom - _region.top - _y);
-        _phase = Phase::AwaitSource;
+        _phase  = Phase::AwaitSource;
         _scheduler.NotifyOwnerWork();
         return true;
     }
@@ -702,32 +697,31 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
     {
         // Another admitted source may consume capacity between the service offer and this worker ack.
         // Remain suspended on the same ticket; the real detach notification makes another offer possible.
-        if (!_commands.HasSourceSlotOwner())
+        if (! _commands.HasSourceSlotOwner())
         {
             _phase = Phase::AwaitSource;
             return true;
         }
         HRESULT status = S_OK;
-        if (!_root->captured)
+        if (! _root->captured)
             status = CaptureCurrentGraphicsOwner(false);
         else
         {
-            ID3D11Device* device = nullptr;
+            ID3D11Device* device           = nullptr;
             ID3D11DeviceContext* immediate = nullptr;
-            status = _queue.BorrowCurrentContextOwner(_root->captured, device, immediate);
+            status                         = _queue.BorrowCurrentContextOwner(_root->captured, device, immediate);
         }
         if (SUCCEEDED(status))
         {
-            status = !_streamInitialized ? _root->stream.InitializeOwner(_scheduler, original, _queue, _root->captured)
-                     : _streamRetired    ? _root->stream.RestartOwner()
-                                         : S_OK;
+            status = ! _streamInitialized ? _root->stream.InitializeOwner(_scheduler, original, _queue, _root->captured)
+                     : _streamRetired     ? _root->stream.RestartOwner()
+                                          : S_OK;
             if (SUCCEEDED(status))
             {
                 _streamInitialized = _root->streamInitialized = true;
                 _streamRetired = _root->streamRetired = false;
-                _transportAuthorized = false;
-                status = _commands.AttachOwner(_root->stream, original, *this, _source,
-                                               GpuCommandFailureDisposition::RetainOriginalForRecovery);
+                _transportAuthorized                  = false;
+                status          = _commands.AttachOwner(_root->stream, original, *this, _source, GpuCommandFailureDisposition::RetainOriginalForRecovery);
                 _sourceAttached = SUCCEEDED(status);
             }
         }
@@ -738,7 +732,7 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
         }
         else
         {
-            _width = (std::min)(_envelope.tileSide, _region.right - _region.left - _x);
+            _width  = (std::min)(_envelope.tileSide, _region.right - _region.left - _x);
             _height = (std::min)(_envelope.tileSide, _region.bottom - _region.top - _y);
             ResumeOwner(Phase::Recording, JobExecutionLane::GpuRecording);
         }
@@ -747,10 +741,9 @@ bool RecordedDocumentReadbackJob::DeferRetirement(JobResult result, JobTicket or
     std::terminate();
 }
 
-void RecordedDocumentReadbackJob::CommandAcknowledgedOwner(JobTicket original, GpuCommandLease command,
-                                                           HRESULT result) noexcept
+void RecordedDocumentReadbackJob::CommandAcknowledgedOwner(JobTicket original, GpuCommandLease command, HRESULT result) noexcept
 {
-    if (!IsOwner() || original != _ticket || command.source != original || command.ordinal <= _lastCommandOrdinal ||
+    if (! IsOwner() || original != _ticket || command.source != original || command.ordinal <= _lastCommandOrdinal ||
         command.deviceGeneration != _deviceGeneration)
         std::terminate();
     _lastCommandOrdinal = command.ordinal;
@@ -761,7 +754,7 @@ void RecordedDocumentReadbackJob::CommandAcknowledgedOwner(JobTicket original, G
 
 void RecordedDocumentReadbackJob::CommandSourceFailedOwner(JobTicket original, HRESULT result) noexcept
 {
-    if (!IsOwner() || original != _ticket || SUCCEEDED(result))
+    if (! IsOwner() || original != _ticket || SUCCEEDED(result))
         std::terminate();
     RememberFailureOwner({JobStatus::Failed, result});
     _scheduler.NotifyOwnerWork();
@@ -769,9 +762,9 @@ void RecordedDocumentReadbackJob::CommandSourceFailedOwner(JobTicket original, H
 
 void RecordedDocumentReadbackJob::ReadbackReady(JobTicket original, GpuReadbackRows rows, HRESULT result) noexcept
 {
-    if (!IsOwner() || original != _ticket || _phase != Phase::AwaitRows || _rowsReady)
+    if (! IsOwner() || original != _ticket || _phase != Phase::AwaitRows || _rowsReady)
         std::terminate();
-    _rows = rows;
+    _rows      = rows;
     _rowsReady = true;
     if (FAILED(result))
         RememberFailureOwner({JobStatus::Failed, result});
@@ -781,10 +774,10 @@ void RecordedDocumentReadbackJob::ReadbackReady(JobTicket original, GpuReadbackR
 HRESULT RecordedDocumentReadbackJob::RecordReadbackSource(ID3D11Texture2D*& source, D3D11_BOX& box) noexcept
 {
     source = nullptr;
-    box = {};
-    if (!IsOwner() || !_root || !_root->graph || !_graphPublished || _cancellation.IsCancelled())
+    box    = {};
+    if (! IsOwner() || ! _root || ! _root->graph || ! _graphPublished || _cancellation.IsCancelled())
         return E_ABORT;
-    ID3D11Device* device = nullptr;
+    ID3D11Device* device           = nullptr;
     ID3D11DeviceContext* immediate = nullptr;
     RETURN_IF_FAILED(_queue.BorrowCurrentContextOwner(_root->captured, device, immediate));
     return _root->graph->BorrowRegionOwner(device, immediate, source, box);
@@ -797,11 +790,10 @@ bool RecordedDocumentReadbackJob::HasUtilityOwnerWork() const noexcept
 
 bool RecordedDocumentReadbackJob::IsUtilityOwnerReady() const noexcept
 {
-    if (!HasUtilityOwnerWork())
+    if (! HasUtilityOwnerWork())
         return false;
     const bool cancelled = _cancellation.IsCancelled();
-    if (_sourceAttached && !_stopOffered &&
-        (cancelled || FAILED(_attemptFailure) || _deviceGeneration != _queue.DeviceGeneration()))
+    if (_sourceAttached && ! _stopOffered && (cancelled || FAILED(_attemptFailure) || _deviceGeneration != _queue.DeviceGeneration()))
         return true;
     if (_phase == Phase::AwaitCommands)
         return _root->stream.CanRetireOwner();
@@ -818,16 +810,15 @@ bool RecordedDocumentReadbackJob::IsUtilityOwnerReady() const noexcept
 
 void RecordedDocumentReadbackJob::PumpUtilityOwner() noexcept
 {
-    if (!IsUtilityOwnerReady())
+    if (! IsUtilityOwnerReady())
         return;
-    if (_sourceAttached && !_stopOffered &&
-        (_cancellation.IsCancelled() || FAILED(_attemptFailure) || _deviceGeneration != _queue.DeviceGeneration()))
+    if (_sourceAttached && ! _stopOffered && (_cancellation.IsCancelled() || FAILED(_attemptFailure) || _deviceGeneration != _queue.DeviceGeneration()))
     {
         if (_cancellation.IsCancelled())
             _terminal = {JobStatus::Cancelled};
         else if (SUCCEEDED(_attemptFailure))
             _attemptFailure = E_ABORT;
-        if (!_commands.StopSourceOwner(_source))
+        if (! _commands.StopSourceOwner(_source))
             std::terminate();
         _stopOffered = true;
     }
@@ -835,12 +826,12 @@ void RecordedDocumentReadbackJob::PumpUtilityOwner() noexcept
     {
         if (_sourceAttached)
         {
-            if (!_commands.DetachOwner(_source, _root->retiredCapture))
+            if (! _commands.DetachOwner(_source, _root->retiredCapture))
                 std::terminate();
             _sourceAttached = false;
-            _source = {};
+            _source         = {};
         }
-        if (!_root->stream.AuthorizeRetirementOwner())
+        if (! _root->stream.AuthorizeRetirementOwner())
             std::terminate();
         _transportAuthorized = true;
         ResumeOwner(Phase::RetireTransport); // Worker drops original command/capture owners before copying.
@@ -873,11 +864,11 @@ void RecordedDocumentReadbackJob::PumpUtilityOwner() noexcept
 
 void RecordedDocumentReadbackJob::StopUtilityOwner() noexcept
 {
-    if (!IsOwner())
+    if (! IsOwner())
         std::terminate();
-    if (_sourceAttached && !_stopOffered)
+    if (_sourceAttached && ! _stopOffered)
     {
-        if (!_commands.StopSourceOwner(_source))
+        if (! _commands.StopSourceOwner(_source))
             std::terminate();
         _stopOffered = true;
     }
@@ -887,8 +878,7 @@ void RecordedDocumentReadbackJob::StopUtilityOwner() noexcept
 
 bool RecordedDocumentReadbackJob::ResumeDetachedReadback(JobTicket original) noexcept
 {
-    if (!IsOwner() || !_root || !_detachedReady || _phase != Phase::Detached || original != _ticket || !_memory ||
-        _memory->IsBound())
+    if (! IsOwner() || ! _root || ! _detachedReady || _phase != Phase::Detached || original != _ticket || ! _memory || _memory->IsBound())
         return false;
     _detachedReady = false;
     if (_scheduler.Resume(original, JobExecutionLane::Compute))
@@ -899,66 +889,62 @@ bool RecordedDocumentReadbackJob::ResumeDetachedReadback(JobTicket original) noe
 
 bool RecordedDocumentReadbackJob::ContinuePixelReadback(JobTicket original, unsigned int x, unsigned int y) noexcept
 {
-    if (!IsOwner() || !_root || !_detachedReady || _phase != Phase::Detached || original != _ticket ||
-        !KeepReadbackGraphForPixelContinuation() || !_graphPrepared || !_streamRetired || _sourceAttached ||
-        _rows.data || _graphPublished || !_memory || _memory->IsBound() || _region.right - _region.left != 1 ||
-        _region.bottom - _region.top != 1 || _root->originalDocument.width <= 0 ||
-        _root->originalDocument.height <= 0 || x >= static_cast<unsigned int>(_root->originalDocument.width) ||
-        y >= static_cast<unsigned int>(_root->originalDocument.height))
+    if (! IsOwner() || ! _root || ! _detachedReady || _phase != Phase::Detached || original != _ticket || ! KeepReadbackGraphForPixelContinuation() ||
+        ! _graphPrepared || ! _streamRetired || _sourceAttached || _rows.data || _graphPublished || ! _memory || _memory->IsBound() ||
+        _region.right - _region.left != 1 || _region.bottom - _region.top != 1 || _root->originalDocument.width <= 0 || _root->originalDocument.height <= 0 ||
+        x >= static_cast<unsigned int>(_root->originalDocument.width) || y >= static_cast<unsigned int>(_root->originalDocument.height))
         return false;
-    const auto previous = _region;
-    const auto reset = _resetOutput;
-    const auto attempt = _attemptFailure;
-    const auto copied = _copiedPixels;
+    const auto previous  = _region;
+    const auto reset     = _resetOutput;
+    const auto attempt   = _attemptFailure;
+    const auto copied    = _copiedPixels;
     const auto previousX = _x, previousY = _y;
     _region = {x, y, 0, x + 1, y + 1, 1};
-    _x = _y = 0;
-    _copiedPixels = 0;
-    _resetOutput = true;
+    _x = _y         = 0;
+    _copiedPixels   = 0;
+    _resetOutput    = true;
     _attemptFailure = S_OK;
-    _detachedReady = false;
-    _phase = Phase::Preparing;
+    _detachedReady  = false;
+    _phase          = Phase::Preparing;
     if (_scheduler.Resume(original, JobExecutionLane::Compute))
         return true;
-    _region = previous;
-    _resetOutput = reset;
+    _region         = previous;
+    _resetOutput    = reset;
     _attemptFailure = attempt;
-    _copiedPixels = copied;
-    _x = previousX;
-    _y = previousY;
-    _detachedReady = true;
-    _phase = Phase::Detached;
+    _copiedPixels   = copied;
+    _x              = previousX;
+    _y              = previousY;
+    _detachedReady  = true;
+    _phase          = Phase::Detached;
     return false;
 }
 
 void RecordedDocumentReadbackJob::RetainJoinedRetirement(JobScheduler& scheduler, JobTicket original) noexcept
 {
-    if (!IsOwner() || &scheduler != &_scheduler || !_scheduler.InJoinedRetirementCallback(original) ||
-        (_ticket.generation && _ticket != original))
+    if (! IsOwner() || &scheduler != &_scheduler || ! _scheduler.InJoinedRetirementCallback(original) || (_ticket.generation && _ticket != original))
         std::terminate();
     _ticket = original;
-    if (_memory && !_memory->IsBound() && FAILED(BindReadbackMemoryForRetirement(original, *_memory)))
+    if (_memory && ! _memory->IsBound() && FAILED(BindReadbackMemoryForRetirement(original, *_memory)))
         std::terminate();
     ReleaseRowsOwner(); // Actual compute join precedes this callback; no worker can still read the rows.
     if (_sourceAttached)
     {
-        if (!_commands.AcknowledgeSourceJoinedShutdownOwner(_source) ||
-            !_commands.DetachOwner(_source, _root->retiredCapture))
+        if (! _commands.AcknowledgeSourceJoinedShutdownOwner(_source) || ! _commands.DetachOwner(_source, _root->retiredCapture))
             std::terminate();
         _sourceAttached = false;
-        _source = {};
+        _source         = {};
     }
     // Close can join a completed retirement body without delivering its owner acknowledgement.
     // Conversely a queued retirement body may never dispatch, while its owner authorization is already real.
     if (_root)
         _streamRetired = _root->streamRetired;
-    if (_root && _streamInitialized && !_streamRetired)
+    if (_root && _streamInitialized && ! _streamRetired)
     {
         _root->stream.RequestStopOwner();
         HRESULT result = E_PENDING;
-        if (!_root->stream.ProducerFinishedOwner(result) && !_root->stream.AcknowledgeEmptyJoinedShutdownOwner())
+        if (! _root->stream.ProducerFinishedOwner(result) && ! _root->stream.AcknowledgeEmptyJoinedShutdownOwner())
             std::terminate();
-        if (!_transportAuthorized && !_root->stream.AuthorizeRetirementOwner())
+        if (! _transportAuthorized && ! _root->stream.AuthorizeRetirementOwner())
             std::terminate();
         _transportAuthorized = true;
     }
@@ -967,34 +953,35 @@ void RecordedDocumentReadbackJob::RetainJoinedRetirement(JobScheduler& scheduler
     {
         if (_graphicsRetired)
             _gpuCharge.ResetOwner(); // No captured/created graphics users exist.
-        else if (!_serviceAttached || !_memory ||
-                 !_owners.RetainJoinedChargeOwner(original, *this, _gpuCharge, *_memory))
+        else if (! _serviceAttached || ! _memory || ! _owners.RetainJoinedChargeOwner(original, *this, _gpuCharge, *_memory))
             std::terminate();
     }
     _joinedDestruction = true;
-    _phase = Phase::Complete;
-    _detachedReady = false;
+    _phase             = Phase::Complete;
+    _detachedReady     = false;
     if (_root)
         _root->parent = nullptr; // Queue retains Root until its actual later owner Close hook.
     DetachServiceOwner();
 }
 
-void RecordedDocumentReadbackJob::TransferReadbackOwners(CanvasDocument& document, PixelBuffer& pixels, Raster& image,
+void RecordedDocumentReadbackJob::TransferReadbackOwners(CanvasDocument& document,
+                                                         PixelBuffer& pixels,
+                                                         Raster& image,
                                                          std::shared_ptr<SharedPublicationMemory>& memory) noexcept
 {
     static_assert(std::is_nothrow_swappable_v<CanvasDocument>);
     static_assert(std::is_nothrow_swappable_v<PixelBuffer>);
     static_assert(std::is_nothrow_swappable_v<Raster>);
     // Empty destination is mandatory; it must not drop another charged owner on this callback stack.
-    if (!IsOwner() || memory || document.layers.Identity() || document.selection || pixels || image.HasStorage())
+    if (! IsOwner() || memory || document.layers.Identity() || document.selection || pixels || image.HasStorage())
         std::terminate();
-    if (!_memory)
+    if (! _memory)
     {
         if (_root)
             std::terminate();
         return; // Accounting creation failed before any heavy root/source/device owner existed.
     }
-    if (!_memory->IsBound())
+    if (! _memory->IsBound())
         std::terminate();
     if (_root)
     {
@@ -1007,17 +994,15 @@ void RecordedDocumentReadbackJob::TransferReadbackOwners(CanvasDocument& documen
 
 void RecordedDocumentReadbackJob::Completed(JobResult result) noexcept
 {
-    if (!IsOwner() || !_graphicsRetired || _phase != Phase::Complete || _serviceAttached || _sourceAttached ||
-        _rows.data || _graphPublished)
+    if (! IsOwner() || ! _graphicsRetired || _phase != Phase::Complete || _serviceAttached || _sourceAttached || _rows.data || _graphPublished)
         std::terminate();
     const JobResult terminal = _terminal.status != JobStatus::Finished ? _terminal : result;
-    if (_memory && !_memory->IsBound() && FAILED(BindReadbackMemoryForRetirement(_ticket, *_memory)))
+    if (_memory && ! _memory->IsBound() && FAILED(BindReadbackMemoryForRetirement(_ticket, *_memory)))
         std::terminate();
     ReadbackCompleted(terminal, _root ? std::move(_root->image) : Raster{}, _deviceGeneration);
 }
 
-HRESULT RecordedDocumentReadbackJob::BindReadbackMemoryForRetirement(JobTicket original,
-                                                                     SharedPublicationMemory& temporary) noexcept
+HRESULT RecordedDocumentReadbackJob::BindReadbackMemoryForRetirement(JobTicket original, SharedPublicationMemory& temporary) noexcept
 {
     return temporary.BindForRetirement(_scheduler, original);
 }

@@ -17,14 +17,14 @@ not promise an allocator, OS, destructor or presentation deadline.
 `Build/GenerateBoundedClipper.py` reproduces the four `clipper.*` files from the exact
 upstream `Clipper2_2.0.1` sources. It verifies the input hashes, including the copied
 containment helper, before transforming them. Output goes to a new directory so
-existing sources cannot be replaced accidentally. Use the repository clang-format
-and `.clang-format`, then compare the four resulting files and their manifest:
+existing sources cannot be replaced accidentally. Use the pinned clang-format that `format.ps1`
+installs under `.build/shared-format` and `.clang-format`, then compare the four resulting files and their manifest:
 
 ```powershell
 python Build/GenerateBoundedClipper.py `
   --source <upstream-C++-directory> `
   --output .build/BoundedClipperReplay `
-  --clang-format <VS-clang-format.exe> `
+  --clang-format .build/shared-format/clang-format.exe `
   --format-style .clang-format
 ```
 

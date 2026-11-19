@@ -13,14 +13,18 @@ namespace
 {
 bool CanRestart(HRESULT result) noexcept
 {
-    return result == E_ABORT || result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET ||
-           result == DXGI_ERROR_DEVICE_HUNG || result == DXGI_ERROR_DRIVER_INTERNAL_ERROR;
+    return result == E_ABORT || result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET || result == DXGI_ERROR_DEVICE_HUNG ||
+           result == DXGI_ERROR_DRIVER_INTERNAL_ERROR;
 }
 } // namespace
 
-DocumentReadbackJob::DocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, CanvasRenderer& composition,
-                                         CanvasDocument document, D3D11_BOX region) noexcept
-    : _scheduler(scheduler), _queue(queue), _composition(composition), _document(std::move(document)), _region(region)
+DocumentReadbackJob::DocumentReadbackJob(
+    JobScheduler& scheduler, GpuWorkQueue& queue, CanvasRenderer& composition, CanvasDocument document, D3D11_BOX region) noexcept
+    : _scheduler(scheduler),
+      _queue(queue),
+      _composition(composition),
+      _document(std::move(document)),
+      _region(region)
 {
 }
 
@@ -32,9 +36,12 @@ DocumentReadbackJob::~DocumentReadbackJob()
         _composition.ReleaseUtility();
 }
 
-DocumentReadbackJob::DocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, CanvasRenderer& composition,
-                                         D3D11_BOX region) noexcept
-    : _scheduler(scheduler), _queue(queue), _composition(composition), _region(region), _phase(Phase::Capture)
+DocumentReadbackJob::DocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, CanvasRenderer& composition, D3D11_BOX region) noexcept
+    : _scheduler(scheduler),
+      _queue(queue),
+      _composition(composition),
+      _region(region),
+      _phase(Phase::Capture)
 {
 }
 
@@ -50,46 +57,42 @@ void DocumentReadbackJob::TransferReadbackOwners(CanvasDocument& document, Pixel
 
 bool DocumentReadbackJob::ContinuePixelReadback(JobTicket ticket, unsigned int x, unsigned int y) noexcept
 {
-    if (!_detachedReady || _phase != Phase::ProcessDetached || ticket != _ticket || _rows.data || _utilityAcquired ||
-        _region.right - _region.left != 1 || _region.bottom - _region.top != 1 || _document.width <= 0 ||
-        _document.height <= 0 || x >= static_cast<unsigned int>(_document.width) ||
+    if (! _detachedReady || _phase != Phase::ProcessDetached || ticket != _ticket || _rows.data || _utilityAcquired || _region.right - _region.left != 1 ||
+        _region.bottom - _region.top != 1 || _document.width <= 0 || _document.height <= 0 || x >= static_cast<unsigned int>(_document.width) ||
         y >= static_cast<unsigned int>(_document.height))
         return false;
-    const D3D11_BOX previous = _region;
+    const D3D11_BOX previous    = _region;
     const HRESULT previousError = _error;
-    const bool previousReset = _resetOutput;
-    _region = {x, y, 0, x + 1, y + 1, 1};
-    _phase = Phase::Prepare;
-    _resetOutput = true; // The next worker drops the previous pixel/result, never the input callback.
-    _error = S_OK;
-    _detachedReady = false;
+    const bool previousReset    = _resetOutput;
+    _region                     = {x, y, 0, x + 1, y + 1, 1};
+    _phase                      = Phase::Prepare;
+    _resetOutput                = true; // The next worker drops the previous pixel/result, never the input callback.
+    _error                      = S_OK;
+    _detachedReady              = false;
     if (_scheduler.Resume(ticket))
         return true;
     // A refused resume has launched no worker. Restore the complete suspended request for its owner.
-    _region = previous;
-    _phase = Phase::ProcessDetached;
-    _resetOutput = previousReset;
-    _error = previousError;
+    _region        = previous;
+    _phase         = Phase::ProcessDetached;
+    _resetOutput   = previousReset;
+    _error         = previousError;
     _detachedReady = true;
     return false;
 }
 
 std::uint64_t DocumentReadbackJob::RequiredMemory(const D3D11_BOX& region) noexcept
 {
-    if (region.front != 0 || region.back != 1 || region.right <= region.left || region.bottom <= region.top ||
-        region.right - region.left > kMaxCanvasSide || region.bottom - region.top > kMaxCanvasSide)
+    if (region.front != 0 || region.back != 1 || region.right <= region.left || region.bottom <= region.top || region.right - region.left > kMaxCanvasSide ||
+        region.bottom - region.top > kMaxCanvasSide)
         return 0;
     const auto bytes = static_cast<std::uint64_t>(region.right - region.left) * (region.bottom - region.top) * 4;
-    return bytes <= std::numeric_limits<std::size_t>::max()
-               ? PixelBuffer::RequiredBytes(static_cast<std::size_t>(bytes))
-               : 0;
+    return bytes <= std::numeric_limits<std::size_t>::max() ? PixelBuffer::RequiredBytes(static_cast<std::size_t>(bytes)) : 0;
 }
 
 bool DocumentReadbackJob::ValidRegion() const noexcept
 {
-    return _document.width > 0 && _document.height > 0 && _document.width <= kMaxCanvasSide &&
-           _document.height <= kMaxCanvasSide && RequiredMemory(_region) != 0 &&
-           _region.right <= static_cast<unsigned int>(_document.width) &&
+    return _document.width > 0 && _document.height > 0 && _document.width <= kMaxCanvasSide && _document.height <= kMaxCanvasSide &&
+           RequiredMemory(_region) != 0 && _region.right <= static_cast<unsigned int>(_document.width) &&
            _region.bottom <= static_cast<unsigned int>(_document.height);
 }
 
@@ -109,16 +112,16 @@ JobResult DocumentReadbackJob::Run(JobContext& context)
         return ProcessReadback(_image, context);
     if (_phase == Phase::Prepare)
     {
-        if (!ValidRegion())
+        if (! ValidRegion())
             return {JobStatus::Failed, E_INVALIDARG};
         if (context.reservedMemoryBytes < RequiredMemory(_region))
             return {JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)};
         if (_resetOutput)
         {
             ResetReadback();
-            _image = {};
-            _pixels = {};
-            _resetOutput = false;
+            _image        = {};
+            _pixels       = {};
+            _resetOutput  = false;
             _copiedPixels = 0;
         }
         if (const auto prepared = PrepareReadbackSnapshot(_document, context); prepared.status != JobStatus::Finished)
@@ -126,14 +129,14 @@ JobResult DocumentReadbackJob::Run(JobContext& context)
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
         const auto bytes = static_cast<std::size_t>(_region.right - _region.left) * (_region.bottom - _region.top) * 4;
-        _pixels = PixelBuffer::TryAllocate(bytes);
+        _pixels          = PixelBuffer::TryAllocate(bytes);
         return _pixels ? JobResult{} : JobResult{JobStatus::Failed, E_OUTOFMEMORY};
     }
     // A GPU failure resumes a successful decision stage so its owner can perform a bounded restart. A final
     // error is delivered by a distinct worker stage; it cannot bypass mapped-row acknowledgement.
     if (FAILED(_error))
         return {};
-    if (!_rows.data || _rows.width != _tileWidth || _rows.height != _tileHeight)
+    if (! _rows.data || _rows.width != _tileWidth || _rows.height != _tileHeight)
         return {JobStatus::Failed, E_UNEXPECTED};
     const auto stride = static_cast<std::size_t>(_region.right - _region.left) * 4;
     for (unsigned int y = 0; y < _tileHeight; ++y)
@@ -145,15 +148,13 @@ JobResult DocumentReadbackJob::Run(JobContext& context)
                     static_cast<std::size_t>(_tileWidth) * 4);
     }
     _copiedPixels += static_cast<std::uint64_t>(_tileWidth) * _tileHeight;
-    context.ReportProgress(static_cast<unsigned int>(
-        _copiedPixels * 100 /
-        (static_cast<std::uint64_t>(_region.right - _region.left) * (_region.bottom - _region.top))));
+    context.ReportProgress(
+        static_cast<unsigned int>(_copiedPixels * 100 / (static_cast<std::uint64_t>(_region.right - _region.left) * (_region.bottom - _region.top))));
     if (LastTile())
     {
-        _image =
-            Raster::Adopt(static_cast<int>(_region.right - _region.left),
-                          static_cast<int>(_region.bottom - _region.top), RasterFormat::Bgra8888, std::move(_pixels));
-        if (!_image.HasStorage())
+        _image = Raster::Adopt(
+            static_cast<int>(_region.right - _region.left), static_cast<int>(_region.bottom - _region.top), RasterFormat::Bgra8888, std::move(_pixels));
+        if (! _image.HasStorage())
             return {JobStatus::Failed, E_UNEXPECTED};
         return ProcessReadbackDetached() ? JobResult{} : ProcessReadback(_image, context);
     }
@@ -173,8 +174,8 @@ void DocumentReadbackJob::Acknowledge() noexcept
 
 void DocumentReadbackJob::ResumeError(JobTicket ticket, HRESULT error) noexcept
 {
-    _phase = Phase::Error;
-    _error = error;
+    _phase             = Phase::Error;
+    _error             = error;
     const bool resumed = _scheduler.Resume(ticket);
     assert(resumed);
     (void)resumed;
@@ -182,12 +183,12 @@ void DocumentReadbackJob::ResumeError(JobTicket ticket, HRESULT error) noexcept
 
 void DocumentReadbackJob::RequestTile(JobTicket ticket) noexcept
 {
-    _ticket = ticket;
-    _tileWidth = (std::min)(_tileSide, _region.right - _region.left - _x);
-    _tileHeight = (std::min)(_tileSide, _region.bottom - _region.top - _y);
-    _phase = Phase::Copy;
+    _ticket           = ticket;
+    _tileWidth        = (std::min)(_tileSide, _region.right - _region.left - _x);
+    _tileHeight       = (std::min)(_tileSide, _region.bottom - _region.top - _y);
+    _phase            = Phase::Copy;
     _deviceGeneration = _queue.DeviceGeneration();
-    _error = _queue.EnqueueProducedReadback(_tileWidth, _tileHeight, ticket, *this, *this);
+    _error            = _queue.EnqueueProducedReadback(_tileWidth, _tileHeight, ticket, *this, *this);
     if (FAILED(_error))
         ResumeError(ticket, _error);
 }
@@ -202,7 +203,7 @@ bool DocumentReadbackJob::DeferCompletion(JobResult result, JobTicket ticket) no
             ResumeError(ticket, captured);
         else
         {
-            _phase = captured == S_FALSE ? Phase::ProcessDetached : Phase::Prepare;
+            _phase             = captured == S_FALSE ? Phase::ProcessDetached : Phase::Prepare;
             const bool resumed = _scheduler.Resume(ticket);
             assert(resumed);
             (void)resumed;
@@ -211,20 +212,18 @@ bool DocumentReadbackJob::DeferCompletion(JobResult result, JobTicket ticket) no
     }
     if (_phase == Phase::ProcessDetached)
     {
-        _detachedReady = true;
+        _detachedReady      = true;
         const bool deferred = DeferDetachedCompletion(result, ticket);
-        if (!deferred)
+        if (! deferred)
             _detachedReady = false;
         return deferred; // no GPU rows/utility ownership cross this boundary
     }
     if (_phase == Phase::Copy)
     {
-        const HRESULT failure = FAILED(_error)                                   ? _error
-                                : _deviceGeneration != _queue.DeviceGeneration() ? E_ABORT
-                                                                                 : S_OK;
+        const HRESULT failure = FAILED(_error) ? _error : _deviceGeneration != _queue.DeviceGeneration() ? E_ABORT : S_OK;
         if (FAILED(failure))
         {
-            if (!CanRestart(failure) || _restarts >= 2)
+            if (! CanRestart(failure) || _restarts >= 2)
                 ResumeError(ticket, failure);
             else
             {
@@ -234,9 +233,9 @@ bool DocumentReadbackJob::DeferCompletion(JobResult result, JobTicket ticket) no
                 else
                 {
                     ++_restarts;
-                    _x = _y = 0;
-                    _phase = Phase::Prepare;
-                    _resetOutput = true;
+                    _x = _y            = 0;
+                    _phase             = Phase::Prepare;
+                    _resetOutput       = true;
                     const bool resumed = _scheduler.Resume(ticket);
                     assert(resumed);
                     (void)resumed;
@@ -246,14 +245,14 @@ bool DocumentReadbackJob::DeferCompletion(JobResult result, JobTicket ticket) no
         }
         if (LastTile())
         {
-            if (!ProcessReadbackDetached())
+            if (! ProcessReadbackDetached())
                 return false;
             if (_utilityAcquired)
             {
                 _composition.ReleaseUtility();
                 _utilityAcquired = false;
             }
-            _phase = Phase::ProcessDetached;
+            _phase                 = Phase::ProcessDetached;
             const HRESULT captured = CaptureDetachedReadback(_image);
             if (FAILED(captured))
             {
@@ -280,18 +279,17 @@ bool DocumentReadbackJob::DeferCompletion(JobResult result, JobTicket ticket) no
             ResumeError(ticket, ready);
             return true;
         }
-        if (!_utilityAcquired)
+        if (! _utilityAcquired)
         {
             _utilityAcquired = _composition.AcquireUtility();
-            if (!_utilityAcquired)
+            if (! _utilityAcquired)
             {
                 ResumeError(ticket, HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA));
                 return true;
             }
         }
         // Match the committed synchronous traversal's guard room for inverse transforms/filter footprints.
-        _tileSide = (std::min)(GpuWorkQueue::kMaxReadbackSide,
-                               static_cast<unsigned int>((std::max)(1, _composition.TextureLimit() / 2)));
+        _tileSide = (std::min)(GpuWorkQueue::kMaxReadbackSide, static_cast<unsigned int>((std::max)(1, _composition.TextureLimit() / 2)));
     }
     RequestTile(ticket);
     return true;
@@ -300,8 +298,8 @@ bool DocumentReadbackJob::DeferCompletion(JobResult result, JobTicket ticket) no
 void DocumentReadbackJob::ReadbackReady(JobTicket ticket, GpuReadbackRows rows, HRESULT result) noexcept
 {
     assert(ticket == _ticket);
-    _rows = rows;
-    _error = result;
+    _rows              = rows;
+    _error             = result;
     const bool resumed = _scheduler.Resume(ticket);
     assert(resumed);
     (void)resumed;
@@ -312,14 +310,13 @@ HRESULT DocumentReadbackJob::RecordReadbackSource(ID3D11Texture2D*& source, D3D1
     source = nullptr;
     if (_cancellation.IsCancelled())
         return E_ABORT;
-    const D3D11_BOX region{
-        _region.left + _x, _region.top + _y, 0, _region.left + _x + _tileWidth, _region.top + _y + _tileHeight, 1};
+    const D3D11_BOX region{_region.left + _x, _region.top + _y, 0, _region.left + _x + _tileWidth, _region.top + _y + _tileHeight, 1};
     wil::com_ptr_nothrow<ID3D11Texture2D> texture;
     const HRESULT result = _composition.ComposeUtilityTile(_document, region, texture);
     if (FAILED(result))
         return result;
     source = texture.get(); // composition owns it through the immediately following CopySubresourceRegion
-    box = {0, 0, 0, _tileWidth, _tileHeight, 1};
+    box    = {0, 0, 0, _tileWidth, _tileHeight, 1};
     return S_OK;
 }
 
@@ -331,8 +328,7 @@ void DocumentReadbackJob::Completed(JobResult result) noexcept
         _composition.ReleaseUtility();
         _utilityAcquired = false;
     }
-    if (result.status == JobStatus::Finished && _phase != Phase::ProcessDetached &&
-        _deviceGeneration != _queue.DeviceGeneration())
+    if (result.status == JobStatus::Finished && _phase != Phase::ProcessDetached && _deviceGeneration != _queue.DeviceGeneration())
         result = {JobStatus::Cancelled};
     ReadbackCompleted(result, result.status == JobStatus::Finished ? std::move(_image) : Raster{}, _deviceGeneration);
 }

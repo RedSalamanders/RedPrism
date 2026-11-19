@@ -22,9 +22,9 @@ struct SizingWorkTestGate final
 {
     static constexpr unsigned int kMessage = WM_APP + 0x4B3;
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    bool afterPreparation = false;
+    bool afterPreparation       = false;
     bool throwAllocationFailure = false;
-    bool throwCaptureFailure = false;
+    bool throwCaptureFailure    = false;
     std::optional<DocumentHistory::PrepareStage> historyFailure;
     std::uint64_t reservationBytes = 0;
     std::atomic<std::size_t> workerSlot{JobScheduler::kCapacity};

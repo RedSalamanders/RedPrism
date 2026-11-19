@@ -24,10 +24,10 @@ struct AdjustmentClosureInput final
 
 class PreparedAdjustmentClosure final
 {
-  public:
-    PreparedAdjustmentClosure(const PreparedAdjustmentClosure&) = delete;
-    PreparedAdjustmentClosure& operator=(const PreparedAdjustmentClosure&) = delete;
-    PreparedAdjustmentClosure(PreparedAdjustmentClosure&&) noexcept = default;
+public:
+    PreparedAdjustmentClosure(const PreparedAdjustmentClosure&)                = delete;
+    PreparedAdjustmentClosure& operator=(const PreparedAdjustmentClosure&)     = delete;
+    PreparedAdjustmentClosure(PreparedAdjustmentClosure&&) noexcept            = default;
     PreparedAdjustmentClosure& operator=(PreparedAdjustmentClosure&&) noexcept = default;
     [[nodiscard]] const std::optional<CanvasDocument>& AfterDocument() const noexcept
     {
@@ -38,11 +38,12 @@ class PreparedAdjustmentClosure final
         return _input.commit;
     }
 
-  private:
+private:
     friend class DocumentSession;
-    PreparedAdjustmentClosure(AdjustmentClosureInput input, std::optional<CanvasDocument> document,
-                              DocumentHistory::Publication history)
-        : _input(std::move(input)), _document(std::move(document)), _history(std::move(history))
+    PreparedAdjustmentClosure(AdjustmentClosureInput input, std::optional<CanvasDocument> document, DocumentHistory::Publication history)
+        : _input(std::move(input)),
+          _document(std::move(document)),
+          _history(std::move(history))
     {
     }
     AdjustmentClosureInput _input;

@@ -41,19 +41,23 @@ template <class Value, class OwnerPolicy> class PersistentOwnerIndex final
         std::uint64_t retirementBytes;
 
         Node(Key identity, const Value& record, Link lower, Link upper, std::uint64_t retiredBytes)
-            : key(identity), value(record), left(std::move(lower)), right(std::move(upper)),
-              count(1 + Count(left) + Count(right)), height(1 + (std::max)(Height(left), Height(right))),
+            : key(identity),
+              value(record),
+              left(std::move(lower)),
+              right(std::move(upper)),
+              count(1 + Count(left) + Count(right)),
+              height(1 + (std::max)(Height(left), Height(right))),
               retirementBytes(retiredBytes)
         {
         }
     };
 
-  public:
+public:
     struct Observer final
     {
-        void* context = nullptr;
+        void* context                   = nullptr;
         void (*visited)(void*) noexcept = nullptr;
-        void (*allocating)(void*) = nullptr; // Deterministic test fault before actual allocation.
+        void (*allocating)(void*)       = nullptr; // Deterministic test fault before actual allocation.
     };
 
     [[nodiscard]] std::size_t size() const noexcept
@@ -82,7 +86,7 @@ template <class Value, class OwnerPolicy> class PersistentOwnerIndex final
 
     [[nodiscard]] const Value* Find(Key key) const noexcept
     {
-        if (!key)
+        if (! key)
             return nullptr;
         const Node* node = _root.get();
         while (node)
@@ -94,12 +98,14 @@ template <class Value, class OwnerPolicy> class PersistentOwnerIndex final
         return nullptr;
     }
 
-    [[nodiscard]] bool TrySet(const Value& value, std::shared_ptr<const SharedPublicationMemory> memory,
-                              CancelToken cancellation, PersistentOwnerIndex& output, Observer observer = {}) const
+    [[nodiscard]] bool TrySet(const Value& value,
+                              std::shared_ptr<const SharedPublicationMemory> memory,
+                              CancelToken cancellation,
+                              PersistentOwnerIndex& output,
+                              Observer observer = {}) const
     {
         Key key = OwnerPolicy{}(value);
-        if (!key || memory.use_count() == 0 || cancellation.IsCancelled() ||
-            size() == (std::numeric_limits<std::size_t>::max)())
+        if (! key || memory.use_count() == 0 || cancellation.IsCancelled() || size() == (std::numeric_limits<std::size_t>::max)())
             return false;
         Builder builder{std::move(memory), cancellation, observer};
         auto root = Set(_root, key, value, builder);
@@ -109,10 +115,10 @@ template <class Value, class OwnerPolicy> class PersistentOwnerIndex final
         return true;
     }
 
-    [[nodiscard]] bool TryErase(Key key, std::shared_ptr<const SharedPublicationMemory> memory,
-                                CancelToken cancellation, PersistentOwnerIndex& output, Observer observer = {}) const
+    [[nodiscard]] bool TryErase(
+        Key key, std::shared_ptr<const SharedPublicationMemory> memory, CancelToken cancellation, PersistentOwnerIndex& output, Observer observer = {}) const
     {
-        if (!key || memory.use_count() == 0 || cancellation.IsCancelled())
+        if (! key || memory.use_count() == 0 || cancellation.IsCancelled())
             return false;
         Builder builder{std::move(memory), cancellation, observer};
         auto root = Erase(_root, key, builder);
@@ -128,7 +134,7 @@ template <class Value, class OwnerPolicy> class PersistentOwnerIndex final
     {
         const Node* stack[MaximumHeight]{};
         std::size_t depth = 0;
-        const Node* node = _root.get();
+        const Node* node  = _root.get();
         while (node || depth)
         {
             if (cancellation.IsCancelled())
@@ -138,17 +144,17 @@ template <class Value, class OwnerPolicy> class PersistentOwnerIndex final
                 if (depth == MaximumHeight)
                     return false;
                 stack[depth++] = node;
-                node = node->left.get();
+                node           = node->left.get();
             }
             node = stack[--depth];
-            if (!visitor(node->key, node->value))
+            if (! visitor(node->key, node->value))
                 return false;
             node = node->right.get();
         }
-        return !cancellation.IsCancelled();
+        return ! cancellation.IsCancelled();
     }
 
-  private:
+private:
     struct Builder final
     {
         std::shared_ptr<const SharedPublicationMemory> memory;
@@ -161,37 +167,34 @@ template <class Value, class OwnerPolicy> class PersistentOwnerIndex final
             if (observer.visited)
                 observer.visited(observer.context);
             failed = failed || cancellation.IsCancelled();
-            return !failed;
+            return ! failed;
         }
         [[nodiscard]] Link Make(Key key, const Value& value, Link left, Link right)
         {
             constexpr auto maximum = (std::numeric_limits<std::size_t>::max)();
-            if (!Check() || Count(left) == maximum || Count(right) > maximum - 1 - Count(left) ||
-                (std::max)(Height(left), Height(right)) >= MaximumHeight)
+            if (! Check() || Count(left) == maximum || Count(right) > maximum - 1 - Count(left) || (std::max)(Height(left), Height(right)) >= MaximumHeight)
             {
                 failed = true;
                 return {};
             }
             if (observer.allocating)
                 observer.allocating(observer.context);
-            const auto valueBytes = OwnerPolicy::RetirementBytes(value);
+            const auto valueBytes       = OwnerPolicy::RetirementBytes(value);
             constexpr auto maximumBytes = (std::numeric_limits<std::uint64_t>::max)();
-            auto bytes = NodeAllocationAllowance();
-            const auto add = [&](std::uint64_t amount) noexcept
+            auto bytes                  = NodeAllocationAllowance();
+            const auto add              = [&](std::uint64_t amount) noexcept
             {
                 if (amount > maximumBytes - bytes)
                     return false;
                 bytes += amount;
                 return true;
             };
-            if (!valueBytes || !add(valueBytes) || !add(left ? left->retirementBytes : 0) ||
-                !add(right ? right->retirementBytes : 0))
+            if (! valueBytes || ! add(valueBytes) || ! add(left ? left->retirementBytes : 0) || ! add(right ? right->retirementBytes : 0))
             {
                 failed = true;
                 return {};
             }
-            return MakeLocallyOwnedPublicationObject<Node>(memory, bytes, 0, key, value, std::move(left),
-                                                           std::move(right), bytes);
+            return MakeLocallyOwnedPublicationObject<Node>(memory, bytes, 0, key, value, std::move(left), std::move(right), bytes);
         }
     };
 
@@ -220,8 +223,8 @@ template <class Value, class OwnerPolicy> class PersistentOwnerIndex final
                 return builder.Make(pivot->key, pivot->value, pivot->left, std::move(upper));
             }
             const auto middle = pivot->right;
-            auto lower = builder.Make(pivot->key, pivot->value, pivot->left, middle->left);
-            auto upper = builder.Make(key, value, middle->right, std::move(right));
+            auto lower        = builder.Make(pivot->key, pivot->value, pivot->left, middle->left);
+            auto upper        = builder.Make(key, value, middle->right, std::move(right));
             return builder.Make(middle->key, middle->value, std::move(lower), std::move(upper));
         }
         if (Height(right) > Height(left) + 1)
@@ -233,17 +236,17 @@ template <class Value, class OwnerPolicy> class PersistentOwnerIndex final
                 return builder.Make(pivot->key, pivot->value, std::move(lower), pivot->right);
             }
             const auto middle = pivot->left;
-            auto lower = builder.Make(key, value, std::move(left), middle->left);
-            auto upper = builder.Make(pivot->key, pivot->value, middle->right, pivot->right);
+            auto lower        = builder.Make(key, value, std::move(left), middle->left);
+            auto upper        = builder.Make(pivot->key, pivot->value, middle->right, pivot->right);
             return builder.Make(middle->key, middle->value, std::move(lower), std::move(upper));
         }
         return builder.Make(key, value, std::move(left), std::move(right));
     }
     [[nodiscard]] static Link Set(const Link& node, Key key, const Value& value, Builder& builder)
     {
-        if (!builder.Check())
+        if (! builder.Check())
             return {};
-        if (!node)
+        if (! node)
             return builder.Make(key, value, {}, {});
         if (key == node->key)
             return builder.Make(key, value, node->left, node->right);
@@ -257,18 +260,18 @@ template <class Value, class OwnerPolicy> class PersistentOwnerIndex final
     }
     [[nodiscard]] static Link Erase(const Link& node, Key key, Builder& builder)
     {
-        if (!builder.Check() || !node)
+        if (! builder.Check() || ! node)
             return node;
         if (key == node->key)
         {
-            if (!node->left)
+            if (! node->left)
                 return node->right;
-            if (!node->right)
+            if (! node->right)
                 return node->left;
             const Node* successor = node->right.get();
             while (successor->left)
             {
-                if (!builder.Check())
+                if (! builder.Check())
                     return {};
                 successor = successor->left.get();
             }

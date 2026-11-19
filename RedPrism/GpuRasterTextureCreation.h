@@ -33,13 +33,13 @@ enum class GpuRasterCreationFailure : std::uint8_t
 // concurrency refuses before any resource allocation; a large owner allocation is never the fallback.
 class GpuRasterTextureCreation final
 {
-  public:
+public:
     GpuRasterTextureCreation() noexcept = default;
     ~GpuRasterTextureCreation();
-    GpuRasterTextureCreation(const GpuRasterTextureCreation&) = delete;
+    GpuRasterTextureCreation(const GpuRasterTextureCreation&)            = delete;
     GpuRasterTextureCreation& operator=(const GpuRasterTextureCreation&) = delete;
-    GpuRasterTextureCreation(GpuRasterTextureCreation&&) = delete;
-    GpuRasterTextureCreation& operator=(GpuRasterTextureCreation&&) = delete;
+    GpuRasterTextureCreation(GpuRasterTextureCreation&&)                 = delete;
+    GpuRasterTextureCreation& operator=(GpuRasterTextureCreation&&)      = delete;
 
     [[nodiscard]] HRESULT CaptureOwner(ID3D11Device* device, std::uint64_t generation) noexcept;
     [[nodiscard]] HRESULT CreateOnWorker(const RasterUploadLayout& layout, CancelToken cancellation = {}) noexcept;
@@ -75,7 +75,7 @@ class GpuRasterTextureCreation final
     [[nodiscard]] bool RestrictConcurrencyForTest() noexcept;
     [[nodiscard]] bool SetFailureForTest(GpuRasterCreationFailure point, HRESULT error = E_FAIL) noexcept;
 
-  private:
+private:
     enum class State : std::uint8_t
     {
         Empty,
@@ -100,16 +100,16 @@ class GpuRasterTextureCreation final
     wil::com_ptr_nothrow<ID3D11RasterizerState> _mipRasterizer;
     wil::com_ptr_nothrow<ID3D11DepthStencilState> _mipDepth;
     std::atomic<State> _state{State::Empty};
-    std::uint64_t _generation = 0;
-    std::uint32_t _ownerThread = 0;
-    HRESULT _threadingResult = E_PENDING;
-    HRESULT _result = E_PENDING;
-    HRESULT _failureResult = E_FAIL;
+    std::uint64_t _generation         = 0;
+    std::uint32_t _ownerThread        = 0;
+    HRESULT _threadingResult          = E_PENDING;
+    HRESULT _result                   = E_PENDING;
+    HRESULT _failureResult            = E_FAIL;
     GpuRasterCreationFailure _failure = GpuRasterCreationFailure::None;
-    unsigned int _resourceCalls = 0;
-    unsigned int _mipCount = 0;
-    unsigned int _mipFailureSlice = kMipSliceCapacity;
-    HRESULT _mipFailureResult = E_FAIL;
-    bool _prepareMipSlices = false;
-    bool _concurrentCreates = false;
+    unsigned int _resourceCalls       = 0;
+    unsigned int _mipCount            = 0;
+    unsigned int _mipFailureSlice     = kMipSliceCapacity;
+    HRESULT _mipFailureResult         = E_FAIL;
+    bool _prepareMipSlices            = false;
+    bool _concurrentCreates           = false;
 };

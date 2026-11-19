@@ -50,11 +50,11 @@ enum class JoinWith
 
 enum class VertexFlags : uint32_t
 {
-    Empty = 0,
+    Empty     = 0,
     OpenStart = 1,
-    OpenEnd = 2,
-    LocalMax = 4,
-    LocalMin = 8
+    OpenEnd   = 2,
+    LocalMax  = 4,
+    LocalMin  = 8
 };
 
 constexpr enum VertexFlags operator&(enum VertexFlags a, enum VertexFlags b)
@@ -70,8 +70,8 @@ constexpr enum VertexFlags operator|(enum VertexFlags a, enum VertexFlags b)
 struct Vertex : ArenaObject<Vertex>
 {
     Point64 pt;
-    Vertex* next = nullptr;
-    Vertex* prev = nullptr;
+    Vertex* next      = nullptr;
+    Vertex* prev      = nullptr;
     VertexFlags flags = VertexFlags::Empty;
 };
 
@@ -94,7 +94,7 @@ class PolyPath;
 class PolyPath64;
 class PolyPathD;
 using PolyTree64 = PolyPath64;
-using PolyTreeD = PolyPathD;
+using PolyTreeD  = PolyPathD;
 
 struct OutRec;
 typedef ArenaVector<OutRec*> OutRecList;
@@ -103,15 +103,15 @@ typedef ArenaVector<OutRec*> OutRecList;
 // have OutRec pointers assigned when they form part of the clipping solution.
 struct OutRec : ArenaObject<OutRec>
 {
-    size_t idx = 0;
-    OutRec* owner = nullptr;
-    Active* front_edge = nullptr;
-    Active* back_edge = nullptr;
-    OutPt* pts = nullptr;
-    PolyPath* polypath = nullptr;
-    OutRecList* splits = nullptr;
+    size_t idx              = 0;
+    OutRec* owner           = nullptr;
+    Active* front_edge      = nullptr;
+    Active* back_edge       = nullptr;
+    OutPt* pts              = nullptr;
+    PolyPath* polypath      = nullptr;
+    OutRecList* splits      = nullptr;
     OutRec* recursive_split = nullptr;
-    Rect64 bounds = {};
+    Rect64 bounds           = {};
     Path64 path;
     bool is_open = false;
 
@@ -134,10 +134,10 @@ struct Active : ArenaObject<Active>
     Point64 bot;
     Point64 top;
     int64_t curr_x = 0; // current (updated at every new scanline)
-    double dx = 0.0;
-    int wind_dx = 1; // 1 or -1 depending on winding direction
-    int wind_cnt = 0;
-    int wind_cnt2 = 0; // winding count of the opposite polytype
+    double dx      = 0.0;
+    int wind_dx    = 1; // 1 or -1 depending on winding direction
+    int wind_cnt   = 0;
+    int wind_cnt2  = 0; // winding count of the opposite polytype
     OutRec* outrec = nullptr;
     // AEL: 'active edge list' (Vatti's AET - active edge table)
     //      a linked list of all edges (from left to right) that are present
@@ -148,13 +148,13 @@ struct Active : ArenaObject<Active>
     // SEL: 'sorted edge list' (Vatti's ST - sorted table)
     //      linked list used when sorting edges into their new positions at the
     //      top of scanbeams, but also (re)used to process horizontals.
-    Active* prev_in_sel = nullptr;
-    Active* next_in_sel = nullptr;
-    Active* jump = nullptr;
-    Vertex* vertex_top = nullptr;
+    Active* prev_in_sel    = nullptr;
+    Active* next_in_sel    = nullptr;
+    Active* jump           = nullptr;
+    Vertex* vertex_top     = nullptr;
     LocalMinima* local_min = nullptr; // the bottom of an edge 'bound' (also Vatti)
-    bool is_left_bound = false;
-    JoinWith join_with = JoinWith::NoJoin;
+    bool is_left_bound     = false;
+    JoinWith join_with     = JoinWith::NoJoin;
 };
 
 struct LocalMinima : ArenaObject<LocalMinima>
@@ -162,7 +162,9 @@ struct LocalMinima : ArenaObject<LocalMinima>
     Vertex* vertex;
     PathType polytype;
     bool is_open;
-    LocalMinima(Vertex* v, PathType pt, bool open) : vertex(v), polytype(pt), is_open(open) {}
+    LocalMinima(Vertex* v, PathType pt, bool open) : vertex(v), polytype(pt), is_open(open)
+    {
+    }
 };
 
 struct IntersectNode
@@ -170,17 +172,25 @@ struct IntersectNode
     Point64 pt;
     Active* edge1;
     Active* edge2;
-    IntersectNode() : pt(Point64(0, 0)), edge1(NULL), edge2(NULL) {}
-    IntersectNode(Active* e1, Active* e2, Point64& pt_) : pt(pt_), edge1(e1), edge2(e2) {}
+    IntersectNode() : pt(Point64(0, 0)), edge1(NULL), edge2(NULL)
+    {
+    }
+    IntersectNode(Active* e1, Active* e2, Point64& pt_) : pt(pt_), edge1(e1), edge2(e2)
+    {
+    }
 };
 
 struct HorzSegment
 {
     OutPt* left_op;
-    OutPt* right_op = nullptr;
+    OutPt* right_op    = nullptr;
     bool left_to_right = true;
-    HorzSegment() : left_op(nullptr) {}
-    explicit HorzSegment(OutPt* op) : left_op(op) {}
+    HorzSegment() : left_op(nullptr)
+    {
+    }
+    explicit HorzSegment(OutPt* op) : left_op(op)
+    {
+    }
 };
 
 struct HorzJoin
@@ -188,17 +198,15 @@ struct HorzJoin
     OutPt* op1 = nullptr;
     OutPt* op2 = nullptr;
     HorzJoin() {};
-    explicit HorzJoin(OutPt* ltr, OutPt* rtl) : op1(ltr), op2(rtl) {}
+    explicit HorzJoin(OutPt* ltr, OutPt* rtl) : op1(ltr), op2(rtl)
+    {
+    }
 };
 
 #ifdef USINGZ
-typedef std::function<void(const Point64& e1bot, const Point64& e1top, const Point64& e2bot, const Point64& e2top,
-                           Point64& pt)>
-    ZCallback64;
+typedef std::function<void(const Point64& e1bot, const Point64& e1top, const Point64& e2bot, const Point64& e2top, Point64& pt)> ZCallback64;
 
-typedef std::function<void(const PointD& e1bot, const PointD& e1top, const PointD& e2bot, const PointD& e2top,
-                           PointD& pt)>
-    ZCallbackD;
+typedef std::function<void(const PointD& e1bot, const PointD& e1top, const PointD& e2bot, const PointD& e2top, PointD& pt)> ZCallbackD;
 #endif
 
 typedef ArenaVector<HorzSegment> HorzSegmentList;
@@ -210,13 +218,13 @@ typedef ArenaVector<IntersectNode> IntersectNodeList;
 
 class ReuseableDataContainer64
 {
-  private:
+private:
     friend class ClipperBase;
     LocalMinimaList minima_list_;
     ArenaVector<Vertex*> vertex_lists_;
     void AddLocMin(Vertex& vert, PathType polytype, bool is_open);
 
-  public:
+public:
     virtual ~ReuseableDataContainer64();
     void Clear();
     void AddPaths(const Paths64& paths, PathType polytype, bool is_open);
@@ -226,15 +234,15 @@ class ReuseableDataContainer64
 
 class ClipperBase
 {
-  private:
-    ClipType cliptype_ = ClipType::NoClip;
-    FillRule fillrule_ = FillRule::EvenOdd;
-    FillRule fillpos = FillRule::Positive;
-    int64_t bot_y_ = 0;
+private:
+    ClipType cliptype_       = ClipType::NoClip;
+    FillRule fillrule_       = FillRule::EvenOdd;
+    FillRule fillpos         = FillRule::Positive;
+    int64_t bot_y_           = 0;
     bool minima_list_sorted_ = false;
-    bool using_polytree_ = false;
-    Active* actives_ = nullptr;
-    Active* sel_ = nullptr;
+    bool using_polytree_     = false;
+    Active* actives_         = nullptr;
+    Active* sel_             = nullptr;
     LocalMinimaList minima_list_; // pointers in case of memory reallocs
     LocalMinimaList::iterator current_locmin_iter_;
     ArenaVector<Vertex*> vertex_lists_;
@@ -288,12 +296,12 @@ class ClipperBase
     inline void CheckJoinLeft(Active& e, const Point64& pt, bool check_curr_x = false);
     inline void CheckJoinRight(Active& e, const Point64& pt, bool check_curr_x = false);
 
-  protected:
+protected:
     bool preserve_collinear_ = true;
-    bool reverse_solution_ = false;
-    int error_code_ = 0;
-    bool has_open_paths_ = false;
-    bool succeeded_ = true;
+    bool reverse_solution_   = false;
+    int error_code_          = 0;
+    bool has_open_paths_     = false;
+    bool succeeded_          = true;
     OutRecList outrec_list_; // pointers in case list memory reallocated
     bool ExecuteInternal(ClipType ct, FillRule ft, bool use_polytrees);
     void CleanCollinear(OutRec* outrec);
@@ -308,7 +316,7 @@ class ClipperBase
     void AddPath(const Path64& path, PathType polytype, bool is_open);
     void AddPaths(const Paths64& paths, PathType polytype, bool is_open);
 
-  public:
+public:
     virtual ~ClipperBase();
     int ErrorCode() const
     {
@@ -346,19 +354,21 @@ class ClipperBase
 
 class PolyPath
 {
-  protected:
+protected:
     PolyPath* parent_;
 
-  public:
-    PolyPath(PolyPath* parent = nullptr) : parent_(parent) {}
+public:
+    PolyPath(PolyPath* parent = nullptr) : parent_(parent)
+    {
+    }
     virtual ~PolyPath() {};
     // https://en.cppreference.com/w/cpp/language/rule_of_three
-    PolyPath(const PolyPath&) = delete;
+    PolyPath(const PolyPath&)            = delete;
     PolyPath& operator=(const PolyPath&) = delete;
 
     unsigned Level() const
     {
-        unsigned result = 0;
+        unsigned result   = 0;
         const PolyPath* p = parent_;
         while ((Workspace::Pulse(), p))
         {
@@ -385,7 +395,7 @@ class PolyPath
     {
         unsigned lvl = Level();
         // Even levels except level 0
-        return lvl && !(lvl & 1);
+        return lvl && ! (lvl & 1);
     }
 };
 
@@ -398,12 +408,14 @@ typedef typename ArenaVector<std::unique_ptr<PolyPathD>> PolyPathDList;
 #pragma warning(disable : 4625 4626)
 class PolyPath64 : public PolyPath
 {
-  private:
+private:
     PolyPath64List childs_;
     Path64 polygon_;
 
-  public:
-    explicit PolyPath64(PolyPath64* parent = nullptr) : PolyPath(parent) {}
+public:
+    explicit PolyPath64(PolyPath64* parent = nullptr) : PolyPath(parent)
+    {
+    }
     explicit PolyPath64(PolyPath64* parent, const Path64& path) : PolyPath(parent)
     {
         polygon_ = path;
@@ -455,8 +467,8 @@ class PolyPath64 : public PolyPath
 
     double Area() const
     {
-        return std::accumulate(childs_.cbegin(), childs_.cend(), RedPrismBoundedClipper::Area<int64_t>(polygon_),
-                               [](double a, const auto& child) { return a + child->Area(); });
+        return std::accumulate(
+            childs_.cbegin(), childs_.cend(), RedPrismBoundedClipper::Area<int64_t>(polygon_), [](double a, const auto& child) { return a + child->Area(); });
     }
 };
 #pragma warning(pop)
@@ -467,12 +479,12 @@ class PolyPath64 : public PolyPath
 #pragma warning(disable : 4625 4626)
 class PolyPathD : public PolyPath
 {
-  private:
+private:
     PolyPathDList childs_;
     double scale_;
     PathD polygon_;
 
-  public:
+public:
     explicit PolyPathD(PolyPathD* parent = nullptr) : PolyPath(parent)
     {
         scale_ = parent ? parent->scale_ : 1.0;
@@ -480,14 +492,14 @@ class PolyPathD : public PolyPath
 
     explicit PolyPathD(PolyPathD* parent, const Path64& path) : PolyPath(parent)
     {
-        scale_ = parent ? parent->scale_ : 1.0;
+        scale_         = parent ? parent->scale_ : 1.0;
         int error_code = 0;
-        polygon_ = ScalePath<double, int64_t>(path, scale_, error_code);
+        polygon_       = ScalePath<double, int64_t>(path, scale_, error_code);
     }
 
     explicit PolyPathD(PolyPathD* parent, const PathD& path) : PolyPath(parent)
     {
-        scale_ = parent ? parent->scale_ : 1.0;
+        scale_   = parent ? parent->scale_ : 1.0;
         polygon_ = path;
     }
 
@@ -551,19 +563,19 @@ class PolyPathD : public PolyPath
 
     double Area() const
     {
-        return std::accumulate(childs_.begin(), childs_.end(), RedPrismBoundedClipper::Area<double>(polygon_),
-                               [](double a, const auto& child) { return a + child->Area(); });
+        return std::accumulate(
+            childs_.begin(), childs_.end(), RedPrismBoundedClipper::Area<double>(polygon_), [](double a, const auto& child) { return a + child->Area(); });
     }
 };
 #pragma warning(pop)
 
 class Clipper64 : public ClipperBase
 {
-  private:
+private:
     void BuildPaths64(Paths64& solutionClosed, Paths64* solutionOpen);
     void BuildTree64(PolyPath64& polytree, Paths64& open_paths);
 
-  public:
+public:
 #ifdef USINGZ
     void SetZCallback(ZCallback64 cb)
     {
@@ -621,7 +633,7 @@ class Clipper64 : public ClipperBase
 
 class ClipperD : public ClipperBase
 {
-  private:
+private:
     double scale_ = 1.0, invScale_ = 1.0;
 #ifdef USINGZ
     ZCallbackD zCallbackD_ = nullptr;
@@ -629,13 +641,13 @@ class ClipperD : public ClipperBase
     void BuildPathsD(PathsD& solutionClosed, PathsD* solutionOpen);
     void BuildTreeD(PolyPathD& polytree, PathsD& open_paths);
 
-  public:
+public:
     explicit ClipperD(int precision = 2) : ClipperBase()
     {
         CheckPrecisionRange(precision, error_code_);
         // to optimize scaling / descaling precision
         // set the scale to a power of double's radix (2) (#25)
-        scale_ = std::pow(std::numeric_limits<double>::radix, std::ilogb(std::pow(10, precision)) + 1);
+        scale_    = std::pow(std::numeric_limits<double>::radix, std::ilogb(std::pow(10, precision)) + 1);
         invScale_ = 1 / scale_;
     }
 
@@ -665,8 +677,8 @@ class ClipperD : public ClipperBase
         if (zCallbackD_)
             // if the user defined float point callback has been assigned
             // then assign the proxy callback function
-            ClipperBase::zCallback_ = std::bind(&ClipperD::ZCB, this, std::placeholders::_1, std::placeholders::_2,
-                                                std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
+            ClipperBase::zCallback_ = std::bind(
+                &ClipperD::ZCB, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
         else
             ClipperBase::zCallback_ = nullptr;
     }

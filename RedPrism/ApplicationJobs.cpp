@@ -20,7 +20,7 @@ struct ShutdownEvidence final
     std::atomic<bool> returned{false};
     std::atomic<bool> mtaAlive{false};
     bool destroyedAfterRun = false;
-    unsigned int applies = 0;
+    unsigned int applies   = 0;
 };
 #pragma warning(pop)
 
@@ -30,8 +30,10 @@ struct ShutdownEvidence final
 #pragma warning(disable : 4626)
 class ShutdownGateJob final : public Job
 {
-  public:
-    explicit ShutdownGateJob(ShutdownEvidence& evidence) noexcept : _evidence(evidence) {}
+public:
+    explicit ShutdownGateJob(ShutdownEvidence& evidence) noexcept : _evidence(evidence)
+    {
+    }
     ~ShutdownGateJob() override
     {
         _evidence.destroyedAfterRun = _evidence.returned.load();
@@ -55,7 +57,7 @@ class ShutdownGateJob final : public Job
         ++_evidence.applies;
     }
 
-  private:
+private:
     ShutdownEvidence& _evidence;
 };
 #pragma warning(pop)
@@ -81,8 +83,10 @@ struct ActivityEvidence final
 #pragma warning(disable : 4626 5027)
 class ActivityGateJob final : public Job
 {
-  public:
-    explicit ActivityGateJob(ActivityEvidence& evidence) noexcept : _evidence(evidence) {}
+public:
+    explicit ActivityGateJob(ActivityEvidence& evidence) noexcept : _evidence(evidence)
+    {
+    }
     JobResult Run(JobContext& context) override
     {
         context.ReportProgress(37);
@@ -103,7 +107,7 @@ class ActivityGateJob final : public Job
         _evidence.applied = result.status == JobStatus::Finished;
     }
 
-  private:
+private:
     ActivityEvidence& _evidence;
 };
 #pragma warning(pop)
@@ -124,7 +128,7 @@ void Application::SyncJobActivity(std::uint64_t nowQpc) noexcept
 {
     const auto& active = _jobActivity.Selected();
     const bool visible = _jobActivity.Visible(nowQpc, _jobQpcFrequency);
-    if (_jobIndicatorTimer && (!active || visible || active->ticket != *_jobIndicatorTimer))
+    if (_jobIndicatorTimer && (! active || visible || active->ticket != *_jobIndicatorTimer))
     {
         if (_window)
         {
@@ -132,11 +136,11 @@ void Application::SyncJobActivity(std::uint64_t nowQpc) noexcept
         }
         _jobIndicatorTimer.reset();
     }
-    if (active && !visible && !_jobIndicatorTimer && _window && _jobQpcFrequency != 0)
+    if (active && ! visible && ! _jobIndicatorTimer && _window && _jobQpcFrequency != 0)
     {
-        const auto elapsed = nowQpc >= active->startQpc ? nowQpc - active->startQpc : 0;
+        const auto elapsed     = nowQpc >= active->startQpc ? nowQpc - active->startQpc : 0;
         const double remaining = 250.0 - static_cast<double>(elapsed) * 1000.0 / static_cast<double>(_jobQpcFrequency);
-        const UINT delay = static_cast<UINT>(std::clamp(std::ceil(remaining), 1.0, 250.0));
+        const UINT delay       = static_cast<UINT>(std::clamp(std::ceil(remaining), 1.0, 250.0));
         if (SetTimer(_window.get(), kJobIndicatorTimerId, delay, nullptr) != 0)
         {
             _jobIndicatorTimer = active->ticket;
@@ -167,7 +171,7 @@ void Application::OnJobIndicatorTimer() noexcept
 int Application::RunJobActivitySelfTest() noexcept
 {
     ActivityEvidence evidence;
-    if (!_chrome || !evidence.entered || !evidence.release || _jobActivity.Selected())
+    if (! _chrome || ! evidence.entered || ! evidence.release || _jobActivity.Selected())
     {
         SelfTestFailure(L"Busy-indicator self-test could not initialize.\n");
         return 5;
@@ -179,16 +183,15 @@ int Application::RunJobActivitySelfTest() noexcept
         SelfTestFailure(L"Busy-indicator self-test could not submit its gated job.\n");
         return 5;
     }
-    const auto settle = wil::scope_exit(
-        [&]() noexcept
+    const auto settle = wil::scope_exit([&]() noexcept
+    {
+        (void)SetEvent(evidence.release.get());
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
         {
-            (void)SetEvent(evidence.release.get());
-            if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
-            {
-                SelfTestFailure(L"Busy-indicator self-test failed to settle; its input must stay alive.\n");
-                std::_Exit(5);
-            }
-        });
+            SelfTestFailure(L"Busy-indicator self-test failed to settle; its input must stay alive.\n");
+            std::_Exit(5);
+        }
+    });
     if (WaitForSingleObject(evidence.entered.get(), 10000) != WAIT_OBJECT_0)
     {
         SelfTestFailure(L"Busy-indicator worker failed to reach its gate.\n");
@@ -196,21 +199,20 @@ int Application::RunJobActivitySelfTest() noexcept
     }
     (void)DrainCompletions(_jobs);
     const auto selected = _jobActivity.Selected();
-    if (!selected || selected->ticket != ticket || selected->percent != 37u)
+    if (! selected || selected->ticket != ticket || selected->percent != 37u)
     {
         SelfTestFailure(L"Busy-indicator observer missed submit/progress.\n");
         return 5;
     }
     // Exact virtual QPC boundaries, no assertion about the speed of this host or the test's worker scheduling.
     SyncJobActivity(selected->startQpc);
-    if (_chrome->JobProgressVisible() || !_jobIndicatorTimer)
+    if (_chrome->JobProgressVisible() || ! _jobIndicatorTimer)
     {
         SelfTestFailure(L"A newly started job must arm one deadline without showing the indicator.\n");
         return 5;
     }
     SyncJobActivity(selected->startQpc + (_jobQpcFrequency + 3) / 4);
-    if (!_chrome->JobProgressVisible() || _chrome->JobProgressIndeterminate() || _chrome->JobProgressPercent() != 37u ||
-        _jobIndicatorTimer)
+    if (! _chrome->JobProgressVisible() || _chrome->JobProgressIndeterminate() || _chrome->JobProgressPercent() != 37u || _jobIndicatorTimer)
     {
         SelfTestFailure(L"The busy deadline did not show determinate progress and disarm the timer.\n");
         return 5;
@@ -222,8 +224,8 @@ int Application::RunJobActivitySelfTest() noexcept
             return 5;
         }
         const D2D1_RECT_F bounds = _chrome->JobProgressBoundsDip();
-        const float width = static_cast<float>(_renderer.Width()) * 96.0f / dpi;
-        const float height = static_cast<float>(_renderer.Height()) * 96.0f / dpi;
+        const float width        = static_cast<float>(_renderer.Width()) * 96.0f / dpi;
+        const float height       = static_cast<float>(_renderer.Height()) * 96.0f / dpi;
         if (bounds.left < 0 || bounds.right > width || bounds.bottom > height || bounds.right <= bounds.left ||
             bounds.top < height - ChromeHost::kStatusHeightDip || bounds.bottom <= bounds.top)
         {
@@ -234,7 +236,7 @@ int Application::RunJobActivitySelfTest() noexcept
     // Indeterminate animation participates only while the control is visible. The independent HostTests state
     // table covers quick completion and transitions between simultaneous jobs.
     _chrome->SetJobProgress(true, std::nullopt);
-    if (!_chrome->JobProgressIndeterminate() || !_chrome->NeedsAnimation())
+    if (! _chrome->JobProgressIndeterminate() || ! _chrome->NeedsAnimation())
     {
         SelfTestFailure(L"The visible indeterminate indicator did not request animation.\n");
         return 5;
@@ -244,40 +246,47 @@ int Application::RunJobActivitySelfTest() noexcept
     for (const bool show : {true, false})
     {
         const EditorTool target = show ? EditorTool::Brush : EditorTool::Move;
-        _chrome->SetJobProgress(!show, 37);
+        _chrome->SetJobProgress(! show, 37);
         _chrome->SetCanvasFocused(true);
         (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), ChromeDpi());
         const D2D1_RECT_F button = _chrome->ToolButtonBoundsDip(target);
-        const float scale = ChromeDpi() / 96.0f;
+        const float scale        = ChromeDpi() / 96.0f;
         DxUi::PointerEvent pointer{};
-        pointer.xPixels = (button.left + button.right) * 0.5f * scale;
-        pointer.yPixels = (button.top + button.bottom) * 0.5f * scale;
-        pointer.action = DxUi::PointerAction::Down;
+        pointer.xPixels    = (button.left + button.right) * 0.5f * scale;
+        pointer.yPixels    = (button.top + button.bottom) * 0.5f * scale;
+        pointer.action     = DxUi::PointerAction::Down;
         const bool pressed = _chrome->DispatchPointer(pointer);
         _chrome->SetJobProgress(show, 37);
         (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), ChromeDpi());
-        pointer.action = DxUi::PointerAction::Up;
+        pointer.action      = DxUi::PointerAction::Up;
         const bool released = _chrome->DispatchPointer(pointer);
-        if (!pressed || !released || _tool != target || _chrome->JobProgressVisible() != show)
+        if (! pressed || ! released || _tool != target || _chrome->JobProgressVisible() != show)
         {
             SelfTestFailure(L"A busy-indicator visibility transition cancelled a held rail button.\n");
             return 5;
         }
     }
     const bool released = SetEvent(evidence.release.get()) != FALSE;
-    const auto settled = SettleJobs(_jobs, 10000, DispatchMessageThunk, this);
-    if (settled != SettleResult::Settled || !evidence.applied || _jobActivity.Selected() || _jobIndicatorTimer ||
-        _chrome->JobProgressVisible())
+    const auto settled  = SettleJobs(_jobs, 10000, DispatchMessageThunk, this);
+    if (settled != SettleResult::Settled || ! evidence.applied || _jobActivity.Selected() || _jobIndicatorTimer || _chrome->JobProgressVisible())
     {
         SelfTestFailure(std::format(L"Completing the busy job did not retire the indicator: settle={}, applied={}, "
                                     L"selected={}, timer={}, visible={}, idle={}, shutdown={}, window={}, "
                                     L"frameFailure={:#x}, released={}, workerReturned={}, wait={:#x}, "
                                     L"waitError={:#x}, sameTicket={}.\n",
-                                    static_cast<unsigned int>(settled), evidence.applied,
-                                    _jobActivity.Selected().has_value(), _jobIndicatorTimer.has_value(),
-                                    _chrome->JobProgressVisible(), _jobs.IsIdle(), _shutdownStarted,
-                                    static_cast<bool>(_window), static_cast<unsigned int>(_frameLoopFailure), released,
-                                    evidence.returned.load(), evidence.waitResult.load(), evidence.waitError.load(),
+                                    static_cast<unsigned int>(settled),
+                                    evidence.applied,
+                                    _jobActivity.Selected().has_value(),
+                                    _jobIndicatorTimer.has_value(),
+                                    _chrome->JobProgressVisible(),
+                                    _jobs.IsIdle(),
+                                    _shutdownStarted,
+                                    static_cast<bool>(_window),
+                                    static_cast<unsigned int>(_frameLoopFailure),
+                                    released,
+                                    evidence.returned.load(),
+                                    evidence.waitResult.load(),
+                                    evidence.waitError.load(),
                                     _jobActivity.Selected() && _jobActivity.Selected()->ticket == ticket));
         return 5;
     }
@@ -295,21 +304,20 @@ int Application::RunJobShutdownSelfTest() noexcept
 {
     APTTYPE beforeApartment{};
     APTTYPEQUALIFIER beforeQualifier{};
-    if (FAILED(CoGetApartmentType(&beforeApartment, &beforeQualifier)) ||
-        (beforeApartment != APTTYPE_STA && beforeApartment != APTTYPE_MAINSTA))
+    if (FAILED(CoGetApartmentType(&beforeApartment, &beforeQualifier)) || (beforeApartment != APTTYPE_STA && beforeApartment != APTTYPE_MAINSTA))
     {
         SelfTestFailure(L"The failure-exit self-test requires the initialized UI STA.\n");
         return 5;
     }
     ShutdownEvidence evidence;
-    if (!evidence.started)
+    if (! evidence.started)
     {
         SelfTestFailure(L"Could not create the worker shutdown gate.\n");
         return 5;
     }
     // A second owner needs no HWND/device. Exercise the same explicit Shutdown used by Main after a mode's early
     // failure return, while that owner still has a running callback and the caller's STA is alive.
-    auto owner = std::make_unique<Application>(_instance, true, nullptr, 0);
+    auto owner          = std::make_unique<Application>(_instance, true, nullptr, 0);
     const auto shutdown = wil::scope_exit([&]() noexcept { owner->Shutdown(); });
     if (FAILED(owner->_jobs.Initialize(1)))
     {
@@ -335,16 +343,21 @@ int Application::RunJobShutdownSelfTest() noexcept
     owner->Shutdown();
     APTTYPE apartment{};
     APTTYPEQUALIFIER qualifier{};
-    if (failedMode != 5 || !owner->_shutdownComplete || !evidence.returned.load() || !evidence.mtaAlive.load() ||
-        !evidence.destroyedAfterRun || evidence.applies != 0 || FAILED(CoGetApartmentType(&apartment, &qualifier)) ||
-        apartment != beforeApartment || qualifier != beforeQualifier)
+    if (failedMode != 5 || ! owner->_shutdownComplete || ! evidence.returned.load() || ! evidence.mtaAlive.load() || ! evidence.destroyedAfterRun ||
+        evidence.applies != 0 || FAILED(CoGetApartmentType(&apartment, &qualifier)) || apartment != beforeApartment || qualifier != beforeQualifier)
     {
-        SelfTestFailure(std::format(
-            L"Failure-exit shutdown: mode={}, closed={}, returned={}, workerMta={}, "
-            L"destroyedAfterRun={}, applies={}, apartment={} (before {}), qualifier={} (before {}).\n",
-            failedMode, owner->_shutdownComplete, evidence.returned.load(), evidence.mtaAlive.load(),
-            evidence.destroyedAfterRun, evidence.applies, static_cast<int>(apartment),
-            static_cast<int>(beforeApartment), static_cast<int>(qualifier), static_cast<int>(beforeQualifier)));
+        SelfTestFailure(std::format(L"Failure-exit shutdown: mode={}, closed={}, returned={}, workerMta={}, "
+                                    L"destroyedAfterRun={}, applies={}, apartment={} (before {}), qualifier={} (before {}).\n",
+                                    failedMode,
+                                    owner->_shutdownComplete,
+                                    evidence.returned.load(),
+                                    evidence.mtaAlive.load(),
+                                    evidence.destroyedAfterRun,
+                                    evidence.applies,
+                                    static_cast<int>(apartment),
+                                    static_cast<int>(beforeApartment),
+                                    static_cast<int>(qualifier),
+                                    static_cast<int>(beforeQualifier)));
         return 5;
     }
     return 0;

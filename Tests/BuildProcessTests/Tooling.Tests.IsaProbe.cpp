@@ -3,8 +3,7 @@
 
 // Linked but never executed: these controls must also run on machines without AVX2/AVX-512.
 #if defined(REDPRISM_ISA_PROBE_SCALAR)
-extern "C" __declspec(noinline) void Kernels_Scalar_Probe_Copy(const std::uint8_t* source,
-                                                               std::uint8_t* destination) noexcept
+extern "C" __declspec(noinline) void Kernels_Scalar_Probe_Copy(const std::uint8_t* source, std::uint8_t* destination) noexcept
 {
     for (int index = 0; index < 32; ++index)
     {
@@ -12,17 +11,14 @@ extern "C" __declspec(noinline) void Kernels_Scalar_Probe_Copy(const std::uint8_
     }
 }
 #elif defined(REDPRISM_ISA_PROBE_EVEX)
-extern "C" __declspec(noinline) void Kernels_Avx512_Probe_Copy(const std::uint8_t* source,
-                                                               std::uint8_t* destination) noexcept
+extern "C" __declspec(noinline) void Kernels_Avx512_Probe_Copy(const std::uint8_t* source, std::uint8_t* destination) noexcept
 {
     _mm512_storeu_si512(destination, _mm512_loadu_si512(source));
 }
 #else
-extern "C" __declspec(noinline) void Kernels_Avx2_Probe_Copy(const std::uint8_t* source,
-                                                             std::uint8_t* destination) noexcept
+extern "C" __declspec(noinline) void Kernels_Avx2_Probe_Copy(const std::uint8_t* source, std::uint8_t* destination) noexcept
 {
-    _mm256_storeu_si256(reinterpret_cast<__m256i*>(destination),
-                        _mm256_loadu_si256(reinterpret_cast<const __m256i*>(source)));
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(destination), _mm256_loadu_si256(reinterpret_cast<const __m256i*>(source)));
 }
 #endif
 

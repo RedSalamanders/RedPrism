@@ -22,19 +22,18 @@ enum class Use
 
 [[nodiscard]] inline bool IsDosAbsolute(std::wstring_view path) noexcept
 {
-    return path.size() >= 3 && ((path[0] >= L'A' && path[0] <= L'Z') || (path[0] >= L'a' && path[0] <= L'z')) &&
-           path[1] == L':' && path[2] == L'\\';
+    return path.size() >= 3 && ((path[0] >= L'A' && path[0] <= L'Z') || (path[0] >= L'a' && path[0] <= L'z')) && path[1] == L':' && path[2] == L'\\';
 }
 
 [[nodiscard]] inline bool IsUncAbsolute(std::wstring_view path) noexcept
 {
-    if (!path.starts_with(L"\\\\"))
+    if (! path.starts_with(L"\\\\"))
         return false;
     const std::size_t serverEnd = path.find(L'\\', 2);
     if (serverEnd == std::wstring_view::npos || serverEnd == 2)
         return false;
     const std::size_t shareStart = serverEnd + 1;
-    const std::size_t shareEnd = path.find(L'\\', shareStart);
+    const std::size_t shareEnd   = path.find(L'\\', shareStart);
     const std::size_t shareLimit = shareEnd == std::wstring_view::npos ? path.size() : shareEnd;
     return shareLimit > shareStart;
 }
@@ -43,22 +42,19 @@ enum class Use
 {
     if (path.find(L'/') != std::wstring_view::npos)
         return true;
-    std::size_t start = IsDosAbsolute(path)         ? std::size_t{3}
-                        : path.starts_with(L"\\\\") ? std::size_t{2}
-                                                    : std::size_t{0};
+    std::size_t start = IsDosAbsolute(path) ? std::size_t{3} : path.starts_with(L"\\\\") ? std::size_t{2} : std::size_t{0};
     if (path.starts_with(L"\\\\") && IsUncAbsolute(path))
     {
         const std::size_t serverEnd = path.find(L'\\', 2);
-        const std::size_t shareEnd = path.find(L'\\', serverEnd + 1);
-        start = shareEnd == std::wstring_view::npos ? path.size() : shareEnd + 1;
+        const std::size_t shareEnd  = path.find(L'\\', serverEnd + 1);
+        start                       = shareEnd == std::wstring_view::npos ? path.size() : shareEnd + 1;
     }
     while (start < path.size())
     {
-        const std::size_t end = path.find(L'\\', start);
-        const std::size_t limit = end == std::wstring_view::npos ? path.size() : end;
+        const std::size_t end             = path.find(L'\\', start);
+        const std::size_t limit           = end == std::wstring_view::npos ? path.size() : end;
         const std::wstring_view component = path.substr(start, limit - start);
-        if (component == L"." || component == L".." ||
-            (!component.empty() && (component.back() == L'.' || component.back() == L' ')))
+        if (component == L"." || component == L".." || (! component.empty() && (component.back() == L'.' || component.back() == L' ')))
             return true;
         if (end == std::wstring_view::npos)
             break;
@@ -129,16 +125,15 @@ enum class Use
 // Keep the familiar destination suffix for ordinary leaves. For a near-limit destination component,
 // choose a short GUID-bearing sibling leaf in the same directory instead of extending the destination leaf.
 // The caller supplies the unique suffix and exclusively creates this exact path; no sibling enumeration occurs.
-[[nodiscard]] inline HRESULT SiblingWithSuffix(std::wstring_view destination, std::wstring_view suffix,
-                                               std::wstring& output) noexcept
+[[nodiscard]] inline HRESULT SiblingWithSuffix(std::wstring_view destination, std::wstring_view suffix, std::wstring& output) noexcept
 {
     constexpr std::size_t maximumComponent = 255;
-    constexpr std::wstring_view shortStem = L"RedPrism";
-    const auto separator = destination.find_last_of(L"\\/");
-    const auto leafStart = separator == std::wstring_view::npos ? 0 : separator + 1;
-    const auto leafLength = destination.size() - leafStart;
-    if (!leafLength || leafLength > maximumComponent || suffix.empty() ||
-        suffix.size() > maximumComponent - shortStem.size() || suffix.find_first_of(L"\\/") != std::wstring_view::npos)
+    constexpr std::wstring_view shortStem  = L"RedPrism";
+    const auto separator                   = destination.find_last_of(L"\\/");
+    const auto leafStart                   = separator == std::wstring_view::npos ? 0 : separator + 1;
+    const auto leafLength                  = destination.size() - leafStart;
+    if (! leafLength || leafLength > maximumComponent || suffix.empty() || suffix.size() > maximumComponent - shortStem.size() ||
+        suffix.find_first_of(L"\\/") != std::wstring_view::npos)
         return E_INVALIDARG;
     try
     {
@@ -214,7 +209,7 @@ enum class Use
         }
         return S_FALSE;
     }
-    if ((IsDosAbsolute(input) || IsUncAbsolute(input)) && !HasOrdinaryParsingComponents(input))
+    if ((IsDosAbsolute(input) || IsUncAbsolute(input)) && ! HasOrdinaryParsingComponents(input))
         return PrefixResolvedPath(path, use, output);
     return Resolve(path, use, output);
 }

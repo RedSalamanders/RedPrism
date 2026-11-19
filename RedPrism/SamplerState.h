@@ -15,7 +15,7 @@ struct SamplerPickerBinding final
 {
     Guid host;
     std::uint64_t opening = 0;
-    PickerTarget target = PickerTarget::Foreground;
+    PickerTarget target   = PickerTarget::Foreground;
 };
 
 // A younger input resolves this exact older prefix, even if a subsequent manual edit suppresses UI publication.
@@ -43,10 +43,10 @@ struct SamplerOpening final
     ContinuationReceipt receipt;
     std::uint32_t originalArgb = 0xFF000000u;
     std::uint32_t resolvedArgb = 0xFF000000u;
-    std::uint32_t consumers = 0;
-    bool jobAlive = false;
-    bool terminal = false;
-    bool overflow = false;
+    std::uint32_t consumers    = 0;
+    bool jobAlive              = false;
+    bool terminal              = false;
+    bool overflow              = false;
 };
 #pragma warning(pop)
 
@@ -60,8 +60,8 @@ struct SamplerState final
     {
         Guid session;
         std::uint64_t documentSerial = 0;
-        std::uint64_t intent = 0;
-        std::uint32_t argb = 0xFF000000u;
+        std::uint64_t intent         = 0;
+        std::uint32_t argb           = 0xFF000000u;
     };
     // One selected input and eight pending host inputs. Allocate this fixed storage once at initialization.
     static constexpr std::size_t kOpeningCapacity = 9;

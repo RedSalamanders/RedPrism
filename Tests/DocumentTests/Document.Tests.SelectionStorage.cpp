@@ -38,8 +38,8 @@ void EmptyConstructionReportsNoCharge()
     reservedEmpty.reserve(5);
     const SelectionLoops reservedVectorEmpty(std::move(reservedEmpty));
     const SelectionLoops initializerEmpty{};
-    ExpectSelectionStorage(defaultEmpty.StorageBytes() == 0 && vectorEmpty.StorageBytes() == 0 &&
-                               reservedVectorEmpty.StorageBytes() == 0 && initializerEmpty.StorageBytes() == 0,
+    ExpectSelectionStorage(defaultEmpty.StorageBytes() == 0 && vectorEmpty.StorageBytes() == 0 && reservedVectorEmpty.StorageBytes() == 0 &&
+                               initializerEmpty.StorageBytes() == 0,
                            "empty-construction-zero");
 }
 
@@ -55,7 +55,7 @@ void RetainedCapacityIsChargedWithoutChangingGeometry()
 void CopiesShareCachedStorageCharge()
 {
     const SelectionLoops original = MakeRoomyLoops();
-    const SelectionLoops shared = original;
+    const SelectionLoops shared   = original;
     ExpectSelectionStorage(shared.Identity() == original.Identity(), "copy-retains-shared-identity");
     ExpectSelectionStorage(shared.StorageBytes() == original.StorageBytes(), "copy-retains-cached-charge");
     ExpectSelectionStorage(shared == original, "shared-copy-keeps-geometry");
@@ -63,21 +63,19 @@ void CopiesShareCachedStorageCharge()
 
 void MovesTransferChargeAndResetDonors()
 {
-    SelectionLoops source = MakeRoomyLoops();
-    const void* sourceIdentity = source.Identity();
+    SelectionLoops source        = MakeRoomyLoops();
+    const void* sourceIdentity   = source.Identity();
     const std::uint64_t expected = source.StorageBytes();
     SelectionLoops moved(std::move(source));
-    ExpectSelectionStorage(moved.Identity() == sourceIdentity && moved.StorageBytes() == expected &&
-                               source.Identity() == nullptr && source.StorageBytes() == 0,
+    ExpectSelectionStorage(moved.Identity() == sourceIdentity && moved.StorageBytes() == expected && source.Identity() == nullptr && source.StorageBytes() == 0,
                            "move-construction-transfers-identity-and-resets-donor");
 
-    SelectionLoops assignmentSource = MakeRoomyLoops();
-    const void* assignmentIdentity = assignmentSource.Identity();
+    SelectionLoops assignmentSource        = MakeRoomyLoops();
+    const void* assignmentIdentity         = assignmentSource.Identity();
     const std::uint64_t assignmentExpected = assignmentSource.StorageBytes();
     SelectionLoops destination{{Vec2{-1, -1}, Vec2{1, 1}}};
     destination = std::move(assignmentSource);
-    ExpectSelectionStorage(destination.Identity() == assignmentIdentity &&
-                               destination.StorageBytes() == assignmentExpected &&
+    ExpectSelectionStorage(destination.Identity() == assignmentIdentity && destination.StorageBytes() == assignmentExpected &&
                                assignmentSource.Identity() == nullptr && assignmentSource.StorageBytes() == 0,
                            "move-assignment-transfers-identity-and-resets-donor");
 }

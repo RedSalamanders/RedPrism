@@ -14,12 +14,12 @@
 
 namespace
 {
-constexpr std::uint64_t kWhole = 256 * 1024;
+constexpr std::uint64_t kWhole   = 256 * 1024;
 constexpr std::uint64_t kOpening = 32 * 1024;
-constexpr std::uint64_t kFinal = 64 * 1024;
+constexpr std::uint64_t kFinal   = 64 * 1024;
 unsigned int failures = 0, checks = 0;
 const char* currentCase = "descriptor";
-std::uint64_t queries = 0;
+std::uint64_t queries   = 0;
 void Expect(bool value, const char* label)
 {
     ++checks;
@@ -63,11 +63,11 @@ struct State final
     std::uint64_t firstBudget = 0, secondBudget = 0;
     std::uint64_t queriesBefore = 0, queriesAfter = 0;
     std::uint64_t reservationAfterOpening = 0;
-    std::uint64_t terminalBytes = 0;
+    std::uint64_t terminalBytes           = 0;
     std::int32_t wrongTicket = S_OK, overLimit = S_OK, undercharged = S_OK;
     std::int32_t openingResult = E_UNEXPECTED, repeated = S_OK, growth = S_OK;
     std::int32_t terminalResult = E_UNEXPECTED;
-    unsigned int runs = 0;
+    unsigned int runs           = 0;
     bool openingAck = false, resumed = false, openingSealed = false, sameTicket = true;
     bool joinedClose = false, completed = false;
     JobResult outcome;
@@ -80,22 +80,24 @@ struct State final
 #pragma warning(disable : 4626 5027)
 class ContinuingJob final : public Job
 {
-  public:
-    explicit ContinuingJob(State& state) noexcept : _state(state) {}
+public:
+    explicit ContinuingJob(State& state) noexcept : _state(state)
+    {
+    }
     JobResult Run(JobContext& context) override
     {
         auto& value = _state;
         if (++value.runs == 1)
         {
-            value.firstBudget = context.reservedMemoryBytes;
-            value.opening = SharedPublicationMemory::CreateForWork(kOpening);
-            value.finalOutput = SharedPublicationMemory::CreateForWork(kWhole - kOpening);
-            value.temporary = SharedPublicationMemory::CreateForWork(kWhole - kOpening);
+            value.firstBudget  = context.reservedMemoryBytes;
+            value.opening      = SharedPublicationMemory::CreateForWork(kOpening);
+            value.finalOutput  = SharedPublicationMemory::CreateForWork(kWhole - kOpening);
+            value.temporary    = SharedPublicationMemory::CreateForWork(kWhole - kOpening);
             value.openingValue = MakeLocallyOwnedPublicationObject<const int>(value.opening, sizeof(int), 0, 17);
             return {};
         }
         value.secondBudget = context.reservedMemoryBytes;
-        value.finalValue = MakeLocallyOwnedPublicationObject<const int>(value.finalOutput, sizeof(int), 0, 41);
+        value.finalValue   = MakeLocallyOwnedPublicationObject<const int>(value.finalOutput, sizeof(int), 0, 41);
         return value.mode == Mode::FailSecond ? JobResult{JobStatus::Failed, E_ACCESSDENIED} : JobResult{};
     }
     bool DeferRetirement(JobResult, JobTicket ticket) noexcept override
@@ -110,19 +112,17 @@ class ContinuingJob final : public Job
             return false;
         value.queriesBefore = queries;
         SharedRetainedMemoryLease refused;
-        value.wrongTicket = value.scheduler.RetainContinuingOutputMemory(JobTicket{ticket.slot, ticket.generation + 1},
-                                                                         kOpening, refused);
-        value.overLimit = value.scheduler.RetainContinuingOutputMemory(ticket, kOpening + 1, refused);
+        value.wrongTicket  = value.scheduler.RetainContinuingOutputMemory(JobTicket{ticket.slot, ticket.generation + 1}, kOpening, refused);
+        value.overLimit    = value.scheduler.RetainContinuingOutputMemory(ticket, kOpening + 1, refused);
         value.undercharged = value.opening->BindContinuingOutputForPublication(
-            value.scheduler, ticket,
-            value.opening->LocalAllocationBytes() + SharedPublicationMemory::OwnershipAllowance() - 1);
-        value.openingResult = value.opening->BindContinuingOutputForPublication(value.scheduler, ticket, kOpening);
-        value.repeated = value.scheduler.RetainContinuingOutputMemory(ticket, kOpening, refused);
-        value.growth = value.scheduler.IncreaseReservation(ticket, kWhole);
-        value.openingSealed = !value.opening->TryAccountLocalAllocation(1);
+            value.scheduler, ticket, value.opening->LocalAllocationBytes() + SharedPublicationMemory::OwnershipAllowance() - 1);
+        value.openingResult           = value.opening->BindContinuingOutputForPublication(value.scheduler, ticket, kOpening);
+        value.repeated                = value.scheduler.RetainContinuingOutputMemory(ticket, kOpening, refused);
+        value.growth                  = value.scheduler.IncreaseReservation(ticket, kWhole);
+        value.openingSealed           = ! value.opening->TryAccountLocalAllocation(1);
         value.reservationAfterOpening = value.scheduler.ReservedMemoryBytes();
-        value.queriesAfter = queries;
-        value.openingAck = true;
+        value.queriesAfter            = queries;
+        value.openingAck              = true;
         if (FAILED(value.openingResult))
             return false;
         if (value.mode == Mode::CloseSuspended)
@@ -137,26 +137,25 @@ class ContinuingJob final : public Job
     }
     void Completed(JobResult result) noexcept override
     {
-        auto& value = _state;
+        auto& value     = _state;
         value.completed = true;
-        value.outcome = result;
+        value.outcome   = result;
         if (result.status == JobStatus::Finished && value.runs == 2)
-            value.terminalResult = value.finalOutput->BindPersistentOutputAfterCompletedWork(
-                value.scheduler, value.original, kFinal, *value.temporary);
+            value.terminalResult = value.finalOutput->BindPersistentOutputAfterCompletedWork(value.scheduler, value.original, kFinal, *value.temporary);
         else
             value.terminalResult = value.temporary->BindForRetirement(value.scheduler, value.original);
         value.terminalBytes = value.temporary->Bytes();
     }
     void RetainJoinedRetirement(JobScheduler&, JobTicket ticket) noexcept override
     {
-        auto& value = _state;
-        value.sameTicket = value.sameTicket && ticket == value.original;
-        value.joinedClose = true;
+        auto& value          = _state;
+        value.sameTicket     = value.sameTicket && ticket == value.original;
+        value.joinedClose    = true;
         value.terminalResult = value.temporary->BindForRetirement(value.scheduler, ticket);
-        value.terminalBytes = value.temporary->Bytes();
+        value.terminalBytes  = value.temporary->Bytes();
     }
 
-  private:
+private:
     State& _state;
 };
 #pragma warning(pop)
@@ -164,7 +163,7 @@ class ContinuingJob final : public Job
 void WaitForOpening(State& state)
 {
     const auto deadline = GetTickCount64() + 10000;
-    while (!state.openingAck)
+    while (! state.openingAck)
     {
         if (PumpMessages().quit)
             SetupFailure("unexpected-quit");
@@ -175,19 +174,20 @@ void WaitForOpening(State& state)
         if (now >= deadline)
             SetupFailure("opening-ack-deadline");
         const HANDLE wake = state.scheduler.WakeHandle();
-        if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
-                                        MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+        if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
             SetupFailure("opening-ack-event");
     }
 }
 class NeverSubmittedJob final : public Job
 {
-  public:
+public:
     JobResult Run(JobContext&) override
     {
         return {};
     }
-    void Completed(JobResult) noexcept override {}
+    void Completed(JobResult) noexcept override
+    {
+    }
 };
 void DescriptorRefusals()
 {
@@ -195,26 +195,22 @@ void DescriptorRefusals()
     if (scheduler.Initialize(2, {}, {Sample, nullptr}) != S_OK)
         SetupFailure("descriptor-scheduler");
     std::unique_ptr<Job> job = std::make_unique<NeverSubmittedJob>();
-    const auto* original = job.get();
+    const auto* original     = job.get();
     JobTicket ticket;
     JobOptions options;
-    options.memoryBytes = kWhole;
+    options.memoryBytes           = kWhole;
     options.continuingOutputLimit = kOpening;
-    const auto before = queries;
-    Expect(scheduler.Submit(job, options, ticket) == E_INVALIDARG && job.get() == original &&
-               scheduler.ReservedMemoryBytes() == 0,
+    const auto before             = queries;
+    Expect(scheduler.Submit(job, options, ticket) == E_INVALIDARG && job.get() == original && scheduler.ReservedMemoryBytes() == 0,
            "descriptor-without-joined-retirement-and-terminal-slot-refuses-before-admission");
     options.deferredRetirement = true;
-    Expect(scheduler.Submit(job, options, ticket) == E_INVALIDARG && job.get() == original &&
-               scheduler.ReservedMemoryBytes() == 0,
+    Expect(scheduler.Submit(job, options, ticket) == E_INVALIDARG && job.get() == original && scheduler.ReservedMemoryBytes() == 0,
            "descriptor-without-preclaimed-terminal-slot-refuses-before-admission");
     options.reserveRetainedMemory = true;
     options.continuingOutputLimit = kWhole;
-    Expect(scheduler.Submit(job, options, ticket) == E_INVALIDARG && job.get() == original &&
-               scheduler.ReservedMemoryBytes() == 0,
+    Expect(scheduler.Submit(job, options, ticket) == E_INVALIDARG && job.get() == original && scheduler.ReservedMemoryBytes() == 0,
            "descriptor-without-remaining-terminal-bytes-refuses-before-admission");
-    Expect(queries == before && scheduler.IsIdle(),
-           "invalid-descriptors-never-query-memory-or-allocate-a-worker-record");
+    Expect(queries == before && scheduler.IsIdle(), "invalid-descriptors-never-query-memory-or-allocate-a-worker-record");
     scheduler.Close();
 }
 void RunCase(Mode mode)
@@ -224,36 +220,34 @@ void RunCase(Mode mode)
                   : mode == Mode::CancelAfterOpening ? "cancel-after-opening"
                                                      : "joined-close";
     JobScheduler scheduler;
-    if (scheduler.Initialize(2, {}, {Sample, nullptr}) != S_OK || !scheduler.EnableDeferredRelease())
+    if (scheduler.Initialize(2, {}, {Sample, nullptr}) != S_OK || ! scheduler.EnableDeferredRelease())
         SetupFailure("actual-two-worker-scheduler");
     State state{scheduler, mode};
     JobOptions options;
-    options.kind = JobClass::Selection;
-    options.serialKey = 27;
-    options.memoryBytes = kWhole;
-    options.deferredRetirement = true;
+    options.kind                  = JobClass::Selection;
+    options.serialKey             = 27;
+    options.memoryBytes           = kWhole;
+    options.deferredRetirement    = true;
     options.reserveRetainedMemory = true;
-    options.allowMemoryWaiting = false;
+    options.allowMemoryWaiting    = false;
     options.continuingOutputLimit = kOpening;
-    std::unique_ptr<Job> job = std::make_unique<ContinuingJob>(state);
+    std::unique_ptr<Job> job      = std::make_unique<ContinuingJob>(state);
     if (scheduler.Submit(job, options, state.original) != S_OK)
         SetupFailure("original-whole-admission");
     WaitForOpening(state);
     Expect(state.openingResult == S_OK && state.openingAck && state.openingValue && *state.openingValue == 17,
            "joined-opening-publishes-literal-under-original-admission");
-    Expect(FAILED(state.wrongTicket) && FAILED(state.overLimit) && FAILED(state.undercharged) &&
-               FAILED(state.repeated) && FAILED(state.growth) && state.openingSealed,
+    Expect(FAILED(state.wrongTicket) && FAILED(state.overLimit) && FAILED(state.undercharged) && FAILED(state.repeated) && FAILED(state.growth) &&
+               state.openingSealed,
            "wrong-ticket-bound-undercharge-repeat-and-growth-refuse-with-sealed-output");
-    Expect(state.firstBudget == kWhole && state.reservationAfterOpening == kWhole &&
-               state.opening->Bytes() == kOpening && state.queriesBefore == state.queriesAfter &&
-               state.opening->BoundTo(scheduler, state.original),
+    Expect(state.firstBudget == kWhole && state.reservationAfterOpening == kWhole && state.opening->Bytes() == kOpening &&
+               state.queriesBefore == state.queriesAfter && state.opening->BoundTo(scheduler, state.original),
            "opening-transfer-keeps-whole-charge-and-performs-no-new-query");
     if (mode == Mode::CloseSuspended)
     {
         scheduler.Close();
-        Expect(state.joinedClose && state.sameTicket && state.terminalResult == S_OK &&
-                   state.terminalBytes == kWhole - kOpening && state.opening->IsBound() && state.temporary->IsBound() &&
-                   state.opening->ResidentBytes() == kWhole,
+        Expect(state.joinedClose && state.sameTicket && state.terminalResult == S_OK && state.terminalBytes == kWhole - kOpening && state.opening->IsBound() &&
+                   state.temporary->IsBound() && state.opening->ResidentBytes() == kWhole,
                "joined-close-keeps-original-terminal-slot-and-complete-live-root-charge");
         state.openingValue.reset();
         state.finalValue.reset();
@@ -264,30 +258,25 @@ void RunCase(Mode mode)
     }
     Settle(scheduler);
     const bool success = mode == Mode::Success;
-    const auto status = success                    ? JobStatus::Finished
-                        : mode == Mode::FailSecond ? JobStatus::Failed
-                                                   : JobStatus::Cancelled;
-    Expect(state.completed && state.sameTicket && state.resumed && state.outcome.status == status &&
-               state.terminalResult == S_OK,
+    const auto status  = success ? JobStatus::Finished : mode == Mode::FailSecond ? JobStatus::Failed : JobStatus::Cancelled;
+    Expect(state.completed && state.sameTicket && state.resumed && state.outcome.status == status && state.terminalResult == S_OK,
            "same-original-ticket-acknowledges-success-failure-or-cancel-and-retains-terminal-memory");
     if (mode != Mode::CancelAfterOpening)
-        Expect(state.runs == 2 && state.secondBudget == kWhole - kOpening && state.finalValue &&
-                   *state.finalValue == 41,
+        Expect(state.runs == 2 && state.secondBudget == kWhole - kOpening && state.finalValue && *state.finalValue == 41,
                "resumed-useful-worker-receives-only-prepaid-remaining-reservation");
     else
-        Expect(state.runs == 1 && !state.finalValue, "cancel-after-opening-never-enters-another-useful-body");
+        Expect(state.runs == 1 && ! state.finalValue, "cancel-after-opening-never-enters-another-useful-body");
     const auto finalBytes = success ? kFinal : 0;
     Expect(scheduler.ReservedMemoryBytes() == kWhole && state.terminalBytes == kWhole - kOpening - finalBytes,
            "terminal-accounting-partitions-exact-original-remainder-without-another-slot");
-    if (!success)
+    if (! success)
     {
         state.finalValue.reset();
         state.finalOutput.reset();
     }
     state.temporary.reset();
     Settle(scheduler);
-    Expect(scheduler.ReservedMemoryBytes() == kOpening + finalBytes,
-           "temporary-refund-keeps-each-still-readable-output-charged");
+    Expect(scheduler.ReservedMemoryBytes() == kOpening + finalBytes, "temporary-refund-keeps-each-still-readable-output-charged");
     std::weak_ptr<const int> weak = state.openingValue;
     state.openingValue.reset();
     state.opening.reset();
@@ -311,8 +300,10 @@ void RunCase(Mode mode)
 #pragma warning(disable : 4626 5027)
 class SlotHolderJob final : public Job
 {
-  public:
-    explicit SlotHolderJob(unsigned int& acknowledgements) noexcept : _acknowledgements(acknowledgements) {}
+public:
+    explicit SlotHolderJob(unsigned int& acknowledgements) noexcept : _acknowledgements(acknowledgements)
+    {
+    }
     JobResult Run(JobContext&) override
     {
         return {};
@@ -325,9 +316,11 @@ class SlotHolderJob final : public Job
         ++_acknowledgements;
         return true;
     }
-    void Completed(JobResult) noexcept override {}
+    void Completed(JobResult) noexcept override
+    {
+    }
 
-  private:
+private:
     unsigned int& _acknowledgements;
     bool _held = false;
 };
@@ -337,7 +330,7 @@ void TestAllSlotsPreclaimed()
 {
     currentCase = "slot-pressure";
     JobScheduler scheduler;
-    if (scheduler.Initialize(2, {}, {Sample, nullptr}) != S_OK || !scheduler.EnableDeferredRelease())
+    if (scheduler.Initialize(2, {}, {Sample, nullptr}) != S_OK || ! scheduler.EnableDeferredRelease())
         SetupFailure("slot-pressure-scheduler");
     constexpr std::uint64_t holderBytes = 8192;
     std::array<JobTicket, JobScheduler::kRetainedMemoryCapacity - 1> holders{};
@@ -346,17 +339,17 @@ void TestAllSlotsPreclaimed()
     {
         std::unique_ptr<Job> holder = std::make_unique<SlotHolderJob>(acknowledgements);
         JobOptions options;
-        options.memoryBytes = holderBytes;
-        options.deferredRetirement = true;
+        options.memoryBytes           = holderBytes;
+        options.deferredRetirement    = true;
         options.reserveRetainedMemory = true;
         if (scheduler.Submit(holder, options, ticket) != S_OK)
             SetupFailure("preclaim-sixty-three-terminal-slots");
     }
     State state{scheduler, Mode::CloseSuspended};
     JobOptions options;
-    options.kind = JobClass::Selection;
-    options.memoryBytes = kWhole;
-    options.deferredRetirement = true;
+    options.kind                  = JobClass::Selection;
+    options.memoryBytes           = kWhole;
+    options.deferredRetirement    = true;
     options.reserveRetainedMemory = true;
     options.continuingOutputLimit = kOpening;
     std::unique_ptr<Job> original = std::make_unique<ContinuingJob>(state);
@@ -375,34 +368,32 @@ void TestAllSlotsPreclaimed()
         if (now >= deadline)
             SetupFailure("holder-acknowledgement-deadline");
         const HANDLE wake = scheduler.WakeHandle();
-        if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
-                                        MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+        if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
             SetupFailure("holder-acknowledgement-event");
     }
     Expect(state.openingResult == S_OK && state.opening->BoundTo(scheduler, state.original) &&
                state.reservationAfterOpening == kWhole + holders.size() * holderBytes,
            "opening-partitions-only-original-bytes-with-all-sixty-four-terminal-slots-preclaimed");
     std::unique_ptr<Job> overflow = std::make_unique<NeverSubmittedJob>();
-    const auto* untouched = overflow.get();
+    const auto* untouched         = overflow.get();
     JobTicket refusedTicket;
-    auto overflowOptions = options;
+    auto overflowOptions                  = options;
     overflowOptions.continuingOutputLimit = 0;
-    const auto before = queries;
-    const auto overflowStatus = scheduler.Submit(overflow, overflowOptions, refusedTicket);
-    Expect(overflowStatus == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
-               overflow.get() == untouched && queries == before,
+    const auto before                     = queries;
+    const auto overflowStatus             = scheduler.Submit(overflow, overflowOptions, refusedTicket);
+    Expect(overflowStatus == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) && overflow.get() == untouched && queries == before,
            "sixty-fifth-slot-refuses-without-query-or-original-ticket-mutation");
     SharedRetainedMemoryLease refused;
-    Expect(scheduler.RetainContinuingOutputMemory(state.original, kOpening, refused) == E_INVALIDARG && !refused,
+    Expect(scheduler.RetainContinuingOutputMemory(state.original, kOpening, refused) == E_INVALIDARG && ! refused,
            "owner-call-outside-joined-acknowledgement-cannot-transfer-an-output");
-    if (!scheduler.Resume(state.original))
+    if (! scheduler.Resume(state.original))
         SetupFailure("resume-original-under-full-slot-pressure");
     for (const auto ticket : holders)
-        if (!scheduler.Resume(ticket))
+        if (! scheduler.Resume(ticket))
             SetupFailure("release-original-slot-holder");
     Settle(scheduler);
-    Expect(state.completed && state.runs == 2 && state.sameTicket && state.outcome.status == JobStatus::Finished &&
-               state.secondBudget == kWhole - kOpening && state.terminalResult == S_OK,
+    Expect(state.completed && state.runs == 2 && state.sameTicket && state.outcome.status == JobStatus::Finished && state.secondBudget == kWhole - kOpening &&
+               state.terminalResult == S_OK,
            "same-original-job-resumes-useful-work-and-binds-its-preclaimed-terminal-slot");
     state.temporary.reset();
     Settle(scheduler);
@@ -421,7 +412,7 @@ void TestAllSlotsPreclaimed()
 int RunDocumentContinuingPublicationTests()
 {
     failures = checks = 0;
-    queries = 0;
+    queries           = 0;
     DescriptorRefusals();
     RunCase(Mode::Success);
     RunCase(Mode::FailSecond);

@@ -19,9 +19,9 @@ struct CloneReadbackTestGate final
 {
     static constexpr UINT kMessage = WM_APP + 0x5f2;
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    bool holdAfterCopy = false;
-    bool throwCaptureFailure = false;
-    bool observeAdoption = false; // Message 2: source lease adopted; message 3: opening completed and Down replayed.
+    bool holdAfterCopy             = false;
+    bool throwCaptureFailure       = false;
+    bool observeAdoption           = false; // Message 2: source lease adopted; message 3: opening completed and Down replayed.
     unsigned int rebindsBeforeCopy = 0;
     JobResult result;
     std::atomic<unsigned int> captures{0};

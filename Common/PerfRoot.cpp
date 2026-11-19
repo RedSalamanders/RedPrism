@@ -14,11 +14,11 @@
 namespace
 {
 constexpr wchar_t kPerfRootName[] = L"RedPrism.Perf";
-constexpr wchar_t kMarkerName[] = L".redprism-perf-owner";
+constexpr wchar_t kMarkerName[]   = L".redprism-perf-owner";
 // Changing the ownership marker requires an intentional format-version change here.
-constexpr char kMarkerContent[] = "RedPrism performance root owner v1\n";
+constexpr char kMarkerContent[]           = "RedPrism performance root owner v1\n";
 constexpr std::size_t kMarkerContentBytes = sizeof(kMarkerContent) - 1;
-constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
+constexpr std::size_t kMarkerReadLimit    = kMarkerContentBytes + 1;
 
 [[nodiscard]] HRESULT Win32Error(DWORD error) noexcept
 {
@@ -38,20 +38,24 @@ constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
 [[nodiscard]] HRESULT OpenDirectoryNoFollow(std::wstring_view path, wil::unique_hfile& directory)
 {
     std::wstring terminated{path};
-    directory.reset(CreateFileW(terminated.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                                OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
-    if (!directory)
+    directory.reset(CreateFileW(terminated.c_str(),
+                                FILE_READ_ATTRIBUTES,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                nullptr,
+                                OPEN_EXISTING,
+                                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                                nullptr));
+    if (! directory)
     {
         return Win32Error(GetLastError());
     }
 
     BY_HANDLE_FILE_INFORMATION information{};
-    if (!GetFileInformationByHandle(directory.get(), &information))
+    if (! GetFileInformationByHandle(directory.get(), &information))
     {
         return Win32Error(GetLastError());
     }
-    if ((information.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
-        (information.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+    if ((information.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 || (information.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
     {
         return HRESULT_FROM_WIN32(ERROR_CANT_ACCESS_FILE);
     }
@@ -60,7 +64,7 @@ constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
 
 [[nodiscard]] HRESULT ValidateOwnedRoot(std::wstring_view path)
 {
-    if (!IsValidPerfRootPath(path))
+    if (! IsValidPerfRootPath(path))
     {
         return E_INVALIDARG;
     }
@@ -75,33 +79,36 @@ constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
     std::wstring markerPath{path};
     markerPath.push_back(L'\\');
     markerPath.append(kMarkerName);
-    wil::unique_hfile marker{CreateFileW(markerPath.c_str(), GENERIC_READ | FILE_READ_ATTRIBUTES, FILE_SHARE_READ,
-                                         nullptr, OPEN_EXISTING,
-                                         FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN, nullptr)};
-    if (!marker)
+    wil::unique_hfile marker{CreateFileW(markerPath.c_str(),
+                                         GENERIC_READ | FILE_READ_ATTRIBUTES,
+                                         FILE_SHARE_READ,
+                                         nullptr,
+                                         OPEN_EXISTING,
+                                         FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN,
+                                         nullptr)};
+    if (! marker)
     {
         return Win32Error(GetLastError());
     }
 
     BY_HANDLE_FILE_INFORMATION markerInformation{};
-    if (!GetFileInformationByHandle(marker.get(), &markerInformation))
+    if (! GetFileInformationByHandle(marker.get(), &markerInformation))
     {
         return Win32Error(GetLastError());
     }
-    if ((markerInformation.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0 ||
-        markerInformation.nFileSizeHigh != 0 || markerInformation.nFileSizeLow > kMarkerContentBytes)
+    if ((markerInformation.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0 || markerInformation.nFileSizeHigh != 0 ||
+        markerInformation.nFileSizeLow > kMarkerContentBytes)
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
     std::array<char, kMarkerReadLimit> content{};
     DWORD bytesRead = 0;
-    if (!ReadFile(marker.get(), content.data(), static_cast<DWORD>(content.size()), &bytesRead, nullptr))
+    if (! ReadFile(marker.get(), content.data(), static_cast<DWORD>(content.size()), &bytesRead, nullptr))
     {
         return Win32Error(GetLastError());
     }
-    if (bytesRead != kMarkerContentBytes ||
-        std::string_view{content.data(), bytesRead} != std::string_view{kMarkerContent, kMarkerContentBytes})
+    if (bytesRead != kMarkerContentBytes || std::string_view{content.data(), bytesRead} != std::string_view{kMarkerContent, kMarkerContentBytes})
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
@@ -111,7 +118,7 @@ constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
 [[nodiscard]] HRESULT CreateOwnedRoot(std::wstring_view path)
 {
     std::wstring terminated{path};
-    if (!CreateDirectoryW(terminated.c_str(), nullptr))
+    if (! CreateDirectoryW(terminated.c_str(), nullptr))
     {
         const DWORD error = GetLastError();
         if (error != ERROR_ALREADY_EXISTS)
@@ -133,16 +140,20 @@ constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
     std::wstring markerPath{path};
     markerPath.push_back(L'\\');
     markerPath.append(kMarkerName);
-    wil::unique_hfile marker{
-        CreateFileW(markerPath.c_str(), GENERIC_WRITE | FILE_READ_ATTRIBUTES, 0, nullptr, CREATE_NEW,
-                    FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_WRITE_THROUGH, nullptr)};
-    if (!marker)
+    wil::unique_hfile marker{CreateFileW(markerPath.c_str(),
+                                         GENERIC_WRITE | FILE_READ_ATTRIBUTES,
+                                         0,
+                                         nullptr,
+                                         CREATE_NEW,
+                                         FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_WRITE_THROUGH,
+                                         nullptr)};
+    if (! marker)
     {
         return Win32Error(GetLastError());
     }
 
     DWORD bytesWritten = 0;
-    if (!WriteFile(marker.get(), kMarkerContent, static_cast<DWORD>(kMarkerContentBytes), &bytesWritten, nullptr))
+    if (! WriteFile(marker.get(), kMarkerContent, static_cast<DWORD>(kMarkerContentBytes), &bytesWritten, nullptr))
     {
         return Win32Error(GetLastError());
     }
@@ -150,7 +161,7 @@ constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
     {
         return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
     }
-    if (!FlushFileBuffers(marker.get()))
+    if (! FlushFileBuffers(marker.get()))
     {
         return Win32Error(GetLastError());
     }
@@ -170,7 +181,7 @@ constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
 
 [[nodiscard]] HRESULT ResolveConfiguredRoot(std::wstring_view configured, std::wstring& result)
 {
-    if (!IsValidPerfRootPath(configured))
+    if (! IsValidPerfRootPath(configured))
     {
         return E_INVALIDARG;
     }
@@ -211,7 +222,7 @@ constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
     }
 
     constexpr wchar_t kPreferredDrive = L'X';
-    const auto tryDrive = [&](wchar_t drive)
+    const auto tryDrive               = [&](wchar_t drive)
     {
         const unsigned int bit = static_cast<unsigned int>(UpperDriveLetter(drive) - L'A');
         if ((driveMask & (1u << bit)) == 0)
@@ -239,10 +250,9 @@ constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
     }
 
     std::array<wchar_t, MAX_PATH> windowsDirectory{};
-    const UINT windowsDirectoryLength =
-        GetWindowsDirectoryW(windowsDirectory.data(), static_cast<UINT>(windowsDirectory.size()));
-    if (windowsDirectoryLength == 0 || windowsDirectoryLength >= windowsDirectory.size() ||
-        !IsAsciiDriveLetter(windowsDirectory[0]) || windowsDirectory[1] != L':')
+    const UINT windowsDirectoryLength = GetWindowsDirectoryW(windowsDirectory.data(), static_cast<UINT>(windowsDirectory.size()));
+    if (windowsDirectoryLength == 0 || windowsDirectoryLength >= windowsDirectory.size() || ! IsAsciiDriveLetter(windowsDirectory[0]) ||
+        windowsDirectory[1] != L':')
     {
         return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
     }
@@ -254,7 +264,7 @@ constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
-    std::wstring path = RootForDrive(systemDrive);
+    std::wstring path    = RootForDrive(systemDrive);
     const HRESULT status = CreateOwnedRoot(path);
     if (SUCCEEDED(status))
     {
@@ -267,7 +277,7 @@ constexpr std::size_t kMarkerReadLimit = kMarkerContentBytes + 1;
 bool IsValidPerfRootPath(std::wstring_view path) noexcept
 {
     constexpr std::size_t kExpectedLength = 3 + (sizeof(kPerfRootName) / sizeof(kPerfRootName[0])) - 1;
-    if (path.size() != kExpectedLength || !IsAsciiDriveLetter(path[0]) || path[1] != L':' || path[2] != L'\\')
+    if (path.size() != kExpectedLength || ! IsAsciiDriveLetter(path[0]) || path[1] != L':' || path[2] != L'\\')
     {
         return false;
     }
@@ -299,8 +309,7 @@ std::int32_t ResolvePerfRoot(std::wstring& root) noexcept
     {
         std::array<wchar_t, 64> configured{};
         SetLastError(ERROR_SUCCESS);
-        const DWORD configuredLength =
-            GetEnvironmentVariableW(L"REDPRISM_PERF_ROOT", configured.data(), static_cast<DWORD>(configured.size()));
+        const DWORD configuredLength = GetEnvironmentVariableW(L"REDPRISM_PERF_ROOT", configured.data(), static_cast<DWORD>(configured.size()));
         if (configuredLength != 0)
         {
             if (configuredLength >= configured.size())
@@ -308,8 +317,7 @@ std::int32_t ResolvePerfRoot(std::wstring& root) noexcept
                 return static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW));
             }
             std::wstring resolved;
-            const HRESULT status = ResolveConfiguredRoot(
-                std::wstring_view{configured.data(), static_cast<std::size_t>(configuredLength)}, resolved);
+            const HRESULT status = ResolveConfiguredRoot(std::wstring_view{configured.data(), static_cast<std::size_t>(configuredLength)}, resolved);
             if (SUCCEEDED(status))
             {
                 root.swap(resolved);

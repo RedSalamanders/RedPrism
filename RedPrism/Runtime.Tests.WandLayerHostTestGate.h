@@ -17,7 +17,7 @@
 #pragma warning(disable : 4625 4626 5026 5027)
 struct WandLayerHostTestGate final
 {
-    static constexpr UINT kMessage = WM_APP + 0x4c7;
+    static constexpr UINT kMessage         = WM_APP + 0x4c7;
     static constexpr UINT kReadbackMessage = WM_APP + 0x5f1;
     wil::unique_handle release;
     JobResult result;
@@ -26,8 +26,8 @@ struct WandLayerHostTestGate final
     std::uint64_t reservationBytes = 0;
     // Owner-only observation at actual successful Apply; owns no published graph or accounting lease.
     std::uint64_t publishedOutputBytes = 0;
-    unsigned int publishedOutputs = 0;
-    bool allOutputsBoundToOriginal = true;
+    unsigned int publishedOutputs      = 0;
+    bool allOutputsBoundToOriginal     = true;
     std::atomic<bool> outlinePreparedOffOwner{false};
     std::atomic<const void*> preparedPointBuffer{nullptr};
     std::atomic<bool> reservationHeld{false}, retired{false}, retiredOffOwner{false};

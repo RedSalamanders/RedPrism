@@ -27,24 +27,24 @@ class GpuBrushCoverage final : public BrushCoverageEngine
         wil::com_ptr_nothrow<ID3D11Buffer> preview;
         wil::com_ptr_nothrow<ID3D11UnorderedAccessView> previewView;
         wil::com_ptr_nothrow<ID3D11Buffer> staging;
-        int width = 0;
+        int width  = 0;
         int height = 0;
     };
 
-  public:
+public:
     // Construct the empty map/control owner on a worker under complete admission. TakeStrokeEpoch swaps
     // the entire graph without hash iteration/allocation. No immediate context or GPU reservation lives here.
     // Destroy/reset only on a worker after every coverage copy/map user has acknowledged; the original owner
     // releases its separate GPU reservation only after that worker acknowledgement (after Close on shutdown).
     class StrokeEpoch final
     {
-      public:
+    public:
         StrokeEpoch();
         ~StrokeEpoch();
-        StrokeEpoch(const StrokeEpoch&) = delete;
+        StrokeEpoch(const StrokeEpoch&)            = delete;
         StrokeEpoch& operator=(const StrokeEpoch&) = delete;
-        StrokeEpoch(StrokeEpoch&&) = delete;
-        StrokeEpoch& operator=(StrokeEpoch&&) = delete;
+        StrokeEpoch(StrokeEpoch&&)                 = delete;
+        StrokeEpoch& operator=(StrokeEpoch&&)      = delete;
         [[nodiscard]] std::size_t TileCount() const noexcept
         {
             return _tiles ? _tiles->size() : 0;
@@ -60,17 +60,17 @@ class GpuBrushCoverage final : public BrushCoverageEngine
         [[nodiscard]] bool HasResources() const noexcept;
         void ResetForWork() noexcept;
 
-      private:
+    private:
         friend class GpuBrushCoverage;
         using TileMap = std::unordered_map<std::uint64_t, TileBuffers>;
         std::unique_ptr<TileMap> _tiles;
         wil::com_ptr_nothrow<ID3D11Buffer> _segments;
         wil::com_ptr_nothrow<ID3D11ShaderResourceView> _segmentsView;
         wil::com_ptr_nothrow<ID3D11Device> _device;
-        std::size_t _segmentCapacity = 0;
-        std::uint64_t _tileGpuBytes = 0;
-        std::uint64_t _cpuBytes = 0;
-        std::uint64_t _gpuBytes = 0;
+        std::size_t _segmentCapacity   = 0;
+        std::uint64_t _tileGpuBytes    = 0;
+        std::uint64_t _cpuBytes        = 0;
+        std::uint64_t _gpuBytes        = 0;
         std::uint32_t _capturingThread = 0;
     };
     [[nodiscard]] std::uint64_t StrokeCpuOwnershipBytes() const noexcept;
@@ -85,7 +85,7 @@ class GpuBrushCoverage final : public BrushCoverageEngine
     [[nodiscard]] bool RestoreStrokeEpoch(StrokeEpoch& epoch) noexcept;
     GpuBrushCoverage() = default;
     ~GpuBrushCoverage() override;
-    GpuBrushCoverage(const GpuBrushCoverage&) = delete;
+    GpuBrushCoverage(const GpuBrushCoverage&)            = delete;
     GpuBrushCoverage& operator=(const GpuBrushCoverage&) = delete;
 
     // Compiles nothing: the shader is build-time bytecode. Creates the pipeline on `device`.
@@ -96,36 +96,41 @@ class GpuBrushCoverage final : public BrushCoverageEngine
         return _pipeline != nullptr;
     }
 
-    [[nodiscard]] bool Render(std::span<const BrushKernelTile> tiles, std::span<const BrushSegment> settled,
-                              std::span<const BrushSegment> tail, const BrushKernelParams& params) noexcept override;
+    [[nodiscard]] bool Render(std::span<const BrushKernelTile> tiles,
+                              std::span<const BrushSegment> settled,
+                              std::span<const BrushSegment> tail,
+                              const BrushKernelParams& params) noexcept override;
     // Owner-only final coverage recording. Performs the same compute dispatch without copying,
     // mapping or converting preview values. The final job retains each borrowed buffer through
     // GpuWorkQueue::EnqueueBufferReadback before EndStroke may release this engine's owners.
-    [[nodiscard]] bool RecordCoverage(std::span<const BrushKernelTile> tiles, std::span<const BrushSegment> settled,
-                                      std::span<const BrushSegment> tail, const BrushKernelParams& params) noexcept;
+    [[nodiscard]] bool RecordCoverage(std::span<const BrushKernelTile> tiles,
+                                      std::span<const BrushSegment> settled,
+                                      std::span<const BrushSegment> tail,
+                                      const BrushKernelParams& params) noexcept;
     [[nodiscard]] ID3D11Buffer* CoverageBuffer(std::uint64_t key, int width, int height) const noexcept;
     // Owner-only final recording against the captured density graph. The live engine must be empty and bound
     // to the epoch's original device. Swaps the graph for one bounded recording call, restores it on every
     // outcome, never reads pixels and leaves no captured stroke resources in the live engine.
-    [[nodiscard]] bool RecordEpochCoverage(StrokeEpoch& epoch, std::span<const BrushKernelTile> tiles,
+    [[nodiscard]] bool RecordEpochCoverage(StrokeEpoch& epoch,
+                                           std::span<const BrushKernelTile> tiles,
                                            std::span<const BrushSegment> settled,
                                            const BrushKernelParams& params) noexcept;
-    [[nodiscard]] ID3D11Buffer* EpochCoverageBuffer(const StrokeEpoch& epoch, std::uint64_t key, int width,
-                                                    int height) const noexcept;
+    [[nodiscard]] ID3D11Buffer* EpochCoverageBuffer(const StrokeEpoch& epoch, std::uint64_t key, int width, int height) const noexcept;
     // Exclusive recorder-lane call, after complete parent admission and actual owner epoch transfer.
     // Uses a private same-device deferred context/pipeline, preserves segment ordering and full-tile
     // coordinates, and checkpoints bounded regions through the original command stream. No readback.
     // The caller joins this producer and acknowledges every original GPU use before accessing/resetting
     // the epoch. Allocations constructing the private engine propagate to the scheduler runner.
-    [[nodiscard]] static HRESULT RecordEpochForWork(StrokeEpoch& epoch, ID3D11DeviceContext* deferred,
+    [[nodiscard]] static HRESULT RecordEpochForWork(StrokeEpoch& epoch,
+                                                    ID3D11DeviceContext* deferred,
                                                     GpuRecordingCommands& commands,
                                                     std::span<const BrushKernelTile> tiles,
                                                     std::span<const BrushSegment> settled,
                                                     std::span<const BrushSegment> tail,
                                                     const BrushKernelParams& params);
     // Owner borrow only after the recorder joined; the caller retains the epoch through every readback.
-    [[nodiscard]] static ID3D11Buffer* RecordedEpochBufferOwner(const StrokeEpoch& epoch, ID3D11Device* originalDevice,
-                                                                std::uint64_t key, int width, int height) noexcept;
+    [[nodiscard]] static ID3D11Buffer* RecordedEpochBufferOwner(
+        const StrokeEpoch& epoch, ID3D11Device* originalDevice, std::uint64_t key, int width, int height) noexcept;
     void BeginStroke() noexcept override;
     void EndStroke() noexcept override;
     [[nodiscard]] bool UsesCpuPermanent() const noexcept override
@@ -137,7 +142,7 @@ class GpuBrushCoverage final : public BrushCoverageEngine
         return _tiles.size();
     }
 
-  private:
+private:
     struct Uniforms
     {
         float mapping[4];
@@ -150,18 +155,20 @@ class GpuBrushCoverage final : public BrushCoverageEngine
     [[nodiscard]] TileBuffers* BuffersFor(const BrushKernelTile& tile) noexcept;
     [[nodiscard]] HRESULT EnsureSegments(std::size_t count) noexcept;
     [[nodiscard]] HRESULT EnsureStaging(TileBuffers& buffers) noexcept;
-    [[nodiscard]] bool RenderImpl(std::span<const BrushKernelTile> tiles, std::span<const BrushSegment> settled,
-                                  std::span<const BrushSegment> tail, const BrushKernelParams& params,
+    [[nodiscard]] bool RenderImpl(std::span<const BrushKernelTile> tiles,
+                                  std::span<const BrushSegment> settled,
+                                  std::span<const BrushSegment> tail,
+                                  const BrushKernelParams& params,
                                   bool readback) noexcept;
 
     GpuRecordingCommands* _recording = nullptr; // private worker borrow; never the compatibility engine
-    ID3D11Device* _device = nullptr;
-    ID3D11DeviceContext* _context = nullptr;
+    ID3D11Device* _device            = nullptr;
+    ID3D11DeviceContext* _context    = nullptr;
     wil::com_ptr_nothrow<ID3D11ComputeShader> _pipeline;
     wil::com_ptr_nothrow<ID3D11Buffer> _uniforms;
     wil::com_ptr_nothrow<ID3D11Buffer> _segments;
     wil::com_ptr_nothrow<ID3D11ShaderResourceView> _segmentsView;
     std::size_t _segmentCapacity = 0;
-    std::uint64_t _tileGpuBytes = 0;
+    std::uint64_t _tileGpuBytes  = 0;
     std::unordered_map<std::uint64_t, TileBuffers> _tiles;
 };

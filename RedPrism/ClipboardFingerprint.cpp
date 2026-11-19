@@ -25,23 +25,21 @@ void Reached(Observer observer, Stage stage, std::size_t offset) noexcept
 }
 } // namespace
 
-std::int32_t Hash(std::span<const std::uint8_t> bytes, Format& output, CancelToken cancellation,
-                  Observer observer) noexcept
+std::int32_t Hash(std::span<const std::uint8_t> bytes, Format& output, CancelToken cancellation, Observer observer) noexcept
 {
     output = {};
     if (cancellation.IsCancelled())
         return E_ABORT;
-    if (!bytes.empty() && !bytes.data())
+    if (! bytes.empty() && ! bytes.data())
         return E_INVALIDARG;
     // Stack owner precedes the hash: CNG retains this object buffer through BCryptDestroyHash.
     alignas(64) std::array<std::uint8_t, 4096> object{};
     ULONG objectLength = 0, returned = 0;
     auto propertyStatus =
-        BCryptGetProperty(BCRYPT_SHA256_ALG_HANDLE, BCRYPT_OBJECT_LENGTH, reinterpret_cast<PUCHAR>(&objectLength),
-                          sizeof(objectLength), &returned, 0);
+        BCryptGetProperty(BCRYPT_SHA256_ALG_HANDLE, BCRYPT_OBJECT_LENGTH, reinterpret_cast<PUCHAR>(&objectLength), sizeof(objectLength), &returned, 0);
     if (propertyStatus < 0)
         return HRESULT_FROM_NT(propertyStatus);
-    if (returned != sizeof(objectLength) || !objectLength || objectLength > object.size())
+    if (returned != sizeof(objectLength) || ! objectLength || objectLength > object.size())
         return E_UNEXPECTED;
     wil::unique_bcrypt_hash hash;
     auto status = Fault(observer, Stage::Create);
@@ -55,10 +53,9 @@ std::int32_t Hash(std::span<const std::uint8_t> bytes, Format& output, CancelTok
         if (cancellation.IsCancelled())
             return E_ABORT;
         const auto count = (std::min)(std::size_t{64 * 1024}, bytes.size() - offset);
-        status = Fault(observer, Stage::Band);
+        status           = Fault(observer, Stage::Band);
         if (status >= 0)
-            status =
-                BCryptHashData(hash.get(), const_cast<PUCHAR>(bytes.data() + offset), static_cast<ULONG>(count), 0);
+            status = BCryptHashData(hash.get(), const_cast<PUCHAR>(bytes.data() + offset), static_cast<ULONG>(count), 0);
         if (status < 0)
             return HRESULT_FROM_NT(status);
         offset += count;
@@ -76,16 +73,18 @@ std::int32_t Hash(std::span<const std::uint8_t> bytes, Format& output, CancelTok
     if (cancellation.IsCancelled())
         return E_ABORT;
     completed.bytes = bytes.size();
-    output = completed;
+    output          = completed;
     return S_OK;
 }
 
-bool Matches(const Binding& expected, const ClipboardReceipt::Key& currentPrivate,
-             const std::optional<ClipboardReceipt::Key>& receipt, const Format& png, const Format& dib) noexcept
+bool Matches(const Binding& expected,
+             const ClipboardReceipt::Key& currentPrivate,
+             const std::optional<ClipboardReceipt::Key>& receipt,
+             const Format& png,
+             const Format& dib) noexcept
 {
     std::array<std::uint8_t, ClipboardReceipt::kEncodedBytes> packet{};
-    return receipt && ClipboardReceipt::Encode(expected.key, packet) && expected.key == currentPrivate &&
-           expected.key == receipt.value() && (png.bytes || dib.bytes) && (!png.bytes || png == expected.png) &&
-           (!dib.bytes || dib == expected.dib);
+    return receipt && ClipboardReceipt::Encode(expected.key, packet) && expected.key == currentPrivate && expected.key == receipt.value() &&
+           (png.bytes || dib.bytes) && (! png.bytes || png == expected.png) && (! dib.bytes || dib == expected.dib);
 }
 } // namespace ClipboardFingerprint

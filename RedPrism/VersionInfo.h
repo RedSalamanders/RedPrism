@@ -18,11 +18,9 @@ namespace RedPrism
 {
 
 // "major.minor.build.revision", the same shape as REDPRISM_VERSION_STRING.
-[[nodiscard]] inline std::wstring FormatFileVersion(std::uint16_t major, std::uint16_t minor, std::uint16_t build,
-                                                    std::uint16_t revision)
+[[nodiscard]] inline std::wstring FormatFileVersion(std::uint16_t major, std::uint16_t minor, std::uint16_t build, std::uint16_t revision)
 {
-    return std::to_wstring(major) + L"." + std::to_wstring(minor) + L"." + std::to_wstring(build) + L"." +
-           std::to_wstring(revision);
+    return std::to_wstring(major) + L"." + std::to_wstring(minor) + L"." + std::to_wstring(build) + L"." + std::to_wstring(revision);
 }
 
 // Reads modulePath's VS_FIXEDFILEINFO and formats it into `formatted`. Returns false, leaving `formatted`
@@ -30,11 +28,11 @@ namespace RedPrism
 // compile-time string.
 [[nodiscard]] inline bool TryReadModuleFileVersion(const wchar_t* modulePath, std::wstring& formatted)
 {
-    if (!modulePath)
+    if (! modulePath)
     {
         return false;
     }
-    DWORD handle = 0;
+    DWORD handle     = 0;
     const DWORD size = GetFileVersionInfoSizeW(modulePath, &handle);
     if (size == 0)
     {
@@ -43,13 +41,13 @@ namespace RedPrism
     std::vector<BYTE> block(size);
     // GetFileVersionInfoW's dwHandle parameter is reserved and must be zero. The handle output from
     // GetFileVersionInfoSizeW is not an input to this API.
-    if (!GetFileVersionInfoW(modulePath, 0, size, block.data()))
+    if (! GetFileVersionInfoW(modulePath, 0, size, block.data()))
     {
         return false;
     }
-    void* value = nullptr;
+    void* value    = nullptr;
     UINT valueSize = 0;
-    if (!VerQueryValueW(block.data(), L"\\", &value, &valueSize) || !value || valueSize < sizeof(VS_FIXEDFILEINFO))
+    if (! VerQueryValueW(block.data(), L"\\", &value, &valueSize) || ! value || valueSize < sizeof(VS_FIXEDFILEINFO))
     {
         return false;
     }
@@ -58,8 +56,8 @@ namespace RedPrism
     {
         return false;
     }
-    formatted = FormatFileVersion(HIWORD(fixed->dwFileVersionMS), LOWORD(fixed->dwFileVersionMS),
-                                  HIWORD(fixed->dwFileVersionLS), LOWORD(fixed->dwFileVersionLS));
+    formatted =
+        FormatFileVersion(HIWORD(fixed->dwFileVersionMS), LOWORD(fixed->dwFileVersionMS), HIWORD(fixed->dwFileVersionLS), LOWORD(fixed->dwFileVersionLS));
     return true;
 }
 

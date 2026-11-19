@@ -21,12 +21,12 @@ enum class ThemePreference : std::uint8_t
 
 struct WindowPlacementSetting
 {
-    bool valid = false; // false: Windows places the window
-    int x = 0;          // the restored (normal) rectangle in screen pixels
-    int y = 0;
-    int width = 0;
-    int height = 0;
-    bool maximized = false;
+    bool valid                                                                  = false; // false: Windows places the window
+    int x                                                                       = 0;     // the restored (normal) rectangle in screen pixels
+    int y                                                                       = 0;
+    int width                                                                   = 0;
+    int height                                                                  = 0;
+    bool maximized                                                              = false;
     [[nodiscard]] bool operator==(const WindowPlacementSetting&) const noexcept = default;
 };
 
@@ -42,17 +42,17 @@ struct ShortcutBinding
 
 struct AppSettings
 {
-    static constexpr int kSchema = 1;
+    static constexpr int kSchema            = 1;
     static constexpr double kLayersPanelMin = 100; // DIP; the chrome clamps again to its own range
     static constexpr double kLayersPanelMax = 2000;
-    static constexpr int kWindowMinWidth = 200; // pixels; smaller placements are ignored
-    static constexpr int kWindowMinHeight = 150;
+    static constexpr int kWindowMinWidth    = 200; // pixels; smaller placements are ignored
+    static constexpr int kWindowMinHeight   = 150;
 
     ThemePreference theme = ThemePreference::System;
-    std::wstring language;         // BCP-47 tag of a satellite string table; empty follows Windows
-    double layersPanelWidth = 240; // DIP (the legacy layersPanelWidth)
-    bool sampleRing = true;        // View > Sample Ring
-    double jpegQuality = 0.8;      // 0..1 (the legacy JPEG export quality)
+    std::wstring language;          // BCP-47 tag of a satellite string table; empty follows Windows
+    double layersPanelWidth = 240;  // DIP (the legacy layersPanelWidth)
+    bool sampleRing         = true; // View > Sample Ring
+    double jpegQuality      = 0.8;  // 0..1 (the legacy JPEG export quality)
     WindowPlacementSetting window;
     // Replacement chords. Empty means every command keeps the catalog default. A later entry for the same
     // commandId replaces an earlier one.

@@ -14,7 +14,7 @@ int g_failures = 0;
 void Expect(bool condition, const char* name) noexcept
 {
     std::printf("%s ui-timing-histogram.%s\n", condition ? "PASS" : "FAIL", name);
-    if (!condition)
+    if (! condition)
     {
         ++g_failures;
     }
@@ -24,19 +24,9 @@ void TestUpperBounds()
 {
     UiTimingHistogram histogram;
     constexpr std::array<std::uint64_t, UiTimingHistogram::kBucketCount> observations{
-        0,       1,
-        2,       4,
-        8,       16,
-        32,      64,
-        125,     250,
-        500,     1000,
-        2000,    4000,
-        8000,    16000,
-        33000,   50000,
-        100000,  250000,
-        1000000, (std::numeric_limits<std::uint64_t>::max)()};
-    constexpr std::array<std::uint64_t, UiTimingHistogram::kBucketCount> expectedCounts{
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+        0,    1,    2,    4,    8,     16,    32,    64,     125,    250,     500,
+        1000, 2000, 4000, 8000, 16000, 33000, 50000, 100000, 250000, 1000000, (std::numeric_limits<std::uint64_t>::max)()};
+    constexpr std::array<std::uint64_t, UiTimingHistogram::kBucketCount> expectedCounts{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
     for (const std::uint64_t observation : observations)
     {
@@ -53,8 +43,7 @@ void TestExactThresholdAndAdjacentValue()
     histogram.Record(4000);
     histogram.Record(4001);
 
-    constexpr std::array<std::uint64_t, UiTimingHistogram::kBucketCount> expectedCounts{
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0};
+    constexpr std::array<std::uint64_t, UiTimingHistogram::kBucketCount> expectedCounts{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0};
     Expect(histogram.BucketCounts() == expectedCounts, "4000-and-4001-straddle-threshold");
     Expect(histogram.MaximumMicroseconds() == 4001, "maximum-is-exact");
 }
@@ -87,9 +76,8 @@ void TestTotalsAndReset()
 {
     UiTimingHistogram histogram;
     histogram.Record((std::numeric_limits<std::uint64_t>::max)());
-    Expect(histogram.TotalMicroseconds() == (std::numeric_limits<std::uint64_t>::max)(),
-           "total-at-maximum-does-not-yet-overflow");
-    Expect(!histogram.TotalOverflowed(), "exact-maximum-total-has-no-overflow-indicator");
+    Expect(histogram.TotalMicroseconds() == (std::numeric_limits<std::uint64_t>::max)(), "total-at-maximum-does-not-yet-overflow");
+    Expect(! histogram.TotalOverflowed(), "exact-maximum-total-has-no-overflow-indicator");
     histogram.Record(1);
     Expect(histogram.TotalMicroseconds() == (std::numeric_limits<std::uint64_t>::max)(), "overflowing-total-saturates");
     Expect(histogram.TotalOverflowed(), "overflowing-total-sets-indicator");
@@ -99,7 +87,7 @@ void TestTotalsAndReset()
     constexpr std::array<std::uint64_t, UiTimingHistogram::kBucketCount> emptyCounts{};
     Expect(histogram.SampleCount() == 0, "reset-clears-sample-count");
     Expect(histogram.TotalMicroseconds() == 0, "reset-clears-total");
-    Expect(!histogram.TotalOverflowed(), "reset-clears-overflow-indicator");
+    Expect(! histogram.TotalOverflowed(), "reset-clears-overflow-indicator");
     Expect(histogram.MaximumMicroseconds() == 0, "reset-clears-maximum");
     Expect(histogram.BucketCounts() == emptyCounts, "reset-clears-buckets");
     Expect(histogram.PercentileUpperBound(50) == 0, "empty-percentile-is-zero");

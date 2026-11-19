@@ -16,12 +16,12 @@
 struct TransformHit
 {
     TransformDrag::Mode mode = TransformDrag::Mode::Move;
-    int handle = -1;
+    int handle               = -1;
 };
 
 struct TransformOverlayGeometry
 {
-    static constexpr double kHitRadiusDip = 10.0;
+    static constexpr double kHitRadiusDip      = 10.0;
     static constexpr double kRotationOffsetDip = 28.0;
 
     std::array<Vec2, 8> handles{};
@@ -30,28 +30,22 @@ struct TransformOverlayGeometry
     // A distortion has no single rotation, so its rotation knob is hidden.
     bool showsRotation = true;
 
-    [[nodiscard]] static TransformOverlayGeometry FromTransform(const LayerTransform& transform,
-                                                                const CanvasViewport& viewport,
-                                                                Vec2 documentSize) noexcept
+    [[nodiscard]] static TransformOverlayGeometry FromTransform(const LayerTransform& transform, const CanvasViewport& viewport, Vec2 documentSize) noexcept
     {
         TransformOverlayGeometry geometry;
         for (std::size_t index = 0; index < 8; ++index)
         {
-            geometry.handles[index] =
-                viewport.ViewFromDocument(transform.Point(LayerTransform::kHandles[index]), documentSize);
+            geometry.handles[index] = viewport.ViewFromDocument(transform.Point(LayerTransform::kHandles[index]), documentSize);
         }
-        const double radians = transform.Radians();
-        const double offset = viewport.DipToView(kRotationOffsetDip);
-        geometry.rotationHandle = Vec2{geometry.handles[1].x + std::sin(radians) * offset,
-                                       geometry.handles[1].y - std::cos(radians) * offset};
-        geometry.hitRadius = viewport.DipToView(kHitRadiusDip);
-        geometry.showsRotation = true;
+        const double radians    = transform.Radians();
+        const double offset     = viewport.DipToView(kRotationOffsetDip);
+        geometry.rotationHandle = Vec2{geometry.handles[1].x + std::sin(radians) * offset, geometry.handles[1].y - std::cos(radians) * offset};
+        geometry.hitRadius      = viewport.DipToView(kHitRadiusDip);
+        geometry.showsRotation  = true;
         return geometry;
     }
 
-    [[nodiscard]] static TransformOverlayGeometry FromCorners(const std::array<Vec2, 4>& corners,
-                                                              const CanvasViewport& viewport,
-                                                              Vec2 documentSize) noexcept
+    [[nodiscard]] static TransformOverlayGeometry FromCorners(const std::array<Vec2, 4>& corners, const CanvasViewport& viewport, Vec2 documentSize) noexcept
     {
         std::array<Vec2, 4> view{};
         for (std::size_t index = 0; index < 4; ++index)
@@ -60,18 +54,17 @@ struct TransformOverlayGeometry
         }
         const auto middle = [](Vec2 a, Vec2 b) { return Vec2{(a.x + b.x) / 2.0, (a.y + b.y) / 2.0}; };
         TransformOverlayGeometry geometry;
-        geometry.handles = {view[0], middle(view[0], view[1]), view[1], middle(view[1], view[2]),
-                            view[2], middle(view[2], view[3]), view[3], middle(view[3], view[0])};
+        geometry.handles = {
+            view[0], middle(view[0], view[1]), view[1], middle(view[1], view[2]), view[2], middle(view[2], view[3]), view[3], middle(view[3], view[0])};
         geometry.rotationHandle = geometry.handles[1];
-        geometry.hitRadius = viewport.DipToView(kHitRadiusDip);
-        geometry.showsRotation = false;
+        geometry.hitRadius      = viewport.DipToView(kHitRadiusDip);
+        geometry.showsRotation  = false;
         return geometry;
     }
 
     [[nodiscard]] std::optional<TransformHit> Hit(Vec2 point) const noexcept
     {
-        const auto nearHandle = [&](Vec2 other)
-        { return std::hypot(point.x - other.x, point.y - other.y) <= hitRadius; };
+        const auto nearHandle = [&](Vec2 other) { return std::hypot(point.x - other.x, point.y - other.y) <= hitRadius; };
         if (showsRotation && nearHandle(rotationHandle))
         {
             return TransformHit{TransformDrag::Mode::Rotate, -1};
@@ -86,10 +79,10 @@ struct TransformOverlayGeometry
         constexpr std::array<std::array<int, 3>, 4> kEdges{{{0, 2, 1}, {2, 4, 3}, {4, 6, 5}, {6, 0, 7}}};
         for (const std::array<int, 3>& edge : kEdges)
         {
-            const Vec2 a = handles[static_cast<std::size_t>(edge[0])];
-            const Vec2 b = handles[static_cast<std::size_t>(edge[1])];
-            const double dx = b.x - a.x;
-            const double dy = b.y - a.y;
+            const Vec2 a               = handles[static_cast<std::size_t>(edge[0])];
+            const Vec2 b               = handles[static_cast<std::size_t>(edge[1])];
+            const double dx            = b.x - a.x;
+            const double dy            = b.y - a.y;
             const double lengthSquared = dx * dx + dy * dy;
             if (lengthSquared <= 0.0)
             {
@@ -115,7 +108,7 @@ struct TransformOverlayGeometry
             return 0;
         }
         const double angle = std::atan2(handles[2].y - handles[0].y, handles[2].x - handles[0].x);
-        const long steps = std::lround((angle + kOffsets[static_cast<std::size_t>(index)]) / (kPi / 4));
+        const long steps   = std::lround((angle + kOffsets[static_cast<std::size_t>(index)]) / (kPi / 4));
         return static_cast<int>(((steps % 4) + 4) % 4);
     }
 };

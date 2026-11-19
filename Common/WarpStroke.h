@@ -15,22 +15,22 @@ struct WarpSourceView final
 {
     Raster image; // immutable layer pixels, empty for a transparent blank layer
     LayerTransform placement;
-    int width = 0; // document grid
+    int width  = 0; // document grid
     int height = 0;
 };
 
 struct WarpSampleMemoryPlan final
 {
     Vec2 point;
-    std::uint64_t sequence = 0;
-    std::uint64_t maximumTiles = 0;
+    std::uint64_t sequence            = 0;
+    std::uint64_t maximumTiles        = 0;
     std::uint64_t maximumChangedTiles = 0;
-    std::uint64_t maximumPoints = 0;
-    std::uint64_t pointCapacity = 0;
-    std::uint64_t persistentCpuBytes = 0;
-    std::uint64_t transientCpuBytes = 0;
+    std::uint64_t maximumPoints       = 0;
+    std::uint64_t pointCapacity       = 0;
+    std::uint64_t persistentCpuBytes  = 0;
+    std::uint64_t transientCpuBytes   = 0;
 
-  private:
+private:
     friend class WarpStroke;
     std::weak_ptr<WarpStroke> _producer; // scalar plan never permits freed-address reuse
     Vec2 _acceptedPoint;
@@ -46,7 +46,7 @@ struct WarpSampleMemoryPlan final
 #pragma warning(disable : 4625 4626)
 class WarpStroke
 {
-  public:
+public:
     static constexpr int kTileSize = 256;
 
     // `image` is the layer rendered at document size (premultiplied BGRA); `settings` give the tip (diameter at
@@ -63,13 +63,18 @@ class WarpStroke
     // The preallocated release node retires the entire mutable CPU draft off owner, even below 16 MiB.
     // Its original accounting owner survives queued graph destruction and the last weak control block.
     // No graphics ownership or document mutation. A bound immutable accounting owner cannot be reused.
-    [[nodiscard]] static std::shared_ptr<WarpStroke> MakeForWork(const Raster& image, SmearMode mode,
+    [[nodiscard]] static std::shared_ptr<WarpStroke> MakeForWork(const Raster& image,
+                                                                 SmearMode mode,
                                                                  const BrushSettings& settings,
-                                                                 std::thread::id ownerThread, CancelToken cancellation,
+                                                                 std::thread::id ownerThread,
+                                                                 CancelToken cancellation,
                                                                  std::shared_ptr<const SharedPublicationMemory> memory);
-    [[nodiscard]] static std::shared_ptr<WarpStroke> MakePlacedForWork(
-        WarpSourceView source, SmearMode mode, const BrushSettings& settings, std::thread::id ownerThread,
-        CancelToken cancellation, std::shared_ptr<const SharedPublicationMemory> memory);
+    [[nodiscard]] static std::shared_ptr<WarpStroke> MakePlacedForWork(WarpSourceView source,
+                                                                       SmearMode mode,
+                                                                       const BrushSettings& settings,
+                                                                       std::thread::id ownerThread,
+                                                                       CancelToken cancellation,
+                                                                       std::shared_ptr<const SharedPublicationMemory> memory);
 
     [[nodiscard]] bool IsValid() const noexcept
     {
@@ -99,7 +104,7 @@ class WarpStroke
     struct WorkObserver
     {
         void (*checkpoint)(void*, WorkStage) = nullptr;
-        void* context = nullptr;
+        void* context                        = nullptr;
     };
     [[nodiscard]] bool AppendForWork(Vec2 point, CancelToken cancellation, WorkObserver observer = {});
     using SampleMemoryPlan = WarpSampleMemoryPlan;
@@ -108,8 +113,7 @@ class WarpStroke
     // opening/processing reservation before accepting the point and capturing its private input.
     [[nodiscard]] std::optional<SampleMemoryPlan> PlanSampleMemory(Vec2 point) const noexcept;
     [[nodiscard]] bool IsSamplePlanCurrentForOwner(const SampleMemoryPlan& plan) const noexcept;
-    [[nodiscard]] bool AppendPlannedForWork(const SampleMemoryPlan& plan, CancelToken cancellation,
-                                            WorkObserver observer = {});
+    [[nodiscard]] bool AppendPlannedForWork(const SampleMemoryPlan& plan, CancelToken cancellation, WorkObserver observer = {});
     [[nodiscard]] std::thread::id WorkOwner() const noexcept
     {
         return _workOwner;
@@ -118,9 +122,7 @@ class WarpStroke
     // Immutable preview construction copies these placed source owners; no full rendered raster is created.
     [[nodiscard]] const WarpSourceView* SourceViewForWork() const noexcept
     {
-        return _valid && _sourceView && _workOwner != std::thread::id{} && _workOwner != std::this_thread::get_id()
-                   ? &_sourceView.value()
-                   : nullptr;
+        return _valid && _sourceView && _workOwner != std::thread::id{} && _workOwner != std::this_thread::get_id() ? &_sourceView.value() : nullptr;
     }
     // Every dab's center, for painting the result into the layer.
     [[nodiscard]] const std::vector<Vec2>& Points() const noexcept
@@ -157,7 +159,7 @@ class WarpStroke
         return _height;
     }
 
-  private:
+private:
     [[nodiscard]] int Radius() const noexcept;
     // How much a dab moves pixels at a distance `u` (0 center, 1 rim) from its center.
     [[nodiscard]] float Weight(float u) const noexcept;
@@ -169,8 +171,7 @@ class WarpStroke
     [[nodiscard]] bool EnsureRegion(int x0, int y0, int x1, int y1, CancelToken cancellation, WorkObserver observer);
     [[nodiscard]] std::uint8_t* PixelAt(int x, int y) noexcept;
     [[nodiscard]] bool CopyCurrentRow(int row, std::uint8_t* output, CancelToken cancellation) const noexcept;
-    [[nodiscard]] std::vector<RasterTile> SnapshotTilesForWork(bool allTouched, CancelToken cancellation,
-                                                               WorkObserver observer);
+    [[nodiscard]] std::vector<RasterTile> SnapshotTilesForWork(bool allTouched, CancelToken cancellation, WorkObserver observer);
     [[nodiscard]] std::optional<SampleMemoryPlan> PlanSampleMemoryImpl(Vec2 point) const noexcept;
     [[nodiscard]] bool IsSamplePlanCurrent(const SampleMemoryPlan& plan) const noexcept;
 
@@ -185,13 +186,13 @@ class WarpStroke
     };
 #pragma warning(pop)
 
-    SmearMode _mode = SmearMode::Liquify;
+    SmearMode _mode  = SmearMode::Liquify;
     double _diameter = 2;
     double _hardness = 0;
     double _strength = 1;
-    int _width = 0;
-    int _height = 0;
-    int _columns = 0;
+    int _width       = 0;
+    int _height      = 0;
+    int _columns     = 0;
     std::vector<std::uint8_t> _pixels;
     std::optional<WarpSourceView> _sourceView;
     std::unique_ptr<PlacedRasterReader> _reader;
@@ -200,11 +201,11 @@ class WarpStroke
     std::weak_ptr<WarpStroke> _self;
     std::thread::id _workOwner;
     std::uint64_t _sampleSequence = 0;
-    std::uint64_t _planningBase = 0;
-    int _allocatedLeft = kMaxCanvasSide;
-    int _allocatedTop = kMaxCanvasSide;
-    int _allocatedRight = -1;
-    int _allocatedBottom = -1;
+    std::uint64_t _planningBase   = 0;
+    int _allocatedLeft            = kMaxCanvasSide;
+    int _allocatedTop             = kMaxCanvasSide;
+    int _allocatedRight           = -1;
+    int _allocatedBottom          = -1;
     std::vector<Vec2> _points;
     std::optional<Vec2> _last;
     std::vector<float> _carried; // Smudge: the color the brush carries, a (2r+1)² BGRA square

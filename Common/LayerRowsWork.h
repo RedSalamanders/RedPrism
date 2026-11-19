@@ -19,9 +19,8 @@ class LayerRowsWork;
 // authorize an unbounded owner copy.
 class LayerRowsAdmission final
 {
-  public:
-    [[nodiscard]] static LayerRowsAdmission Estimate(const CanvasDocument& source, std::size_t collapsedCount,
-                                                     std::wstring_view hiddenPattern) noexcept;
+public:
+    [[nodiscard]] static LayerRowsAdmission Estimate(const CanvasDocument& source, std::size_t collapsedCount, std::wstring_view hiddenPattern) noexcept;
     [[nodiscard]] bool IsValid() const noexcept
     {
         return _bytes != 0;
@@ -31,23 +30,23 @@ class LayerRowsAdmission final
         return _bytes;
     }
 
-  private:
+private:
     friend class LayerRowsWork;
     Guid _documentId;
-    const void* _layers = nullptr;
-    std::size_t _count = 0;
-    std::size_t _collapsedCount = 0;
-    std::size_t _patternUnits = 0;
-    std::size_t _slots = 0;
-    std::uint64_t _sourceBytes = 0;
+    const void* _layers          = nullptr;
+    std::size_t _count           = 0;
+    std::size_t _collapsedCount  = 0;
+    std::size_t _patternUnits    = 0;
+    std::size_t _slots           = 0;
+    std::uint64_t _sourceBytes   = 0;
     std::uint64_t _metadataBytes = 0;
-    std::uint64_t _bytes = 0;
+    std::uint64_t _bytes         = 0;
 };
 
 struct LayerRowsObserver final
 {
     void (*checkpoint)(void* context, std::size_t rowCount) noexcept = nullptr;
-    void* context = nullptr;
+    void* context                                                    = nullptr;
 };
 
 #pragma warning(push)
@@ -57,26 +56,31 @@ struct LayerRowsObserver final
 // original document/collapse/locale authority, charge retained rows and qualify DxUi notification/layout costs.
 class LayerRowsWork final : public DeferredReleaseNode
 {
-  private:
+private:
     struct ConstructionTag final
     {
     };
 
-  public:
+public:
     struct Release final
     {
         void operator()(LayerRowsWork* rows) const noexcept;
     };
     using Handle = std::unique_ptr<LayerRowsWork, Release>;
-    explicit LayerRowsWork(ConstructionTag) noexcept {}
-    LayerRowsWork(const LayerRowsWork&) = delete;
+    explicit LayerRowsWork(ConstructionTag) noexcept
+    {
+    }
+    LayerRowsWork(const LayerRowsWork&)            = delete;
     LayerRowsWork& operator=(const LayerRowsWork&) = delete;
-    LayerRowsWork(LayerRowsWork&&) = delete;
-    LayerRowsWork& operator=(LayerRowsWork&&) = delete;
+    LayerRowsWork(LayerRowsWork&&)                 = delete;
+    LayerRowsWork& operator=(LayerRowsWork&&)      = delete;
     // Worker only after admission. Top-first hierarchy semantics match LayerRows; collapsed descendants are
     // absent and effective visibility includes every ancestor. Pattern comes from the STRINGTABLE owner.
-    [[nodiscard]] static Handle Prepare(CanvasDocument source, std::vector<Guid> collapsed, std::wstring hiddenPattern,
-                                        const LayerRowsAdmission& admission, CancelToken cancellation = {},
+    [[nodiscard]] static Handle Prepare(CanvasDocument source,
+                                        std::vector<Guid> collapsed,
+                                        std::wstring hiddenPattern,
+                                        const LayerRowsAdmission& admission,
+                                        CancelToken cancellation   = {},
                                         LayerRowsObserver observer = {});
     [[nodiscard]] std::span<const HierarchyEntry> Rows() const noexcept
     {
@@ -102,7 +106,7 @@ class LayerRowsWork final : public DeferredReleaseNode
     // it borrows the held root and prepared index, never scans names/rows.
     [[nodiscard]] std::optional<std::size_t> FindVisibleRow(const Guid& id) const noexcept;
 
-  private:
+private:
     CanvasDocument _source;
     std::vector<Guid> _collapsed;
     std::wstring _hiddenPattern;

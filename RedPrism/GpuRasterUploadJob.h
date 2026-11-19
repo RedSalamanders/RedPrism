@@ -27,7 +27,7 @@ struct GpuRasterUploadInput final : DeferredReleaseNode
     }
     [[nodiscard]] std::uint64_t WorkerAllocationBytes() const noexcept;
 
-  private:
+private:
     friend class GpuRasterUploadJob;
     RasterUploadLayout _layout;
     std::vector<std::uint8_t> _sourceRow;
@@ -52,10 +52,10 @@ struct GpuRasterCreationRequest final
 // Borrowed views may not escape their admitted owner. Reset/replacement happens only after those users join.
 class GpuRasterCreatedResidency final
 {
-  public:
+public:
     GpuRasterCreatedResidency() noexcept = default;
     ~GpuRasterCreatedResidency();
-    GpuRasterCreatedResidency(const GpuRasterCreatedResidency&) = delete;
+    GpuRasterCreatedResidency(const GpuRasterCreatedResidency&)            = delete;
     GpuRasterCreatedResidency& operator=(const GpuRasterCreatedResidency&) = delete;
     GpuRasterCreatedResidency(GpuRasterCreatedResidency&& other) noexcept;
     GpuRasterCreatedResidency& operator=(GpuRasterCreatedResidency&& other) noexcept;
@@ -83,14 +83,14 @@ class GpuRasterCreatedResidency final
     }
     void ResetOwner() noexcept;
 
-  private:
+private:
     friend class GpuRasterUploadJob;
     GpuResidencyReservation _reservation; // last release, after graphics and CPU source ownership
     Raster _source;
     wil::com_ptr_nothrow<ID3D11Texture2D> _texture;
     wil::com_ptr_nothrow<ID3D11ShaderResourceView> _view;
     std::uint32_t _ownerThread = 0;
-    bool _mipsComplete = false;
+    bool _mipsComplete         = false;
 };
 
 // One DEFAULT destination, one original scheduler record and one serial base-level chunk at a time. The
@@ -106,12 +106,15 @@ class GpuRasterCreatedResidency final
 #pragma warning(disable : 4625 4626)
 class GpuRasterUploadJob : public Job, public GpuUploadReceiver
 {
-  public:
-    GpuRasterUploadJob(JobScheduler& scheduler, GpuUploadQueue& queue, std::unique_ptr<GpuRasterUploadInput> input,
-                       ID3D11Texture2D* destination, unsigned int subresource = 0, unsigned int x = 0,
-                       unsigned int y = 0) noexcept;
-    GpuRasterUploadJob(JobScheduler& scheduler, GpuUploadQueue& queue, std::unique_ptr<GpuRasterUploadInput> input,
-                       GpuRasterCreationRequest creation) noexcept;
+public:
+    GpuRasterUploadJob(JobScheduler& scheduler,
+                       GpuUploadQueue& queue,
+                       std::unique_ptr<GpuRasterUploadInput> input,
+                       ID3D11Texture2D* destination,
+                       unsigned int subresource = 0,
+                       unsigned int x           = 0,
+                       unsigned int y           = 0) noexcept;
+    GpuRasterUploadJob(JobScheduler& scheduler, GpuUploadQueue& queue, std::unique_ptr<GpuRasterUploadInput> input, GpuRasterCreationRequest creation) noexcept;
     ~GpuRasterUploadJob() override;
     [[nodiscard]] JobResult Run(JobContext& context) final;
     [[nodiscard]] bool DeferRetirement(JobResult result, JobTicket ticket) noexcept final;
@@ -120,7 +123,7 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     void UploadFinished(JobTicket ticket, HRESULT result) noexcept final;
     void Completed(JobResult result) noexcept final;
 
-  protected:
+protected:
     // Valid only during this owner's final callback. Borrow/adopt only after a Finished result. CPU input and
     // destination ownership retire through their respective worker and owner lanes after the callback.
     [[nodiscard]] ID3D11Texture2D* Destination() const noexcept
@@ -155,7 +158,7 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     [[nodiscard]] bool SetMipViewFailureForTest(unsigned int slice, HRESULT error) noexcept;
     [[nodiscard]] bool SetCreationFailureForTest(GpuRasterCreationFailure point, HRESULT error) noexcept;
 
-  private:
+private:
     enum class Phase
     {
         Prepare,
@@ -184,25 +187,25 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     wil::com_ptr_nothrow<ID3D11Texture2D> _destination;
     JobTicket _ticket;
     GpuUploadRows _rows;
-    RasterUploadRowObserver _observer = nullptr;
-    void* _observerContext = nullptr;
+    RasterUploadRowObserver _observer        = nullptr;
+    void* _observerContext                   = nullptr;
     PublicationObserver _publicationObserver = nullptr;
-    void* _publicationContext = nullptr;
+    void* _publicationContext                = nullptr;
     JobResult _workerResult;
-    HRESULT _queueResult = S_OK;
-    HRESULT _creationCaptureResult = S_OK;
-    std::uint64_t _chunk = 0;
-    unsigned int _mipSlice = 0;
+    HRESULT _queueResult            = S_OK;
+    HRESULT _creationCaptureResult  = S_OK;
+    std::uint64_t _chunk            = 0;
+    unsigned int _mipSlice          = 0;
     std::uint64_t _deviceGeneration = 0;
-    unsigned int _subresource = 0;
-    unsigned int _x = 0;
-    unsigned int _y = 0;
-    Phase _phase = Phase::Prepare;
-    bool _queueFinished = true;    // owner-only; a receiver never reads the unfinished worker's result
-    bool _workerPublished = false; // read on owner only after scheduler producer acknowledgement
-    bool _creationMode = false;
-    bool _canAdoptCreated = false;
-    bool _completeMips = false;
-    bool _mipsComplete = false;
+    unsigned int _subresource       = 0;
+    unsigned int _x                 = 0;
+    unsigned int _y                 = 0;
+    Phase _phase                    = Phase::Prepare;
+    bool _queueFinished             = true;  // owner-only; a receiver never reads the unfinished worker's result
+    bool _workerPublished           = false; // read on owner only after scheduler producer acknowledgement
+    bool _creationMode              = false;
+    bool _canAdoptCreated           = false;
+    bool _completeMips              = false;
+    bool _mipsComplete              = false;
 };
 #pragma warning(pop)

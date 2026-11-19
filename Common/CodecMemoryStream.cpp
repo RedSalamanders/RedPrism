@@ -10,27 +10,34 @@
 #include <wil/result.h>
 #pragma warning(pop)
 
-CodecMemoryStream::CodecMemoryStream(ConstructionKey, wil::unique_virtualalloc_ptr<std::uint8_t> buffer,
-                                     std::uint64_t capacity, std::uint64_t reserved, std::uint32_t pageBytes,
-                                     CancelToken cancellation, CodecMemoryObserver observer) noexcept
-    : _buffer(std::move(buffer)), _capacity(capacity), _reserved(reserved), _pageBytes(pageBytes),
-      _cancellation(cancellation), _observer(observer)
+CodecMemoryStream::CodecMemoryStream(ConstructionKey,
+                                     wil::unique_virtualalloc_ptr<std::uint8_t> buffer,
+                                     std::uint64_t capacity,
+                                     std::uint64_t reserved,
+                                     std::uint32_t pageBytes,
+                                     CancelToken cancellation,
+                                     CodecMemoryObserver observer) noexcept
+    : _buffer(std::move(buffer)),
+      _capacity(capacity),
+      _reserved(reserved),
+      _pageBytes(pageBytes),
+      _cancellation(cancellation),
+      _observer(observer)
 {
 }
 
-HRESULT CodecMemoryStream::Create(std::uint64_t capacity, CancelToken cancellation, CodecMemoryStream** output,
-                                  CodecMemoryObserver observer) noexcept
+HRESULT CodecMemoryStream::Create(std::uint64_t capacity, CancelToken cancellation, CodecMemoryStream** output, CodecMemoryObserver observer) noexcept
 {
-    if (!output)
+    if (! output)
         return E_POINTER;
     *output = nullptr;
-    if (!capacity || capacity > kMaximumBytes)
+    if (! capacity || capacity > kMaximumBytes)
         return E_INVALIDARG;
     if (cancellation.IsCancelled())
         return E_ABORT;
     SYSTEM_INFO info{};
     GetSystemInfo(&info);
-    if (!info.dwPageSize || info.dwPageSize > 64 * 1024)
+    if (! info.dwPageSize || info.dwPageSize > 64 * 1024)
         return E_UNEXPECTED; // retain a fixed conservative page-rounding allowance in graph admission
     const auto reserved = ((capacity + info.dwPageSize - 1) / info.dwPageSize) * info.dwPageSize;
     if (observer.fault)
@@ -38,7 +45,7 @@ HRESULT CodecMemoryStream::Create(std::uint64_t capacity, CancelToken cancellati
             return HRESULT_FROM_WIN32(error);
     wil::unique_virtualalloc_ptr<std::uint8_t> buffer(
         static_cast<std::uint8_t*>(VirtualAlloc(nullptr, static_cast<SIZE_T>(reserved), MEM_RESERVE, PAGE_READWRITE)));
-    if (!buffer)
+    if (! buffer)
         return HRESULT_FROM_WIN32(GetLastError());
     if (observer.reached)
         observer.reached(observer.context, CodecMemoryStage::Reserve, reserved);
@@ -46,9 +53,8 @@ HRESULT CodecMemoryStream::Create(std::uint64_t capacity, CancelToken cancellati
         return E_ABORT;
     try
     {
-        auto stream = std::make_unique<CodecMemoryStream>(ConstructionKey{}, std::move(buffer), capacity, reserved,
-                                                          info.dwPageSize, cancellation, observer);
-        *output = stream.release(); // transfer the initial COM reference
+        auto stream = std::make_unique<CodecMemoryStream>(ConstructionKey{}, std::move(buffer), capacity, reserved, info.dwPageSize, cancellation, observer);
+        *output     = stream.release(); // transfer the initial COM reference
         return S_OK;
     }
     catch (const std::bad_alloc&)
@@ -90,8 +96,7 @@ HRESULT CodecMemoryStream::Ensure(std::uint64_t bytes) noexcept
             if (const auto error = _observer.fault(_observer.context, CodecMemoryStage::Commit))
                 return HRESULT_FROM_WIN32(error);
         const auto next = (std::min)(target, _committed + 64 * 1024);
-        if (!VirtualAlloc(_buffer.get() + _committed, static_cast<SIZE_T>(next - _committed), MEM_COMMIT,
-                          PAGE_READWRITE))
+        if (! VirtualAlloc(_buffer.get() + _committed, static_cast<SIZE_T>(next - _committed), MEM_COMMIT, PAGE_READWRITE))
             return HRESULT_FROM_WIN32(GetLastError());
         _committed = next;
         Reached(CodecMemoryStage::Commit, _committed);
@@ -115,7 +120,7 @@ HRESULT CodecMemoryStream::Zero(std::uint64_t first, std::uint64_t end) noexcept
 
 HRESULT CodecMemoryStream::QueryInterface(REFIID iid, void** result) noexcept
 {
-    if (!result)
+    if (! result)
         return E_POINTER;
     *result = nullptr;
     if (iid != IID_IUnknown && iid != IID_ISequentialStream && iid != IID_IStream)
@@ -131,7 +136,7 @@ ULONG CodecMemoryStream::AddRef() noexcept
 ULONG CodecMemoryStream::Release() noexcept
 {
     const auto references = _references.fetch_sub(1, std::memory_order_acq_rel) - 1;
-    if (!references)
+    if (! references)
     {
         const std::unique_ptr<CodecMemoryStream> retired(this);
     }
@@ -142,15 +147,15 @@ HRESULT CodecMemoryStream::Read(void* output, ULONG count, ULONG* received) noex
 {
     if (received)
         *received = 0;
-    if (!output && count)
+    if (! output && count)
         return E_POINTER;
     if (_cancellation.IsCancelled())
         return E_ABORT;
     const auto available = _cursor < _size ? _size - _cursor : 0;
-    const auto total = static_cast<ULONG>((std::min)(static_cast<std::uint64_t>(count), available));
-    auto* destination = static_cast<std::uint8_t*>(output);
-    ULONG done = 0;
-    if (total && !destination)
+    const auto total     = static_cast<ULONG>((std::min)(static_cast<std::uint64_t>(count), available));
+    auto* destination    = static_cast<std::uint8_t*>(output);
+    ULONG done           = 0;
+    if (total && ! destination)
         return E_POINTER;
     while (done < total)
     {
@@ -171,7 +176,7 @@ HRESULT CodecMemoryStream::Write(const void* input, ULONG count, ULONG* written)
 {
     if (written)
         *written = 0;
-    if (!input && count)
+    if (! input && count)
         return E_POINTER;
     if (_cancellation.IsCancelled())
         return E_ABORT;
@@ -180,7 +185,7 @@ HRESULT CodecMemoryStream::Write(const void* input, ULONG count, ULONG* written)
         _limitExceeded = true;
         return STG_E_MEDIUMFULL;
     }
-    if (!count)
+    if (! count)
         return S_OK;
     const auto previouslyCommitted = _committed;
     RETURN_IF_FAILED(Ensure(_cursor + count));
@@ -191,7 +196,7 @@ HRESULT CodecMemoryStream::Write(const void* input, ULONG count, ULONG* written)
         _size = _cursor;
     }
     const auto* source = static_cast<const std::uint8_t*>(input);
-    ULONG done = 0;
+    ULONG done         = 0;
     while (done < count)
     {
         if (_cancellation.IsCancelled())
@@ -272,19 +277,19 @@ HRESULT CodecMemoryStream::UnlockRegion(ULARGE_INTEGER, ULARGE_INTEGER, DWORD) n
 }
 HRESULT CodecMemoryStream::Stat(STATSTG* result, DWORD) noexcept
 {
-    if (!result)
+    if (! result)
         return E_POINTER;
     *result = {};
     if (_cancellation.IsCancelled())
         return E_ABORT;
-    result->type = STGTY_STREAM;
+    result->type            = STGTY_STREAM;
     result->cbSize.QuadPart = _size;
-    result->grfMode = STGM_READWRITE;
+    result->grfMode         = STGM_READWRITE;
     return S_OK;
 }
 HRESULT CodecMemoryStream::Clone(IStream** result) noexcept
 {
-    if (!result)
+    if (! result)
         return E_POINTER;
     *result = nullptr;
     return E_NOTIMPL;

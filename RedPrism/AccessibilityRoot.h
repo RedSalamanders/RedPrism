@@ -11,11 +11,9 @@
 // The UIA root of the main window (Specs/UI/UI_ApplicationChrome.md, Accessibility): the HWND's own provider with
 // the DxUi chrome's fragment root as its one child, so screen readers walk the menus, rail, headers, layers and
 // panels. Everything runs on the UI thread (server-side provider with COM threading); Disconnect retires it.
-class WindowAccessibilityRoot final : public IRawElementProviderSimple,
-                                      public IRawElementProviderFragment,
-                                      public IRawElementProviderFragmentRoot
+class WindowAccessibilityRoot final : public IRawElementProviderSimple, public IRawElementProviderFragment, public IRawElementProviderFragmentRoot
 {
-  public:
+public:
     static HRESULT Create(HWND window, wil::com_ptr_nothrow<WindowAccessibilityRoot>& result) noexcept;
 
     // The chrome's fragment root (null until DxUi attached its accessibility).
@@ -35,24 +33,22 @@ class WindowAccessibilityRoot final : public IRawElementProviderSimple,
     HRESULT STDMETHODCALLTYPE GetPropertyValue(PROPERTYID property, VARIANT* value) noexcept override;
     HRESULT STDMETHODCALLTYPE get_HostRawElementProvider(IRawElementProviderSimple** provider) noexcept override;
     // IRawElementProviderFragment
-    HRESULT STDMETHODCALLTYPE Navigate(NavigateDirection direction,
-                                       IRawElementProviderFragment** result) noexcept override;
+    HRESULT STDMETHODCALLTYPE Navigate(NavigateDirection direction, IRawElementProviderFragment** result) noexcept override;
     HRESULT STDMETHODCALLTYPE GetRuntimeId(SAFEARRAY** runtimeId) noexcept override;
     HRESULT STDMETHODCALLTYPE get_BoundingRectangle(UiaRect* rectangle) noexcept override;
     HRESULT STDMETHODCALLTYPE GetEmbeddedFragmentRoots(SAFEARRAY** roots) noexcept override;
     HRESULT STDMETHODCALLTYPE SetFocus() noexcept override;
     HRESULT STDMETHODCALLTYPE get_FragmentRoot(IRawElementProviderFragmentRoot** root) noexcept override;
     // IRawElementProviderFragmentRoot
-    HRESULT STDMETHODCALLTYPE ElementProviderFromPoint(double x, double y,
-                                                       IRawElementProviderFragment** result) noexcept override;
+    HRESULT STDMETHODCALLTYPE ElementProviderFromPoint(double x, double y, IRawElementProviderFragment** result) noexcept override;
     HRESULT STDMETHODCALLTYPE GetFocus(IRawElementProviderFragment** result) noexcept override;
 
-  private:
+private:
     explicit WindowAccessibilityRoot(HWND window) noexcept;
     ~WindowAccessibilityRoot() = default;
 
     LONG _references = 1;
-    HWND _window = nullptr;
+    HWND _window     = nullptr;
     wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> _chrome;
     bool _chromeFocused = false;
 };

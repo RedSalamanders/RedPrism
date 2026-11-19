@@ -12,18 +12,18 @@
 
 namespace
 {
-constexpr float kCardWidthDip = 300.0f;
+constexpr float kCardWidthDip   = 300.0f;
 constexpr float kCardPaddingDip = 12.0f;
-constexpr float kRowDip = 28.0f;
-constexpr float kRowGapDip = 8.0f;
-constexpr float kMarginDip = 8.0f;
-constexpr float kButtonDip = 30.0f;
+constexpr float kRowDip         = 28.0f;
+constexpr float kRowGapDip      = 8.0f;
+constexpr float kMarginDip      = 8.0f;
+constexpr float kButtonDip      = 30.0f;
 } // namespace
 
 void ChromeHost::LayerTreeModel::OnTreeItemInvoked(uint64_t itemId)
 {
     const auto index = FindVisibleItemById(itemId);
-    if (!index)
+    if (! index)
     {
         return;
     }
@@ -47,21 +47,20 @@ void ChromeHost::BuildRenameCard(DxUi::Panel& root)
     _renameField->SetPlaceholder(LoadStringResource(nullptr, IDS_RENAME_NAME));
     _renameField->SetOnSubmitted([this] { CloseRenameCard(true); });
     _renameCancel = MakeButton(*_renameCard, {.labelId = IDS_TRANSFORM_CANCEL}, [this] { CloseRenameCard(false); });
-    _renameOk =
-        MakeButton(*_renameCard, {.labelId = IDS_ADJUST_OK, .primary = true}, [this] { CloseRenameCard(true); });
+    _renameOk     = MakeButton(*_renameCard, {.labelId = IDS_ADJUST_OK, .primary = true}, [this] { CloseRenameCard(true); });
 }
 
 void ChromeHost::ArrangeRenameCard(float right, float top) noexcept
 {
-    if (!_renameCard || !_renameCard->IsVisible())
+    if (! _renameCard || ! _renameCard->IsVisible())
     {
         return;
     }
-    const float width = std::min(kCardWidthDip, std::max(200.0f, right - kRailWidthDip - 2.0f * kMarginDip));
-    const float left = right - kMarginDip - width;
-    const float innerLeft = left + kCardPaddingDip;
+    const float width      = std::min(kCardWidthDip, std::max(200.0f, right - kRailWidthDip - 2.0f * kMarginDip));
+    const float left       = right - kMarginDip - width;
+    const float innerLeft  = left + kCardPaddingDip;
     const float innerRight = left + width - kCardPaddingDip;
-    float y = top + kMarginDip + kCardPaddingDip;
+    float y                = top + kMarginDip + kCardPaddingDip;
     PlaceControl(_renameTitle, D2D1::RectF(innerLeft, y, innerRight, y + 24.0f));
     y += 24.0f + kRowGapDip;
     PlaceControl(_renameField, D2D1::RectF(innerLeft, y, innerRight, y + kRowDip));
@@ -74,7 +73,7 @@ void ChromeHost::ArrangeRenameCard(float right, float top) noexcept
 
 void ChromeHost::OpenRenameCard(const std::wstring& name) noexcept
 {
-    if (!_renameCard || !_renameField)
+    if (! _renameCard || ! _renameField)
     {
         return;
     }
@@ -89,7 +88,7 @@ void ChromeHost::OpenRenameCard(const std::wstring& name) noexcept
 
 void ChromeHost::CloseRenameCard(bool commit) noexcept
 {
-    if (!RenameCardOpen())
+    if (! RenameCardOpen())
     {
         return;
     }

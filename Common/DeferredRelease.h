@@ -9,7 +9,7 @@
 struct alignas(16) DeferredReleaseNode
 {
     void* link[2]{};
-    std::uint64_t bytes = 0;
+    std::uint64_t bytes                            = 0;
     void (*destroy)(DeferredReleaseNode*) noexcept = nullptr;
 };
 static_assert(offsetof(DeferredReleaseNode, link) == 0);
@@ -21,7 +21,7 @@ namespace DeferredReleaseDetail
 struct Sink final
 {
     void (*enqueue)(void*, DeferredReleaseNode&) noexcept = nullptr;
-    void* context = nullptr;
+    void* context                                         = nullptr;
 };
 // Only the owner/UI thread is eligible to defer. Other threads have an empty slot and destroy inline. A TLS
 // pair removes the load-function/load-context teardown race of a process-global callback without adding a lock,
@@ -32,11 +32,10 @@ inline thread_local Sink sink;
 // Install/clear on the same owning thread. Exactly one sink per thread; its context outlives Clear followed by
 // joining/draining the consumer. Shutdown clears after owner cleanup and before final worker retirement/pool
 // teardown, so no retired node outlives its consumer and subsequent owner-thread frees run inline.
-[[nodiscard]] inline bool InstallDeferredReleaseSink(void (*enqueue)(void*, DeferredReleaseNode&) noexcept,
-                                                     void* context) noexcept
+[[nodiscard]] inline bool InstallDeferredReleaseSink(void (*enqueue)(void*, DeferredReleaseNode&) noexcept, void* context) noexcept
 {
     auto& sink = DeferredReleaseDetail::sink;
-    if (!enqueue || !context || sink.enqueue)
+    if (! enqueue || ! context || sink.enqueue)
     {
         return false;
     }
@@ -47,7 +46,7 @@ inline thread_local Sink sink;
 [[nodiscard]] inline bool ClearDeferredReleaseSink(void* context) noexcept
 {
     auto& sink = DeferredReleaseDetail::sink;
-    if (!sink.enqueue || sink.context != context)
+    if (! sink.enqueue || sink.context != context)
     {
         return false;
     }
@@ -63,12 +62,10 @@ enum class DeferredReleasePolicy : std::uint8_t
 
 // Complete metadata graphs can have expensive destruction below the pixel-size threshold. Their producers
 // choose AlwaysOnOwner while still declaring their actual conservative ownership bound in node.bytes.
-[[nodiscard]] inline bool TryDeferRelease(DeferredReleaseNode& node,
-                                          DeferredReleasePolicy policy = DeferredReleasePolicy::SizeThreshold) noexcept
+[[nodiscard]] inline bool TryDeferRelease(DeferredReleaseNode& node, DeferredReleasePolicy policy = DeferredReleasePolicy::SizeThreshold) noexcept
 {
     const auto sink = DeferredReleaseDetail::sink;
-    if (!sink.enqueue || !node.destroy ||
-        (policy == DeferredReleasePolicy::SizeThreshold && node.bytes < kDeferredReleaseThreshold))
+    if (! sink.enqueue || ! node.destroy || (policy == DeferredReleasePolicy::SizeThreshold && node.bytes < kDeferredReleaseThreshold))
     {
         return false;
     }

@@ -19,12 +19,12 @@
 
 namespace
 {
-constexpr DWORD kFailureTimeoutMs = 10000;
+constexpr DWORD kFailureTimeoutMs           = 10000;
 constexpr std::uint64_t kInitialReservation = 4096;
-constexpr std::uint64_t kGrownReservation = 8192;
-constexpr std::uint64_t kFinalReservation = 12288;
-constexpr std::uint64_t kWideAvailable = kMemoryAdmissionHeadroomBytes + 4 * 1024 * 1024;
-constexpr std::uint64_t kSerialKey = 0x52455347524F5754ULL;
+constexpr std::uint64_t kGrownReservation   = 8192;
+constexpr std::uint64_t kFinalReservation   = 12288;
+constexpr std::uint64_t kWideAvailable      = kMemoryAdmissionHeadroomBytes + 4 * 1024 * 1024;
+constexpr std::uint64_t kSerialKey          = 0x52455347524F5754ULL;
 
 struct Checks final
 {
@@ -58,11 +58,11 @@ struct MemoryProbe final
 {
     MemorySnapshot snapshot{kWideAvailable, kWideAvailable};
     std::atomic<unsigned int> samples{0};
-    bool fail = false; // Owner-only: MemorySource is sampled only by owner operations.
+    bool fail                     = false; // Owner-only: MemorySource is sampled only by owner operations.
     JobScheduler* resumeScheduler = nullptr;
     JobTicket resumeTicket{};
     bool resumeDuringNextSample = false;
-    bool resumeResult = false;
+    bool resumeResult           = false;
 
     static bool Sample(void* context, MemorySnapshot& output) noexcept
     {
@@ -71,7 +71,7 @@ struct MemoryProbe final
         if (probe.resumeDuringNextSample)
         {
             probe.resumeDuringNextSample = false;
-            probe.resumeResult = probe.resumeScheduler && probe.resumeScheduler->Resume(probe.resumeTicket);
+            probe.resumeResult           = probe.resumeScheduler && probe.resumeScheduler->Resume(probe.resumeTicket);
         }
         if (probe.fail)
             return false;
@@ -88,15 +88,20 @@ struct MemoryProbe final
 struct StageState final
 {
     StageState()
-        : firstEntered(Event()), firstRelease(Event()), suspended(Event()), secondEntered(Event()),
-          secondRelease(Event()), completed(Event()), successorEntered(Event()), successorCompleted(Event())
+        : firstEntered(Event()),
+          firstRelease(Event()),
+          suspended(Event()),
+          secondEntered(Event()),
+          secondRelease(Event()),
+          completed(Event()),
+          successorEntered(Event()),
+          successorCompleted(Event())
     {
     }
 
     [[nodiscard]] bool EventsValid() const noexcept
     {
-        return firstEntered && firstRelease && suspended && secondEntered && secondRelease && completed &&
-               successorEntered && successorCompleted;
+        return firstEntered && firstRelease && suspended && secondEntered && secondRelease && completed && successorEntered && successorCompleted;
     }
 
     JobScheduler* scheduler = nullptr;
@@ -114,13 +119,13 @@ struct StageState final
     std::atomic<bool> acknowledgementObserved{false};
     std::atomic<bool> finalCallbackPublished{false};
     JobTicket ticket{};
-    JobStatus finalStatus = JobStatus::Failed;
-    unsigned int deferrals = 0;
-    unsigned int completions = 0;
+    JobStatus finalStatus     = JobStatus::Failed;
+    unsigned int deferrals    = 0;
+    unsigned int completions  = 0;
     std::int32_t retainResult = E_UNEXPECTED;
     RetainedMemoryTicket retained{};
     std::uint64_t chargeBeforeRetain = 0;
-    std::uint64_t chargeAfterRetain = 0;
+    std::uint64_t chargeAfterRetain  = 0;
 };
 #pragma warning(pop)
 
@@ -130,8 +135,10 @@ struct StageState final
 #pragma warning(disable : 4626 5027)
 class TwoStageJob final : public Job
 {
-  public:
-    explicit TwoStageJob(StageState& state) noexcept : _state(state) {}
+public:
+    explicit TwoStageJob(StageState& state) noexcept : _state(state)
+    {
+    }
 
     JobResult Run(JobContext& context) override
     {
@@ -159,8 +166,7 @@ class TwoStageJob final : public Job
             return false;
         ++_state.deferrals;
         _state.ticket = ticket;
-        _state.acknowledgementObserved.store(_state.producedBytes.load(std::memory_order_acquire) == 0xA17E5EEDULL,
-                                             std::memory_order_release);
+        _state.acknowledgementObserved.store(_state.producedBytes.load(std::memory_order_acquire) == 0xA17E5EEDULL, std::memory_order_release);
         (void)SetEvent(_state.suspended.get());
         return true;
     }
@@ -168,7 +174,7 @@ class TwoStageJob final : public Job
     void Completed(JobResult result) noexcept override
     {
         ++_state.completions;
-        _state.finalStatus = result.status;
+        _state.finalStatus        = result.status;
         _state.chargeBeforeRetain = _state.scheduler->ReservedMemoryBytes();
         if (result.status == JobStatus::Finished)
             _state.retainResult = _state.scheduler->RetainMemory(_state.ticket, _state.retained);
@@ -177,7 +183,7 @@ class TwoStageJob final : public Job
         (void)SetEvent(_state.completed.get());
     }
 
-  private:
+private:
     StageState& _state;
 };
 #pragma warning(pop)
@@ -188,7 +194,9 @@ class TwoStageJob final : public Job
 #pragma warning(disable : 4625 4626 5026 5027)
 struct SuccessorState final
 {
-    explicit SuccessorState(StageState& predecessor) noexcept : predecessor_(predecessor) {}
+    explicit SuccessorState(StageState& predecessor) noexcept : predecessor_(predecessor)
+    {
+    }
     StageState& predecessor_;
     std::atomic<bool> entered{false};
     std::atomic<bool> sawFinalCallback{false};
@@ -202,12 +210,13 @@ struct SuccessorState final
 #pragma warning(disable : 4626 5027)
 class SuccessorJob final : public Job
 {
-  public:
-    explicit SuccessorJob(SuccessorState& state) noexcept : _state(state) {}
+public:
+    explicit SuccessorJob(SuccessorState& state) noexcept : _state(state)
+    {
+    }
     JobResult Run(JobContext&) override
     {
-        _state.sawFinalCallback.store(_state.predecessor_.finalCallbackPublished.load(std::memory_order_acquire),
-                                      std::memory_order_release);
+        _state.sawFinalCallback.store(_state.predecessor_.finalCallbackPublished.load(std::memory_order_acquire), std::memory_order_release);
         _state.entered.store(true, std::memory_order_release);
         (void)SetEvent(_state.predecessor_.successorEntered.get());
         return {};
@@ -218,7 +227,7 @@ class SuccessorJob final : public Job
         (void)SetEvent(_state.predecessor_.successorCompleted.get());
     }
 
-  private:
+private:
     SuccessorState& _state;
 };
 #pragma warning(pop)
@@ -226,9 +235,9 @@ class SuccessorJob final : public Job
 JobOptions OriginalOptions() noexcept
 {
     JobOptions options{};
-    options.kind = JobClass::Commit;
-    options.serialKey = kSerialKey;
-    options.memoryBytes = kInitialReservation;
+    options.kind                  = JobClass::Commit;
+    options.serialKey             = kSerialKey;
+    options.memoryBytes           = kInitialReservation;
     options.reserveRetainedMemory = true;
     return options;
 }
@@ -246,8 +255,7 @@ bool WaitForGate(JobScheduler& scheduler, HANDLE gate, Checks& checks, const cha
             return false;
         }
         const DWORD remaining = static_cast<DWORD>(deadline - now);
-        const DWORD waited =
-            WaitForMultipleObjects(static_cast<DWORD>(handles.size()), handles.data(), FALSE, remaining);
+        const DWORD waited    = WaitForMultipleObjects(static_cast<DWORD>(handles.size()), handles.data(), FALSE, remaining);
         if (waited == WAIT_OBJECT_0)
         {
             checks.Setup(name, true);
@@ -276,20 +284,19 @@ void ReleaseAll(StageState& state) noexcept
 
 bool StartSuspended(JobScheduler& scheduler, StageState& state, Checks& checks, JobTicket& ticket)
 {
-    state.scheduler = &scheduler;
-    std::unique_ptr<Job> job = std::make_unique<TwoStageJob>(state);
+    state.scheduler              = &scheduler;
+    std::unique_ptr<Job> job     = std::make_unique<TwoStageJob>(state);
     const std::int32_t submitted = scheduler.Submit(job, OriginalOptions(), ticket);
-    checks.Setup("initial-job-admitted-with-original-ticket", submitted == S_OK && !job && ticket.generation != 0);
+    checks.Setup("initial-job-admitted-with-original-ticket", submitted == S_OK && ! job && ticket.generation != 0);
     if (submitted != S_OK)
         return false;
-    if (!WaitForGate(scheduler, state.firstEntered.get(), checks, "first-stage-entered-by-event"))
+    if (! WaitForGate(scheduler, state.firstEntered.get(), checks, "first-stage-entered-by-event"))
         return false;
     (void)SetEvent(state.firstRelease.get());
-    if (!WaitForGate(scheduler, state.suspended.get(), checks, "joined-first-stage-reaches-owner-suspension"))
+    if (! WaitForGate(scheduler, state.suspended.get(), checks, "joined-first-stage-reaches-owner-suspension"))
         return false;
     checks.Expect("producer-ack-published-before-suspension",
-                  state.acknowledgementObserved.load(std::memory_order_acquire) && state.deferrals == 1 &&
-                      state.ticket == ticket);
+                  state.acknowledgementObserved.load(std::memory_order_acquire) && state.deferrals == 1 && state.ticket == ticket);
     return true;
 }
 
@@ -305,7 +312,7 @@ void RunGrowthAndFifo(Checks& checks)
     StageState state;
     checks.Setup("success-events-created", state.EventsValid());
     JobTicket ticket{};
-    if (!StartSuspended(scheduler, state, checks, ticket))
+    if (! StartSuspended(scheduler, state, checks, ticket))
     {
         ReleaseAll(state);
         scheduler.Close();
@@ -314,82 +321,73 @@ void RunGrowthAndFifo(Checks& checks)
 
     const unsigned int initialSamples = memory.samples.load(std::memory_order_relaxed);
     checks.Expect("success.grow-to-eight-kib-with-one-fresh-sample",
-                  scheduler.IncreaseReservation(ticket, kGrownReservation) == S_OK &&
-                      scheduler.ReservedMemoryBytes() == kGrownReservation &&
+                  scheduler.IncreaseReservation(ticket, kGrownReservation) == S_OK && scheduler.ReservedMemoryBytes() == kGrownReservation &&
                       memory.samples.load(std::memory_order_relaxed) == initialSamples + 1);
     checks.Expect("success.grow-to-twelve-kib-with-next-fresh-sample",
-                  scheduler.IncreaseReservation(ticket, kFinalReservation) == S_OK &&
-                      scheduler.ReservedMemoryBytes() == kFinalReservation &&
+                  scheduler.IncreaseReservation(ticket, kFinalReservation) == S_OK && scheduler.ReservedMemoryBytes() == kFinalReservation &&
                       memory.samples.load(std::memory_order_relaxed) == initialSamples + 2);
     const unsigned int beforeNoOp = memory.samples.load(std::memory_order_relaxed);
     checks.Expect("success.same-total-is-no-op-without-sample",
-                  scheduler.IncreaseReservation(ticket, kFinalReservation) == S_OK &&
-                      memory.samples.load(std::memory_order_relaxed) == beforeNoOp &&
+                  scheduler.IncreaseReservation(ticket, kFinalReservation) == S_OK && memory.samples.load(std::memory_order_relaxed) == beforeNoOp &&
                       scheduler.ReservedMemoryBytes() == kFinalReservation);
     checks.Expect("success.shrink-refused-without-changing-charge",
-                  scheduler.IncreaseReservation(ticket, kGrownReservation) == E_INVALIDARG &&
-                      scheduler.ReservedMemoryBytes() == kFinalReservation);
+                  scheduler.IncreaseReservation(ticket, kGrownReservation) == E_INVALIDARG && scheduler.ReservedMemoryBytes() == kFinalReservation);
     const JobTicket staleGeneration{ticket.slot, ticket.generation + 1};
-    checks.Expect("success.stale-generation-refused", static_cast<HRESULT>(scheduler.IncreaseReservation(
-                                                          staleGeneration, kFinalReservation + 4096)) == invalidState &&
-                                                          scheduler.ReservedMemoryBytes() == kFinalReservation);
+    checks.Expect("success.stale-generation-refused",
+                  static_cast<HRESULT>(scheduler.IncreaseReservation(staleGeneration, kFinalReservation + 4096)) == invalidState &&
+                      scheduler.ReservedMemoryBytes() == kFinalReservation);
     const JobTicket invalidSlot{JobScheduler::kCapacity, ticket.generation};
-    checks.Expect("success.invalid-slot-is-invalid-argument",
-                  scheduler.IncreaseReservation(invalidSlot, kFinalReservation) == E_INVALIDARG);
+    checks.Expect("success.invalid-slot-is-invalid-argument", scheduler.IncreaseReservation(invalidSlot, kFinalReservation) == E_INVALIDARG);
 
     SuccessorState successorState{state};
     std::unique_ptr<Job> successor = std::make_unique<SuccessorJob>(successorState);
     JobTicket successorTicket{};
     JobOptions successorOptions{};
-    successorOptions.kind = JobClass::Commit;
+    successorOptions.kind      = JobClass::Commit;
     successorOptions.serialKey = kSerialKey;
     checks.Expect("success.same-key-successor-admitted-but-blocked",
-                  scheduler.Submit(successor, successorOptions, successorTicket) == S_OK && !successor &&
-                      !successorState.entered.load(std::memory_order_acquire));
+                  scheduler.Submit(successor, successorOptions, successorTicket) == S_OK && ! successor &&
+                      ! successorState.entered.load(std::memory_order_acquire));
 
-    const bool firstResume = scheduler.Resume(ticket);
-    const bool duplicateResumeRefused = !scheduler.Resume(ticket);
+    const bool firstResume            = scheduler.Resume(ticket);
+    const bool duplicateResumeRefused = ! scheduler.Resume(ticket);
     checks.Expect("success.original-ticket-resumes-once", firstResume && duplicateResumeRefused);
     checks.Expect("success.resuming-stage-cannot-grow",
                   static_cast<HRESULT>(scheduler.IncreaseReservation(ticket, kFinalReservation + 1)) == invalidState &&
                       scheduler.ReservedMemoryBytes() == kFinalReservation);
-    if (!WaitForGate(scheduler, state.secondEntered.get(), checks, "success-second-stage-enters-after-resume"))
+    if (! WaitForGate(scheduler, state.secondEntered.get(), checks, "success-second-stage-enters-after-resume"))
     {
         ReleaseAll(state);
         scheduler.Close();
         return;
     }
-    checks.Expect("success-second-context-borrows-grown-total",
-                  state.secondStageReservation.load(std::memory_order_acquire) == kFinalReservation);
-    checks.Expect("success-running-stage-cannot-grow", static_cast<HRESULT>(scheduler.IncreaseReservation(
-                                                           ticket, kFinalReservation + 4096)) == invalidState &&
-                                                           scheduler.ReservedMemoryBytes() == kFinalReservation);
+    checks.Expect("success-second-context-borrows-grown-total", state.secondStageReservation.load(std::memory_order_acquire) == kFinalReservation);
+    checks.Expect("success-running-stage-cannot-grow",
+                  static_cast<HRESULT>(scheduler.IncreaseReservation(ticket, kFinalReservation + 4096)) == invalidState &&
+                      scheduler.ReservedMemoryBytes() == kFinalReservation);
     (void)SetEvent(state.secondRelease.get());
-    if (!WaitForCompletion(scheduler, state, checks, "success-final-callback-drained"))
+    if (! WaitForCompletion(scheduler, state, checks, "success-final-callback-drained"))
     {
         ReleaseAll(state);
         scheduler.Close();
         return;
     }
-    if (!WaitForGate(scheduler, state.successorEntered.get(), checks, "success-successor-enters-after-final-callback"))
+    if (! WaitForGate(scheduler, state.successorEntered.get(), checks, "success-successor-enters-after-final-callback"))
     {
         scheduler.Close();
         return;
     }
-    if (!WaitForGate(scheduler, state.successorCompleted.get(), checks, "success-successor-final-callback-drained"))
+    if (! WaitForGate(scheduler, state.successorCompleted.get(), checks, "success-successor-final-callback-drained"))
     {
         scheduler.Close();
         return;
     }
     checks.Expect("success-final-retain-transfers-entire-grown-charge",
-                  state.finalStatus == JobStatus::Finished && state.retainResult == S_OK &&
-                      state.chargeBeforeRetain == kFinalReservation && state.chargeAfterRetain == kFinalReservation &&
-                      scheduler.ReservedMemoryBytes() == kFinalReservation);
+                  state.finalStatus == JobStatus::Finished && state.retainResult == S_OK && state.chargeBeforeRetain == kFinalReservation &&
+                      state.chargeAfterRetain == kFinalReservation && scheduler.ReservedMemoryBytes() == kFinalReservation);
     checks.Expect("success-successor-observes-predecessor-final-callback",
-                  successorState.sawFinalCallback.load(std::memory_order_acquire) &&
-                      successorState.completions.load(std::memory_order_relaxed) == 1);
-    checks.Expect("success-retained-ticket-releases-grown-charge",
-                  scheduler.ReleaseRetainedMemory(state.retained) && scheduler.ReservedMemoryBytes() == 0);
+                  successorState.sawFinalCallback.load(std::memory_order_acquire) && successorState.completions.load(std::memory_order_relaxed) == 1);
+    checks.Expect("success-retained-ticket-releases-grown-charge", scheduler.ReleaseRetainedMemory(state.retained) && scheduler.ReservedMemoryBytes() == 0);
     scheduler.Close();
 }
 
@@ -404,7 +402,7 @@ void RunRefusalAndRecovery(Checks& checks)
     StageState state;
     checks.Setup("refusal-events-created", state.EventsValid());
     JobTicket ticket{};
-    if (!StartSuspended(scheduler, state, checks, ticket))
+    if (! StartSuspended(scheduler, state, checks, ticket))
     {
         ReleaseAll(state);
         scheduler.Close();
@@ -412,40 +410,34 @@ void RunRefusalAndRecovery(Checks& checks)
     }
     const auto unchanged = [&]() noexcept
     {
-        return scheduler.ReservedMemoryBytes() == kInitialReservation && state.deferrals == 1 &&
-               state.ticket == ticket && state.runs.load(std::memory_order_relaxed) == 1;
+        return scheduler.ReservedMemoryBytes() == kInitialReservation && state.deferrals == 1 && state.ticket == ticket &&
+               state.runs.load(std::memory_order_relaxed) == 1;
     };
 
     memory.fail = true;
     checks.Expect("refusal.failed-fresh-sample-is-out-of-memory-and-atomic",
                   scheduler.IncreaseReservation(ticket, kGrownReservation) == E_OUTOFMEMORY && unchanged());
-    memory.fail = false;
+    memory.fail     = false;
     memory.snapshot = {kMemoryAdmissionHeadroomBytes + kInitialReservation + 4095, kWideAvailable};
-    checks.Expect("refusal.physical-capacity-shortfall-is-atomic",
-                  scheduler.IncreaseReservation(ticket, kGrownReservation) == E_OUTOFMEMORY && unchanged());
+    checks.Expect("refusal.physical-capacity-shortfall-is-atomic", scheduler.IncreaseReservation(ticket, kGrownReservation) == E_OUTOFMEMORY && unchanged());
     memory.snapshot = {kWideAvailable, kMemoryAdmissionHeadroomBytes + kInitialReservation + 4095};
-    checks.Expect("refusal.commit-capacity-shortfall-is-atomic",
-                  scheduler.IncreaseReservation(ticket, kGrownReservation) == E_OUTOFMEMORY && unchanged());
+    checks.Expect("refusal.commit-capacity-shortfall-is-atomic", scheduler.IncreaseReservation(ticket, kGrownReservation) == E_OUTOFMEMORY && unchanged());
     memory.snapshot = {kWideAvailable, kWideAvailable};
     checks.Expect("refusal.uint64-maximum-is-refused-without-overflow",
-                  scheduler.IncreaseReservation(ticket, (std::numeric_limits<std::uint64_t>::max)()) == E_OUTOFMEMORY &&
-                      unchanged());
+                  scheduler.IncreaseReservation(ticket, (std::numeric_limits<std::uint64_t>::max)()) == E_OUTOFMEMORY && unchanged());
     checks.Expect("refusal.valid-recovery-after-faults-keeps-original-ticket",
-                  scheduler.IncreaseReservation(ticket, kGrownReservation) == S_OK &&
-                      scheduler.ReservedMemoryBytes() == kGrownReservation && state.ticket == ticket);
+                  scheduler.IncreaseReservation(ticket, kGrownReservation) == S_OK && scheduler.ReservedMemoryBytes() == kGrownReservation &&
+                      state.ticket == ticket);
     checks.Expect("refusal.recovery-resumes-original-stage", scheduler.Resume(ticket));
     (void)WaitForGate(scheduler, state.secondEntered.get(), checks, "refusal.recovered-stage-enters");
-    checks.Expect("refusal.recovered-context-gets-whole-new-total",
-                  state.secondStageReservation.load(std::memory_order_acquire) == kGrownReservation);
+    checks.Expect("refusal.recovered-context-gets-whole-new-total", state.secondStageReservation.load(std::memory_order_acquire) == kGrownReservation);
     (void)SetEvent(state.secondRelease.get());
     if (WaitForCompletion(scheduler, state, checks, "refusal.recovered-job-finalizes"))
     {
         checks.Expect("refusal.recovered-final-transfer-keeps-new-total",
-                      state.finalStatus == JobStatus::Finished && state.retainResult == S_OK &&
-                          state.chargeBeforeRetain == kGrownReservation &&
+                      state.finalStatus == JobStatus::Finished && state.retainResult == S_OK && state.chargeBeforeRetain == kGrownReservation &&
                           state.chargeAfterRetain == kGrownReservation);
-        checks.Expect("refusal.recovered-retained-charge-releases",
-                      scheduler.ReleaseRetainedMemory(state.retained) && scheduler.ReservedMemoryBytes() == 0);
+        checks.Expect("refusal.recovered-retained-charge-releases", scheduler.ReleaseRetainedMemory(state.retained) && scheduler.ReservedMemoryBytes() == 0);
     }
     else
     {
@@ -469,21 +461,18 @@ void RunCancellationAndShutdown(Checks& checks)
             if (StartSuspended(scheduler, state, checks, ticket))
             {
                 checks.Expect("cancel.grow-before-cancellation",
-                              scheduler.IncreaseReservation(ticket, kFinalReservation) == S_OK &&
-                                  scheduler.ReservedMemoryBytes() == kFinalReservation);
+                              scheduler.IncreaseReservation(ticket, kFinalReservation) == S_OK && scheduler.ReservedMemoryBytes() == kFinalReservation);
                 checks.Expect("cancel.request-on-suspended-ticket", scheduler.Cancel(ticket));
                 checks.Expect("cancel.growth-returns-abort-and-keeps-grown-charge",
                               scheduler.IncreaseReservation(ticket, kFinalReservation + 4096) == E_ABORT &&
                                   scheduler.ReservedMemoryBytes() == kFinalReservation);
-                checks.Expect("cancel.cancelled-growth-does-not-sample-memory",
-                              memory.samples.load(std::memory_order_relaxed) == 2);
+                checks.Expect("cancel.cancelled-growth-does-not-sample-memory", memory.samples.load(std::memory_order_relaxed) == 2);
                 checks.Expect("cancel.suspended-ticket-can-be-resumed-to-acknowledge-cancel", scheduler.Resume(ticket));
                 if (WaitForCompletion(scheduler, state, checks, "cancel.final-callback-arrives"))
                 {
                     checks.Expect("cancel.skips-next-useful-stage-and-calls-back-once",
-                                  state.finalStatus == JobStatus::Cancelled && state.completions == 1 &&
-                                      state.runs.load(std::memory_order_relaxed) == 1 &&
-                                      !state.secondStageReservation.load(std::memory_order_acquire));
+                                  state.finalStatus == JobStatus::Cancelled && state.completions == 1 && state.runs.load(std::memory_order_relaxed) == 1 &&
+                                      ! state.secondStageReservation.load(std::memory_order_acquire));
                     checks.Expect("cancel.returns-complete-grown-reservation", scheduler.ReservedMemoryBytes() == 0);
                 }
             }
@@ -502,30 +491,27 @@ void RunCancellationAndShutdown(Checks& checks)
         StageState state;
         checks.Setup("close-events-created", state.EventsValid());
         JobTicket ticket{};
-        if (!StartSuspended(scheduler, state, checks, ticket))
+        if (! StartSuspended(scheduler, state, checks, ticket))
         {
             ReleaseAll(state);
             scheduler.Close();
             return;
         }
-        checks.Expect("close.grow-before-shutdown", scheduler.IncreaseReservation(ticket, kFinalReservation) == S_OK &&
-                                                        scheduler.ReservedMemoryBytes() == kFinalReservation);
+        checks.Expect("close.grow-before-shutdown",
+                      scheduler.IncreaseReservation(ticket, kFinalReservation) == S_OK && scheduler.ReservedMemoryBytes() == kFinalReservation);
         scheduler.Close();
         checks.Expect("close.refunds-complete-grown-reservation", scheduler.ReservedMemoryBytes() == 0);
-        checks.Expect("close.suppresses-final-callback",
-                      state.completions == 0 && !state.finalCallbackPublished.load(std::memory_order_acquire));
+        checks.Expect("close.suppresses-final-callback", state.completions == 0 && ! state.finalCallbackPublished.load(std::memory_order_acquire));
         checks.Expect("close.does-not-run-another-useful-stage", state.runs.load(std::memory_order_relaxed) == 1);
         checks.Expect("close.closed-ticket-is-invalid-state",
-                      static_cast<HRESULT>(scheduler.IncreaseReservation(ticket, kFinalReservation + 4096)) ==
-                          HRESULT_FROM_WIN32(ERROR_INVALID_STATE));
+                      static_cast<HRESULT>(scheduler.IncreaseReservation(ticket, kFinalReservation + 4096)) == HRESULT_FROM_WIN32(ERROR_INVALID_STATE));
     }
 }
 
 void RunInputBoundaries(Checks& checks)
 {
     JobScheduler uninitialized;
-    checks.Expect("boundary.uninitialized-is-invalid-argument",
-                  uninitialized.IncreaseReservation({}, kInitialReservation) == E_INVALIDARG);
+    checks.Expect("boundary.uninitialized-is-invalid-argument", uninitialized.IncreaseReservation({}, kInitialReservation) == E_INVALIDARG);
 
     JobScheduler scheduler;
     MemoryProbe memory;
@@ -549,39 +535,34 @@ void RunSnapshotRevalidation(Checks& checks)
     StageState state;
     checks.Setup("revalidation-events-created", state.EventsValid());
     JobTicket ticket{};
-    if (!StartSuspended(scheduler, state, checks, ticket))
+    if (! StartSuspended(scheduler, state, checks, ticket))
     {
         ReleaseAll(state);
         scheduler.Close();
         return;
     }
 
-    memory.resumeScheduler = &scheduler;
-    memory.resumeTicket = ticket;
+    memory.resumeScheduler        = &scheduler;
+    memory.resumeTicket           = ticket;
     memory.resumeDuringNextSample = true;
     checks.Expect("revalidation.same-owner-sample-resumes-exact-suspended-ticket",
-                  static_cast<HRESULT>(scheduler.IncreaseReservation(ticket, kGrownReservation)) ==
-                          HRESULT_FROM_WIN32(ERROR_INVALID_STATE) &&
-                      memory.resumeResult && !memory.resumeDuringNextSample &&
-                      memory.samples.load(std::memory_order_relaxed) == 2 &&
+                  static_cast<HRESULT>(scheduler.IncreaseReservation(ticket, kGrownReservation)) == HRESULT_FROM_WIN32(ERROR_INVALID_STATE) &&
+                      memory.resumeResult && ! memory.resumeDuringNextSample && memory.samples.load(std::memory_order_relaxed) == 2 &&
                       scheduler.ReservedMemoryBytes() == kInitialReservation);
 
-    if (!WaitForGate(scheduler, state.secondEntered.get(), checks, "revalidation.resumed-stage-enters"))
+    if (! WaitForGate(scheduler, state.secondEntered.get(), checks, "revalidation.resumed-stage-enters"))
     {
         ReleaseAll(state);
         scheduler.Close();
         return;
     }
-    checks.Expect("revalidation.resumed-context-keeps-original-total",
-                  state.secondStageReservation.load(std::memory_order_acquire) == kInitialReservation);
+    checks.Expect("revalidation.resumed-context-keeps-original-total", state.secondStageReservation.load(std::memory_order_acquire) == kInitialReservation);
     (void)SetEvent(state.secondRelease.get());
     if (WaitForCompletion(scheduler, state, checks, "revalidation.final-callback-drained"))
     {
         checks.Expect("revalidation.final-retain-keeps-original-total",
-                      state.finalStatus == JobStatus::Finished && state.retainResult == S_OK &&
-                          state.chargeBeforeRetain == kInitialReservation &&
-                          state.chargeAfterRetain == kInitialReservation &&
-                          scheduler.ReservedMemoryBytes() == kInitialReservation);
+                      state.finalStatus == JobStatus::Finished && state.retainResult == S_OK && state.chargeBeforeRetain == kInitialReservation &&
+                          state.chargeAfterRetain == kInitialReservation && scheduler.ReservedMemoryBytes() == kInitialReservation);
         checks.Expect("revalidation.retained-original-charge-releases",
                       scheduler.ReleaseRetainedMemory(state.retained) && scheduler.ReservedMemoryBytes() == 0);
     }

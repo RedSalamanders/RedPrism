@@ -17,7 +17,7 @@ class ChromeHost;
 // `_prompts` at one or the other, in the same places it used to set `_quietUi`.
 class Prompts
 {
-  public:
+public:
     virtual ~Prompts() = default;
 
     // A notice card over the canvas (ChromeHost::ShowNotice). Returns whether it actually showed (a quiet run
@@ -43,8 +43,12 @@ class Prompts
     // A two-choice question with Cancel; `first` is the default button. Shared by the save prompt
     // (Application::AskDiscardChanges) and the image-open prompt (Application::PromptImageOpen), as the two
     // already shared the TaskDialog helper that answers it. A quiet run answers `forced` instead of asking.
-    [[nodiscard]] virtual Answer AskThreeWay(HWND window, const std::wstring& title, const std::wstring& text,
-                                             const std::wstring& first, const std::wstring& second, bool warning,
+    [[nodiscard]] virtual Answer AskThreeWay(HWND window,
+                                             const std::wstring& title,
+                                             const std::wstring& text,
+                                             const std::wstring& first,
+                                             const std::wstring& second,
+                                             bool warning,
                                              Answer forced) const noexcept = 0;
 };
 

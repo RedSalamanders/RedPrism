@@ -38,10 +38,10 @@ struct ArmedLog final
 {
     std::array<unsigned int, 8> retries{};
     std::array<std::uint32_t, 8> delays{};
-    std::size_t count = 0;
+    std::size_t count           = 0;
     RetryWaitQueue* signalQueue = nullptr;
-    bool signalWhenArmed = false;
-    bool signalSucceeded = false;
+    bool signalWhenArmed        = false;
+    bool signalSucceeded        = false;
 };
 
 void RecordArmed(void* context, JobTicket ticket, unsigned int retry, std::uint32_t delay) noexcept
@@ -50,7 +50,7 @@ void RecordArmed(void* context, JobTicket ticket, unsigned int retry, std::uint3
     if (log.count < log.retries.size())
     {
         log.retries[log.count] = retry;
-        log.delays[log.count] = delay;
+        log.delays[log.count]  = delay;
         ++log.count;
     }
     if (log.signalWhenArmed && log.signalQueue)
@@ -61,18 +61,18 @@ struct Receiver final : RetryWaitReceiver
 {
     std::size_t calls = 0;
     JobTicket received{};
-    RetryWaitStatus status = RetryWaitStatus::Failed;
-    std::int32_t error = E_UNEXPECTED;
+    RetryWaitStatus status        = RetryWaitStatus::Failed;
+    std::int32_t error            = E_UNEXPECTED;
     JobScheduler* resumeScheduler = nullptr;
-    bool resume = false;
-    bool resumed = false;
+    bool resume                   = false;
+    bool resumed                  = false;
 
     void RetryWaitReady(JobTicket ticket, RetryWaitStatus result, std::int32_t resultError) noexcept override
     {
         ++calls;
         received = ticket;
-        status = result;
-        error = resultError;
+        status   = result;
+        error    = resultError;
         if (resume && resumeScheduler)
             resumed = resumeScheduler->Resume(ticket);
     }
@@ -88,7 +88,7 @@ struct Rig final
     OwnerWorkMultiplexer routes;
     RetryWaitQueue queue;
     bool schedulerInitialized = false;
-    bool routesRegistered = false;
+    bool routesRegistered     = false;
 
     [[nodiscard]] bool Open(RetryWaitObserver observer = {}) noexcept
     {
@@ -96,7 +96,7 @@ struct Rig final
         if (FAILED(initialized))
             return false;
         schedulerInitialized = true;
-        routesRegistered = scheduler.RegisterOwnerWork(routes);
+        routesRegistered     = scheduler.RegisterOwnerWork(routes);
         return routesRegistered && SUCCEEDED(queue.Initialize(scheduler, routes, observer));
     }
 
@@ -105,7 +105,7 @@ struct Rig final
         queue.StopNotifications();
         if (schedulerInitialized)
         {
-            if (routesRegistered && !routes.HasPending() && !routes.HasReady())
+            if (routesRegistered && ! routes.HasPending() && ! routes.HasReady())
             {
                 (void)scheduler.UnregisterOwnerWork(routes);
                 routesRegistered = false;
@@ -128,8 +128,8 @@ bool RunFaultCase(RetryWaitFault target, bool initializeFault) noexcept
     Rig rig;
     FaultPlan plan{target};
     RetryWaitObserver observer{};
-    observer.context = &plan;
-    observer.fault = InjectFault;
+    observer.context           = &plan;
+    observer.fault             = InjectFault;
     const auto schedulerResult = rig.scheduler.Initialize(1);
     if (FAILED(schedulerResult))
         return false;
@@ -149,8 +149,8 @@ bool RunFaultCase(RetryWaitFault target, bool initializeFault) noexcept
         return false;
     }
     Receiver receiver;
-    const auto startResult = rig.queue.Start({3, 9}, 1, {}, receiver);
-    const bool failedAtBoundary = startResult == kInjectedFailure && plan.calls == 1 && !rig.queue.HasPending();
+    const auto startResult      = rig.queue.Start({3, 9}, 1, {}, receiver);
+    const bool failedAtBoundary = startResult == kInjectedFailure && plan.calls == 1 && ! rig.queue.HasPending();
     rig.Close();
     return failedAtBoundary;
 }
@@ -160,10 +160,10 @@ struct DeferredEvidence final
     JobTicket ticket{};
     unsigned int runs = 0;
     std::array<std::uint64_t, 2> reservations{};
-    std::size_t readyCalls = 0;
+    std::size_t readyCalls  = 0;
     bool readyTicketMatches = false;
-    bool resumeSucceeded = false;
-    bool completed = false;
+    bool resumeSucceeded    = false;
+    bool completed          = false;
     JobResult finalResult{};
 };
 
@@ -173,13 +173,12 @@ struct DeferredEvidence final
 #pragma warning(disable : 4626 5027)
 class DeferredRetryJob final : public Job, public RetryWaitReceiver
 {
-  public:
+public:
     RetryWaitQueue& queue;
     JobScheduler& scheduler;
     DeferredEvidence& evidence;
 
-    DeferredRetryJob(RetryWaitQueue& retryQueue, JobScheduler& jobs, DeferredEvidence& result) noexcept
-        : queue(retryQueue), scheduler(jobs), evidence(result)
+    DeferredRetryJob(RetryWaitQueue& retryQueue, JobScheduler& jobs, DeferredEvidence& result) noexcept : queue(retryQueue), scheduler(jobs), evidence(result)
     {
     }
 
@@ -202,14 +201,13 @@ class DeferredRetryJob final : public Job, public RetryWaitReceiver
     void RetryWaitReady(JobTicket current, RetryWaitStatus status, std::int32_t error) noexcept override
     {
         ++evidence.readyCalls;
-        evidence.readyTicketMatches =
-            current == evidence.ticket && status == RetryWaitStatus::Ready && SUCCEEDED(error);
-        evidence.resumeSucceeded = scheduler.Resume(current);
+        evidence.readyTicketMatches = current == evidence.ticket && status == RetryWaitStatus::Ready && SUCCEEDED(error);
+        evidence.resumeSucceeded    = scheduler.Resume(current);
     }
 
     void Completed(JobResult result) noexcept override
     {
-        evidence.completed = true;
+        evidence.completed   = true;
         evidence.finalResult = result;
     }
 };
@@ -221,27 +219,22 @@ void TestRetryIntervalsAndValidation() noexcept
     ArmedLog log;
     RetryWaitObserver observer{};
     observer.context = &log;
-    observer.armed = RecordArmed;
+    observer.armed   = RecordArmed;
     Rig rig;
     const bool opened = rig.Open(observer);
     Expect(opened, "intervals.initialize");
-    if (!opened)
+    if (! opened)
     {
         rig.Close();
         return;
     }
-    Expect(rig.queue.Initialize(rig.scheduler, rig.routes) ==
-               static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
+    Expect(rig.queue.Initialize(rig.scheduler, rig.routes) == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
            "initialize.duplicate_rejected");
 
     Receiver receiver;
     const JobTicket ticket{7, 41};
-    Expect(rig.queue.Start(ticket, 0, {}, receiver) ==
-               static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
-           "retry.zero_rejected");
-    Expect(rig.queue.Start(ticket, 6, {}, receiver) ==
-               static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
-           "retry.six_rejected");
+    Expect(rig.queue.Start(ticket, 0, {}, receiver) == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)), "retry.zero_rejected");
+    Expect(rig.queue.Start(ticket, 6, {}, receiver) == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)), "retry.six_rejected");
 
     for (unsigned int retry = 1; retry <= expectedDelays.size(); ++retry)
     {
@@ -249,13 +242,11 @@ void TestRetryIntervalsAndValidation() noexcept
         Expect(SUCCEEDED(start), "interval.start");
         if (FAILED(start))
             break;
-        Expect(rig.queue.Start(ticket, retry, {}, receiver) ==
-                   static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)),
+        Expect(rig.queue.Start(ticket, retry, {}, receiver) == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)),
                "ticket.duplicate_rejected");
         Expect(rig.queue.SignalDeadlineForTest(ticket), "interval.signal_real_wait");
         Expect(SettleJobs(rig.scheduler, 5000) == SettleResult::Settled, "interval.acknowledged");
-        Expect(receiver.calls == retry && receiver.received == ticket && receiver.status == RetryWaitStatus::Ready &&
-                   SUCCEEDED(receiver.error),
+        Expect(receiver.calls == retry && receiver.received == ticket && receiver.status == RetryWaitStatus::Ready && SUCCEEDED(receiver.error),
                "interval.receiver");
     }
 
@@ -281,7 +272,7 @@ void TestFixedCapacityAndMuxRegistration() noexcept
     Rig rig;
     const bool opened = rig.Open();
     Expect(opened, "capacity.initialize");
-    if (!opened)
+    if (! opened)
     {
         rig.Close();
         return;
@@ -294,14 +285,13 @@ void TestFixedCapacityAndMuxRegistration() noexcept
         Expect(SUCCEEDED(rig.queue.Start(ticket, 1, {}, receiver)), "capacity.slot_admitted");
     }
     Expect(rig.routes.HasPending(), "capacity.multiplexer_sees_pending");
-    Expect(rig.queue.Start({RetryWaitQueue::kCapacity, 99}, 1, {}, receiver) ==
-               static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)),
+    Expect(rig.queue.Start({RetryWaitQueue::kCapacity, 99}, 1, {}, receiver) == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)),
            "capacity.ninth_refused");
     for (std::size_t index = 0; index < RetryWaitQueue::kCapacity; ++index)
         Expect(rig.queue.SignalDeadlineForTest({index, index + 1}), "capacity.signal_real_wait");
     Expect(SettleJobs(rig.scheduler, 5000) == SettleResult::Settled, "capacity.all_acknowledged");
     Expect(receiver.calls == RetryWaitQueue::kCapacity, "capacity.eight_receipts");
-    Expect(!rig.routes.HasPending(), "capacity.multiplexer_quiescent");
+    Expect(! rig.routes.HasPending(), "capacity.multiplexer_quiescent");
     rig.Close();
 }
 
@@ -309,14 +299,14 @@ void TestDeferredJobResume() noexcept
 {
     Rig rig;
     ArmedLog log;
-    log.signalQueue = &rig.queue;
+    log.signalQueue     = &rig.queue;
     log.signalWhenArmed = false;
     RetryWaitObserver observer{};
-    observer.context = &log;
-    observer.armed = RecordArmed;
+    observer.context  = &log;
+    observer.armed    = RecordArmed;
     const bool opened = rig.Open(observer);
     Expect(opened, "defer.initialize");
-    if (!opened)
+    if (! opened)
     {
         rig.Close();
         return;
@@ -326,7 +316,7 @@ void TestDeferredJobResume() noexcept
     std::unique_ptr<Job> job = std::make_unique<DeferredRetryJob>(rig.queue, rig.scheduler, evidence);
     JobTicket submitted{};
     constexpr std::uint64_t reservation = 4096;
-    const auto submitResult = rig.scheduler.Submit(job, {JobClass::Background, 0, reservation}, submitted);
+    const auto submitResult             = rig.scheduler.Submit(job, {JobClass::Background, 0, reservation}, submitted);
     Expect(SUCCEEDED(submitResult), "defer.submit");
     if (FAILED(submitResult))
     {
@@ -335,13 +325,12 @@ void TestDeferredJobResume() noexcept
     }
 
     Expect(SettleJobs(rig.scheduler, 5000) == SettleResult::Settled, "defer.settled");
-    Expect(!log.signalSucceeded, "defer.real-relative-deadline-fired-without-test-signal");
+    Expect(! log.signalSucceeded, "defer.real-relative-deadline-fired-without-test-signal");
     Expect(evidence.completed && evidence.finalResult.status == JobStatus::Finished, "defer.completed");
     Expect(evidence.runs == 2, "defer.same_job_ran_twice");
     Expect(evidence.ticket == submitted && evidence.readyTicketMatches, "defer.same_ticket_acknowledged");
     Expect(evidence.readyCalls == 1 && evidence.resumeSucceeded, "defer.resumed_once");
-    Expect(evidence.reservations[0] == reservation && evidence.reservations[1] == reservation,
-           "defer.reservation_retained");
+    Expect(evidence.reservations[0] == reservation && evidence.reservations[1] == reservation, "defer.reservation_retained");
     rig.Close();
 }
 

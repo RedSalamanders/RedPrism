@@ -41,15 +41,14 @@ enum class EndType
 // Joined : offsets both sides of a path, with joined ends
 // Polygon: offsets only one side of a closed path
 
-typedef std::function<double(const Path64& path, const PathD& path_normals, size_t curr_idx, size_t prev_idx)>
-    DeltaCallback64;
+typedef std::function<double(const Path64& path, const PathD& path_normals, size_t curr_idx, size_t prev_idx)> DeltaCallback64;
 
 class ClipperOffset
 {
-  private:
+private:
     class Group
     {
-      public:
+    public:
         Paths64 paths_in;
         std::optional<size_t> lowest_path_idx{};
         bool is_reversed = false;
@@ -58,25 +57,25 @@ class ClipperOffset
         Group(const Paths64& _paths, JoinType _join_type, EndType _end_type);
     };
 
-    int error_code_ = 0;
-    double delta_ = 0.0;
-    double group_delta_ = 0.0;
-    double temp_lim_ = 0.0;
+    int error_code_       = 0;
+    double delta_         = 0.0;
+    double group_delta_   = 0.0;
+    double temp_lim_      = 0.0;
     double steps_per_rad_ = 0.0;
-    double step_sin_ = 0.0;
-    double step_cos_ = 0.0;
+    double step_sin_      = 0.0;
+    double step_cos_      = 0.0;
     PathD norms;
     Path64 path_out;
-    Paths64* solution = nullptr;
+    Paths64* solution         = nullptr;
     PolyTree64* solution_tree = nullptr;
     ArenaVector<Group> groups_{std::initializer_list<Group>{}};
     JoinType join_type_ = JoinType::Bevel;
-    EndType end_type_ = EndType::Polygon;
+    EndType end_type_   = EndType::Polygon;
 
-    double miter_limit_ = 0.0;
-    double arc_tolerance_ = 0.0;
+    double miter_limit_      = 0.0;
+    double arc_tolerance_    = 0.0;
     bool preserve_collinear_ = false;
-    bool reverse_solution_ = false;
+    bool reverse_solution_   = false;
 
 #ifdef USINGZ
     ZCallback64 zCallback64_ = nullptr;
@@ -97,10 +96,11 @@ class ClipperOffset
     void DoGroupOffset(Group& group);
     void ExecuteInternal(double delta);
 
-  public:
-    explicit ClipperOffset(double miter_limit = 2.0, double arc_tolerance = 0.0, bool preserve_collinear = false,
-                           bool reverse_solution = false)
-        : miter_limit_(miter_limit), arc_tolerance_(arc_tolerance), preserve_collinear_(preserve_collinear),
+public:
+    explicit ClipperOffset(double miter_limit = 2.0, double arc_tolerance = 0.0, bool preserve_collinear = false, bool reverse_solution = false)
+        : miter_limit_(miter_limit),
+          arc_tolerance_(arc_tolerance),
+          preserve_collinear_(preserve_collinear),
           reverse_solution_(reverse_solution) {};
 
     ~ClipperOffset()

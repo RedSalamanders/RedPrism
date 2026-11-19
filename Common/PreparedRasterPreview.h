@@ -18,8 +18,8 @@ struct PreparedRasterPreview final
     // Bound by the original successful callback before publication. Members below retire before this owner.
     std::shared_ptr<const SharedPublicationMemory> memory;
     Guid target;
-    bool mask = false;
-    int width = 0;
+    bool mask  = false;
+    int width  = 0;
     int height = 0;
     LayerTransform transform;
     std::uint8_t fill = 0;
@@ -37,6 +37,7 @@ struct PreparedRasterPreview final
 // Exclusively borrowed completed CPU raster edit. Refuse the known owner before traversing any tile.
 // No PaintSnapshot/materialization, no consumption/mutation of the stroke's changed list, no document clone.
 // Allocation failure belongs to the normal worker runner. Refusal/cancellation returns an empty handle.
-[[nodiscard]] std::shared_ptr<const PreparedRasterPreview> PrepareRasterPreviewForWork(
-    const BrushStroke& stroke, std::thread::id ownerThread, CancelToken cancellation = {},
-    std::shared_ptr<const SharedPublicationMemory> memory = {});
+[[nodiscard]] std::shared_ptr<const PreparedRasterPreview> PrepareRasterPreviewForWork(const BrushStroke& stroke,
+                                                                                       std::thread::id ownerThread,
+                                                                                       CancelToken cancellation                              = {},
+                                                                                       std::shared_ptr<const SharedPublicationMemory> memory = {});

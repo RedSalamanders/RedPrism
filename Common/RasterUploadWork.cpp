@@ -4,20 +4,26 @@
 
 #include <limits>
 
-RasterUploadWorkStatus CopyRasterRowsForUpload(const Raster& source, int sourceX, int sourceY, int width, int height,
-                                               std::uint8_t* destination, std::size_t destinationCapacity,
-                                               std::size_t rowPitch, CancelToken cancellation,
-                                               RasterUploadRowObserver observer, void* observerContext) noexcept
+RasterUploadWorkStatus CopyRasterRowsForUpload(const Raster& source,
+                                               int sourceX,
+                                               int sourceY,
+                                               int width,
+                                               int height,
+                                               std::uint8_t* destination,
+                                               std::size_t destinationCapacity,
+                                               std::size_t rowPitch,
+                                               CancelToken cancellation,
+                                               RasterUploadRowObserver observer,
+                                               void* observerContext) noexcept
 {
-    if (!source.HasStorage() || destination == nullptr || sourceX < 0 || sourceY < 0 || width <= 0 || height <= 0 ||
-        (source.Format() != RasterFormat::Gray8 && source.Format() != RasterFormat::Bgra8888) ||
-        sourceX > source.Width() || sourceY > source.Height() || width > source.Width() - sourceX ||
-        height > source.Height() - sourceY)
+    if (! source.HasStorage() || destination == nullptr || sourceX < 0 || sourceY < 0 || width <= 0 || height <= 0 ||
+        (source.Format() != RasterFormat::Gray8 && source.Format() != RasterFormat::Bgra8888) || sourceX > source.Width() || sourceY > source.Height() ||
+        width > source.Width() - sourceX || height > source.Height() - sourceY)
     {
         return RasterUploadWorkStatus::Invalid;
     }
 
-    const std::size_t channels = source.Format() == RasterFormat::Gray8 ? 1U : 4U;
+    const std::size_t channels      = source.Format() == RasterFormat::Gray8 ? 1U : 4U;
     const std::size_t unsignedWidth = static_cast<std::size_t>(width);
     if (unsignedWidth > std::numeric_limits<std::size_t>::max() / channels)
     {
@@ -51,8 +57,7 @@ RasterUploadWorkStatus CopyRasterRowsForUpload(const Raster& source, int sourceX
             return RasterUploadWorkStatus::Cancelled;
         }
         const std::size_t rowIndex = static_cast<std::size_t>(row);
-        source.ReadRegion(sourceX, sourceY + row, width, 1, destination + rowIndex * rowPitch,
-                          static_cast<int>(rowPitch), 0);
+        source.ReadRegion(sourceX, sourceY + row, width, 1, destination + rowIndex * rowPitch, static_cast<int>(rowPitch), 0);
         if (observer != nullptr)
         {
             observer(observerContext, rowIndex + 1);

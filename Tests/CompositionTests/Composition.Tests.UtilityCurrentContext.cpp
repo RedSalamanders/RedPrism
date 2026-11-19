@@ -28,7 +28,7 @@ void Expect(bool condition, const char* name) noexcept
 bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
 {
     constexpr std::uint64_t available = 4ULL * 1024 * 1024 * 1024;
-    snapshot = {available, available};
+    snapshot                          = {available, available};
     return true;
 }
 
@@ -40,8 +40,8 @@ struct WarpDevice final
     HRESULT Create() noexcept
     {
         constexpr D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
-        return D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &level, 1,
-                                 D3D11_SDK_VERSION, device.put(), nullptr, context.put());
+        return D3D11CreateDevice(
+            nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, &level, 1, D3D11_SDK_VERSION, device.put(), nullptr, context.put());
     }
 };
 
@@ -67,7 +67,7 @@ struct Rig final
         if (FAILED(result))
             return result;
         result = queue.Initialize(scheduler);
-        if (FAILED(result) || !bind)
+        if (FAILED(result) || ! bind)
             return result;
         return queue.Bind(device.device.get(), device.context.get());
     }
@@ -78,13 +78,13 @@ struct Rig final
 };
 #pragma warning(pop)
 
-bool RefusalClearsOutputs(GpuWorkQueue& queue, const GpuCompletionContext& captured, ID3D11Device* sentinelDevice,
-                          ID3D11DeviceContext* sentinelContext, const char* name) noexcept
+bool RefusalClearsOutputs(
+    GpuWorkQueue& queue, const GpuCompletionContext& captured, ID3D11Device* sentinelDevice, ID3D11DeviceContext* sentinelContext, const char* name) noexcept
 {
-    ID3D11Device* borrowedDevice = sentinelDevice;
+    ID3D11Device* borrowedDevice         = sentinelDevice;
     ID3D11DeviceContext* borrowedContext = sentinelContext;
-    const HRESULT result = queue.BorrowCurrentContextOwner(captured, borrowedDevice, borrowedContext);
-    const bool passed = FAILED(result) && borrowedDevice == nullptr && borrowedContext == nullptr;
+    const HRESULT result                 = queue.BorrowCurrentContextOwner(captured, borrowedDevice, borrowedContext);
+    const bool passed                    = FAILED(result) && borrowedDevice == nullptr && borrowedContext == nullptr;
     Expect(passed, name);
     return passed;
 }
@@ -98,8 +98,7 @@ void TestCaptureAndRebindRefusals() noexcept
         return;
 
     GpuCompletionContext empty;
-    RefusalClearsOutputs(rig.queue, empty, rig.device.device.get(), rig.device.context.get(),
-                         "uninitialized-queue-refuses-and-clears-both-outputs");
+    RefusalClearsOutputs(rig.queue, empty, rig.device.device.get(), rig.device.context.get(), "uninitialized-queue-refuses-and-clears-both-outputs");
 
     result = rig.scheduler.Initialize(1, {}, {StableMemory, nullptr});
     if (SUCCEEDED(result))
@@ -110,8 +109,7 @@ void TestCaptureAndRebindRefusals() noexcept
     if (FAILED(result))
         return;
 
-    RefusalClearsOutputs(rig.queue, empty, rig.device.device.get(), rig.device.context.get(),
-                         "empty-capture-refuses-and-clears-both-outputs");
+    RefusalClearsOutputs(rig.queue, empty, rig.device.device.get(), rig.device.context.get(), "empty-capture-refuses-and-clears-both-outputs");
 
     GpuCompletionContext first;
     result = rig.queue.CaptureCompletionContext(first);
@@ -119,9 +117,9 @@ void TestCaptureAndRebindRefusals() noexcept
     if (FAILED(result))
         return;
 
-    ID3D11Device* borrowedDevice = nullptr;
+    ID3D11Device* borrowedDevice         = nullptr;
     ID3D11DeviceContext* borrowedContext = nullptr;
-    result = rig.queue.BorrowCurrentContextOwner(first, borrowedDevice, borrowedContext);
+    result                               = rig.queue.BorrowCurrentContextOwner(first, borrowedDevice, borrowedContext);
     Expect(result == S_OK && borrowedDevice == rig.device.device.get() && borrowedContext == rig.device.context.get(),
            "borrow-returns-exact-actual-warp-device-and-immediate-context");
     if (FAILED(result))
@@ -131,27 +129,24 @@ void TestCaptureAndRebindRefusals() noexcept
     const HRESULT foreignReady = foreign.Initialize();
     Expect(SUCCEEDED(foreignReady), "setup.independent-foreign-warp-queue");
     if (SUCCEEDED(foreignReady))
-        RefusalClearsOutputs(foreign.queue, first, foreign.device.device.get(), foreign.device.context.get(),
-                             "foreign-capture-refuses-and-clears-both-outputs");
+        RefusalClearsOutputs(
+            foreign.queue, first, foreign.device.device.get(), foreign.device.context.get(), "foreign-capture-refuses-and-clears-both-outputs");
 
     const std::uint64_t firstGeneration = first.DeviceGeneration();
-    result = rig.queue.Bind(rig.device.device.get(), rig.device.context.get());
-    Expect(SUCCEEDED(result) && rig.queue.DeviceGeneration() != firstGeneration,
-           "same-device-and-context-rebind-advances-actual-queue-generation");
+    result                              = rig.queue.Bind(rig.device.device.get(), rig.device.context.get());
+    Expect(SUCCEEDED(result) && rig.queue.DeviceGeneration() != firstGeneration, "same-device-and-context-rebind-advances-actual-queue-generation");
     if (FAILED(result))
         return;
-    RefusalClearsOutputs(rig.queue, first, rig.device.device.get(), rig.device.context.get(),
-                         "same-pointer-rebind-refuses-stale-capture");
+    RefusalClearsOutputs(rig.queue, first, rig.device.device.get(), rig.device.context.get(), "same-pointer-rebind-refuses-stale-capture");
 
     GpuCompletionContext samePointers;
     result = rig.queue.CaptureCompletionContext(samePointers);
-    Expect(result == S_OK && samePointers.DeviceGeneration() == rig.queue.DeviceGeneration(),
-           "recapture-after-same-pointer-rebind-uses-current-generation");
+    Expect(result == S_OK && samePointers.DeviceGeneration() == rig.queue.DeviceGeneration(), "recapture-after-same-pointer-rebind-uses-current-generation");
     if (FAILED(result))
         return;
-    borrowedDevice = nullptr;
+    borrowedDevice  = nullptr;
     borrowedContext = nullptr;
-    result = rig.queue.BorrowCurrentContextOwner(samePointers, borrowedDevice, borrowedContext);
+    result          = rig.queue.BorrowCurrentContextOwner(samePointers, borrowedDevice, borrowedContext);
     Expect(result == S_OK && borrowedDevice == rig.device.device.get() && borrowedContext == rig.device.context.get(),
            "same-pointer-rebind-borrows-exact-current-objects");
 
@@ -161,51 +156,48 @@ void TestCaptureAndRebindRefusals() noexcept
     if (FAILED(result))
         return;
     const std::uint64_t samePointerGeneration = samePointers.DeviceGeneration();
-    result = rig.queue.Bind(replacement.device.get(), replacement.context.get());
-    Expect(SUCCEEDED(result) && rig.queue.DeviceGeneration() != samePointerGeneration,
-           "changed-device-and-context-rebind-advances-generation");
+    result                                    = rig.queue.Bind(replacement.device.get(), replacement.context.get());
+    Expect(SUCCEEDED(result) && rig.queue.DeviceGeneration() != samePointerGeneration, "changed-device-and-context-rebind-advances-generation");
     if (FAILED(result))
         return;
-    RefusalClearsOutputs(rig.queue, samePointers, replacement.device.get(), replacement.context.get(),
-                         "changed-pointer-rebind-refuses-old-capture-and-clears-outputs");
+    RefusalClearsOutputs(
+        rig.queue, samePointers, replacement.device.get(), replacement.context.get(), "changed-pointer-rebind-refuses-old-capture-and-clears-outputs");
 
     GpuCompletionContext changedPointers;
     result = rig.queue.CaptureCompletionContext(changedPointers);
     Expect(result == S_OK, "capture-after-changed-device-and-context-rebind");
     if (FAILED(result))
         return;
-    borrowedDevice = nullptr;
+    borrowedDevice  = nullptr;
     borrowedContext = nullptr;
-    result = rig.queue.BorrowCurrentContextOwner(changedPointers, borrowedDevice, borrowedContext);
+    result          = rig.queue.BorrowCurrentContextOwner(changedPointers, borrowedDevice, borrowedContext);
     Expect(result == S_OK && borrowedDevice == replacement.device.get() && borrowedContext == replacement.context.get(),
            "changed-pointer-rebind-returns-exact-replacement-objects");
 
     struct WorkerAttempt final
     {
-        GpuWorkQueue* queue = nullptr;
+        GpuWorkQueue* queue                  = nullptr;
         const GpuCompletionContext* captured = nullptr;
-        ID3D11Device* borrowedDevice = nullptr;
+        ID3D11Device* borrowedDevice         = nullptr;
         ID3D11DeviceContext* borrowedContext = nullptr;
-        HRESULT result = E_PENDING;
-        DWORD thread = 0;
+        HRESULT result                       = E_PENDING;
+        DWORD thread                         = 0;
     } attempt{&rig.queue, &changedPointers, replacement.device.get(), replacement.context.get(), E_PENDING, 0};
 
     const DWORD ownerThread = GetCurrentThreadId();
-    std::thread worker(
-        [&attempt]() noexcept
-        {
-            attempt.thread = GetCurrentThreadId();
-            attempt.result = attempt.queue->BorrowCurrentContextOwner(*attempt.captured, attempt.borrowedDevice,
-                                                                      attempt.borrowedContext);
-        });
+    std::thread worker([&attempt]() noexcept
+    {
+        attempt.thread = GetCurrentThreadId();
+        attempt.result = attempt.queue->BorrowCurrentContextOwner(*attempt.captured, attempt.borrowedDevice, attempt.borrowedContext);
+    });
     worker.join();
-    Expect(attempt.thread != ownerThread && attempt.result == HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID) &&
-               !attempt.borrowedDevice && !attempt.borrowedContext,
+    Expect(attempt.thread != ownerThread && attempt.result == HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID) && ! attempt.borrowedDevice &&
+               ! attempt.borrowedContext,
            "joined-off-owner-thread-refusal-clears-both-outputs");
 
     rig.queue.RetireDevice();
-    RefusalClearsOutputs(rig.queue, changedPointers, replacement.device.get(), replacement.context.get(),
-                         "retired-device-refuses-capture-and-clears-both-outputs");
+    RefusalClearsOutputs(
+        rig.queue, changedPointers, replacement.device.get(), replacement.context.get(), "retired-device-refuses-capture-and-clears-both-outputs");
 }
 
 void TestDestructAndReinitializeIdentity() noexcept
@@ -246,14 +238,12 @@ void TestDestructAndReinitializeIdentity() noexcept
     }
 
     GpuWorkQueue* const originalQueueAddress = &queue.value();
-    const std::uint64_t originalGeneration = original.DeviceGeneration();
+    const std::uint64_t originalGeneration   = original.DeviceGeneration();
     queue->StopNotifications();
-    RefusalClearsOutputs(queue.value(), original, device.device.get(), device.context.get(),
-                         "stopped-queue-refuses-original-capture-and-clears-outputs");
+    RefusalClearsOutputs(queue.value(), original, device.device.get(), device.context.get(), "stopped-queue-refuses-original-capture-and-clears-outputs");
     firstScheduler.Close();
     queue->CloseAfterWorkers();
-    RefusalClearsOutputs(queue.value(), original, device.device.get(), device.context.get(),
-                         "closed-queue-refuses-original-capture-and-clears-outputs");
+    RefusalClearsOutputs(queue.value(), original, device.device.get(), device.context.get(), "closed-queue-refuses-original-capture-and-clears-outputs");
     queue.reset();
 
     queue.emplace();
@@ -270,11 +260,10 @@ void TestDestructAndReinitializeIdentity() noexcept
            "reinitialized-queue-reuses-numeric-generation-with-fresh-queue-identity");
     if (SUCCEEDED(result))
     {
-        RefusalClearsOutputs(queue.value(), original, device.device.get(), device.context.get(),
-                             "new-queue-at-reused-address-refuses-old-origin-capture");
-        ID3D11Device* borrowedDevice = nullptr;
+        RefusalClearsOutputs(queue.value(), original, device.device.get(), device.context.get(), "new-queue-at-reused-address-refuses-old-origin-capture");
+        ID3D11Device* borrowedDevice         = nullptr;
         ID3D11DeviceContext* borrowedContext = nullptr;
-        const HRESULT borrowed = queue->BorrowCurrentContextOwner(replacement, borrowedDevice, borrowedContext);
+        const HRESULT borrowed               = queue->BorrowCurrentContextOwner(replacement, borrowedDevice, borrowedContext);
         Expect(borrowed == S_OK && borrowedDevice == device.device.get() && borrowedContext == device.context.get(),
                "reinitialized-queue-borrows-only-its-new-capture");
     }
@@ -288,13 +277,13 @@ void TestDestructAndReinitializeIdentity() noexcept
 struct DeferredReleaseObservation final
 {
     JobTicket original{};
-    bool capturedOnOwner = false;
-    bool resumedSameTicket = false;
+    bool capturedOnOwner               = false;
+    bool resumedSameTicket             = false;
     bool captureHeldAtWorkerRetirement = false;
-    bool captureReleasedOnWorker = false;
-    DWORD ownerThread = 0;
-    DWORD releaseThread = 0;
-    bool completed = false;
+    bool captureReleasedOnWorker       = false;
+    DWORD ownerThread                  = 0;
+    DWORD releaseThread                = 0;
+    bool completed                     = false;
     JobResult terminal{};
 };
 
@@ -304,10 +293,11 @@ struct DeferredReleaseObservation final
 #pragma warning(disable : 4626 5027)
 class DeferredCaptureRelease final : public Job
 {
-  public:
-    DeferredCaptureRelease(JobScheduler& scheduler, GpuWorkQueue& queue,
-                           DeferredReleaseObservation& observation) noexcept
-        : _scheduler(scheduler), _queue(queue), _observation(observation)
+public:
+    DeferredCaptureRelease(JobScheduler& scheduler, GpuWorkQueue& queue, DeferredReleaseObservation& observation) noexcept
+        : _scheduler(scheduler),
+          _queue(queue),
+          _observation(observation)
     {
     }
 
@@ -318,10 +308,10 @@ class DeferredCaptureRelease final : public Job
 
     void RetireWorkerStage(JobContext&, JobResult) noexcept override
     {
-        _observation.releaseThread = GetCurrentThreadId();
+        _observation.releaseThread                 = GetCurrentThreadId();
         _observation.captureHeldAtWorkerRetirement = bool(_captured);
-        _captured = {};
-        _observation.captureReleasedOnWorker = !_captured;
+        _captured                                  = {};
+        _observation.captureReleasedOnWorker       = ! _captured;
     }
 
     bool DeferRetirement(JobResult result, JobTicket ticket) noexcept override
@@ -331,22 +321,19 @@ class DeferredCaptureRelease final : public Job
         else if (ticket != _observation.original)
             return false;
 
-        if (!_observation.capturedOnOwner)
+        if (! _observation.capturedOnOwner)
         {
             if (result.status != JobStatus::Finished)
                 return false;
-            ID3D11Device* borrowedDevice = nullptr;
+            ID3D11Device* borrowedDevice         = nullptr;
             ID3D11DeviceContext* borrowedContext = nullptr;
-            const HRESULT captured = _queue.CaptureCompletionContext(_captured);
-            const HRESULT borrowed = SUCCEEDED(captured)
-                                         ? _queue.BorrowCurrentContextOwner(_captured, borrowedDevice, borrowedContext)
-                                         : captured;
-            _observation.capturedOnOwner =
-                captured == S_OK && borrowed == S_OK && borrowedDevice != nullptr && borrowedContext != nullptr;
-            _observation.ownerThread = GetCurrentThreadId();
-            if (!_observation.capturedOnOwner)
+            const HRESULT captured               = _queue.CaptureCompletionContext(_captured);
+            const HRESULT borrowed       = SUCCEEDED(captured) ? _queue.BorrowCurrentContextOwner(_captured, borrowedDevice, borrowedContext) : captured;
+            _observation.capturedOnOwner = captured == S_OK && borrowed == S_OK && borrowedDevice != nullptr && borrowedContext != nullptr;
+            _observation.ownerThread     = GetCurrentThreadId();
+            if (! _observation.capturedOnOwner)
                 return false;
-            if (!_scheduler.Resume(ticket))
+            if (! _scheduler.Resume(ticket))
                 std::terminate();
             _observation.resumedSameTicket = ticket == _observation.original;
             return true;
@@ -357,11 +344,11 @@ class DeferredCaptureRelease final : public Job
 
     void Completed(JobResult result) noexcept override
     {
-        _observation.terminal = result;
+        _observation.terminal  = result;
         _observation.completed = true;
     }
 
-  private:
+private:
     JobScheduler& _scheduler;
     GpuWorkQueue& _queue;
     DeferredReleaseObservation& _observation;
@@ -378,17 +365,16 @@ void TestOriginalTicketWorkerRelease() noexcept
         return;
 
     DeferredReleaseObservation observation;
-    const DWORD ownerThread = GetCurrentThreadId();
+    const DWORD ownerThread  = GetCurrentThreadId();
     std::unique_ptr<Job> job = std::make_unique<DeferredCaptureRelease>(rig.scheduler, rig.queue, observation);
     JobTicket submitted{};
-    const HRESULT admitted = rig.scheduler.Submit(
-        job, {.kind = JobClass::Background, .memoryBytes = 4096, .deferredRetirement = true}, submitted);
-    Expect(SUCCEEDED(admitted) && !job, "worker-release.scheduler-parent-admitted");
+    const HRESULT admitted = rig.scheduler.Submit(job, {.kind = JobClass::Background, .memoryBytes = 4096, .deferredRetirement = true}, submitted);
+    Expect(SUCCEEDED(admitted) && ! job, "worker-release.scheduler-parent-admitted");
     if (FAILED(admitted))
         return;
 
     const std::uint64_t deadline = GetTickCount64() + 5000;
-    while (!observation.completed)
+    while (! observation.completed)
     {
         (void)DrainCompletions(rig.scheduler);
         if (observation.completed)
@@ -403,8 +389,8 @@ void TestOriginalTicketWorkerRelease() noexcept
             return;
         }
         const auto remaining = static_cast<DWORD>(deadline - now);
-        const HANDLE wake = static_cast<HANDLE>(rig.scheduler.WakeHandle());
-        if (!wake || WaitForSingleObject(wake, remaining) != WAIT_OBJECT_0)
+        const HANDLE wake    = static_cast<HANDLE>(rig.scheduler.WakeHandle());
+        if (! wake || WaitForSingleObject(wake, remaining) != WAIT_OBJECT_0)
         {
             Expect(false, "worker-release.deferred-parent-wakes-owner-before-timeout");
             rig.queue.StopNotifications();
@@ -414,14 +400,11 @@ void TestOriginalTicketWorkerRelease() noexcept
         }
     }
 
-    Expect(observation.original == submitted && observation.resumedSameTicket,
-           "worker-release-capture-retirement-stays-under-original-parent-ticket");
-    Expect(observation.capturedOnOwner && observation.ownerThread == ownerThread &&
-               observation.captureHeldAtWorkerRetirement && observation.captureReleasedOnWorker &&
-               observation.releaseThread != ownerThread,
+    Expect(observation.original == submitted && observation.resumedSameTicket, "worker-release-capture-retirement-stays-under-original-parent-ticket");
+    Expect(observation.capturedOnOwner && observation.ownerThread == ownerThread && observation.captureHeldAtWorkerRetirement &&
+               observation.captureReleasedOnWorker && observation.releaseThread != ownerThread,
            "worker-release-strong-capture-drops-on-actual-scheduler-retirement-worker");
-    Expect(observation.terminal.status == JobStatus::Finished && rig.scheduler.IsIdle(),
-           "worker-release-parent-finishes-after-deferred-capture-retirement");
+    Expect(observation.terminal.status == JobStatus::Finished && rig.scheduler.IsIdle(), "worker-release-parent-finishes-after-deferred-capture-retirement");
 }
 } // namespace
 

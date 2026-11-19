@@ -59,13 +59,12 @@ struct BenchmarkMachineInfo final
 // matching clone and never chooses the first conflicting path as a timing authority.
 struct BenchmarkRefreshCandidate final
 {
-    bool matches = false;
+    bool matches  = false;
     bool eligible = false;
     BenchmarkMachineInfo::RefreshRate rate{};
 };
 
-[[nodiscard]] std::optional<BenchmarkMachineInfo::RefreshRate> SelectBenchmarkRefreshRate(
-    std::span<const BenchmarkRefreshCandidate> candidates) noexcept;
+[[nodiscard]] std::optional<BenchmarkMachineInfo::RefreshRate> SelectBenchmarkRefreshRate(std::span<const BenchmarkRefreshCandidate> candidates) noexcept;
 
 // Monotonic invalidation observed from the real owner window procedure. The window monitor is checked
 // only when WM_MOVE is delivered; topology/DPI/interactive-size changes invalidate unconditionally.

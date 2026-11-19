@@ -42,7 +42,7 @@ enum class ApplicationResponsiveSourceStage : std::uint8_t
 // reached event/registration fault seam. Its context outlives InitializeProcessing and Shutdown.
 struct ApplicationProcessingTestProbe final
 {
-    void* context = nullptr;
+    void* context                                                          = nullptr;
     std::int32_t (*afterStage)(void*, ApplicationProcessingStage) noexcept = nullptr;
     RetryWaitObserver retryWait;
     MemorySource memory; // Optional fixed admission source, alive through scheduler Close.
@@ -50,12 +50,12 @@ struct ApplicationProcessingTestProbe final
     // Absent in production. Its borrowed context survives Run and Shutdown; failure exercises acquired cleanup.
     std::int32_t (*afterRuntimeSources)(void*) noexcept = nullptr;
     // Explicit actual-Run startup fixture only. Borrowed context survives Run and joined Shutdown.
-    bool responsiveSourcesForTest = false;
-    bool responsiveSelectionSourcesForTest = false; // Explicit complete-source cold-start fixture only.
+    bool responsiveSourcesForTest                                                                = false;
+    bool responsiveSelectionSourcesForTest                                                       = false; // Explicit complete-source cold-start fixture only.
     std::int32_t (*afterResponsiveSourceStage)(void*, ApplicationResponsiveSourceStage) noexcept = nullptr;
     // Owner-only observation after an actual committed graph becomes visible. Absent in production.
     void (*committedDisplayPublished)(void*, RecordedDisplayGraph*) noexcept = nullptr;
-    unsigned int workerCount = 0; // Startup-only; zero preserves the production automatic count.
+    unsigned int workerCount                                                 = 0; // Startup-only; zero preserves the production automatic count.
     // Reached lasso fixture controls, configured before each admitted operation. The borrowed probe and
     // this shared owner survive joined Close; absent in production and no Application layout cost.
     std::shared_ptr<LassoWorkTestGate> lassoWork;

@@ -23,9 +23,9 @@ void Expect(bool condition, const char* name, int& failures) noexcept
 
 struct LifetimeCounts final
 {
-    int constructed = 0;
-    int destroyed = 0;
-    int childDestroyed = 0;
+    int constructed     = 0;
+    int destroyed       = 0;
+    int childDestroyed  = 0;
     int parentDestroyed = 0;
 };
 
@@ -35,7 +35,7 @@ struct LifetimeCounts final
 #pragma warning(disable : 4626)
 class TrackedObject final : public ArenaObject<TrackedObject>
 {
-  public:
+public:
     TrackedObject(LifetimeCounts& counts, std::uint32_t payload) noexcept : payload(payload), _counts(counts)
     {
         ++_counts.constructed;
@@ -47,7 +47,7 @@ class TrackedObject final : public ArenaObject<TrackedObject>
 
     std::uint32_t payload;
 
-  private:
+private:
     LifetimeCounts& _counts;
 };
 #pragma warning(pop)
@@ -58,14 +58,16 @@ class TrackedObject final : public ArenaObject<TrackedObject>
 #pragma warning(disable : 4626)
 class TrackedChild final : public ArenaObject<TrackedChild>
 {
-  public:
-    explicit TrackedChild(LifetimeCounts& counts) noexcept : _counts(counts) {}
+public:
+    explicit TrackedChild(LifetimeCounts& counts) noexcept : _counts(counts)
+    {
+    }
     ~TrackedChild() noexcept
     {
         ++_counts.childDestroyed;
     }
 
-  private:
+private:
     LifetimeCounts& _counts;
 };
 #pragma warning(pop)
@@ -76,7 +78,7 @@ class TrackedChild final : public ArenaObject<TrackedChild>
 #pragma warning(disable : 4626)
 class ThrowingParent final : public ArenaObject<ThrowingParent>
 {
-  public:
+public:
     explicit ThrowingParent(LifetimeCounts& counts) : _counts(counts)
     {
         (void)new TrackedChild(counts);
@@ -87,7 +89,7 @@ class ThrowingParent final : public ArenaObject<ThrowingParent>
         ++_counts.parentDestroyed;
     }
 
-  private:
+private:
     LifetimeCounts& _counts;
 };
 #pragma warning(pop)
@@ -95,21 +97,21 @@ class ThrowingParent final : public ArenaObject<ThrowingParent>
 bool DisjointAlignedAllocations()
 {
     Workspace workspace{1024, {}};
-    constexpr std::size_t firstSize = 13;
+    constexpr std::size_t firstSize  = 13;
     constexpr std::size_t secondSize = 29;
-    auto* first = static_cast<std::byte*>(Workspace::Allocate(firstSize, alignof(std::byte)));
-    auto* second = static_cast<std::byte*>(Workspace::Allocate(secondSize, alignof(std::byte)));
-    first[0] = std::byte{0x31};
-    first[firstSize - 1] = std::byte{0x7a};
-    second[0] = std::byte{0x42};
-    second[secondSize - 1] = std::byte{0x6b};
+    auto* first                      = static_cast<std::byte*>(Workspace::Allocate(firstSize, alignof(std::byte)));
+    auto* second                     = static_cast<std::byte*>(Workspace::Allocate(secondSize, alignof(std::byte)));
+    first[0]                         = std::byte{0x31};
+    first[firstSize - 1]             = std::byte{0x7a};
+    second[0]                        = std::byte{0x42};
+    second[secondSize - 1]           = std::byte{0x6b};
 
-    const auto firstAddress = reinterpret_cast<std::uintptr_t>(first);
+    const auto firstAddress  = reinterpret_cast<std::uintptr_t>(first);
     const auto secondAddress = reinterpret_cast<std::uintptr_t>(second);
-    const bool aligned = firstAddress % Workspace::Alignment == 0 && secondAddress % Workspace::Alignment == 0;
-    const bool disjoint = firstAddress + firstSize <= secondAddress || secondAddress + secondSize <= firstAddress;
-    return aligned && disjoint && first[0] == std::byte{0x31} && first[firstSize - 1] == std::byte{0x7a} &&
-           second[0] == std::byte{0x42} && second[secondSize - 1] == std::byte{0x6b};
+    const bool aligned       = firstAddress % Workspace::Alignment == 0 && secondAddress % Workspace::Alignment == 0;
+    const bool disjoint      = firstAddress + firstSize <= secondAddress || secondAddress + secondSize <= firstAddress;
+    return aligned && disjoint && first[0] == std::byte{0x31} && first[firstSize - 1] == std::byte{0x7a} && second[0] == std::byte{0x42} &&
+           second[secondSize - 1] == std::byte{0x6b};
 }
 
 bool ExactCapacityAndRefusal()
@@ -163,14 +165,14 @@ bool PreCancelledConstructionRefused()
 
 struct CheckpointState final
 {
-    std::stop_source* source = nullptr;
+    std::stop_source* source    = nullptr;
     std::uint64_t observedUnits = 0;
-    unsigned int calls = 0;
+    unsigned int calls          = 0;
 };
 
 void CancelAtCheckpoint(void* context, std::uint64_t workUnits) noexcept
 {
-    auto& state = *static_cast<CheckpointState*>(context);
+    auto& state         = *static_cast<CheckpointState*>(context);
     state.observedUnits = workUnits;
     ++state.calls;
     (void)state.source->request_stop();
@@ -181,7 +183,7 @@ bool CancellationAtHeldMutationCheckpoint()
     LifetimeCounts counts;
     std::stop_source source;
     CheckpointState checkpoint{&source};
-    bool refusedAtBoundary = false;
+    bool refusedAtBoundary              = false;
     bool mutationRetainedUntilScopeExit = false;
     {
         Workspace workspace{1024, CancelToken{source.get_token()}, CancelAtCheckpoint, &checkpoint};
@@ -200,8 +202,8 @@ bool CancellationAtHeldMutationCheckpoint()
         }
         mutationRetainedUntilScopeExit = object->payload == 0x91c4U && counts.destroyed == 0;
     }
-    return refusedAtBoundary && mutationRetainedUntilScopeExit && checkpoint.calls == 1 &&
-           checkpoint.observedUnits == Workspace::Quantum && counts.constructed == 1 && counts.destroyed == 1;
+    return refusedAtBoundary && mutationRetainedUntilScopeExit && checkpoint.calls == 1 && checkpoint.observedUnits == Workspace::Quantum &&
+           counts.constructed == 1 && counts.destroyed == 1;
 }
 
 bool ConstructorFailureCleansOwnedChild()
@@ -223,8 +225,7 @@ bool ConstructorFailureCleansOwnedChild()
         if (counts.childDestroyed != 0 || counts.destroyed != 0 || counts.parentDestroyed != 0)
             return false;
     }
-    return constructorFailed && counts.childDestroyed == 1 && counts.constructed == 0 && counts.destroyed == 0 &&
-           counts.parentDestroyed == 0;
+    return constructorFailed && counts.childDestroyed == 1 && counts.constructed == 0 && counts.destroyed == 0 && counts.parentDestroyed == 0;
 }
 
 bool DeletedObjectNotDestroyedAgain()
@@ -296,14 +297,14 @@ bool MultipleOwnedObjectsReleaseToZeroOutstanding()
 bool RawBufferBytesDoNotBecomeOwnedObjects()
 {
     Workspace workspace{512, {}};
-    auto* bytes = static_cast<std::byte*>(Workspace::Allocate(4, alignof(std::byte)));
-    bytes[0] = std::byte{0x11};
-    bytes[1] = std::byte{0x22};
-    bytes[2] = std::byte{0x33};
-    bytes[3] = std::byte{0x44};
+    auto* bytes                            = static_cast<std::byte*>(Workspace::Allocate(4, alignof(std::byte)));
+    bytes[0]                               = std::byte{0x11};
+    bytes[1]                               = std::byte{0x22};
+    bytes[2]                               = std::byte{0x33};
+    bytes[3]                               = std::byte{0x44};
     const Workspace::Statistics statistics = workspace.GetStatistics();
-    return statistics.allocations == 1 && statistics.liveObjects == 0 && bytes[0] == std::byte{0x11} &&
-           bytes[1] == std::byte{0x22} && bytes[2] == std::byte{0x33} && bytes[3] == std::byte{0x44};
+    return statistics.allocations == 1 && statistics.liveObjects == 0 && bytes[0] == std::byte{0x11} && bytes[1] == std::byte{0x22} &&
+           bytes[2] == std::byte{0x33} && bytes[3] == std::byte{0x44};
 }
 
 template <class Test> void RunCase(Test test, const char* name, int& failures) noexcept
@@ -335,7 +336,6 @@ int RunDocumentWandWorkspaceTests()
     RunCase(ArenaVectorGrowthPreservesValues, "container.vector-growth-preserves-literal-values", failures);
     RunCase(RawBufferBytesDoNotBecomeOwnedObjects, "allocation.raw-buffer-is-not-an-owned-object", failures);
     RunCase(RepeatedScopeReleaseBalancesDestructors, "scope.repeated-release-balances-destructors", failures);
-    RunCase(MultipleOwnedObjectsReleaseToZeroOutstanding, "scope.multiple-objects-release-to-zero-outstanding",
-            failures);
+    RunCase(MultipleOwnedObjectsReleaseToZeroOutstanding, "scope.multiple-objects-release-to-zero-outstanding", failures);
     return failures;
 }

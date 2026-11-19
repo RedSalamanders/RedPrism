@@ -26,11 +26,13 @@ void Expect(bool condition, const char* label) noexcept
 bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
 {
     constexpr std::uint64_t available = 8ULL * 1024 * 1024 * 1024;
-    snapshot = {available, available};
+    snapshot                          = {available, available};
     return true;
 }
 
-void NoopWait(void*) noexcept {}
+void NoopWait(void*) noexcept
+{
+}
 
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
@@ -47,7 +49,7 @@ struct WaitProbe final
         for (auto& event : events)
         {
             event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-            if (!event)
+            if (! event)
                 return false;
         }
         overflowEvent.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
@@ -57,11 +59,10 @@ struct WaitProbe final
     std::size_t Available(JobScheduler& scheduler, bool& capacityError) noexcept
     {
         std::size_t count = 0;
-        capacityError = false;
+        capacityError     = false;
         for (; count < events.size(); ++count)
         {
-            const HRESULT result = static_cast<HRESULT>(
-                scheduler.RegisterEventWait(events[count].get(), NoopWait, nullptr, tickets[count]));
+            const HRESULT result = static_cast<HRESULT>(scheduler.RegisterEventWait(events[count].get(), NoopWait, nullptr, tickets[count]));
             if (FAILED(result))
             {
                 capacityError = result == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
@@ -71,9 +72,8 @@ struct WaitProbe final
         if (count == events.size())
         {
             JobEventTicket overflowTicket{};
-            const HRESULT overflow = static_cast<HRESULT>(
-                scheduler.RegisterEventWait(overflowEvent.get(), NoopWait, nullptr, overflowTicket));
-            capacityError = overflow == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+            const HRESULT overflow = static_cast<HRESULT>(scheduler.RegisterEventWait(overflowEvent.get(), NoopWait, nullptr, overflowTicket));
+            capacityError          = overflow == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
             if (SUCCEEDED(overflow))
                 capacityError = scheduler.RemoveEventWait(overflowTicket) && capacityError;
         }
@@ -86,8 +86,7 @@ struct WaitProbe final
         std::size_t held = 0;
         for (; held < count; ++held)
         {
-            if (FAILED(static_cast<HRESULT>(
-                    scheduler.RegisterEventWait(events[held].get(), NoopWait, nullptr, tickets[held]))))
+            if (FAILED(static_cast<HRESULT>(scheduler.RegisterEventWait(events[held].get(), NoopWait, nullptr, tickets[held]))))
                 break;
         }
         if (held != count)
@@ -115,14 +114,16 @@ struct DummyOwner final : OwnerWorkPump
     {
         return false;
     }
-    void Pump() noexcept override {}
+    void Pump() noexcept override
+    {
+    }
 };
 
 bool CheckAvailable(WaitProbe& probe, JobScheduler& scheduler, std::size_t expected, const char* label) noexcept
 {
-    bool capacityError = false;
+    bool capacityError   = false;
     const auto available = probe.Available(scheduler, capacityError);
-    const bool complete = capacityError && available == expected && available >= GpuUploadQueue::kCapacity;
+    const bool complete  = capacityError && available == expected && available >= GpuUploadQueue::kCapacity;
     Expect(complete, label);
     return complete;
 }
@@ -133,28 +134,32 @@ void CloseQueue(GpuUploadQueue& queue, const char* label) noexcept
     queue.CloseAfterWorkers();
     queue.CloseAfterWorkers();
     queue.StopNotifications();
-    Expect(!queue.HasPending() && !queue.HasReady(), label);
+    Expect(! queue.HasPending() && ! queue.HasReady(), label);
 }
 
 void CheckSuccessfulRetry(JobScheduler& scheduler, WaitProbe& probe, std::size_t baseline, const char* label)
 {
     GpuUploadQueue queue;
     const HRESULT initialized = queue.Initialize(scheduler);
-    const bool initiallyIdle = !queue.HasPending() && !queue.HasReady();
+    const bool initiallyIdle  = ! queue.HasPending() && ! queue.HasReady();
     if (SUCCEEDED(initialized))
         queue.Pump();
     queue.StopNotifications();
     queue.CloseAfterWorkers();
     queue.CloseAfterWorkers();
-    bool capacityError = false;
+    bool capacityError   = false;
     const auto available = probe.Available(scheduler, capacityError);
-    Expect(initialized == S_OK && initiallyIdle && !queue.HasPending() && !queue.HasReady() && capacityError &&
-               available == baseline,
-           label);
+    Expect(initialized == S_OK && initiallyIdle && ! queue.HasPending() && ! queue.HasReady() && capacityError && available == baseline, label);
 }
 
-void CheckInjectedFailure(JobScheduler& scheduler, WaitProbe& probe, std::size_t baseline, GpuUploadFailurePoint point,
-                          HRESULT injected, unsigned int skip, HRESULT expected, const char* label)
+void CheckInjectedFailure(JobScheduler& scheduler,
+                          WaitProbe& probe,
+                          std::size_t baseline,
+                          GpuUploadFailurePoint point,
+                          HRESULT injected,
+                          unsigned int skip,
+                          HRESULT expected,
+                          const char* label)
 {
     GpuUploadQueue queue;
     queue.SetFailureForTest(point, injected, skip);
@@ -173,9 +178,9 @@ void TestCapacityExhaustion(JobScheduler& scheduler, WaitProbe& probe, std::size
         return;
 
     const std::size_t heldCount = baseline - 3;
-    const bool held = probe.Hold(scheduler, heldCount);
+    const bool held             = probe.Hold(scheduler, heldCount);
     Expect(held, "capacity-hold-except-three");
-    if (!held)
+    if (! held)
         return;
     GpuUploadQueue queue;
     queue.SetFailureForTest(GpuUploadFailurePoint::None);
@@ -193,7 +198,7 @@ void TestOwnerConflict(JobScheduler& scheduler, WaitProbe& probe, std::size_t ba
     DummyOwner dummy;
     const bool registered = scheduler.RegisterOwnerWork(dummy);
     Expect(registered, "owner-conflict-dummy-registered");
-    if (!registered)
+    if (! registered)
         return;
     GpuUploadQueue queue;
     const HRESULT actual = queue.Initialize(scheduler);
@@ -207,23 +212,19 @@ void TestOwnerConflict(JobScheduler& scheduler, WaitProbe& probe, std::size_t ba
 
 void RunInitializationCases(JobScheduler& scheduler, WaitProbe& probe, std::size_t baseline)
 {
-    CheckInjectedFailure(scheduler, probe, baseline, GpuUploadFailurePoint::ImplementationAllocation, E_FAIL, 0,
-                         E_OUTOFMEMORY, "allocation-boundary-out-of-memory");
+    CheckInjectedFailure(
+        scheduler, probe, baseline, GpuUploadFailurePoint::ImplementationAllocation, E_FAIL, 0, E_OUTOFMEMORY, "allocation-boundary-out-of-memory");
 
     constexpr std::array<unsigned int, 3> skips{0, 3, 7};
-    constexpr std::array<const char*, 3> eventLabels{"event-create-skip-0", "event-create-skip-3",
-                                                     "event-create-skip-7"};
-    constexpr std::array<const char*, 3> waitLabels{"wait-register-skip-0", "wait-register-skip-3",
-                                                    "wait-register-skip-7"};
+    constexpr std::array<const char*, 3> eventLabels{"event-create-skip-0", "event-create-skip-3", "event-create-skip-7"};
+    constexpr std::array<const char*, 3> waitLabels{"wait-register-skip-0", "wait-register-skip-3", "wait-register-skip-7"};
     for (std::size_t index = 0; index < skips.size(); ++index)
-        CheckInjectedFailure(scheduler, probe, baseline, GpuUploadFailurePoint::EventCreation, E_ACCESSDENIED,
-                             skips[index], E_ACCESSDENIED, eventLabels[index]);
+        CheckInjectedFailure(
+            scheduler, probe, baseline, GpuUploadFailurePoint::EventCreation, E_ACCESSDENIED, skips[index], E_ACCESSDENIED, eventLabels[index]);
     for (std::size_t index = 0; index < skips.size(); ++index)
-        CheckInjectedFailure(scheduler, probe, baseline, GpuUploadFailurePoint::WaitRegistration, E_FAIL, skips[index],
-                             E_FAIL, waitLabels[index]);
+        CheckInjectedFailure(scheduler, probe, baseline, GpuUploadFailurePoint::WaitRegistration, E_FAIL, skips[index], E_FAIL, waitLabels[index]);
 
-    CheckInjectedFailure(scheduler, probe, baseline, GpuUploadFailurePoint::OwnerRegistration, E_FAIL, 0, E_FAIL,
-                         "owner-registration-failure-exact");
+    CheckInjectedFailure(scheduler, probe, baseline, GpuUploadFailurePoint::OwnerRegistration, E_FAIL, 0, E_FAIL, "owner-registration-failure-exact");
     TestCapacityExhaustion(scheduler, probe, baseline);
     TestOwnerConflict(scheduler, probe, baseline);
 }
@@ -241,13 +242,13 @@ int RunGpuUploadInitializationTests()
     WaitProbe probe;
     const bool eventsCreated = probe.CreateEvents();
     Expect(eventsCreated, "wait-probe-events-created");
-    if (!eventsCreated)
+    if (! eventsCreated)
     {
         scheduler.Close();
         return gFailures;
     }
 
-    bool capacityError = false;
+    bool capacityError         = false;
     const std::size_t baseline = probe.Available(scheduler, capacityError);
     Expect(capacityError && baseline >= GpuUploadQueue::kCapacity, "wait-pool-baseline-measured");
     if (capacityError && baseline >= GpuUploadQueue::kCapacity)

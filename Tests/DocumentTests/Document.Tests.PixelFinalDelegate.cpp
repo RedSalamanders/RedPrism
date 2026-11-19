@@ -50,10 +50,10 @@ Pixels Source()
 
 Pixels Expected(bool duplicate)
 {
-    auto result = Source();
-    constexpr std::size_t source = (1 * 5 + 1) * 4;
+    auto result                       = Source();
+    constexpr std::size_t source      = (1 * 5 + 1) * 4;
     constexpr std::size_t destination = (2 * 5 + 3) * 4;
-    if (!duplicate)
+    if (! duplicate)
         std::fill_n(result.begin() + static_cast<std::ptrdiff_t>(source), 4, std::uint8_t{});
     std::copy(kRed.begin(), kRed.end(), result.begin() + static_cast<std::ptrdiff_t>(destination));
     return result;
@@ -62,7 +62,7 @@ Pixels Expected(bool duplicate)
 bool Matches(const DocumentSession& session, const Pixels& expected)
 {
     const auto* layer = session.ActiveLayer();
-    if (!layer || !layer->asset || layer->asset->image.Width() != 5 || layer->asset->image.Height() != 3)
+    if (! layer || ! layer->asset || layer->asset->image.Width() != 5 || layer->asset->image.Height() != 3)
         return false;
     Pixels actual{};
     layer->asset->image.ReadRegion(0, 0, 5, 3, actual.data(), 20, 0);
@@ -80,7 +80,7 @@ struct Memory final
     {
         static_cast<Memory*>(raw)->queries.fetch_add(1, std::memory_order_relaxed);
         constexpr std::uint64_t available = kMemoryAdmissionHeadroomBytes + 2ull * 1024 * 1024 * 1024;
-        snapshot = {available, available};
+        snapshot                          = {available, available};
         return true;
     }
 };
@@ -116,7 +116,7 @@ struct Probe final
     {
         if (notice.event == JobNoticeKind::Submitted)
         {
-            auto& value = *static_cast<Probe*>(raw);
+            auto& value           = *static_cast<Probe*>(raw);
             value.submittedTicket = notice.ticket;
             value.submissions.fetch_add(1, std::memory_order_release);
         }
@@ -132,12 +132,18 @@ struct Fixture;
 #pragma warning(disable : 4625 4626 5027)
 class FinalStage final : public Job
 {
-  public:
-    FinalStage(Probe& probe, SelectionOutlineGestureState& result, SelectionPixelFinalWork work,
-               JobScheduler& scheduler, DocumentSession& session) noexcept
-        : _probe(probe), _result(&result), _closure(std::move(work.closure)), _finalMemory(std::move(work.finalMemory)),
-          _temporaryMemory(std::move(work.temporaryMemory)), _remainingCpuBytes(work.remainingCpuBytes),
-          _finalOutputBytes(work.finalOutputBytes), _scheduler(scheduler), _session(session), _ticket(result.original)
+public:
+    FinalStage(Probe& probe, SelectionOutlineGestureState& result, SelectionPixelFinalWork work, JobScheduler& scheduler, DocumentSession& session) noexcept
+        : _probe(probe),
+          _result(&result),
+          _closure(std::move(work.closure)),
+          _finalMemory(std::move(work.finalMemory)),
+          _temporaryMemory(std::move(work.temporaryMemory)),
+          _remainingCpuBytes(work.remainingCpuBytes),
+          _finalOutputBytes(work.finalOutputBytes),
+          _scheduler(scheduler),
+          _session(session),
+          _ticket(result.original)
     {
     }
 
@@ -155,7 +161,7 @@ class FinalStage final : public Job
             _probe.refreshThread = id;
             _probe.refreshTicket = _ticket;
             _probe.refreshRuns.fetch_add(1, std::memory_order_release);
-            _refreshReady = _closure && _closure->RefreshHistoryResidency(context.cancellation);
+            _refreshReady     = _closure && _closure->RefreshHistoryResidency(context.cancellation);
             _refreshRequested = false;
             return _refreshReady ? JobResult{} : JobResult{JobStatus::Failed, E_FAIL};
         }
@@ -184,10 +190,9 @@ class FinalStage final : public Job
         }
         else if (_probe.firstRetires.fetch_add(1, std::memory_order_acq_rel) == 0)
         {
-            _probe.firstRetireThread = std::this_thread::get_id();
+            _probe.firstRetireThread   = std::this_thread::get_id();
             _probe.initialRetireTicket = _ticket;
-            _probe.initialRetirementPrecededEveryRun.store(_probe.workRuns.load(std::memory_order_acquire) == 0,
-                                                           std::memory_order_release);
+            _probe.initialRetirementPrecededEveryRun.store(_probe.workRuns.load(std::memory_order_acquire) == 0, std::memory_order_release);
         }
     }
 
@@ -211,7 +216,7 @@ class FinalStage final : public Job
         }
         if (result.status != JobStatus::Finished)
             return false;
-        if (!_closure)
+        if (! _closure)
             return false;
 
         if (_refreshReady)
@@ -232,12 +237,11 @@ class FinalStage final : public Job
         if (layer && layer->asset)
             layer->asset->image.ReadRegion(0, 0, 5, 3, source.data(), 20, 0);
         _probe.sourceBeforeApply.store(layer && layer->asset && source == Source(), std::memory_order_release);
-        const auto bound = _finalMemory && _temporaryMemory &&
-                           _finalMemory->BindPersistentOutputForPublication(_scheduler, ticket, _finalOutputBytes,
-                                                                            *_temporaryMemory) == S_OK;
+        const auto bound   = _finalMemory && _temporaryMemory &&
+                             _finalMemory->BindPersistentOutputForPublication(_scheduler, ticket, _finalOutputBytes, *_temporaryMemory) == S_OK;
         const bool applied = bound && _session.ApplyPreparedDeferredPixelMoveClosureIfCurrent(*_closure);
         _probe.applied.store(applied, std::memory_order_release);
-        if (!applied)
+        if (! applied)
         {
             permit.Reset();
             return RetireAfterRefusal({JobStatus::Failed, E_ABORT});
@@ -251,12 +255,10 @@ class FinalStage final : public Job
     void Completed(JobResult result) noexcept override
     {
         _probe.completedCalls.fetch_add(1, std::memory_order_relaxed);
-        _probe.completionTicket = _ticket;
+        _probe.completionTicket   = _ticket;
         _result->pixelFinalClosed = _applied;
         _result->pixelFinalOutcome =
-            _applied ? JobResult{}
-                     : _failure.value_or(result.status == JobStatus::Finished ? JobResult{JobStatus::Failed, E_ABORT}
-                                                                              : result);
+            _applied ? JobResult{} : _failure.value_or(result.status == JobStatus::Finished ? JobResult{JobStatus::Failed, E_ABORT} : result);
     }
 
     void RetainJoinedRetirement(JobScheduler&, JobTicket) noexcept override
@@ -264,7 +266,7 @@ class FinalStage final : public Job
         _probe.joinedRetirements.fetch_add(1, std::memory_order_relaxed);
     }
 
-  private:
+private:
     bool ResumeStage() noexcept
     {
         return _scheduler.Resume(_ticket);
@@ -272,7 +274,7 @@ class FinalStage final : public Job
 
     bool RetireAfterRefusal(JobResult failure) noexcept
     {
-        _failure = failure;
+        _failure    = failure;
         _retireOnly = true;
         return ResumeStage();
     }
@@ -288,16 +290,16 @@ class FinalStage final : public Job
     DocumentSession& _session;
     JobTicket _ticket{};
     bool _refreshRequested = false;
-    bool _refreshReady = false;
-    bool _retireOnly = false;
-    bool _applied = false;
+    bool _refreshReady     = false;
+    bool _retireOnly       = false;
+    bool _applied          = false;
     std::optional<JobResult> _failure;
 };
 #pragma warning(pop)
 
 std::unique_ptr<Job> MakeFinalStage(void* raw, SelectionOutlineGestureState& result, SelectionPixelFinalWork work)
 {
-    auto& probe = *static_cast<Probe*>(raw);
+    auto& probe         = *static_cast<Probe*>(raw);
     probe.factoryThread = std::this_thread::get_id();
     probe.factoryTicket = result.original;
     probe.factoryCalls.fetch_add(1, std::memory_order_release);
@@ -315,7 +317,7 @@ struct Fixture final
     Memory memory;
     Probe probe;
     JobScheduler jobs;
-    std::unique_ptr<DocumentSession> session = std::make_unique<DocumentSession>();
+    std::unique_ptr<DocumentSession> session        = std::make_unique<DocumentSession>();
     std::unique_ptr<HostSelectionPressInput> prefix = std::make_unique<HostSelectionPressInput>();
     std::unique_ptr<SelectionOutlineGestureState> state;
     std::optional<SelectionOutlineGestureMemory> admitted;
@@ -325,42 +327,40 @@ struct Fixture final
     {
         probe.refuseFactory = refuseFactory;
         DocumentFixture document;
-        document.width = 5;
-        document.height = 3;
+        document.width     = 5;
+        document.height    = 3;
         document.selection = DocumentSelection{false, {{{1, 1}, {2, 1}, {2, 2}, {1, 2}}}};
-        auto layer = ImageLayer::Blank(L"Pixel final delegate", {5, 3});
-        const auto source = Source();
-        layer.asset =
-            RasterAsset{Raster::Make(5, 3, RasterFormat::Bgra8888, source.data(), source.size()), {}, layer.name};
-        active = layer.id;
+        auto layer         = ImageLayer::Blank(L"Pixel final delegate", {5, 3});
+        const auto source  = Source();
+        layer.asset        = RasterAsset{Raster::Make(5, 3, RasterFormat::Bgra8888, source.data(), source.size()), {}, layer.name};
+        active             = layer.id;
         document.layers.push_back(std::move(layer));
         session->ReplaceDocument(std::move(document).Seal(), active);
         session->SetSelection(DocumentSelection{false, {{{0, 0}, {1, 0}, {1, 1}, {0, 1}}}}, L"Redo seed");
         session->Undo();
-        if (!session->history.CanRedo() || jobs.Initialize(2, {Probe::Notice, &probe}, {Memory::Read, &memory}) != 0 ||
-            !jobs.EnableDeferredRelease())
+        if (! session->history.CanRedo() || jobs.Initialize(2, {Probe::Notice, &probe}, {Memory::Read, &memory}) != 0 || ! jobs.EnableDeferredRelease())
             Broken("seed-redo-and-start-scheduler");
         admitted = DescribeSelectionPixelGestureMemory(*session, LassoKind::Rectangle, SelectionMode::New);
-        if (!admitted)
+        if (! admitted)
             Broken("complete-pixel-admission");
         HostSelectionPressInput::Context arrival;
         arrival.document = admitted->source.document;
-        arrival.ordinal = 1;
-        arrival.active = active;
-        arrival.crop = session->CropFrame();
-        arrival.mask = session->IsMaskSelected();
-        arrival.tool = HostSelectionPressInput::Tool::Marquee;
-        arrival.kind = LassoKind::Rectangle;
-        arrival.mode = SelectionMode::New;
-        if (!prefix->Begin(81, arrival, {1.5, 1.5}, {false, true, duplicate}, false))
+        arrival.ordinal  = 1;
+        arrival.active   = active;
+        arrival.crop     = session->CropFrame();
+        arrival.mask     = session->IsMaskSelected();
+        arrival.tool     = HostSelectionPressInput::Tool::Marquee;
+        arrival.kind     = LassoKind::Rectangle;
+        arrival.mode     = SelectionMode::New;
+        if (! prefix->Begin(81, arrival, {1.5, 1.5}, {false, true, duplicate}, false))
             Broken("captured-control-alt-down");
-        state = std::make_unique<SelectionOutlineGestureState>(jobs, *session, *prefix, 81, admitted->limits);
-        state->admissionSource = admitted->source;
-        state->drawingPlan = admitted->drawing;
+        state                        = std::make_unique<SelectionOutlineGestureState>(jobs, *session, *prefix, 81, admitted->limits);
+        state->admissionSource       = admitted->source;
+        state->drawingPlan           = admitted->drawing;
         state->allowInitialPixelMove = true;
         state->requireCapturedTarget = true;
-        state->pixelFinalFactory = MakeFinalStage;
-        state->pixelFinalHost = &probe;
+        state->pixelFinalFactory     = MakeFinalStage;
+        state->pixelFinalHost        = &probe;
     }
 
     ~Fixture()
@@ -375,11 +375,11 @@ struct Fixture final
             Broken("accepted-move-and-up");
         std::unique_ptr<Job> job = std::make_unique<SelectionOutlineGestureJob>(*state);
         if (jobs.Submit(job,
-                        {.kind = JobClass::Selection,
-                         .serialKey = session->DocumentSerial(),
-                         .memoryBytes = admitted->limits.totalBytes,
-                         .deferredRetirement = true,
-                         .allowMemoryWaiting = false,
+                        {.kind                  = JobClass::Selection,
+                         .serialKey             = session->DocumentSerial(),
+                         .memoryBytes           = admitted->limits.totalBytes,
+                         .deferredRetirement    = true,
+                         .allowMemoryWaiting    = false,
                          .reserveRetainedMemory = true,
                          .continuingOutputLimit = admitted->limits.continuingOutputBytes},
                         state->original) != 0)
@@ -394,64 +394,62 @@ void VerifyDelegated(bool duplicate, int& failures)
 {
     Fixture fixture(duplicate);
     const auto initialGeneration = fixture.session->Generation();
-    const auto initialUndo = fixture.session->history.UndoCount();
+    const auto initialUndo       = fixture.session->history.UndoCount();
     fixture.Finish({3.5, 2.5});
     auto& p = fixture.probe;
-    Expect(fixture.state->completed && fixture.state->sameTicket && fixture.state->inputAcknowledged &&
-               fixture.state->pixelMove && fixture.state->closed &&
+    Expect(fixture.state->completed && fixture.state->sameTicket && fixture.state->inputAcknowledged && fixture.state->pixelMove && fixture.state->closed &&
                fixture.state->outcome.status == JobStatus::Finished,
-           duplicate ? "alt-duplicate-original-gesture-finishes" : "move-original-gesture-finishes", failures);
-    const bool refreshConsistent =
-        p.refreshRuns == 0 || (p.refreshThread != p.owner && p.refreshTicket == fixture.state->original);
-    Expect(p.factoryCalls == 1 && p.workRuns == 1 && p.finalRetires == 1 && p.ownerCompletions == 3 + p.refreshRuns &&
-               refreshConsistent && p.completedCalls == 1 && p.factoryTicket == fixture.state->original &&
-               p.deferredRetirements == p.ownerCompletions && p.joinedRetirements == 0 &&
-               p.initialRetirementPrecededEveryRun && p.initialRetireTicket == fixture.state->original &&
-               p.workTicket == fixture.state->original && p.finalRetireTicket == fixture.state->original &&
-               p.completionTicket == fixture.state->original && p.factoryThread != p.owner &&
-               p.firstRetireThread != p.owner && p.workThread != p.owner && p.finalRetireThread != p.owner &&
-               p.submissions == 1 && p.submittedTicket == fixture.state->original && fixture.memory.queries >= 1,
-           "factory-work-and-retirement-use-worker-on-same-original-ticket", failures);
-    Expect(p.applied && p.sourceBeforeApply && Matches(*fixture.session, Expected(duplicate)) &&
-               fixture.session->Generation() == initialGeneration + 1 &&
-               fixture.session->history.UndoCount() == initialUndo + 1 && !fixture.session->history.CanRedo(),
-           "owner-publication-applies-literal-bgra-once-and-transfers-history-charge", failures);
+           duplicate ? "alt-duplicate-original-gesture-finishes" : "move-original-gesture-finishes",
+           failures);
+    const bool refreshConsistent = p.refreshRuns == 0 || (p.refreshThread != p.owner && p.refreshTicket == fixture.state->original);
+    Expect(p.factoryCalls == 1 && p.workRuns == 1 && p.finalRetires == 1 && p.ownerCompletions == 3 + p.refreshRuns && refreshConsistent &&
+               p.completedCalls == 1 && p.factoryTicket == fixture.state->original && p.deferredRetirements == p.ownerCompletions && p.joinedRetirements == 0 &&
+               p.initialRetirementPrecededEveryRun && p.initialRetireTicket == fixture.state->original && p.workTicket == fixture.state->original &&
+               p.finalRetireTicket == fixture.state->original && p.completionTicket == fixture.state->original && p.factoryThread != p.owner &&
+               p.firstRetireThread != p.owner && p.workThread != p.owner && p.finalRetireThread != p.owner && p.submissions == 1 &&
+               p.submittedTicket == fixture.state->original && fixture.memory.queries >= 1,
+           "factory-work-and-retirement-use-worker-on-same-original-ticket",
+           failures);
+    Expect(p.applied && p.sourceBeforeApply && Matches(*fixture.session, Expected(duplicate)) && fixture.session->Generation() == initialGeneration + 1 &&
+               fixture.session->history.UndoCount() == initialUndo + 1 && ! fixture.session->history.CanRedo(),
+           "owner-publication-applies-literal-bgra-once-and-transfers-history-charge",
+           failures);
     fixture.session->Undo();
-    Expect(Matches(*fixture.session, Source()) && fixture.session->history.CanRedo(),
-           "single-undo-restores-independent-literal-source", failures);
+    Expect(Matches(*fixture.session, Source()) && fixture.session->history.CanRedo(), "single-undo-restores-independent-literal-source", failures);
     fixture.session->Redo();
     Expect(Matches(*fixture.session, Expected(duplicate)) && fixture.session->history.UndoCount() == initialUndo + 1,
-           "single-redo-restores-literal-published-pixels", failures);
+           "single-redo-restores-literal-published-pixels",
+           failures);
 }
 
 void VerifyZeroOffset(int& failures)
 {
     Fixture fixture(false);
     const auto generation = fixture.session->Generation();
-    const auto revision = fixture.session->history.CurrentRevision();
-    const auto undoCount = fixture.session->history.UndoCount();
+    const auto revision   = fixture.session->history.CurrentRevision();
+    const auto undoCount  = fixture.session->history.UndoCount();
     fixture.Finish({1.5, 1.5});
-    Expect(fixture.state->completed && fixture.state->closed && fixture.state->pixelMove &&
-               fixture.state->outcome.status == JobStatus::Finished && fixture.probe.factoryCalls == 0 &&
-               Matches(*fixture.session, Source()) && fixture.session->Generation() == generation &&
-               fixture.session->history.CurrentRevision() == revision &&
-               fixture.session->history.UndoCount() == undoCount && fixture.session->history.CanRedo(),
-           "zero-offset-bypasses-factory-and-preserves-pixels-and-redo", failures);
+    Expect(fixture.state->completed && fixture.state->closed && fixture.state->pixelMove && fixture.state->outcome.status == JobStatus::Finished &&
+               fixture.probe.factoryCalls == 0 && Matches(*fixture.session, Source()) && fixture.session->Generation() == generation &&
+               fixture.session->history.CurrentRevision() == revision && fixture.session->history.UndoCount() == undoCount &&
+               fixture.session->history.CanRedo(),
+           "zero-offset-bypasses-factory-and-preserves-pixels-and-redo",
+           failures);
 }
 
 void VerifyNullFactory(int& failures)
 {
     Fixture fixture(false, true);
     const auto generation = fixture.session->Generation();
-    const auto revision = fixture.session->history.CurrentRevision();
-    const auto undoCount = fixture.session->history.UndoCount();
+    const auto revision   = fixture.session->history.CurrentRevision();
+    const auto undoCount  = fixture.session->history.UndoCount();
     fixture.Finish({3.5, 2.5});
-    Expect(fixture.probe.factoryCalls == 1 && fixture.state->completed &&
-               fixture.state->outcome.status == JobStatus::Failed && fixture.state->outcome.error == E_OUTOFMEMORY &&
-               !fixture.state->closed && fixture.probe.submissions == 1 && Matches(*fixture.session, Source()) &&
-               fixture.session->Generation() == generation && fixture.session->history.CurrentRevision() == revision &&
+    Expect(fixture.probe.factoryCalls == 1 && fixture.state->completed && fixture.state->outcome.status == JobStatus::Failed &&
+               fixture.state->outcome.error == E_OUTOFMEMORY && ! fixture.state->closed && fixture.probe.submissions == 1 &&
+               Matches(*fixture.session, Source()) && fixture.session->Generation() == generation && fixture.session->history.CurrentRevision() == revision &&
                fixture.session->history.UndoCount() == undoCount && fixture.session->history.CanRedo(),
-           "null-selected-factory-refuses-without-cpu-fallback-or-document-history-mutation", failures);
+           "null-selected-factory-refuses-without-cpu-fallback-or-document-history-mutation",
+           failures);
 }
 } // namespace
 

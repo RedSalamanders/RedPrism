@@ -23,28 +23,28 @@ namespace
 
 [[nodiscard]] Raster BlurUnchecked(const Raster& source, double sigma, const CancelToken& cancellation)
 {
-    const int width = source.Width();
-    const int height = source.Height();
-    const int channels = source.Channels();
-    const bool clamp = source.Format() == RasterFormat::Gray8;
-    const Raster prepared = ContiguousRasterForWork(source, cancellation);
+    const int width          = source.Width();
+    const int height         = source.Height();
+    const int channels       = source.Channels();
+    const bool clamp         = source.Format() == RasterFormat::Gray8;
+    const Raster prepared    = ContiguousRasterForWork(source, cancellation);
     const std::uint8_t* data = prepared.Data();
     if (data == nullptr)
     {
         return {};
     }
-    const std::size_t stride = static_cast<std::size_t>(source.Stride());
-    const int radius = std::max(1, static_cast<int>(std::ceil(sigma * 3.0)));
+    const std::size_t stride      = static_cast<std::size_t>(source.Stride());
+    const int radius              = std::max(1, static_cast<int>(std::ceil(sigma * 3.0)));
     const std::size_t weightCount = static_cast<std::size_t>(radius) * 2 + 1;
-    const auto weights = std::make_unique_for_overwrite<double[]>(weightCount);
-    double total = 0;
+    const auto weights            = std::make_unique_for_overwrite<double[]>(weightCount);
+    double total                  = 0;
     for (int i = -radius; i <= radius; ++i)
     {
         if ((i & 63) == 0 && cancellation.IsCancelled())
         {
             return {};
         }
-        const double w = std::exp(-(static_cast<double>(i) * i) / (2.0 * sigma * sigma));
+        const double w                                = std::exp(-(static_cast<double>(i) * i) / (2.0 * sigma * sigma));
         weights[static_cast<std::size_t>(i + radius)] = w;
         total += w;
     }
@@ -56,7 +56,7 @@ namespace
         }
         weights[i] /= total;
     }
-    const std::size_t pixelCount = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    const std::size_t pixelCount   = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
     const std::size_t channelCount = static_cast<std::size_t>(channels);
     // Every element is written before the vertical pass. Avoid an uncancellable image-sized zero fill.
     const auto horizontal = std::make_unique_for_overwrite<float[]>(pixelCount * channelCount);
@@ -81,24 +81,21 @@ namespace
                     int sx = x + i;
                     if (sx < 0 || sx >= width)
                     {
-                        if (!clamp)
+                        if (! clamp)
                         {
                             continue;
                         }
                         sx = std::clamp(sx, 0, width - 1);
                     }
-                    sum += weights[static_cast<std::size_t>(i + radius)] *
-                           row[static_cast<std::size_t>(sx) * channelCount + static_cast<std::size_t>(c)];
+                    sum += weights[static_cast<std::size_t>(i + radius)] * row[static_cast<std::size_t>(sx) * channelCount + static_cast<std::size_t>(c)];
                 }
-                horizontal[(static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
-                            static_cast<std::size_t>(x)) *
-                               channelCount +
+                horizontal[(static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)) * channelCount +
                            static_cast<std::size_t>(c)] = static_cast<float>(sum);
             }
         }
     }
     PixelBuffer bytes = PixelBuffer::TryAllocate(pixelCount * channelCount);
-    if (!bytes)
+    if (! bytes)
     {
         return {};
     }
@@ -122,25 +119,22 @@ namespace
                     int sy = y + i;
                     if (sy < 0 || sy >= height)
                     {
-                        if (!clamp)
+                        if (! clamp)
                         {
                             continue;
                         }
                         sy = std::clamp(sy, 0, height - 1);
                     }
                     sum += weights[static_cast<std::size_t>(i + radius)] *
-                           horizontal[(static_cast<std::size_t>(sy) * static_cast<std::size_t>(width) +
-                                       static_cast<std::size_t>(x)) *
-                                          channelCount +
+                           horizontal[(static_cast<std::size_t>(sy) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)) * channelCount +
                                       static_cast<std::size_t>(c)];
                 }
-                bytes[(static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)) *
-                          channelCount +
+                bytes[(static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)) * channelCount +
                       static_cast<std::size_t>(c)] = Round8(sum);
             }
         }
     }
-    if (!clamp)
+    if (! clamp)
     {
         // Premultiplied pixels stay premultiplied: rounding can leave a color byte past its alpha.
         for (std::size_t p = 0; p < pixelCount; ++p)
@@ -165,8 +159,7 @@ namespace
 // published on E_OUTOFMEMORY, and worker callers treat the empty raster as a failed whole operation.
 namespace
 {
-std::int32_t TryGaussianBlur(const Raster& source, double sigma, const CancelToken& cancellation,
-                             Raster& result) noexcept
+std::int32_t TryGaussianBlur(const Raster& source, double sigma, const CancelToken& cancellation, Raster& result) noexcept
 {
     try
     {
@@ -184,8 +177,7 @@ Raster GaussianBlur(const Raster& source, double sigma, const CancelToken& cance
 {
     // The tap count and x/y + radius must fit int before converting a floating-point radius.
     constexpr double kMaxSigma = (std::numeric_limits<int>::max() / 2 - kMaxCanvasSide) / 3.0;
-    if (!source.HasStorage() || !(sigma > 0.0) || !std::isfinite(sigma) || sigma > kMaxSigma ||
-        cancellation.IsCancelled())
+    if (! source.HasStorage() || ! (sigma > 0.0) || ! std::isfinite(sigma) || sigma > kMaxSigma || cancellation.IsCancelled())
     {
         return {};
     }
@@ -193,11 +185,9 @@ Raster GaussianBlur(const Raster& source, double sigma, const CancelToken& cance
     return TryGaussianBlur(source, sigma, cancellation, result) >= 0 ? std::move(result) : Raster{};
 }
 
-Raster RenderMaskPixels(const Raster& mask, const LayerTransform& transform, int width, int height,
-                        std::uint8_t background)
+Raster RenderMaskPixels(const Raster& mask, const LayerTransform& transform, int width, int height, std::uint8_t background)
 {
-    if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide || !mask.HasStorage() ||
-        mask.Format() != RasterFormat::Gray8)
+    if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide || ! mask.HasStorage() || mask.Format() != RasterFormat::Gray8)
     {
         return {};
     }
@@ -208,11 +198,10 @@ Raster RenderMaskPixels(const Raster& mask, const LayerTransform& transform, int
     }
     try
     {
-        if (!transform.IsValid())
+        if (! transform.IsValid())
         {
-            PixelBuffer bytes =
-                PixelBuffer::TryAllocate(static_cast<std::size_t>(width) * static_cast<std::size_t>(height));
-            if (!bytes)
+            PixelBuffer bytes = PixelBuffer::TryAllocate(static_cast<std::size_t>(width) * static_cast<std::size_t>(height));
+            if (! bytes)
             {
                 return {};
             }
@@ -221,9 +210,8 @@ Raster RenderMaskPixels(const Raster& mask, const LayerTransform& transform, int
         }
         // A transient sample, not a resample: High collapses to Smooth's single bilinear tap (no supersampling),
         // as RenderLayerPixels does for a layer's pixels.
-        const LayerSampling sampling =
-            transform.sampling == LayerSampling::Nearest ? LayerSampling::Nearest : LayerSampling::Smooth;
-        const Affine2 pixelToTarget = PixelToDocument(transform, mask.Width(), mask.Height());
+        const LayerSampling sampling = transform.sampling == LayerSampling::Nearest ? LayerSampling::Nearest : LayerSampling::Smooth;
+        const Affine2 pixelToTarget  = PixelToDocument(transform, mask.Width(), mask.Height());
         return RenderPlacedMask(mask, pixelToTarget, width, height, sampling, background);
     }
     catch (const std::bad_alloc&)
@@ -232,22 +220,21 @@ Raster RenderMaskPixels(const Raster& mask, const LayerTransform& transform, int
     }
 }
 
-Raster RenderMaskPixelsForWork(const Raster& mask, const LayerTransform& transform, int width, int height,
-                               std::uint8_t background, const CancelToken& cancellation)
+Raster RenderMaskPixelsForWork(
+    const Raster& mask, const LayerTransform& transform, int width, int height, std::uint8_t background, const CancelToken& cancellation)
 {
     if (cancellation.IsCancelled() || width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide ||
-        static_cast<std::int64_t>(width) * height > kMaxLayerPixels || !mask.HasStorage() ||
-        mask.Format() != RasterFormat::Gray8 || mask.PixelCount() > kMaxLayerPixels)
+        static_cast<std::int64_t>(width) * height > kMaxLayerPixels || ! mask.HasStorage() || mask.Format() != RasterFormat::Gray8 ||
+        mask.PixelCount() > kMaxLayerPixels)
         return {};
     // Read privately, including when an invalid transform yields the legacy uniform edge background. A failed
     // source read cannot be replaced by a valid background result. Never materialize the shared sparse mask.
     const auto source = ContiguousRasterForWork(mask, cancellation);
-    if (!source.HasStorage() || cancellation.IsCancelled())
+    if (! source.HasStorage() || cancellation.IsCancelled())
         return {};
-    if (!transform.IsValid())
+    if (! transform.IsValid())
         return RenderPlacedMask({}, Affine2{}, width, height, LayerSampling::Nearest, background, cancellation);
     const auto sampling = transform.sampling == LayerSampling::Nearest ? LayerSampling::Nearest : LayerSampling::Smooth;
-    return RenderPlacedMask(source, PixelToDocument(transform, source.Width(), source.Height()), width, height,
-                            sampling, background, cancellation);
+    return RenderPlacedMask(source, PixelToDocument(transform, source.Width(), source.Height()), width, height, sampling, background, cancellation);
 }
 } // namespace ImageFilters

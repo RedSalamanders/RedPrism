@@ -11,21 +11,20 @@ WorkerWake::~WorkerWake()
     Close();
 }
 
-HRESULT WorkerWake::Initialize(PTP_POOL pool, std::uint32_t capacity, Dispatch dispatch, void* context,
-                               Observer observer) noexcept
+HRESULT WorkerWake::Initialize(PTP_POOL pool, std::uint32_t capacity, Dispatch dispatch, void* context, Observer observer) noexcept
 {
     // Reinitialization is deliberately unsupported: no generation or callback can alias another endpoint.
     if (_ownerThread != 0)
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     _ownerThread = GetCurrentThreadId();
-    if (!pool || !dispatch || capacity == 0 || capacity > OwnerWakeCounts::kMaximumCapacity)
+    if (! pool || ! dispatch || capacity == 0 || capacity > OwnerWakeCounts::kMaximumCapacity)
         return E_INVALIDARG;
     _counts.emplace(capacity);
     _dispatch = dispatch;
-    _context = context;
+    _context  = context;
     _observer = observer;
     _event.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
-    if (!_event)
+    if (! _event)
     {
         const DWORD error = GetLastError();
         Close();
@@ -38,7 +37,7 @@ HRESULT WorkerWake::Initialize(PTP_POOL pool, std::uint32_t capacity, Dispatch d
     SetThreadpoolCallbackPriority(&environment, TP_CALLBACK_PRIORITY_HIGH);
     // Owned separately from the parent's dispatch cleanup group. Broker Close joins it first.
     _wait.reset(CreateThreadpoolWait(Callback, this, &environment));
-    if (!_wait)
+    if (! _wait)
     {
         const DWORD error = GetLastError();
         Close();
@@ -53,13 +52,13 @@ HRESULT WorkerWake::Request(WakeLane channel) noexcept
 {
     if (_ownerThread != GetCurrentThreadId())
         return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
-    if (!_open)
+    if (! _open)
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
-    if (!_counts.value().Request(channel))
+    if (! _counts.value().Request(channel))
         return E_INVALIDARG;
     // Always signal, including saturation. Real work has already been published by the caller's protocol;
     // relaxed counter operations do not publish it. A failure must fail the caller operation or tear down.
-    if (!SetEvent(_event.get()))
+    if (! SetEvent(_event.get()))
         return HRESULT_FROM_WIN32(GetLastError());
     return S_OK;
 }
@@ -88,7 +87,7 @@ void CALLBACK WorkerWake::Callback(PTP_CALLBACK_INSTANCE, void* context, PTP_WAI
     // Serialize rearm with Close's disarm. Close cannot disarm and then lose that decision to a late rearm.
     const auto lock = wil::AcquireSRWLockExclusive(&self._rearmLock);
     self.Observe(Phase::RearmLocked);
-    if (!self._stopping.load(std::memory_order_acquire))
+    if (! self._stopping.load(std::memory_order_acquire))
         SetThreadpoolWait(self._wait.get(), self._event.get(), nullptr);
 }
 
@@ -114,7 +113,7 @@ void WorkerWake::Close() noexcept
     _event.reset();
     _counts.reset();
     _dispatch = nullptr;
-    _context = nullptr;
+    _context  = nullptr;
     _observer = {};
 }
 } // namespace WorkerResources

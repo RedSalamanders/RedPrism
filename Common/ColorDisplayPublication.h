@@ -21,27 +21,33 @@ struct ColorDisplayPreviewMemory final
 // layer-scoped commit token remains distinct from complete display-source authority.
 class ColorDisplayPreviewInput final
 {
-  public:
+public:
     class ConstructionKey final
     {
         friend class DocumentSession;
         ConstructionKey() = default;
     };
-    ColorDisplayPreviewInput(ConstructionKey, ImageImportAuthority authority, DocumentHistory::Authority history,
-                             const CanvasDocument& source, ColorEditJobInput&& job) noexcept
-        : _authority(std::move(authority)), _history(std::move(history)), _source(source), _job(std::move(job))
+    ColorDisplayPreviewInput(
+        ConstructionKey, ImageImportAuthority authority, DocumentHistory::Authority history, const CanvasDocument& source, ColorEditJobInput&& job) noexcept
+        : _authority(std::move(authority)),
+          _history(std::move(history)),
+          _source(source),
+          _job(std::move(job))
     {
     }
-    ColorDisplayPreviewInput(const ColorDisplayPreviewInput&) = delete;
+    ColorDisplayPreviewInput(const ColorDisplayPreviewInput&)            = delete;
     ColorDisplayPreviewInput& operator=(const ColorDisplayPreviewInput&) = delete;
     ColorDisplayPreviewInput(ColorDisplayPreviewInput&& other) noexcept
-        : _authority(std::move(other._authority)), _history(std::move(other._history)),
-          _source(std::move(other._source)), _job(std::move(other._job)), _valid(std::exchange(other._valid, false))
+        : _authority(std::move(other._authority)),
+          _history(std::move(other._history)),
+          _source(std::move(other._source)),
+          _job(std::move(other._job)),
+          _valid(std::exchange(other._valid, false))
     {
     }
     ColorDisplayPreviewInput& operator=(ColorDisplayPreviewInput&&) = delete;
 
-  private:
+private:
     friend class DocumentSession;
     friend class PreparedColorDisplayPreview;
     ImageImportAuthority _authority;
@@ -53,28 +59,34 @@ class ColorDisplayPreviewInput final
 
 class PreparedColorDisplayPreview final
 {
-  public:
+public:
     class ConstructionKey final
     {
         friend class DocumentSession;
         ConstructionKey() = default;
     };
-    PreparedColorDisplayPreview(ConstructionKey, ColorDisplayPreviewInput&& input, ColorEditPreviewResult&& result,
+    PreparedColorDisplayPreview(ConstructionKey,
+                                ColorDisplayPreviewInput&& input,
+                                ColorEditPreviewResult&& result,
                                 std::optional<CanvasDocument>&& display) noexcept
-        : _input(std::move(input)), _result(std::move(result)), _display(std::move(display))
+        : _input(std::move(input)),
+          _result(std::move(result)),
+          _display(std::move(display))
     {
     }
     PreparedColorDisplayPreview(ConstructionKey, ColorDisplayPreviewInput&& input, ColorEditJobStatus status) noexcept
         : _input(std::move(input)),
-          _result{std::move(_input._job.token), std::move(_input._job.edit),
-                  status == ColorEditJobStatus::NoSource ? status : ColorEditJobStatus::Failed}
+          _result{std::move(_input._job.token), std::move(_input._job.edit), status == ColorEditJobStatus::NoSource ? status : ColorEditJobStatus::Failed}
     {
     }
-    PreparedColorDisplayPreview(const PreparedColorDisplayPreview&) = delete;
+    PreparedColorDisplayPreview(const PreparedColorDisplayPreview&)            = delete;
     PreparedColorDisplayPreview& operator=(const PreparedColorDisplayPreview&) = delete;
     PreparedColorDisplayPreview(PreparedColorDisplayPreview&& other) noexcept
-        : _input(std::move(other._input)), _result(std::move(other._result)), _display(std::move(other._display)),
-          _retired(std::move(other._retired)), _consumed(std::exchange(other._consumed, true))
+        : _input(std::move(other._input)),
+          _result(std::move(other._result)),
+          _display(std::move(other._display)),
+          _retired(std::move(other._retired)),
+          _consumed(std::exchange(other._consumed, true))
     {
     }
     PreparedColorDisplayPreview& operator=(PreparedColorDisplayPreview&&) = delete;
@@ -87,7 +99,7 @@ class PreparedColorDisplayPreview final
         return _result.status;
     }
 
-  private:
+private:
     friend class DocumentSession;
     struct RetiredPreview final
     {

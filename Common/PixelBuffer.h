@@ -10,12 +10,12 @@ struct PixelAllocation;
 // transfer to a worker without allocation or a copy. Every byte must be initialized before publication.
 class PixelBuffer final
 {
-  public:
+public:
     static constexpr std::size_t kAlignment = 64;
 
     PixelBuffer() noexcept;
     ~PixelBuffer();
-    PixelBuffer(const PixelBuffer&) = delete;
+    PixelBuffer(const PixelBuffer&)            = delete;
     PixelBuffer& operator=(const PixelBuffer&) = delete;
     PixelBuffer(PixelBuffer&&) noexcept;
     PixelBuffer& operator=(PixelBuffer&&) noexcept;
@@ -37,7 +37,7 @@ class PixelBuffer final
         return Data()[index];
     }
 
-  private:
+private:
     struct Retire
     {
         void operator()(PixelAllocation* allocation) const noexcept;

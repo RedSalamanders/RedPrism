@@ -25,8 +25,8 @@ namespace
 {
 constexpr std::uint64_t kCpuCharge = 1024 * 1024;
 constexpr std::uint64_t kGpuCharge = 65536;
-constexpr DWORD kTimeoutMs = 5000;
-unsigned failures = 0;
+constexpr DWORD kTimeoutMs         = 5000;
+unsigned failures                  = 0;
 
 void Expect(bool value, const char* name) noexcept
 {
@@ -51,25 +51,25 @@ struct Observation final
     wil::unique_event_nothrow release;
     JobTicket original;
     std::weak_ptr<SharedPublicationMemory> weak;
-    bool attached = false;
-    bool unboundChargeRefused = false;
-    bool joined = false;
-    bool boundBeforeTransfer = false;
-    bool wrongOriginalRefused = false;
-    bool transferred = false;
-    bool detached = false;
-    bool deferred = false;
-    bool ownerHook = false;
-    bool chargeHeldInOwnerHook = false;
+    bool attached                  = false;
+    bool unboundChargeRefused      = false;
+    bool joined                    = false;
+    bool boundBeforeTransfer       = false;
+    bool wrongOriginalRefused      = false;
+    bool transferred               = false;
+    bool detached                  = false;
+    bool deferred                  = false;
+    bool ownerHook                 = false;
+    bool chargeHeldInOwnerHook     = false;
     bool releaseRefusedInOwnerHook = false;
-    bool closeRefusedInOwnerHook = false;
-    bool workerHook = false;
-    bool heldBytesIntact = false;  // Worker only until release acknowledgement/Close returns.
-    bool heldChargeIntact = false; // Joined witness writes, then owner reads after thread::join.
-    bool heldEventObserved = false;
-    bool retiredOffOwner = false;
-    bool retired = false;
-    unsigned completed = 0;
+    bool closeRefusedInOwnerHook   = false;
+    bool workerHook                = false;
+    bool heldBytesIntact           = false; // Worker only until release acknowledgement/Close returns.
+    bool heldChargeIntact          = false; // Joined witness writes, then owner reads after thread::join.
+    bool heldEventObserved         = false;
+    bool retiredOffOwner           = false;
+    bool retired                   = false;
+    unsigned completed             = 0;
 };
 #pragma warning(pop)
 
@@ -83,18 +83,16 @@ struct Payload final : DeferredReleaseNode
 {
     explicit Payload(Observation& value) noexcept : observation(value)
     {
-        bytes = kCpuCharge;
+        bytes   = kCpuCharge;
         destroy = [](DeferredReleaseNode* node) noexcept
         {
-            auto* payload = static_cast<Payload*>(node);
-            auto& observation = payload->observation;
+            auto* payload               = static_cast<Payload*>(node);
+            auto& observation           = payload->observation;
             observation.retiredOffOwner = GetCurrentThreadId() != observation.ownerThread;
             observation.heldBytesIntact =
                 payload->pixels.Size() == 65536 &&
-                std::all_of(payload->pixels.Data(), payload->pixels.Data() + payload->pixels.Size(),
-                            [](std::uint8_t value) noexcept { return value == 17; });
-            if (!SetEvent(observation.entered.get()) ||
-                WaitForSingleObject(observation.release.get(), kTimeoutMs) != WAIT_OBJECT_0)
+                std::all_of(payload->pixels.Data(), payload->pixels.Data() + payload->pixels.Size(), [](std::uint8_t value) noexcept { return value == 17; });
+            if (! SetEvent(observation.entered.get()) || WaitForSingleObject(observation.release.get(), kTimeoutMs) != WAIT_OBJECT_0)
                 std::terminate(); // Failure bound, never a fabricated retirement acknowledgement.
             delete payload;
             observation.retired = true;
@@ -114,24 +112,26 @@ struct Payload final : DeferredReleaseNode
 #pragma warning(disable : 4625 4626)
 class Parent final : public Job, public UtilityReadbackOwner
 {
-  public:
-    Parent(JobScheduler& jobs, UtilityReadbackOwnerService& service, Observation& observation,
-           GpuResidencyReservation charge) noexcept
-        : _jobs(jobs), _service(service), _observation(observation), _charge(std::move(charge))
+public:
+    Parent(JobScheduler& jobs, UtilityReadbackOwnerService& service, Observation& observation, GpuResidencyReservation charge) noexcept
+        : _jobs(jobs),
+          _service(service),
+          _observation(observation),
+          _charge(std::move(charge))
     {
     }
     ~Parent() override
     {
-        if (!_payload)
+        if (! _payload)
             return;
-        if (!_observation.joined || _charge)
+        if (! _observation.joined || _charge)
             std::terminate();
-        _pending = false; // The scheduler joined every useful producer; only final payload retirement remains.
+        _pending              = false; // The scheduler joined every useful producer; only final payload retirement remains.
         _observation.detached = _service.DetachOwner(_observation.original, *this);
-        if (!_observation.detached)
+        if (! _observation.detached)
             std::terminate();
         _observation.deferred = TryDeferRelease(*_payload, DeferredReleasePolicy::AlwaysOnOwner);
-        if (!_observation.deferred)
+        if (! _observation.deferred)
             std::terminate();
         _payload = nullptr;
     }
@@ -139,10 +139,10 @@ class Parent final : public Job, public UtilityReadbackOwner
     {
         if (context.reservedMemoryBytes != kCpuCharge)
             return {JobStatus::Failed, E_UNEXPECTED};
-        auto payload = std::make_unique<Payload>(_observation);
+        auto payload    = std::make_unique<Payload>(_observation);
         payload->memory = SharedPublicationMemory::CreateForWork();
         payload->pixels = PixelBuffer::TryAllocate(65536);
-        if (!payload->pixels)
+        if (! payload->pixels)
             return {JobStatus::Failed, E_OUTOFMEMORY};
         std::fill_n(payload->pixels.Data(), payload->pixels.Size(), static_cast<std::uint8_t>(17));
         _payload = payload.release();
@@ -150,31 +150,26 @@ class Parent final : public Job, public UtilityReadbackOwner
     }
     bool DeferCompletion(JobResult, JobTicket ticket) noexcept override
     {
-        _observation.original = ticket;
-        _observation.weak = _payload->memory;
-        _pending = true;
-        _observation.attached = _service.AttachOwner(ticket, *this);
-        _observation.unboundChargeRefused =
-            !_service.RetainJoinedChargeOwner(ticket, *this, _charge, *_payload->memory) &&
-            _charge.Bytes() == kGpuCharge;
+        _observation.original             = ticket;
+        _observation.weak                 = _payload->memory;
+        _pending                          = true;
+        _observation.attached             = _service.AttachOwner(ticket, *this);
+        _observation.unboundChargeRefused = ! _service.RetainJoinedChargeOwner(ticket, *this, _charge, *_payload->memory) && _charge.Bytes() == kGpuCharge;
         return _observation.attached;
     }
     void RetainJoinedRetirement(JobScheduler& jobs, JobTicket original) noexcept override
     {
-        if (&jobs != &_jobs || original != _observation.original || !_payload)
+        if (&jobs != &_jobs || original != _observation.original || ! _payload)
             std::terminate();
         _observation.joined = true;
         if (FAILED(_payload->memory->BindForRetirement(jobs, original)))
             std::terminate();
-        _observation.boundBeforeTransfer =
-            _payload->memory->BoundTo(jobs, original) && _payload->memory->Bytes() == kCpuCharge;
-        auto wrong = original;
+        _observation.boundBeforeTransfer = _payload->memory->BoundTo(jobs, original) && _payload->memory->Bytes() == kCpuCharge;
+        auto wrong                       = original;
         ++wrong.generation;
-        _observation.wrongOriginalRefused =
-            !_service.RetainJoinedChargeOwner(wrong, *this, _charge, *_payload->memory) &&
-            _charge.Bytes() == kGpuCharge;
-        _observation.transferred = _service.RetainJoinedChargeOwner(original, *this, _charge, *_payload->memory);
-        if (!_observation.transferred || _charge)
+        _observation.wrongOriginalRefused = ! _service.RetainJoinedChargeOwner(wrong, *this, _charge, *_payload->memory) && _charge.Bytes() == kGpuCharge;
+        _observation.transferred          = _service.RetainJoinedChargeOwner(original, *this, _charge, *_payload->memory);
+        if (! _observation.transferred || _charge)
             std::terminate();
     }
     void Completed(JobResult) noexcept override
@@ -193,29 +188,30 @@ class Parent final : public Job, public UtilityReadbackOwner
     {
         std::terminate();
     }
-    void StopUtilityOwner() noexcept override {}
+    void StopUtilityOwner() noexcept override
+    {
+    }
 
-  private:
+private:
     JobScheduler& _jobs;
     UtilityReadbackOwnerService& _service;
     Observation& _observation;
     GpuResidencyReservation _charge;
     Payload* _payload = nullptr;
-    bool _pending = false;
+    bool _pending     = false;
 };
 #pragma warning(pop)
 
 bool WaitAttached(JobScheduler& jobs, Observation& observation) noexcept
 {
     const auto deadline = GetTickCount64() + kTimeoutMs;
-    while (!observation.attached)
+    while (! observation.attached)
     {
         (void)DrainCompletions(jobs);
         if (observation.attached)
             return true;
         const auto now = GetTickCount64();
-        if (now >= deadline || WaitForSingleObject(static_cast<HANDLE>(jobs.WakeHandle()),
-                                                   static_cast<DWORD>(deadline - now)) != WAIT_OBJECT_0)
+        if (now >= deadline || WaitForSingleObject(static_cast<HANDLE>(jobs.WakeHandle()), static_cast<DWORD>(deadline - now)) != WAIT_OBJECT_0)
             return false;
     }
     return true;
@@ -238,17 +234,16 @@ int RunUtilityJoinedCloseTests()
 {
     failures = 0;
     Observation observation;
-    Expect(SUCCEEDED(observation.entered.create(wil::EventOptions::ManualReset)) &&
-               SUCCEEDED(observation.release.create(wil::EventOptions::ManualReset)),
+    Expect(SUCCEEDED(observation.entered.create(wil::EventOptions::ManualReset)) && SUCCEEDED(observation.release.create(wil::EventOptions::ManualReset)),
            "actual-retirement-events-created");
-    if (!observation.entered || !observation.release)
+    if (! observation.entered || ! observation.release)
         return 1;
     JobScheduler jobs;
     OwnerWorkMultiplexer routes;
     auto service = std::make_unique<UtilityReadbackOwnerService>();
     GpuResidencyBudget budget;
-    Expect(SUCCEEDED(jobs.Initialize(1, {}, {Memory, nullptr})) && jobs.EnableDeferredRelease() &&
-               jobs.RegisterOwnerWork(routes) && SUCCEEDED(service->InitializeOwner(jobs, routes)),
+    Expect(SUCCEEDED(jobs.Initialize(1, {}, {Memory, nullptr})) && jobs.EnableDeferredRelease() && jobs.RegisterOwnerWork(routes) &&
+               SUCCEEDED(service->InitializeOwner(jobs, routes)),
            "actual-scheduler-release-sink-and-service-initialized");
     GpuResidencyAdmission admission = GpuResidencyAdmission::Invalid;
     // This is an independent accounting policy fixture, not an adapter-budget/caller admission proof.
@@ -256,67 +251,59 @@ int RunUtilityJoinedCloseTests()
     Expect(charge && admission == GpuResidencyAdmission::Ready, "whole-policy-charge-reserved-before-parent");
     std::unique_ptr<Job> parent = std::make_unique<Parent>(jobs, *service, observation, std::move(charge));
     JobOptions options;
-    options.memoryBytes = kCpuCharge;
-    options.deferredRetirement = true;
+    options.memoryBytes           = kCpuCharge;
+    options.deferredRetirement    = true;
     options.reserveRetainedMemory = true;
     JobTicket original;
-    if (FAILED(jobs.Submit(parent, options, original)) || !WaitAttached(jobs, observation))
+    if (FAILED(jobs.Submit(parent, options, original)) || ! WaitAttached(jobs, observation))
         std::terminate();
     Expect(observation.original == original && observation.unboundChargeRefused && service->HasPending(),
            "one-actual-original-ticket-suspended-with-whole-charges");
     service->StopOwner();
-    Expect(!service->ReleaseJoinedChargesOwner() && !service->CloseOwner(),
-           "live-scheduler-cannot-refund-or-close-service");
-    std::thread witness(
-        [&]() noexcept
+    Expect(! service->ReleaseJoinedChargesOwner() && ! service->CloseOwner(), "live-scheduler-cannot-refund-or-close-service");
+    std::thread witness([&]() noexcept
+    {
+        observation.heldEventObserved = WaitForSingleObject(observation.entered.get(), kTimeoutMs) == WAIT_OBJECT_0;
+        if (observation.heldEventObserved)
         {
-            observation.heldEventObserved = WaitForSingleObject(observation.entered.get(), kTimeoutMs) == WAIT_OBJECT_0;
-            if (observation.heldEventObserved)
-            {
-                const auto memory = observation.weak.lock();
-                observation.heldChargeIntact = memory && memory->IsBound() && memory->Bytes() == kCpuCharge &&
-                                               memory->ResidentBytes() == kCpuCharge && observation.heldBytesIntact;
-            }
-            if (!SetEvent(observation.release.get()))
-                std::terminate();
-        });
+            const auto memory = observation.weak.lock();
+            observation.heldChargeIntact =
+                memory && memory->IsBound() && memory->Bytes() == kCpuCharge && memory->ResidentBytes() == kCpuCharge && observation.heldBytesIntact;
+        }
+        if (! SetEvent(observation.release.get()))
+            std::terminate();
+    });
     CloseState state{*service, budget, observation};
     jobs.Close({[](void* opaque) noexcept
-                {
-                    auto& state = *static_cast<CloseState*>(opaque);
-                    auto& observation = state.observation;
-                    observation.ownerHook = true;
-                    observation.chargeHeldInOwnerHook = state.budget.ReservedOwner() == kGpuCharge &&
-                                                        state.budget.ActiveOwner() == 1 && state.service.HasPending() &&
-                                                        observation.joined && observation.detached &&
-                                                        observation.deferred;
-                    observation.releaseRefusedInOwnerHook = !state.service.ReleaseJoinedChargesOwner();
-                    observation.closeRefusedInOwnerHook = !state.service.CloseOwner();
-                },
+    {
+        auto& state                           = *static_cast<CloseState*>(opaque);
+        auto& observation                     = state.observation;
+        observation.ownerHook                 = true;
+        observation.chargeHeldInOwnerHook     = state.budget.ReservedOwner() == kGpuCharge && state.budget.ActiveOwner() == 1 && state.service.HasPending() &&
+                                                observation.joined && observation.detached && observation.deferred;
+        observation.releaseRefusedInOwnerHook = ! state.service.ReleaseJoinedChargesOwner();
+        observation.closeRefusedInOwnerHook   = ! state.service.CloseOwner();
+    },
                 [](void* opaque) noexcept
-                {
-                    auto& observation = static_cast<CloseState*>(opaque)->observation;
-                    observation.workerHook = GetCurrentThreadId() != observation.ownerThread;
-                },
+    {
+        auto& observation      = static_cast<CloseState*>(opaque)->observation;
+        observation.workerHook = GetCurrentThreadId() != observation.ownerThread;
+    },
                 &state});
     witness.join();
     Expect(observation.boundBeforeTransfer && observation.wrongOriginalRefused && observation.transferred,
            "original-joined-hook-binds-cpu-before-exact-gpu-transfer");
-    Expect(observation.ownerHook && observation.chargeHeldInOwnerHook && observation.releaseRefusedInOwnerHook &&
-               observation.closeRefusedInOwnerHook,
+    Expect(observation.ownerHook && observation.chargeHeldInOwnerHook && observation.releaseRefusedInOwnerHook && observation.closeRefusedInOwnerHook,
            "owner-close-hook-retains-gpu-charge-until-final-worker-return");
-    Expect(observation.workerHook && observation.heldEventObserved && observation.heldChargeIntact &&
-               observation.retiredOffOwner && observation.retired,
+    Expect(observation.workerHook && observation.heldEventObserved && observation.heldChargeIntact && observation.retiredOffOwner && observation.retired,
            "held-final-worker-destroys-literal-bytes-before-acknowledgement");
-    Expect(observation.completed == 0 && !jobs.WakeHandle() && budget.ReservedOwner() == kGpuCharge,
+    Expect(observation.completed == 0 && ! jobs.WakeHandle() && budget.ReservedOwner() == kGpuCharge,
            "joined-close-drops-useful-completion-and-keeps-owner-gpu-charge");
     Expect(observation.weak.expired(), "final-worker-destroys-last-readable-cpu-owner");
     observation.weak.reset(); // Retained accounting includes the actual weak control owner, too.
-    Expect(service->ReleaseJoinedChargesOwner() && !service->HasPending() && budget.ReservedOwner() == 0 &&
-               budget.ActiveOwner() == 0,
+    Expect(service->ReleaseJoinedChargesOwner() && ! service->HasPending() && budget.ReservedOwner() == 0 && budget.ActiveOwner() == 0,
            "gpu-refund-only-after-actual-close-return-and-final-worker-ack");
-    Expect(service->CloseOwner() && !routes.HasPending() && !routes.HasReady(),
-           "stable-route-detached-after-all-original-owners");
+    Expect(service->CloseOwner() && ! routes.HasPending() && ! routes.HasReady(), "stable-route-detached-after-all-original-owners");
     return failures ? 1 : 0;
 }
 } // namespace RedPrism::CompositionTests

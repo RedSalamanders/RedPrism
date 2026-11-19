@@ -46,9 +46,9 @@ using unique_hmenu = wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyM
 // The canvas hole in physical pixels: the rectangle the document composition blits into.
 struct CanvasHole
 {
-    float left = 0;
-    float top = 0;
-    float width = 0;
+    float left   = 0;
+    float top    = 0;
+    float width  = 0;
     float height = 0;
 };
 
@@ -117,22 +117,22 @@ enum class BrushAction : std::uint8_t
 
 struct BrushInspectorState
 {
-    bool visible = false;
-    bool enabled = false;
-    EditorTool tool = EditorTool::Brush;
-    int mode = 0; // 0 paint, 1 erase
-    double size = 40;
-    double hardness = 100;
-    double opacity = 100;
-    bool maskSelected = false;
-    bool maskPaintWhite = false;
+    bool visible            = false;
+    bool enabled            = false;
+    EditorTool tool         = EditorTool::Brush;
+    int mode                = 0; // 0 paint, 1 erase
+    double size             = 40;
+    double hardness         = 100;
+    double opacity          = 100;
+    bool maskSelected       = false;
+    bool maskPaintWhite     = false;
     uint32_t foregroundArgb = 0xFF000000u;
     // Spot Healing, Clone Stamp and Smear (C11).
-    int healMode = 0; // Content-Aware, Create Texture, Proximity Match
-    bool cloneAligned = true;
-    bool cloneAllLayers = false;
-    bool cloneHasSource = false;
-    int smearMode = 0; // Liquify, Blur, Smudge
+    int healMode                                                             = 0; // Content-Aware, Create Texture, Proximity Match
+    bool cloneAligned                                                        = true;
+    bool cloneAllLayers                                                      = false;
+    bool cloneHasSource                                                      = false;
+    int smearMode                                                            = 0; // Liquify, Blur, Smudge
     [[nodiscard]] bool operator==(const BrushInspectorState&) const noexcept = default;
 };
 
@@ -151,15 +151,15 @@ enum class GradientAction : std::uint8_t
 
 struct GradientInspectorState
 {
-    bool enabled = false;
-    int shape = 0; // Linear, Radial
-    int style = 1; // Foreground to Background, Foreground to Transparent
-    bool reversed = false;
-    double opacity = 100;
-    bool maskSelected = false;
-    bool pending = false;
-    uint32_t startArgb = 0xFF000000u;
-    uint32_t endArgb = 0x00000000u; // alpha 0: the transparent end
+    bool enabled                                                                = false;
+    int shape                                                                   = 0; // Linear, Radial
+    int style                                                                   = 1; // Foreground to Background, Foreground to Transparent
+    bool reversed                                                               = false;
+    double opacity                                                              = 100;
+    bool maskSelected                                                           = false;
+    bool pending                                                                = false;
+    uint32_t startArgb                                                          = 0xFF000000u;
+    uint32_t endArgb                                                            = 0x00000000u; // alpha 0: the transparent end
     [[nodiscard]] bool operator==(const GradientInspectorState&) const noexcept = default;
 };
 
@@ -173,10 +173,10 @@ enum class ShapeAction : std::uint8_t
 
 struct ShapeInspectorState
 {
-    bool enabled = false;
-    int kind = 0; // Rectangle, Ellipse
-    double radius = 0;
-    uint32_t foregroundArgb = 0xFF000000u;
+    bool enabled                                                             = false;
+    int kind                                                                 = 0; // Rectangle, Ellipse
+    double radius                                                            = 0;
+    uint32_t foregroundArgb                                                  = 0xFF000000u;
     [[nodiscard]] bool operator==(const ShapeInspectorState&) const noexcept = default;
 };
 
@@ -190,11 +190,11 @@ enum class CropAction : std::uint8_t
 
 struct CropInspectorState
 {
-    bool enabled = false; // a document is open
-    int ratio = 0;
-    bool hasFrame = false;
-    int width = 0;
-    int height = 0;
+    bool enabled                                                            = false; // a document is open
+    int ratio                                                               = 0;
+    bool hasFrame                                                           = false;
+    int width                                                               = 0;
+    int height                                                              = 0;
     [[nodiscard]] bool operator==(const CropInspectorState&) const noexcept = default;
 };
 
@@ -251,15 +251,15 @@ struct AdjustInspectorState
     LevelsSettings levels;
     LevelsHistogram histogram{};
     bool histogramReady = false;
-    int levelsSample = 0;
+    int levelsSample    = 0;
     HueSaturationSettings hsv;
-    int hueSample = 0;
-    bool targeting = false;
-    bool preview = true;
+    int hueSample           = 0;
+    bool targeting          = false;
+    bool preview            = true;
     bool limitedToSelection = false;
-    bool editsAdjustment = false;
-    bool previewFailed = false; // Content-Aware Fill found nothing to copy from: OK waits, the note says so
-    bool busy = false;
+    bool editsAdjustment    = false;
+    bool previewFailed      = false; // Content-Aware Fill found nothing to copy from: OK waits, the note says so
+    bool busy               = false;
     [[nodiscard]] bool operator==(const AdjustInspectorState&) const noexcept = default;
 };
 
@@ -293,67 +293,67 @@ enum class SizeAction : std::uint8_t
 
 struct SizeCardState
 {
-    SizeCardKind kind = SizeCardKind::None;
-    int originalWidth = 0;
-    int originalHeight = 0;
-    double width = 0; // the numbers the fields show, in the unit
-    double height = 0;
-    int unit = 0;
-    bool relative = false;
-    bool locked = false;
-    int anchor = 4;
-    int extension = 0;
-    uint32_t extensionArgb = 0xFFFFFFFFu;
-    double resolution = 72;
-    bool resample = true;
-    int sampling = 2;
-    bool valid = true;
-    int resultWidth = 0; // the rounded pixels the card announces
-    int resultHeight = 0;
+    SizeCardKind kind                                                  = SizeCardKind::None;
+    int originalWidth                                                  = 0;
+    int originalHeight                                                 = 0;
+    double width                                                       = 0; // the numbers the fields show, in the unit
+    double height                                                      = 0;
+    int unit                                                           = 0;
+    bool relative                                                      = false;
+    bool locked                                                        = false;
+    int anchor                                                         = 4;
+    int extension                                                      = 0;
+    uint32_t extensionArgb                                             = 0xFFFFFFFFu;
+    double resolution                                                  = 72;
+    bool resample                                                      = true;
+    int sampling                                                       = 2;
+    bool valid                                                         = true;
+    int resultWidth                                                    = 0; // the rounded pixels the card announces
+    int resultHeight                                                   = 0;
     [[nodiscard]] bool operator==(const SizeCardState&) const noexcept = default;
 };
 
 // The selection tools' header state, mirrored from the session (Specs/Document/Document_Tools.md).
 struct SelectionInspectorState
 {
-    bool visible = false;
-    bool enabled = false; // a document is open
-    EditorTool tool = EditorTool::Marquee;
-    int marqueeKind = 0; // 0 rectangle, 1 ellipse
-    int lassoKind = 0;   // 0 freehand, 1 polygonal
-    int mode = 0;        // displayed mode: 0 new, 1 add, 2 subtract
-    bool antialiasVisible = true;
-    bool antialiased = true;
-    int tolerance = 32;
-    int sampleSize = 0; // 0 point, 1 three by three, 2 five by five
-    bool sampleAllLayers = false;
-    bool contiguous = true;
-    bool canModify = false;
-    int expandAmount = 1;
-    int contractAmount = 1;
-    bool hasSelection = false;
-    bool isEmpty = false;
+    bool visible                                                                 = false;
+    bool enabled                                                                 = false; // a document is open
+    EditorTool tool                                                              = EditorTool::Marquee;
+    int marqueeKind                                                              = 0; // 0 rectangle, 1 ellipse
+    int lassoKind                                                                = 0; // 0 freehand, 1 polygonal
+    int mode                                                                     = 0; // displayed mode: 0 new, 1 add, 2 subtract
+    bool antialiasVisible                                                        = true;
+    bool antialiased                                                             = true;
+    int tolerance                                                                = 32;
+    int sampleSize                                                               = 0; // 0 point, 1 three by three, 2 five by five
+    bool sampleAllLayers                                                         = false;
+    bool contiguous                                                              = true;
+    bool canModify                                                               = false;
+    int expandAmount                                                             = 1;
+    int contractAmount                                                           = 1;
+    bool hasSelection                                                            = false;
+    bool isEmpty                                                                 = false;
     [[nodiscard]] bool operator==(const SelectionInspectorState&) const noexcept = default;
 };
 
 // The Move tool's header state: the numbers describe the edited transform (draft or active layer).
 struct TransformInspectorState
 {
-    bool visible = false;
-    bool enabled = false;   // a transformable layer or a pending edit
-    bool editing = false;   // a pending edit: Apply and Cancel are live
-    bool distorted = false; // while distorted the handles are the controls; numbers are read-only
-    bool targetsMask = false;
-    double x = 0;
-    double y = 0;
-    double width = 1;
-    double height = 1;
-    double scale = 100;
-    double rotation = 0;
-    int sampling = 2;
-    bool autoSelect = false;
-    bool showControls = true;
-    bool lockRatio = true;
+    bool visible                                                                 = false;
+    bool enabled                                                                 = false; // a transformable layer or a pending edit
+    bool editing                                                                 = false; // a pending edit: Apply and Cancel are live
+    bool distorted                                                               = false; // while distorted the handles are the controls; numbers are read-only
+    bool targetsMask                                                             = false;
+    double x                                                                     = 0;
+    double y                                                                     = 0;
+    double width                                                                 = 1;
+    double height                                                                = 1;
+    double scale                                                                 = 100;
+    double rotation                                                              = 0;
+    int sampling                                                                 = 2;
+    bool autoSelect                                                              = false;
+    bool showControls                                                            = true;
+    bool lockRatio                                                               = true;
     [[nodiscard]] bool operator==(const TransformInspectorState&) const noexcept = default;
 };
 
@@ -364,30 +364,30 @@ struct TransformInspectorState
 // does in it goes to the ChromeEvents it is constructed with.
 class ChromeHost final : public CommandIds
 {
-  public:
-    static constexpr float kMenuHeightDip = 30.0f;
-    static constexpr float kTabHeightDip = 32.0f;
-    static constexpr float kHeaderHeightDip = 36.0f;
-    static constexpr float kStatusHeightDip = 24.0f;
-    static constexpr float kRailWidthDip = 48.0f;
-    static constexpr float kToolButtonDip = 40.0f;
-    static constexpr float kToolGapDip = 2.0f;
-    static constexpr float kSplitterWidthDip = DxUi::Splitter::kDefaultThicknessDip;
-    static constexpr float kCanvasMinDip = 200.0f;
-    static constexpr float kLayersMinDip = 160.0f;
-    static constexpr float kLayersMaxDip = 480.0f;
-    static constexpr float kLayersDefaultDip = 240.0f;
-    static constexpr float kLayersTitleDip = 32.0f;
-    static constexpr float kOpacityWidthDip = 96.0f;
-    static constexpr float kStatusZoomSectionWidthDip = 80.0f;
+public:
+    static constexpr float kMenuHeightDip                 = 30.0f;
+    static constexpr float kTabHeightDip                  = 32.0f;
+    static constexpr float kHeaderHeightDip               = 36.0f;
+    static constexpr float kStatusHeightDip               = 24.0f;
+    static constexpr float kRailWidthDip                  = 48.0f;
+    static constexpr float kToolButtonDip                 = 40.0f;
+    static constexpr float kToolGapDip                    = 2.0f;
+    static constexpr float kSplitterWidthDip              = DxUi::Splitter::kDefaultThicknessDip;
+    static constexpr float kCanvasMinDip                  = 200.0f;
+    static constexpr float kLayersMinDip                  = 160.0f;
+    static constexpr float kLayersMaxDip                  = 480.0f;
+    static constexpr float kLayersDefaultDip              = 240.0f;
+    static constexpr float kLayersTitleDip                = 32.0f;
+    static constexpr float kOpacityWidthDip               = 96.0f;
+    static constexpr float kStatusZoomSectionWidthDip     = 80.0f;
     static constexpr float kStatusDocumentSectionWidthDip = 140.0f;
-    static constexpr float kJobProgressSectionWidthDip = 160.0f;
-    static constexpr float kJobProgressInsetDip = 8.0f;
-    static constexpr float kJobProgressTrackHeightDip = 8.0f;
-    static constexpr float kWellBlockDip = 48.0f;
-    static constexpr float kSwatchDip = 22.0f;
-    static constexpr float kPaletteHotDip = 14.0f;
-    static constexpr float kPickerMarginDip = 8.0f;
+    static constexpr float kJobProgressSectionWidthDip    = 160.0f;
+    static constexpr float kJobProgressInsetDip           = 8.0f;
+    static constexpr float kJobProgressTrackHeightDip     = 8.0f;
+    static constexpr float kWellBlockDip                  = 48.0f;
+    static constexpr float kSwatchDip                     = 22.0f;
+    static constexpr float kPaletteHotDip                 = 14.0f;
+    static constexpr float kPickerMarginDip               = 8.0f;
 
     enum class MenuIndex : std::size_t
     {
@@ -405,7 +405,7 @@ class ChromeHost final : public CommandIds
     explicit ChromeHost(ChromeEvents& events) noexcept;
     ~ChromeHost();
 
-    ChromeHost(const ChromeHost&) = delete;
+    ChromeHost(const ChromeHost&)            = delete;
     ChromeHost& operator=(const ChromeHost&) = delete;
 
     HRESULT Attach(ID3D11Device* device, void* requestContext, void (*requestFrame)(void*) noexcept) noexcept;
@@ -420,14 +420,14 @@ class ChromeHost final : public CommandIds
     // The Move tool's header: typed numbers, flips, sampling, Apply/Cancel and the toggles.
     void SetTransformInspector(const TransformInspectorState& state) noexcept;
     // The transform box in canvas-hole pixels (nullopt hides it) and snap guides in canvas-hole pixels.
-    void SetTransformOverlay(const std::optional<TransformOverlayGeometry>& geometry, const std::vector<float>& guideXs,
+    void SetTransformOverlay(const std::optional<TransformOverlayGeometry>& geometry,
+                             const std::vector<float>& guideXs,
                              const std::vector<float>& guideYs) noexcept;
     // The selection tools' header: kinds, mode, wand settings, Anti-alias, Expand / Contract and Deselect.
     void SetSelectionInspector(const SelectionInspectorState& state) noexcept;
     // Selection vertices are document coordinates relative to the retained anchor. Mapping is independent.
     void SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loops) noexcept;
-    [[nodiscard]] bool SetPreparedSelectionOutline(PreparedSelectionOutline outline,
-                                                   std::vector<CanvasOverlay::OutlineLoop>& retired) noexcept;
+    [[nodiscard]] bool SetPreparedSelectionOutline(PreparedSelectionOutline outline, std::vector<CanvasOverlay::OutlineLoop>& retired) noexcept;
     [[nodiscard]] std::optional<std::uint64_t> LegacySelectionOutlineMemoryOwner() const noexcept;
     void SetSelectionMapping(Vec2 originPixels, double pixelsPerDocumentPixel, float dpi) noexcept;
     [[nodiscard]] D2D1_MATRIX_3X2_F SelectionMappingForTest() const noexcept;
@@ -472,8 +472,8 @@ class ChromeHost final : public CommandIds
     struct PickerSampleAuthority final
     {
         Guid host;
-        std::uint64_t revision = 0;
-        PickerTarget target = PickerTarget::Foreground;
+        std::uint64_t revision                                       = 0;
+        PickerTarget target                                          = PickerTarget::Foreground;
         bool operator==(const PickerSampleAuthority&) const noexcept = default;
     };
     [[nodiscard]] std::optional<PickerSampleAuthority> CapturePickerSampleAuthority() const noexcept;
@@ -481,9 +481,9 @@ class ChromeHost final : public CommandIds
     struct PickerIntentAuthority final
     {
         Guid host;
-        std::uint64_t opening = 0;
-        std::uint64_t revision = 0;
-        PickerTarget target = PickerTarget::Foreground;
+        std::uint64_t opening                                        = 0;
+        std::uint64_t revision                                       = 0;
+        PickerTarget target                                          = PickerTarget::Foreground;
         bool operator==(const PickerIntentAuthority&) const noexcept = default;
     };
     [[nodiscard]] std::optional<PickerIntentAuthority> CapturePickerIntentAuthority() const noexcept;
@@ -511,8 +511,7 @@ class ChromeHost final : public CommandIds
     // Share the admitted immutable epoch with the publisher and accessibility snapshots. Its original charge
     // survives replacement while any reader remains; final graph retirement acknowledges it. Publication does
     // no row traversal, string formatting, pixel access or complete owner-thread graph destruction.
-    void SetPreparedLayers(const std::shared_ptr<const PreparedLayerRows>& rows, const std::optional<Guid>& active,
-                           bool maskTargeted);
+    void SetPreparedLayers(const std::shared_ptr<const PreparedLayerRows>& rows, const std::optional<Guid>& active, bool maskTargeted);
     void SetPreparedLayerRetry(bool available) noexcept;
     void SetPreparedLayerInteraction(bool enabled) noexcept;
 
@@ -598,15 +597,15 @@ class ChromeHost final : public CommandIds
     // count is one push that changed something, never one that found its region as it was.
     struct SyncCounters
     {
-        std::uint64_t layerRows = 0; // SetLayers rebuilt the rows and told the tree
-        std::uint64_t menus = 0;     // SetUndoRedoNames, SetEditTargets or SetMaskCommands rebuilt their captions
-        std::uint64_t texts = 0;     // SetStatus or SetDocumentTitle wrote a text
-        std::uint64_t headers = 0;   // a tool header, the adjust panel or a size card wrote its controls
+        std::uint64_t layerRows         = 0; // SetLayers rebuilt the rows and told the tree
+        std::uint64_t menus             = 0; // SetUndoRedoNames, SetEditTargets or SetMaskCommands rebuilt their captions
+        std::uint64_t texts             = 0; // SetStatus or SetDocumentTitle wrote a text
+        std::uint64_t headers           = 0; // a tool header, the adjust panel or a size card wrote its controls
         std::uint64_t selectionOutlines = 0;
         std::uint64_t selectionVertices = 0;
         std::uint64_t selectionMappings = 0;
-        std::uint64_t overlays = 0;  // the canvas overlay took something new to draw
-        std::uint64_t publishes = 0; // the UI Automation snapshot was republished
+        std::uint64_t overlays          = 0; // the canvas overlay took something new to draw
+        std::uint64_t publishes         = 0; // the UI Automation snapshot was republished
     };
     [[nodiscard]] const SyncCounters& SyncCountersForTest() const noexcept
     {
@@ -650,7 +649,7 @@ class ChromeHost final : public CommandIds
         {
             LeaveMenuKeyboard(); // the menu bar never keeps the keyboard behind the canvas
         }
-        _canvasFocused = focused;
+        _canvasFocused               = focused;
         _accessibilityPlacementDirty = true;
     }
     // The chrome palette (Specs/UI/UI_ApplicationChrome.md, Theme): dark, light or the system high-contrast colors.
@@ -724,8 +723,7 @@ class ChromeHost final : public CommandIds
     // The Move tool header's Flip Horizontal button, for a self-test click; empty while hidden.
     [[nodiscard]] D2D1_RECT_F FlipHorizontalBoundsDipForTest() const noexcept;
     [[nodiscard]] DxUi::TreeItemData LayerRowItemForTest(std::size_t index) const;
-    [[nodiscard]] std::shared_ptr<const DxUi::IPreparedTreeAccessibilityRows> PreparedLayerAccessibilityForTest()
-        const noexcept
+    [[nodiscard]] std::shared_ptr<const DxUi::IPreparedTreeAccessibilityRows> PreparedLayerAccessibilityForTest() const noexcept
     {
         return _treeModel.CapturePreparedAccessibilityRows();
     }
@@ -765,8 +763,8 @@ class ChromeHost final : public CommandIds
     // it across a key down the chrome took.
     struct KeyboardFocusMark
     {
-        bool canvas = false;
-        const DxUi::Control* control = nullptr;
+        bool canvas                                                            = false;
+        const DxUi::Control* control                                           = nullptr;
         [[nodiscard]] bool operator==(const KeyboardFocusMark&) const noexcept = default;
     };
     [[nodiscard]] KeyboardFocusMark KeyboardFocus() const noexcept;
@@ -822,29 +820,28 @@ class ChromeHost final : public CommandIds
         return CommandCatalog();
     }
 
-  private:
+private:
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
 #pragma warning(push)
 #pragma warning(disable : 4626 5027)
     class LayerTreeModel final : public DxUi::ITreeModel, public DxUi::ITreeDelegate
     {
-      public:
-        explicit LayerTreeModel(ChromeEvents& events) noexcept : events(events) {}
+    public:
+        explicit LayerTreeModel(ChromeEvents& events) noexcept : events(events)
+        {
+        }
         ChromeEvents& events;
         std::vector<HierarchyEntry> rows;
-        std::shared_ptr<const PreparedLayerRows>
-            preparedRows; // same admitted immutable epoch as the publisher and snapshots
+        std::shared_ptr<const PreparedLayerRows> preparedRows; // same admitted immutable epoch as the publisher and snapshots
         bool preparedMode = false;
         [[nodiscard]] std::span<const HierarchyEntry> RowsView() const noexcept
         {
-            return preparedMode ? (preparedRows ? preparedRows->Rows() : std::span<const HierarchyEntry>{})
-                                : std::span<const HierarchyEntry>(rows);
+            return preparedMode ? (preparedRows ? preparedRows->Rows() : std::span<const HierarchyEntry>{}) : std::span<const HierarchyEntry>(rows);
         }
         [[nodiscard]] std::span<const std::wstring> TextView() const noexcept
         {
-            return preparedMode ? (preparedRows ? preparedRows->DisplayText() : std::span<const std::wstring>{})
-                                : std::span<const std::wstring>(displayText);
+            return preparedMode ? (preparedRows ? preparedRows->DisplayText() : std::span<const std::wstring>{}) : std::span<const std::wstring>(displayText);
         }
 
         // Each row's display text (the name, or the "(hidden)" suffixed form), built once by SetRows so
@@ -867,8 +864,7 @@ class ChromeHost final : public CommandIds
         [[nodiscard]] size_t GetVisibleItemCount() const noexcept override;
         [[nodiscard]] std::optional<std::size_t> FindVisibleItemById(uint64_t itemId) const noexcept override;
         void GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
-        [[nodiscard]] std::shared_ptr<const DxUi::IPreparedTreeAccessibilityRows> CapturePreparedAccessibilityRows()
-            const noexcept override
+        [[nodiscard]] std::shared_ptr<const DxUi::IPreparedTreeAccessibilityRows> CapturePreparedAccessibilityRows() const noexcept override
         {
             return preparedMode ? preparedRows : std::shared_ptr<const PreparedLayerRows>{};
         }
@@ -887,14 +883,16 @@ class ChromeHost final : public CommandIds
 #pragma warning(disable : 4626 5027)
     class ShortcutListModel final : public DxUi::ITreeModel, public DxUi::ITreeDelegate
     {
-      public:
+    public:
         struct Row
         {
             std::wstring name;
             std::wstring chord;
             int command = 0;
         };
-        explicit ShortcutListModel(ChromeHost& host) noexcept : host(host) {}
+        explicit ShortcutListModel(ChromeHost& host) noexcept : host(host)
+        {
+        }
         ChromeHost& host; // a row invoked runs through LaunchShortcut
         std::vector<Row> all;
         std::vector<Row> rows;
@@ -941,19 +939,19 @@ class ChromeHost final : public CommandIds
     // what the control reports (the stepper's change, the combo's index, the checkbox's state, nothing for a button).
     struct ComboSpec
     {
-        UINT nameId = 0; // the accessible name; 0: the tooltip names it
-        UINT tipId = 0;
+        UINT nameId          = 0; // the accessible name; 0: the tooltip names it
+        UINT tipId           = 0;
         std::size_t selected = 0;
     };
     struct StepperSpec
     {
-        UINT labelId = 0;     // also the accessible name (never the tooltip)
-        float labelWidth = 0; // 0: the label names the stepper without being painted
-        UINT unitId = 0;
-        float unitWidth = 0;
-        double minimum = 0;
-        double maximum = 0;
-        double step = 1; // the large step is ten steps
+        UINT labelId          = 0; // also the accessible name (never the tooltip)
+        float labelWidth      = 0; // 0: the label names the stepper without being painted
+        UINT unitId           = 0;
+        float unitWidth       = 0;
+        double minimum        = 0;
+        double maximum        = 0;
+        double step           = 1; // the large step is ten steps
         std::uint8_t decimals = 0;
         std::optional<double> value;
         UINT tipId = 0;
@@ -961,28 +959,23 @@ class ChromeHost final : public CommandIds
     struct CheckSpec
     {
         UINT labelId = 0;
-        UINT tipId = 0;
-        UINT nameId = 0; // 0: the caption names it
+        UINT tipId   = 0;
+        UINT nameId  = 0; // 0: the caption names it
         bool checked = false;
     };
     struct ButtonSpec
     {
         UINT labelId = 0;
-        UINT tipId = 0;
+        UINT tipId   = 0;
         bool primary = false;
     };
-    template <typename Handler>
-    DxUi::ComboBox* MakeCombo(DxUi::Panel& parent, std::vector<DxUi::ComboBox::Item> items, const ComboSpec& spec,
-                              Handler handler);
-    template <typename Handler>
-    DxUi::NumericStepper* MakeStepper(DxUi::Panel& parent, const StepperSpec& spec, Handler handler);
+    template <typename Handler> DxUi::ComboBox* MakeCombo(DxUi::Panel& parent, std::vector<DxUi::ComboBox::Item> items, const ComboSpec& spec, Handler handler);
+    template <typename Handler> DxUi::NumericStepper* MakeStepper(DxUi::Panel& parent, const StepperSpec& spec, Handler handler);
     template <typename Handler> DxUi::Checkbox* MakeCheck(DxUi::Panel& parent, const CheckSpec& spec, Handler handler);
     template <typename Handler> DxUi::Button* MakeButton(DxUi::Panel& parent, const ButtonSpec& spec, Handler handler);
     // Combo items with stable values, or numbered from `first` (the unit list starts at Inches without resampling).
-    [[nodiscard]] static std::vector<DxUi::ComboBox::Item> NamedItems(
-        std::initializer_list<std::pair<const wchar_t*, UINT>> items);
-    [[nodiscard]] static std::vector<DxUi::ComboBox::Item> NumberedItems(std::span<const UINT> ids,
-                                                                         std::size_t first = 0);
+    [[nodiscard]] static std::vector<DxUi::ComboBox::Item> NamedItems(std::initializer_list<std::pair<const wchar_t*, UINT>> items);
+    [[nodiscard]] static std::vector<DxUi::ComboBox::Item> NumberedItems(std::span<const UINT> ids, std::size_t first = 0);
     [[nodiscard]] static std::vector<DxUi::ComboBox::Item> NumberedItems(std::initializer_list<UINT> ids)
     {
         return NumberedItems(std::span<const UINT>(ids.begin(), ids.size()));
@@ -1002,16 +995,16 @@ class ChromeHost final : public CommandIds
     struct HeaderSlot
     {
         DxUi::Control* control = nullptr;
-        float width = 0;
-        bool wanted = true;
-        float inset = 0;
-        float gap = 6.0f;
+        float width            = 0;
+        bool wanted            = true;
+        float inset            = 0;
+        float gap              = 6.0f;
     };
     // A tool header's row: the pinned slots take the right end from the right (with `keepTitleRoom`, each only while
     // it leaves 80 DIP to its left); the flow slots run from the left in order and stop at the first wanted slot that
     // does not fit. A slot that is not wanted or has no room hides.
-    void ArrangeHeaderRow(DxUi::Panel* header, const D2D1_RECT_F& bounds, std::span<const HeaderSlot> pinned,
-                          std::span<const HeaderSlot> flow, bool keepTitleRoom) noexcept;
+    void ArrangeHeaderRow(
+        DxUi::Panel* header, const D2D1_RECT_F& bounds, std::span<const HeaderSlot> pinned, std::span<const HeaderSlot> flow, bool keepTitleRoom) noexcept;
     void BuildTransformHeader(DxUi::Panel& root);
     void ArrangeTransformHeader(float left, float top, float right, float bottom) noexcept;
     void BuildSelectionHeader(DxUi::Panel& root);
@@ -1052,11 +1045,11 @@ class ChromeHost final : public CommandIds
     };
     struct OpenCard
     {
-        ModalCard card = ModalCard::Notice;
-        DxUi::Control* panel = nullptr;
-        DxUi::Control* home = nullptr;     // takes the keyboard when the card opens (none for the size card and panel)
+        ModalCard card          = ModalCard::Notice;
+        DxUi::Control* panel    = nullptr;
+        DxUi::Control* home     = nullptr; // takes the keyboard when the card opens (none for the size card and panel)
         DxUi::Control* keyboard = nullptr; // the chrome control that had the keyboard before
-        bool canvas = false;               // the canvas had the keyboard before
+        bool canvas             = false;   // the canvas had the keyboard before
     };
     void PushCard(ModalCard card, DxUi::Control* panel, DxUi::Control* home) noexcept;
     void PopCard(ModalCard card) noexcept;
@@ -1069,10 +1062,10 @@ class ChromeHost final : public CommandIds
     ChromeEvents& _events;
     DxUi::EmbeddedHost _view;
     std::shared_ptr<DxUi::GraphicsDevice> _graphics;
-    void* _requestContext = nullptr;
+    void* _requestContext                 = nullptr;
     void (*_requestFrame)(void*) noexcept = nullptr;
-    HWND _owner = nullptr;
-    DxUi::ThemePalette _palette = RedPrism::MakeRedPrismThemePalette(true);
+    HWND _owner                           = nullptr;
+    DxUi::ThemePalette _palette           = RedPrism::MakeRedPrismThemePalette(true);
     wil::com_ptr_nothrow<WindowAccessibilityRoot> _accessibilityRoot;
     std::shared_ptr<ChromeAccessibilitySite> _accessibilitySite;
     HRESULT _accessibilityStatus = S_FALSE;
@@ -1093,8 +1086,7 @@ class ChromeHost final : public CommandIds
     }
     [[nodiscard]] D2D1_RECT_F PixelToDip(const D2D1_RECT_F& pixels) const noexcept
     {
-        return D2D1::RectF(PixelToDip(pixels.left), PixelToDip(pixels.top), PixelToDip(pixels.right),
-                           PixelToDip(pixels.bottom));
+        return D2D1::RectF(PixelToDip(pixels.left), PixelToDip(pixels.top), PixelToDip(pixels.right), PixelToDip(pixels.bottom));
     }
     // A pressed look only when it changes: a button's transition restarted every sync cancels presses held across
     // frames.
@@ -1116,8 +1108,8 @@ class ChromeHost final : public CommandIds
     // DxUi's preparation count when the UI Automation snapshot was last published: a preparation since then changed
     // the controls, and a later Prepare or a client's request republishes them (EmbeddedHost::UpdateAccessibility).
     std::uint64_t _accessibilityPreparations = 0;
-    bool _accessibleStructureChanged = false; // since the last publish (see AttachAccessibility above)
-    bool _accessibilityRequested = false;     // a client asked for the tree while the snapshot could not be published
+    bool _accessibleStructureChanged         = false; // since the last publish (see AttachAccessibility above)
+    bool _accessibilityRequested             = false; // a client asked for the tree while the snapshot could not be published
     std::optional<bool> _accessibilityListenerForTest;
     SyncCounters _syncCounters;
     std::uint64_t _displayRevision = 0;
@@ -1125,22 +1117,22 @@ class ChromeHost final : public CommandIds
     // are built, and for a header or card when one of its controls changed itself (Report and the adjust panel's
     // drawn editors), so a value the session did not take goes back to the control. Otherwise a push that finds its
     // state as last written writes nothing: every DxUi write dirties the whole chrome surface.
-    static constexpr std::uint32_t kResyncTransform = 1u << 0;
-    static constexpr std::uint32_t kResyncSelection = 1u << 1;
-    static constexpr std::uint32_t kResyncBrush = 1u << 2;
-    static constexpr std::uint32_t kResyncGradient = 1u << 3;
-    static constexpr std::uint32_t kResyncShape = 1u << 4;
-    static constexpr std::uint32_t kResyncCrop = 1u << 5;
-    static constexpr std::uint32_t kResyncAdjust = 1u << 6;
-    static constexpr std::uint32_t kResyncSize = 1u << 7;
-    static constexpr std::uint32_t kResyncUndoRedo = 1u << 8;
-    static constexpr std::uint32_t kResyncEditTargets = 1u << 9;
+    static constexpr std::uint32_t kResyncTransform    = 1u << 0;
+    static constexpr std::uint32_t kResyncSelection    = 1u << 1;
+    static constexpr std::uint32_t kResyncBrush        = 1u << 2;
+    static constexpr std::uint32_t kResyncGradient     = 1u << 3;
+    static constexpr std::uint32_t kResyncShape        = 1u << 4;
+    static constexpr std::uint32_t kResyncCrop         = 1u << 5;
+    static constexpr std::uint32_t kResyncAdjust       = 1u << 6;
+    static constexpr std::uint32_t kResyncSize         = 1u << 7;
+    static constexpr std::uint32_t kResyncUndoRedo     = 1u << 8;
+    static constexpr std::uint32_t kResyncEditTargets  = 1u << 9;
     static constexpr std::uint32_t kResyncMaskCommands = 1u << 10;
-    static constexpr std::uint32_t kResyncTitle = 1u << 11;
-    static constexpr std::uint32_t kResyncLayers = 1u << 12;
-    static constexpr std::uint32_t kResyncTool = 1u << 13;
-    static constexpr std::uint32_t kResyncAll = ~0u;
-    std::uint32_t _resync = kResyncAll;
+    static constexpr std::uint32_t kResyncTitle        = 1u << 11;
+    static constexpr std::uint32_t kResyncLayers       = 1u << 12;
+    static constexpr std::uint32_t kResyncTool         = 1u << 13;
+    static constexpr std::uint32_t kResyncAll          = ~0u;
+    std::uint32_t _resync                              = kResyncAll;
     // Clears `region`'s mark; true when it was set.
     [[nodiscard]] bool TakeResync(std::uint32_t region) noexcept
     {
@@ -1153,21 +1145,21 @@ class ChromeHost final : public CommandIds
     {
         std::wstring undoName;
         std::wstring redoName;
-        bool canUndo = false;
-        bool canRedo = false;
-        bool masksTargeted = false;
+        bool canUndo             = false;
+        bool canRedo             = false;
+        bool masksTargeted       = false;
         bool transformsSelection = false;
-        bool clipped = false;
-        int merge = 0;
-        bool maskPresent = false;
-        bool maskTargeted = false;
-        bool maskLinked = false;
-        bool maskEnabled = false;
+        bool clipped             = false;
+        int merge                = 0;
+        bool maskPresent         = false;
+        bool maskTargeted        = false;
+        bool maskLinked          = false;
+        bool maskEnabled         = false;
     };
     MenuTargets _menuTargets;
     std::wstring _documentTitle;
-    bool _documentDirty = false;
-    bool _inDispatch = false;     // inside _view.Dispatch*: no accessibility flush from a re-entered Prepare
+    bool _documentDirty  = false;
+    bool _inDispatch     = false; // inside _view.Dispatch*: no accessibility flush from a re-entered Prepare
     bool _pointerPressed = false; // a chrome press in progress: DxUi's accessibility calls would cancel it
     struct DeferredJobProgress final
     {
@@ -1184,41 +1176,41 @@ class ChromeHost final : public CommandIds
     std::array<OpenCard, static_cast<std::size_t>(ModalCard::Count)> _cards{}; // one entry per open card
     std::size_t _cardCount = 0;
     std::array<unique_hmenu, static_cast<std::size_t>(MenuIndex::Count)> _menus;
-    DxUi::MenuBar* _menu = nullptr;
-    DxUi::TabControl* _tabs = nullptr;
-    DxUi::Toolbar* _rail = nullptr;
-    DxUi::Button* _moreTools = nullptr;
+    DxUi::MenuBar* _menu       = nullptr;
+    DxUi::TabControl* _tabs    = nullptr;
+    DxUi::Toolbar* _rail       = nullptr;
+    DxUi::Button* _moreTools   = nullptr;
     DxUi::CardPanel* _moreCard = nullptr;
     std::array<DxUi::Button*, kEditorToolCount> _overflowButtons{};
-    int _moreToolStart = static_cast<int>(kEditorToolCount);
-    bool _moreToolsOpen = false;
-    DxUi::Label* _header = nullptr;
-    DxUi::Tree* _layers = nullptr;
-    DxUi::StatusStrip* _status = nullptr;
-    DxUi::ProgressBar* _jobProgress = nullptr;
-    DxUi::Label* _layersTitle = nullptr;
-    DxUi::Button* _layerRetry = nullptr;
-    DxUi::Splitter* _splitter = nullptr;
-    PaletteControl* _railPalette = nullptr;
-    DxUi::NumericStepper* _opacity = nullptr;
-    DxUi::CardPanel* _pickerCard = nullptr;
-    DxUi::ColorPicker* _picker = nullptr;
-    DxUi::CardPanel* _noticeCard = nullptr;
-    DxUi::Label* _noticeLabel = nullptr;
-    DxUi::Button* _noticeClose = nullptr;
-    DxUi::CardPanel* _shortcutsCard = nullptr;
-    DxUi::Label* _shortcutsTitle = nullptr;
+    int _moreToolStart                = static_cast<int>(kEditorToolCount);
+    bool _moreToolsOpen               = false;
+    DxUi::Label* _header              = nullptr;
+    DxUi::Tree* _layers               = nullptr;
+    DxUi::StatusStrip* _status        = nullptr;
+    DxUi::ProgressBar* _jobProgress   = nullptr;
+    DxUi::Label* _layersTitle         = nullptr;
+    DxUi::Button* _layerRetry         = nullptr;
+    DxUi::Splitter* _splitter         = nullptr;
+    PaletteControl* _railPalette      = nullptr;
+    DxUi::NumericStepper* _opacity    = nullptr;
+    DxUi::CardPanel* _pickerCard      = nullptr;
+    DxUi::ColorPicker* _picker        = nullptr;
+    DxUi::CardPanel* _noticeCard      = nullptr;
+    DxUi::Label* _noticeLabel         = nullptr;
+    DxUi::Button* _noticeClose        = nullptr;
+    DxUi::CardPanel* _shortcutsCard   = nullptr;
+    DxUi::Label* _shortcutsTitle      = nullptr;
     DxUi::TextField* _shortcutsSearch = nullptr;
-    DxUi::Tree* _shortcutsTree = nullptr;
-    DxUi::Button* _shortcutsClose = nullptr;
+    DxUi::Tree* _shortcutsTree        = nullptr;
+    DxUi::Button* _shortcutsClose     = nullptr;
     ShortcutListModel _shortcutModel;
     const CommandBindings* _bindings = nullptr;
-    std::vector<std::wstring> _chordTexts; // the effective chord text of each catalog row, in catalog order
-    bool _menuKeyboard = false;            // the menu bar took the keyboard (Alt, F10 or a mnemonic)
-    bool _focusFromKeyboard = false;       // a key moved DxUi's focus since the last pointer press
+    std::vector<std::wstring> _chordTexts;   // the effective chord text of each catalog row, in catalog order
+    bool _menuKeyboard              = false; // the menu bar took the keyboard (Alt, F10 or a mnemonic)
+    bool _focusFromKeyboard         = false; // a key moved DxUi's focus since the last pointer press
     DxUi::Control* _menuReturnFocus = nullptr;
-    bool _menuReturnCanvas = false;
-    bool _menusRecordOnly = false;
+    bool _menuReturnCanvas          = false;
+    bool _menusRecordOnly           = false;
     std::optional<std::size_t> _recordedMenu;
     std::function<void(int)> _commandProbe; // SetCommandProbeForTest
     // A menu row, a rail tool, a palette hot zone or a Command List row: ChromeEvents::OnCommand (or the probe).
@@ -1226,84 +1218,84 @@ class ChromeHost final : public CommandIds
     CanvasOverlay* _overlay = nullptr;
     std::vector<float> _guideXsDip; // SetTransformOverlay's snap guides in DIP, reused between calls
     std::vector<float> _guideYsDip;
-    DxUi::Panel* _transformHeader = nullptr;
-    DxUi::Label* _transformTitle = nullptr;
-    DxUi::Checkbox* _autoSelect = nullptr;
-    DxUi::Checkbox* _showControls = nullptr;
-    DxUi::Checkbox* _lockRatio = nullptr;
-    DxUi::NumericStepper* _transformX = nullptr;
-    DxUi::NumericStepper* _transformY = nullptr;
-    DxUi::NumericStepper* _transformWidth = nullptr;
+    DxUi::Panel* _transformHeader          = nullptr;
+    DxUi::Label* _transformTitle           = nullptr;
+    DxUi::Checkbox* _autoSelect            = nullptr;
+    DxUi::Checkbox* _showControls          = nullptr;
+    DxUi::Checkbox* _lockRatio             = nullptr;
+    DxUi::NumericStepper* _transformX      = nullptr;
+    DxUi::NumericStepper* _transformY      = nullptr;
+    DxUi::NumericStepper* _transformWidth  = nullptr;
     DxUi::NumericStepper* _transformHeight = nullptr;
-    DxUi::NumericStepper* _transformScale = nullptr;
-    DxUi::NumericStepper* _transformAngle = nullptr;
-    DxUi::ComboBox* _sampling = nullptr;
-    DxUi::Button* _flipHorizontal = nullptr;
-    DxUi::Button* _flipVertical = nullptr;
-    DxUi::Button* _transformCancel = nullptr;
-    DxUi::Button* _transformApply = nullptr;
+    DxUi::NumericStepper* _transformScale  = nullptr;
+    DxUi::NumericStepper* _transformAngle  = nullptr;
+    DxUi::ComboBox* _sampling              = nullptr;
+    DxUi::Button* _flipHorizontal          = nullptr;
+    DxUi::Button* _flipVertical            = nullptr;
+    DxUi::Button* _transformCancel         = nullptr;
+    DxUi::Button* _transformApply          = nullptr;
     TransformInspectorState _transformInspector;
-    DxUi::Panel* _selectionHeader = nullptr;
-    DxUi::Label* _selectionTitle = nullptr;
-    DxUi::ComboBox* _marqueeShape = nullptr;
-    DxUi::ComboBox* _lassoShape = nullptr;
-    DxUi::ComboBox* _selectionMode = nullptr;
-    DxUi::NumericStepper* _wandTolerance = nullptr;
-    DxUi::ComboBox* _wandSampleSize = nullptr;
-    DxUi::ComboBox* _wandSample = nullptr;
-    DxUi::Checkbox* _wandContiguous = nullptr;
-    DxUi::Checkbox* _selectionAntialias = nullptr;
-    DxUi::Button* _expandButton = nullptr;
-    DxUi::NumericStepper* _expandAmount = nullptr;
-    DxUi::Button* _contractButton = nullptr;
+    DxUi::Panel* _selectionHeader         = nullptr;
+    DxUi::Label* _selectionTitle          = nullptr;
+    DxUi::ComboBox* _marqueeShape         = nullptr;
+    DxUi::ComboBox* _lassoShape           = nullptr;
+    DxUi::ComboBox* _selectionMode        = nullptr;
+    DxUi::NumericStepper* _wandTolerance  = nullptr;
+    DxUi::ComboBox* _wandSampleSize       = nullptr;
+    DxUi::ComboBox* _wandSample           = nullptr;
+    DxUi::Checkbox* _wandContiguous       = nullptr;
+    DxUi::Checkbox* _selectionAntialias   = nullptr;
+    DxUi::Button* _expandButton           = nullptr;
+    DxUi::NumericStepper* _expandAmount   = nullptr;
+    DxUi::Button* _contractButton         = nullptr;
     DxUi::NumericStepper* _contractAmount = nullptr;
-    DxUi::Label* _selectionEmpty = nullptr;
-    DxUi::Button* _deselectButton = nullptr;
+    DxUi::Label* _selectionEmpty          = nullptr;
+    DxUi::Button* _deselectButton         = nullptr;
     SelectionInspectorState _selectionInspector;
-    DxUi::Panel* _brushHeader = nullptr;
-    DxUi::Label* _brushTitle = nullptr;
-    DxUi::ComboBox* _brushMode = nullptr;
-    DxUi::NumericStepper* _brushSize = nullptr;
-    DxUi::NumericStepper* _brushHardness = nullptr;
-    DxUi::NumericStepper* _brushOpacity = nullptr;
-    DxUi::ComboBox* _brushMaskPaint = nullptr;
-    DxUi::Label* _brushColorLabel = nullptr;
-    DxUi::ColorSwatch* _brushColor = nullptr;
-    DxUi::Label* _brushMaskNote = nullptr;
-    DxUi::ComboBox* _brushHealMode = nullptr;
-    DxUi::Checkbox* _brushCloneAligned = nullptr;
-    DxUi::ComboBox* _brushCloneSample = nullptr;
-    DxUi::ComboBox* _brushSmearMode = nullptr;
-    DxUi::Label* _brushSourceNote = nullptr;
-    DxUi::Panel* _gradientHeader = nullptr;
-    DxUi::Label* _gradientTitle = nullptr;
-    DxUi::ComboBox* _gradientShape = nullptr;
-    DxUi::ColorSwatch* _gradientStart = nullptr;
-    DxUi::ColorSwatch* _gradientEnd = nullptr;
-    DxUi::ComboBox* _gradientStyle = nullptr;
-    DxUi::Checkbox* _gradientReverse = nullptr;
+    DxUi::Panel* _brushHeader              = nullptr;
+    DxUi::Label* _brushTitle               = nullptr;
+    DxUi::ComboBox* _brushMode             = nullptr;
+    DxUi::NumericStepper* _brushSize       = nullptr;
+    DxUi::NumericStepper* _brushHardness   = nullptr;
+    DxUi::NumericStepper* _brushOpacity    = nullptr;
+    DxUi::ComboBox* _brushMaskPaint        = nullptr;
+    DxUi::Label* _brushColorLabel          = nullptr;
+    DxUi::ColorSwatch* _brushColor         = nullptr;
+    DxUi::Label* _brushMaskNote            = nullptr;
+    DxUi::ComboBox* _brushHealMode         = nullptr;
+    DxUi::Checkbox* _brushCloneAligned     = nullptr;
+    DxUi::ComboBox* _brushCloneSample      = nullptr;
+    DxUi::ComboBox* _brushSmearMode        = nullptr;
+    DxUi::Label* _brushSourceNote          = nullptr;
+    DxUi::Panel* _gradientHeader           = nullptr;
+    DxUi::Label* _gradientTitle            = nullptr;
+    DxUi::ComboBox* _gradientShape         = nullptr;
+    DxUi::ColorSwatch* _gradientStart      = nullptr;
+    DxUi::ColorSwatch* _gradientEnd        = nullptr;
+    DxUi::ComboBox* _gradientStyle         = nullptr;
+    DxUi::Checkbox* _gradientReverse       = nullptr;
     DxUi::NumericStepper* _gradientOpacity = nullptr;
-    DxUi::Label* _gradientMaskNote = nullptr;
-    DxUi::Button* _gradientCancel = nullptr;
-    DxUi::Button* _gradientApply = nullptr;
+    DxUi::Label* _gradientMaskNote         = nullptr;
+    DxUi::Button* _gradientCancel          = nullptr;
+    DxUi::Button* _gradientApply           = nullptr;
     GradientInspectorState _gradientInspector;
     DxUi::Panel* _shapeHeader = nullptr;
     // ChromeHostCrop.cpp: the Crop header.
     void BuildCropHeader(DxUi::Panel& root);
     void ArrangeCropHeader(float left, float top, float right, float bottom) noexcept;
-    DxUi::Panel* _cropHeader = nullptr;
-    DxUi::Label* _cropTitle = nullptr;
+    DxUi::Panel* _cropHeader     = nullptr;
+    DxUi::Label* _cropTitle      = nullptr;
     DxUi::Label* _cropRatioLabel = nullptr;
-    DxUi::ComboBox* _cropRatio = nullptr;
-    DxUi::Label* _cropSize = nullptr;
-    DxUi::Button* _cropCancel = nullptr;
-    DxUi::Button* _cropApply = nullptr;
+    DxUi::ComboBox* _cropRatio   = nullptr;
+    DxUi::Label* _cropSize       = nullptr;
+    DxUi::Button* _cropCancel    = nullptr;
+    DxUi::Button* _cropApply     = nullptr;
     CropInspectorState _cropInspector;
-    DxUi::Label* _shapeTitle = nullptr;
-    DxUi::ComboBox* _shapeKind = nullptr;
+    DxUi::Label* _shapeTitle           = nullptr;
+    DxUi::ComboBox* _shapeKind         = nullptr;
     DxUi::NumericStepper* _shapeRadius = nullptr;
-    DxUi::Label* _shapeFillLabel = nullptr;
-    DxUi::ColorSwatch* _shapeFill = nullptr;
+    DxUi::Label* _shapeFillLabel       = nullptr;
+    DxUi::ColorSwatch* _shapeFill      = nullptr;
     ShapeInspectorState _shapeInspector;
     BrushInspectorState _brushInspector;
     std::array<DxUi::Button*, kEditorToolCount> _toolButtons{}; // icon buttons; the active tool's is latched
@@ -1312,11 +1304,11 @@ class ChromeHost final : public CommandIds
     // ChromeHostRename.cpp: the Rename Layer card.
     void BuildRenameCard(DxUi::Panel& root);
     void ArrangeRenameCard(float right, float top) noexcept;
-    DxUi::CardPanel* _renameCard = nullptr;
-    DxUi::Label* _renameTitle = nullptr;
+    DxUi::CardPanel* _renameCard  = nullptr;
+    DxUi::Label* _renameTitle     = nullptr;
     DxUi::TextField* _renameField = nullptr;
-    DxUi::Button* _renameCancel = nullptr;
-    DxUi::Button* _renameOk = nullptr;
+    DxUi::Button* _renameCancel   = nullptr;
+    DxUi::Button* _renameOk       = nullptr;
     // The adjustment panel (ChromeHostAdjust.cpp).
     enum class AdjustRowId : std::uint8_t
     {
@@ -1338,29 +1330,29 @@ class ChromeHost final : public CommandIds
     };
     struct AdjustRow
     {
-        DxUi::Label* label = nullptr;
-        DxUi::Slider* slider = nullptr;
+        DxUi::Label* label            = nullptr;
+        DxUi::Slider* slider          = nullptr;
         DxUi::NumericStepper* stepper = nullptr;
-        AdjustAction action = AdjustAction::SetRadius;
-        double minimum = 0;
-        double maximum = 1;
-        bool logarithmic = false;
-        int decimals = 0;
+        AdjustAction action           = AdjustAction::SetRadius;
+        double minimum                = 0;
+        double maximum                = 1;
+        bool logarithmic              = false;
+        int decimals                  = 0;
     };
     void BuildAdjustPanel(DxUi::Panel& root);
     void ArrangeAdjustPanel(float right, float top, float bottom) noexcept;
-    DxUi::CardPanel* _adjustCard = nullptr;
-    DxUi::Label* _adjustTitle = nullptr;
-    DxUi::ComboBox* _adjustChannel = nullptr;
-    CurveEditor* _curveEditor = nullptr;
-    DxUi::Label* _curveCaption = nullptr;
-    DxUi::Button* _curveRemove = nullptr;
-    DxUi::Button* _curveReset = nullptr;
-    LevelsBar* _levelsInput = nullptr;
-    LevelsBar* _levelsOutput = nullptr;
-    DxUi::NumericStepper* _levelsBlack = nullptr;
-    DxUi::NumericStepper* _levelsGamma = nullptr;
-    DxUi::NumericStepper* _levelsWhite = nullptr;
+    DxUi::CardPanel* _adjustCard          = nullptr;
+    DxUi::Label* _adjustTitle             = nullptr;
+    DxUi::ComboBox* _adjustChannel        = nullptr;
+    CurveEditor* _curveEditor             = nullptr;
+    DxUi::Label* _curveCaption            = nullptr;
+    DxUi::Button* _curveRemove            = nullptr;
+    DxUi::Button* _curveReset             = nullptr;
+    LevelsBar* _levelsInput               = nullptr;
+    LevelsBar* _levelsOutput              = nullptr;
+    DxUi::NumericStepper* _levelsBlack    = nullptr;
+    DxUi::NumericStepper* _levelsGamma    = nullptr;
+    DxUi::NumericStepper* _levelsWhite    = nullptr;
     DxUi::NumericStepper* _levelsOutBlack = nullptr;
     DxUi::NumericStepper* _levelsOutWhite = nullptr;
     std::array<DxUi::Button*, 3> _levelsSample{};
@@ -1369,77 +1361,77 @@ class ChromeHost final : public CommandIds
     DxUi::ComboBox* _hueRange = nullptr;
     std::array<DxUi::Button*, 3> _hueSample{};
     std::array<bool, 3> _hueSamplePressed{};
-    DxUi::Button* _hueTargeting = nullptr;
-    bool _hueTargetingPressed = false;
-    SpectrumEditor* _spectrum = nullptr;
-    DxUi::Checkbox* _hueInvert = nullptr;
-    DxUi::Checkbox* _hueColorize = nullptr;
-    GradientRamp* _gradientRamp = nullptr;
-    DxUi::ColorSwatch* _mapShadows = nullptr;
-    DxUi::Label* _mapShadowsLabel = nullptr;
-    DxUi::ColorSwatch* _mapHighlights = nullptr;
-    DxUi::Label* _mapHighlightsLabel = nullptr;
-    DxUi::Checkbox* _mapReverse = nullptr;
+    DxUi::Button* _hueTargeting        = nullptr;
+    bool _hueTargetingPressed          = false;
+    SpectrumEditor* _spectrum          = nullptr;
+    DxUi::Checkbox* _hueInvert         = nullptr;
+    DxUi::Checkbox* _hueColorize       = nullptr;
+    GradientRamp* _gradientRamp        = nullptr;
+    DxUi::ColorSwatch* _mapShadows     = nullptr;
+    DxUi::Label* _mapShadowsLabel      = nullptr;
+    DxUi::ColorSwatch* _mapHighlights  = nullptr;
+    DxUi::Label* _mapHighlightsLabel   = nullptr;
+    DxUi::Checkbox* _mapReverse        = nullptr;
     DxUi::ComboBox* _noiseDistribution = nullptr;
-    DxUi::Checkbox* _noiseMono = nullptr;
-    DxUi::Label* _lensHint = nullptr;
+    DxUi::Checkbox* _noiseMono         = nullptr;
+    DxUi::Label* _lensHint             = nullptr;
     std::array<AdjustRow, static_cast<std::size_t>(AdjustRowId::Count)> _adjustRows{};
     DxUi::Checkbox* _adjustPreview = nullptr;
-    DxUi::Label* _fillHint = nullptr;
-    DxUi::Label* _fillNoSource = nullptr;
-    DxUi::Label* _adjustNote = nullptr;
-    DxUi::Button* _adjustCancel = nullptr;
-    DxUi::Button* _adjustApply = nullptr;
+    DxUi::Label* _fillHint         = nullptr;
+    DxUi::Label* _fillNoSource     = nullptr;
+    DxUi::Label* _adjustNote       = nullptr;
+    DxUi::Button* _adjustCancel    = nullptr;
+    DxUi::Button* _adjustApply     = nullptr;
     AdjustInspectorState _adjustInspector;
     std::uint64_t _adjustCallbacksForTest = 0;
     // ChromeHostSize.cpp: the size cards.
     void BuildSizeCard(DxUi::Panel& root);
     void ArrangeSizeCard(float right, float top, float bottom) noexcept;
-    DxUi::CardPanel* _sizeCard = nullptr;
-    DxUi::Label* _sizeTitle = nullptr;
-    DxUi::Label* _sizeCurrent = nullptr;
-    DxUi::Label* _sizeBytes = nullptr;
-    DxUi::ComboBox* _sizeUnit = nullptr;
-    DxUi::NumericStepper* _sizeWidth = nullptr;
+    DxUi::CardPanel* _sizeCard        = nullptr;
+    DxUi::Label* _sizeTitle           = nullptr;
+    DxUi::Label* _sizeCurrent         = nullptr;
+    DxUi::Label* _sizeBytes           = nullptr;
+    DxUi::ComboBox* _sizeUnit         = nullptr;
+    DxUi::NumericStepper* _sizeWidth  = nullptr;
     DxUi::NumericStepper* _sizeHeight = nullptr;
-    DxUi::Checkbox* _sizeRelative = nullptr;
-    DxUi::Checkbox* _sizeLocked = nullptr;
-    DxUi::Label* _sizeResult = nullptr;
-    DxUi::Label* _sizeAnchorLabel = nullptr;
+    DxUi::Checkbox* _sizeRelative     = nullptr;
+    DxUi::Checkbox* _sizeLocked       = nullptr;
+    DxUi::Label* _sizeResult          = nullptr;
+    DxUi::Label* _sizeAnchorLabel     = nullptr;
     std::array<DxUi::Button*, 9> _sizeAnchors{};
     std::array<bool, 9> _sizeAnchorPressed{};
-    DxUi::Label* _sizeAnchorName = nullptr;
-    DxUi::Label* _sizeAnchorHint = nullptr;
-    DxUi::ComboBox* _sizeExtension = nullptr;
+    DxUi::Label* _sizeAnchorName            = nullptr;
+    DxUi::Label* _sizeAnchorHint            = nullptr;
+    DxUi::ComboBox* _sizeExtension          = nullptr;
     DxUi::ColorSwatch* _sizeExtensionSwatch = nullptr;
-    DxUi::NumericStepper* _sizeResolution = nullptr;
-    DxUi::Label* _sizePpi = nullptr;
-    DxUi::Checkbox* _sizeResample = nullptr;
-    DxUi::ComboBox* _sizeSampling = nullptr;
-    DxUi::Label* _sizeNote = nullptr;
-    DxUi::Button* _sizeOpen = nullptr;
-    DxUi::Button* _sizeImport = nullptr;
-    DxUi::Button* _sizeCancel = nullptr;
-    DxUi::Button* _sizeApply = nullptr;
+    DxUi::NumericStepper* _sizeResolution   = nullptr;
+    DxUi::Label* _sizePpi                   = nullptr;
+    DxUi::Checkbox* _sizeResample           = nullptr;
+    DxUi::ComboBox* _sizeSampling           = nullptr;
+    DxUi::Label* _sizeNote                  = nullptr;
+    DxUi::Button* _sizeOpen                 = nullptr;
+    DxUi::Button* _sizeImport               = nullptr;
+    DxUi::Button* _sizeCancel               = nullptr;
+    DxUi::Button* _sizeApply                = nullptr;
     SizeCardState _sizeState;
-    std::size_t _sizeUnitFirst = 0; // the unit the size card's unit list starts at
-    UINT _width = 0;
-    UINT _height = 0;
-    float _dpi = 96.0f;
-    float _layersWidthDip = kLayersDefaultDip;
+    std::size_t _sizeUnitFirst     = 0; // the unit the size card's unit list starts at
+    UINT _width                    = 0;
+    UINT _height                   = 0;
+    float _dpi                     = 96.0f;
+    float _layersWidthDip          = kLayersDefaultDip;
     float _preferredLayersWidthDip = kLayersDefaultDip;
-    uint32_t _foregroundArgb = 0xFF000000u;
-    uint32_t _backgroundArgb = 0xFFFFFFFFu;
+    uint32_t _foregroundArgb       = 0xFF000000u;
+    uint32_t _backgroundArgb       = 0xFFFFFFFFu;
     std::optional<bool> _maskPaintWhite; // engaged while a layer's mask is the target: the wells show black and white
-    EditorTool _tool = EditorTool::Move;
+    EditorTool _tool           = EditorTool::Move;
     PickerTarget _pickerTarget = PickerTarget::Foreground; // what the open color picker edits
-    Guid _pickerInstance = Guid::Generate();
+    Guid _pickerInstance       = Guid::Generate();
     InputRevision _pickerInputRevision;
     InputRevision _pickerIntentRevision;
     InputRevision _pickerOpeningRevision;
     bool _sampledPickerPublication = false;
-    bool _canvasFocused = true;
-    bool _attached = false;
+    bool _canvasFocused            = true;
+    bool _attached                 = false;
 };
 
 template <typename Action> void ChromeHost::Report(Action action, double value) noexcept
@@ -1499,8 +1491,7 @@ template <typename Action> void ChromeHost::Report(Action action, double value) 
 }
 
 template <typename Handler>
-DxUi::ComboBox* ChromeHost::MakeCombo(DxUi::Panel& parent, std::vector<DxUi::ComboBox::Item> items,
-                                      const ComboSpec& spec, Handler handler)
+DxUi::ComboBox* ChromeHost::MakeCombo(DxUi::Panel& parent, std::vector<DxUi::ComboBox::Item> items, const ComboSpec& spec, Handler handler)
 {
     DxUi::ComboBox* control = parent.AddChild<DxUi::ComboBox>();
     control->SetItems(std::move(items));
@@ -1521,11 +1512,10 @@ DxUi::ComboBox* ChromeHost::MakeCombo(DxUi::Panel& parent, std::vector<DxUi::Com
     return control;
 }
 
-template <typename Handler>
-DxUi::NumericStepper* ChromeHost::MakeStepper(DxUi::Panel& parent, const StepperSpec& spec, Handler handler)
+template <typename Handler> DxUi::NumericStepper* ChromeHost::MakeStepper(DxUi::Panel& parent, const StepperSpec& spec, Handler handler)
 {
     DxUi::NumericStepper* control = parent.AddChild<DxUi::NumericStepper>();
-    std::wstring label = LoadStringResource(nullptr, spec.labelId);
+    std::wstring label            = LoadStringResource(nullptr, spec.labelId);
     control->SetLabel(label, spec.labelWidth);
     control->SetAccessibleName(std::move(label));
     if (spec.unitId != 0)
@@ -1556,8 +1546,7 @@ DxUi::NumericStepper* ChromeHost::MakeStepper(DxUi::Panel& parent, const Stepper
     return control;
 }
 
-template <typename Handler>
-DxUi::Checkbox* ChromeHost::MakeCheck(DxUi::Panel& parent, const CheckSpec& spec, Handler handler)
+template <typename Handler> DxUi::Checkbox* ChromeHost::MakeCheck(DxUi::Panel& parent, const CheckSpec& spec, Handler handler)
 {
     DxUi::Checkbox* control = parent.AddChild<DxUi::Checkbox>(LoadStringResource(nullptr, spec.labelId));
     if (spec.tipId != 0)
@@ -1583,8 +1572,7 @@ DxUi::Checkbox* ChromeHost::MakeCheck(DxUi::Panel& parent, const CheckSpec& spec
     return control;
 }
 
-template <typename Handler>
-DxUi::Button* ChromeHost::MakeButton(DxUi::Panel& parent, const ButtonSpec& spec, Handler handler)
+template <typename Handler> DxUi::Button* ChromeHost::MakeButton(DxUi::Panel& parent, const ButtonSpec& spec, Handler handler)
 {
     DxUi::Button* control = parent.AddChild<DxUi::Button>(LoadStringResource(nullptr, spec.labelId));
     if (spec.primary)

@@ -23,7 +23,7 @@ enum class PathClassificationReadNotice : std::uint8_t
 // handle on the worker; ReadFile, cancellation and completion acknowledgement remain the Windows APIs.
 struct PathClassificationReadSource final
 {
-    void* context = nullptr;
+    void* context                                     = nullptr;
     void* (*openRead)(void*, const wchar_t*) noexcept = nullptr;
     // Worker-only observations, strictly after the actual named API boundary. Never emulates readiness or
     // acknowledgement. The borrowed context survives the original job and final worker shutdown.
@@ -42,10 +42,10 @@ enum class PathClassificationReadStep : std::uint8_t
 // through each owner/event continuation. The stable startup wait owns event until final worker cleanup.
 class PathClassificationRead final
 {
-  public:
+public:
     PathClassificationRead() noexcept;
     ~PathClassificationRead();
-    PathClassificationRead(const PathClassificationRead&) = delete;
+    PathClassificationRead(const PathClassificationRead&)            = delete;
     PathClassificationRead& operator=(const PathClassificationRead&) = delete;
     // Worker allocation; bad_alloc propagates to the original scheduler runner's existing translation.
     void Initialize(void* event, PathClassificationReadSource source = {});
@@ -63,7 +63,7 @@ class PathClassificationRead final
     // No bound is claimed for a driver which does not complete an in-flight native API call.
     void CancelAndJoinForShutdownWorker() noexcept;
 
-  private:
+private:
     struct Impl;
     std::unique_ptr<Impl> _impl;
 };

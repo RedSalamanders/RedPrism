@@ -59,24 +59,20 @@ UINT ReceiptFormat() noexcept
 
 Status HashStatus(std::int32_t error) noexcept
 {
-    return error == 0               ? Status::Ok
-           : error == E_ABORT       ? Status::Cancelled
-           : error == E_OUTOFMEMORY ? Status::OutOfMemory
-                                    : Status::NativeFailure;
+    return error == 0 ? Status::Ok : error == E_ABORT ? Status::Cancelled : error == E_OUTOFMEMORY ? Status::OutOfMemory : Status::NativeFailure;
 }
 
 std::optional<ClipboardReceipt::Key> ReadReceipt() noexcept
 {
     const auto format = ReceiptFormat();
-    if (!format || !IsClipboardFormatAvailable(format))
+    if (! format || ! IsClipboardFormatAvailable(format))
         return std::nullopt;
     const auto handle = GetClipboardData(format);
-    if (!handle || GlobalSize(handle) != ClipboardReceipt::kEncodedBytes)
+    if (! handle || GlobalSize(handle) != ClipboardReceipt::kEncodedBytes)
         return std::nullopt;
     const wil::unique_hglobal_locked locked(handle);
     ClipboardReceipt::Key key;
-    return locked.get() && ClipboardReceipt::Decode(
-                               {static_cast<const std::uint8_t*>(locked.get()), ClipboardReceipt::kEncodedBytes}, key)
+    return locked.get() && ClipboardReceipt::Decode({static_cast<const std::uint8_t*>(locked.get()), ClipboardReceipt::kEncodedBytes}, key)
                ? std::optional<ClipboardReceipt::Key>{key}
                : std::nullopt;
 }
@@ -85,9 +81,8 @@ wil::unique_hwnd ReadWindow(Observer observer) noexcept
 {
     if (Injected(observer, Fault::Window) != 0)
         return {};
-    wil::unique_hwnd window(
-        CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
-    if (!window)
+    wil::unique_hwnd window(CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
+    if (! window)
         NativeFailure(observer, NativeCall::Window, 0, GetLastError());
     else
         Reached(observer, Stage::WindowCreated);
@@ -96,14 +91,14 @@ wil::unique_hwnd ReadWindow(Observer observer) noexcept
 
 class OpenScope final
 {
-  public:
+public:
     OpenScope() noexcept = default;
     ~OpenScope()
     {
         if (_open)
             (void)CloseClipboard();
     }
-    OpenScope(const OpenScope&) = delete;
+    OpenScope(const OpenScope&)            = delete;
     OpenScope& operator=(const OpenScope&) = delete;
     bool Open(HWND window) noexcept
     {
@@ -112,28 +107,28 @@ class OpenScope final
     }
     bool Close() noexcept
     {
-        if (!_open)
+        if (! _open)
             return false;
-        if (!CloseClipboard())
+        if (! CloseClipboard())
             return false;
         _open = false;
         return true;
     }
 
-  private:
+private:
     bool _open = false;
 };
 
 Status GlobalCopy(std::span<const std::uint8_t> bytes, wil::unique_hglobal& output, CancelToken cancellation) noexcept
 {
     wil::unique_hglobal local(GlobalAlloc(GMEM_MOVEABLE, bytes.size()));
-    if (!local)
+    if (! local)
         return Status::OutOfMemory;
     {
         const wil::unique_hglobal_locked locked(local.get());
-        if (!locked.get())
+        if (! locked.get())
             return Status::NativeFailure;
-        auto* destination = static_cast<std::uint8_t*>(locked.get());
+        auto* destination    = static_cast<std::uint8_t*>(locked.get());
         const auto allocated = GlobalSize(local.get());
         if (allocated < bytes.size())
             return Status::NativeFailure;
@@ -165,8 +160,7 @@ Status HashGlobal(HGLOBAL block, ClipboardFingerprint::Format& output, CancelTok
 {
     const auto size = GlobalSize(block);
     const wil::unique_hglobal_locked locked(block);
-    return size && locked.get() ? HashStatus(ClipboardFingerprint::Hash(
-                                      {static_cast<const std::uint8_t*>(locked.get()), size}, output, cancellation))
+    return size && locked.get() ? HashStatus(ClipboardFingerprint::Hash({static_cast<const std::uint8_t*>(locked.get()), size}, output, cancellation))
                                 : Status::NativeFailure;
 }
 
@@ -194,15 +188,13 @@ Status DibStatus(ClipboardDibStatus status) noexcept
     return Status::Invalid;
 }
 
-Status ProbeBytes(std::span<const std::uint8_t> bytes, bool png, std::int64_t pixelBudget, FormatInfo& info,
-                  CancelToken cancellation)
+Status ProbeBytes(std::span<const std::uint8_t> bytes, bool png, std::int64_t pixelBudget, FormatInfo& info, CancelToken cancellation)
 {
     info = {};
     if (png)
     {
         ImageImportMetadata metadata;
-        const Status status =
-            CodecStatus(ProbeProjectPng(bytes.data(), bytes.size(), pixelBudget, metadata, cancellation));
+        const Status status = CodecStatus(ProbeProjectPng(bytes.data(), bytes.size(), pixelBudget, metadata, cancellation));
         if (status == Status::Ok)
             info = {bytes.size(), metadata.pixels, metadata.rawWidth, metadata.rawHeight};
         return status;
@@ -216,14 +208,13 @@ Status ProbeBytes(std::span<const std::uint8_t> bytes, bool png, std::int64_t pi
 
 // ClipboardScope has already opened. GetClipboardData may block a worker while an external owner renders.
 // The OS handle is borrowed; only the locked pointer's scope owns an unlock, never GlobalFree.
-Status InspectFormat(UINT format, bool png, std::int64_t pixelBudget, FormatInfo& info, CancelToken cancellation,
-                     Observer observer)
+Status InspectFormat(UINT format, bool png, std::int64_t pixelBudget, FormatInfo& info, CancelToken cancellation, Observer observer)
 {
     info = {};
     if (cancellation.IsCancelled())
         return Status::Cancelled;
     const HANDLE handle = GetClipboardData(format);
-    if (!handle)
+    if (! handle)
     {
         NativeFailure(observer, NativeCall::Read, format, GetLastError());
         return Status::NativeFailure;
@@ -239,7 +230,7 @@ Status InspectFormat(UINT format, bool png, std::int64_t pixelBudget, FormatInfo
     if (size > kMaxImageEncodedBytes)
         return Status::TooLarge;
     const wil::unique_hglobal_locked locked(handle);
-    if (!locked.get())
+    if (! locked.get())
     {
         NativeFailure(observer, NativeCall::Lock, format, GetLastError());
         return Status::NativeFailure;
@@ -247,13 +238,18 @@ Status InspectFormat(UINT format, bool png, std::int64_t pixelBudget, FormatInfo
     return ProbeBytes({static_cast<const std::uint8_t*>(locked.get()), size}, png, pixelBudget, info, cancellation);
 }
 
-Status CopyFormat(UINT format, bool png, std::int64_t pixelBudget, const FormatInfo& inspected,
-                  std::vector<std::uint8_t>& output, CancelToken cancellation, Observer observer)
+Status CopyFormat(UINT format,
+                  bool png,
+                  std::int64_t pixelBudget,
+                  const FormatInfo& inspected,
+                  std::vector<std::uint8_t>& output,
+                  CancelToken cancellation,
+                  Observer observer)
 {
     if (cancellation.IsCancelled())
         return Status::Cancelled;
     const HANDLE handle = GetClipboardData(format);
-    if (!handle)
+    if (! handle)
     {
         NativeFailure(observer, NativeCall::Read, format, GetLastError());
         return Status::NativeFailure;
@@ -269,7 +265,7 @@ Status CopyFormat(UINT format, bool png, std::int64_t pixelBudget, const FormatI
     if (size != inspected.encodedBytes || size > kMaxImageEncodedBytes)
         return Status::Stale;
     const wil::unique_hglobal_locked locked(handle);
-    if (!locked.get())
+    if (! locked.get())
     {
         NativeFailure(observer, NativeCall::Lock, format, GetLastError());
         return Status::NativeFailure;
@@ -302,7 +298,7 @@ struct PreparedImage::Storage final
 {
     wil::unique_hglobal png;
     wil::unique_hglobal dib;
-    UINT pngFormat = 0;
+    UINT pngFormat               = 0;
     std::uint32_t sourceSequence = 0;
     wil::unique_hglobal receipt;
     UINT receiptFormat = 0;
@@ -312,14 +308,13 @@ struct PreparedImage::Storage final
 
 static_assert(sizeof(CodecMemoryStream) <= 256);
 
-PreparedImage::PreparedImage() noexcept = default;
-PreparedImage::~PreparedImage() = default;
-PreparedImage::PreparedImage(PreparedImage&&) noexcept = default;
+PreparedImage::PreparedImage() noexcept                           = default;
+PreparedImage::~PreparedImage()                                   = default;
+PreparedImage::PreparedImage(PreparedImage&&) noexcept            = default;
 PreparedImage& PreparedImage::operator=(PreparedImage&&) noexcept = default;
 PreparedImage::operator bool() const noexcept
 {
-    return _storage && _storage->png && _storage->dib && _storage->pngFormat != 0 &&
-           (!_storage->binding || (_storage->receipt && _storage->receiptFormat));
+    return _storage && _storage->png && _storage->dib && _storage->pngFormat != 0 && (! _storage->binding || (_storage->receipt && _storage->receiptFormat));
 }
 
 std::uint64_t PreparedImage::RetainedBytes() const noexcept
@@ -339,33 +334,37 @@ std::uint32_t PreparedImage::SourceSequence() const noexcept
     return _storage ? _storage->sourceSequence : 0;
 }
 
-Status Prepare(const Raster& image, double resolution, std::uint32_t sourceSequence, PreparedImage& output,
-               CancelToken cancellation, Observer observer, const std::optional<ClipboardReceipt::Key>& receipt)
+Status Prepare(const Raster& image,
+               double resolution,
+               std::uint32_t sourceSequence,
+               PreparedImage& output,
+               CancelToken cancellation,
+               Observer observer,
+               const std::optional<ClipboardReceipt::Key>& receipt)
 {
     static_assert(sizeof(PreparedImage::Storage) <= 256);
-    static_assert(kClipboardEncodingFixedMetadataBytes >= sizeof(PreparedImage::Storage) + sizeof(CodecMemoryStream) +
-                                                              4 * sizeof(std::vector<std::uint8_t>) + 128 +
-                                                              16 * sizeof(void*));
+    static_assert(kClipboardEncodingFixedMetadataBytes >=
+                  sizeof(PreparedImage::Storage) + sizeof(CodecMemoryStream) + 4 * sizeof(std::vector<std::uint8_t>) + 128 + 16 * sizeof(void*));
     output = {};
     if (cancellation.IsCancelled())
         return Status::Cancelled;
-    if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888)
+    if (! image.HasStorage() || image.Format() != RasterFormat::Bgra8888)
         return Status::Invalid;
     if (image.PixelCount() > kMaxLayerPixels)
         return Status::TooLarge;
     PreparedImage prepared;
-    prepared._storage = std::make_unique<PreparedImage::Storage>();
-    prepared._storage->pngFormat = PngFormat();
+    prepared._storage                 = std::make_unique<PreparedImage::Storage>();
+    prepared._storage->pngFormat      = PngFormat();
     prepared._storage->sourceSequence = sourceSequence;
     if (prepared._storage->pngFormat == 0)
         return Status::NativeFailure;
     if (receipt)
     {
         std::array<std::uint8_t, ClipboardReceipt::kEncodedBytes> packet{};
-        if (!ClipboardReceipt::Encode(receipt.value(), packet))
+        if (! ClipboardReceipt::Encode(receipt.value(), packet))
             return Status::Invalid;
         prepared._storage->receiptFormat = ReceiptFormat();
-        if (!prepared._storage->receiptFormat)
+        if (! prepared._storage->receiptFormat)
             return Status::NativeFailure;
         if (const auto error = Injected(observer, Fault::ReceiptGlobal); error != 0)
             return error == ERROR_NOT_ENOUGH_MEMORY ? Status::OutOfMemory : Status::NativeFailure;
@@ -419,7 +418,7 @@ Status Prepare(const Raster& image, double resolution, std::uint32_t sourceSeque
 Publication Publish(PreparedImage& image, CancelToken cancellation, Observer observer) noexcept
 {
     Publication result;
-    if (!image)
+    if (! image)
         return result;
     if (cancellation.IsCancelled())
     {
@@ -428,16 +427,15 @@ Publication Publish(PreparedImage& image, CancelToken cancellation, Observer obs
     }
     if (const DWORD error = Injected(observer, Fault::Window); error != 0)
     {
-        result.status = Status::NativeFailure;
+        result.status      = Status::NativeFailure;
         result.nativeError = error;
         return result;
     }
     // Built-in window procedure; no Application pointer, subclass, visible surface or borrowed HWND.
-    wil::unique_hwnd window(
-        CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
-    if (!window)
+    wil::unique_hwnd window(CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
+    if (! window)
     {
-        result.status = Status::NativeFailure;
+        result.status      = Status::NativeFailure;
         result.nativeError = Error();
         return result;
     }
@@ -450,13 +448,13 @@ Publication Publish(PreparedImage& image, CancelToken cancellation, Observer obs
     OpenScope scope;
     if (const DWORD error = Injected(observer, Fault::Open); error != 0)
     {
-        result.status = Status::Busy;
+        result.status      = Status::Busy;
         result.nativeError = error;
         return result;
     }
-    if (!scope.Open(window.get()))
+    if (! scope.Open(window.get()))
     {
-        result.status = Status::Busy;
+        result.status      = Status::Busy;
         result.nativeError = Error();
         return result;
     }
@@ -474,13 +472,13 @@ Publication Publish(PreparedImage& image, CancelToken cancellation, Observer obs
     }
     if (const DWORD error = Injected(observer, Fault::Empty); error != 0)
     {
-        result.status = Status::NativeFailure;
+        result.status      = Status::NativeFailure;
         result.nativeError = error;
         return result;
     }
-    if (!EmptyClipboard())
+    if (! EmptyClipboard())
     {
-        result.status = Status::NativeFailure;
+        result.status      = Status::NativeFailure;
         result.nativeError = Error();
         return result;
     }
@@ -489,10 +487,10 @@ Publication Publish(PreparedImage& image, CancelToken cancellation, Observer obs
     if (image._storage->binding)
     {
         const auto error = Injected(observer, Fault::ReceiptPlace);
-        if (error || !SetClipboardData(image._storage->receiptFormat, image._storage->receipt.get()))
+        if (error || ! SetClipboardData(image._storage->receiptFormat, image._storage->receipt.get()))
         {
             result.nativeError = error ? error : Error();
-            result.status = Status::NativeFailure;
+            result.status      = Status::NativeFailure;
             // No unbound image formats escape when receipt placement fails. Close precedes owner destruction.
             result.sequence = GetClipboardSequenceNumber();
             (void)scope.Close();
@@ -507,7 +505,7 @@ Publication Publish(PreparedImage& image, CancelToken cancellation, Observer obs
     // From Empty onward this attempt cannot be rolled back or retried. Complete both independent formats,
     // retain the first error, and report the exact held sequence even when a stop arrives after publication.
     DWORD error = Injected(observer, Fault::Png);
-    if (!error && SetClipboardData(image._storage->pngFormat, image._storage->png.get()))
+    if (! error && SetClipboardData(image._storage->pngFormat, image._storage->png.get()))
     {
         (void)image._storage->png.release();
         result.pngPlaced = true;
@@ -516,7 +514,7 @@ Publication Publish(PreparedImage& image, CancelToken cancellation, Observer obs
     else
         result.nativeError = error ? error : Error();
     error = Injected(observer, Fault::Dib);
-    if (!error && SetClipboardData(CF_DIBV5, image._storage->dib.get()))
+    if (! error && SetClipboardData(CF_DIBV5, image._storage->dib.get()))
     {
         (void)image._storage->dib.release();
         result.dibPlaced = true;
@@ -524,14 +522,14 @@ Publication Publish(PreparedImage& image, CancelToken cancellation, Observer obs
     }
     else if (result.nativeError == 0)
         result.nativeError = error ? error : Error();
-    result.sequence = GetClipboardSequenceNumber();
-    result.status = result.pngPlaced && result.dibPlaced ? Status::Ok : Status::NativeFailure;
-    const bool closed = scope.Close();
+    result.sequence        = GetClipboardSequenceNumber();
+    result.status          = result.pngPlaced && result.dibPlaced ? Status::Ok : Status::NativeFailure;
+    const bool closed      = scope.Close();
     const DWORD closeError = closed ? Injected(observer, Fault::Close) : Error();
     if (closeError && result.nativeError == 0)
     {
         result.nativeError = closeError;
-        result.status = Status::NativeFailure;
+        result.status      = Status::NativeFailure;
     }
     Reached(observer, Stage::Closed);
     // Scope closes before the immediate-format window is destroyed. Transferred global blocks belong to
@@ -548,12 +546,12 @@ Inspection& Inspection::operator=(Inspection&& other) noexcept
 {
     if (this != &other)
     {
-        _valid = std::exchange(other._valid, false);
-        _sequence = other._sequence;
-        _pngFormat = other._pngFormat;
-        _dibFormat = other._dibFormat;
-        _png = other._png;
-        _dib = other._dib;
+        _valid       = std::exchange(other._valid, false);
+        _sequence    = other._sequence;
+        _pngFormat   = other._pngFormat;
+        _dibFormat   = other._dibFormat;
+        _png         = other._png;
+        _dib         = other._dib;
         _pixelBudget = other._pixelBudget;
     }
     return *this;
@@ -569,8 +567,7 @@ std::uint64_t ImageCopy::RetainedBytes() const noexcept
     return _png.capacity() + _dib.capacity();
 }
 
-Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancellation, Observer observer,
-               Availability* availability)
+Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancellation, Observer observer, Availability* availability)
 {
     output = {};
     if (availability)
@@ -582,14 +579,14 @@ Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancell
     // NULL scopes may both open successfully on different threads and one Close invalidates the other.
     // A distinct worker-owned HWND makes native acquisition exclusive, including concurrent hint/availability.
     const auto window = ReadWindow(observer);
-    if (!window)
+    if (! window)
         return Status::NativeFailure;
     if (cancellation.IsCancelled())
         return Status::Cancelled;
     OpenScope scope;
     if (Injected(observer, Fault::Open) != 0)
         return Status::Busy;
-    if (!scope.Open(window.get()))
+    if (! scope.Open(window.get()))
     {
         NativeFailure(observer, NativeCall::Open, 0, GetLastError());
         return Status::Busy;
@@ -597,16 +594,16 @@ Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancell
     Reached(observer, Stage::Opened);
     Inspection inspected;
     inspected._pixelBudget = pixelBudget;
-    const UINT png = PngFormat();
+    const UINT png         = PngFormat();
     if (png == 0)
     {
         NativeFailure(observer, NativeCall::RegisterFormat, 0, GetLastError());
         return Status::NativeFailure;
     }
     const bool hasPng = IsClipboardFormatAvailable(png) != FALSE;
-    const bool hasV5 = IsClipboardFormatAvailable(CF_DIBV5) != FALSE;
+    const bool hasV5  = IsClipboardFormatAvailable(CF_DIBV5) != FALSE;
     const bool hasDib = IsClipboardFormatAvailable(CF_DIB) != FALSE;
-    Status pngStatus = Status::Invalid;
+    Status pngStatus  = Status::Invalid;
     if (hasPng)
     {
         pngStatus = InspectFormat(png, true, pixelBudget, inspected._png, cancellation, observer);
@@ -626,7 +623,7 @@ Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancell
                 return Status::Cancelled;
             SetLastError(ERROR_SUCCESS);
             format = EnumClipboardFormats(format);
-            if (!format)
+            if (! format)
             {
                 const DWORD error = GetLastError();
                 if (error != ERROR_SUCCESS)
@@ -656,7 +653,7 @@ Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancell
     if (cancellation.IsCancelled())
         return Status::Cancelled;
     inspected._sequence = GetClipboardSequenceNumber();
-    if (!scope.Close())
+    if (! scope.Close())
     {
         NativeFailure(observer, NativeCall::Close, 0, GetLastError());
         return Status::NativeFailure;
@@ -669,26 +666,26 @@ Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancell
     if (inspected._pngFormat == 0 && inspected._dibFormat == 0)
         return pngStatus == Status::TooLarge || dibStatus == Status::TooLarge ? Status::TooLarge : Status::Invalid;
     inspected._valid = true;
-    output = std::move(inspected);
+    output           = std::move(inspected);
     return Status::Ok;
 }
 
 Status Copy(const Inspection& inspected, ImageCopy& output, CancelToken cancellation, Observer observer)
 {
     output = {};
-    if (!inspected)
+    if (! inspected)
         return Status::Invalid;
     if (cancellation.IsCancelled())
         return Status::Cancelled;
     const auto window = ReadWindow(observer);
-    if (!window)
+    if (! window)
         return Status::NativeFailure;
     if (cancellation.IsCancelled())
         return Status::Cancelled;
     OpenScope scope;
     if (Injected(observer, Fault::Open) != 0)
         return Status::Busy;
-    if (!scope.Open(window.get()))
+    if (! scope.Open(window.get()))
     {
         NativeFailure(observer, NativeCall::Open, 0, GetLastError());
         return Status::Busy;
@@ -709,8 +706,7 @@ Status Copy(const Inspection& inspected, ImageCopy& output, CancelToken cancella
     if (inspected._pngFormat != 0)
         pngStatus = Injected(observer, Fault::PngRead) != 0
                         ? Status::NativeFailure
-                        : CopyFormat(inspected._pngFormat, true, inspected._pixelBudget, inspected._png, copy._png,
-                                     cancellation, observer);
+                        : CopyFormat(inspected._pngFormat, true, inspected._pixelBudget, inspected._png, copy._png, cancellation, observer);
     if (pngStatus == Status::Stale || pngStatus == Status::Cancelled)
         return pngStatus;
     if (GetClipboardSequenceNumber() != inspected._sequence)
@@ -719,8 +715,7 @@ Status Copy(const Inspection& inspected, ImageCopy& output, CancelToken cancella
     if (inspected._dibFormat != 0)
         dibStatus = Injected(observer, Fault::DibRead) != 0
                         ? Status::NativeFailure
-                        : CopyFormat(inspected._dibFormat, false, inspected._pixelBudget, inspected._dib, copy._dib,
-                                     cancellation, observer);
+                        : CopyFormat(inspected._dibFormat, false, inspected._pixelBudget, inspected._dib, copy._dib, cancellation, observer);
     if (dibStatus == Status::Stale || dibStatus == Status::Cancelled)
         return dibStatus;
     if (pngStatus != Status::Ok && dibStatus != Status::Ok)
@@ -728,7 +723,7 @@ Status Copy(const Inspection& inspected, ImageCopy& output, CancelToken cancella
     if (GetClipboardSequenceNumber() != inspected._sequence)
         return Status::Stale;
     copy._sequence = inspected._sequence;
-    if (!scope.Close())
+    if (! scope.Close())
     {
         NativeFailure(observer, NativeCall::Close, 0, GetLastError());
         return Status::NativeFailure;
@@ -747,11 +742,11 @@ Status Decode(const ImageCopy& copy, Raster& output, CancelToken cancellation)
         return Status::Cancelled;
     if (copy._pixelBudget < 0 || copy._pixelBudget > (std::numeric_limits<int>::max)())
         return Status::Invalid;
-    if (!copy._png.empty())
+    if (! copy._png.empty())
     {
         DecodedImage decoded;
-        const Status status = CodecStatus(DecodeProjectPng(copy._png.data(), copy._png.size(), false,
-                                                           static_cast<int>(copy._pixelBudget), decoded, cancellation));
+        const Status status =
+            CodecStatus(DecodeProjectPng(copy._png.data(), copy._png.size(), false, static_cast<int>(copy._pixelBudget), decoded, cancellation));
         if (status == Status::Ok)
         {
             output = std::move(decoded.image);
@@ -765,22 +760,22 @@ Status Decode(const ImageCopy& copy, Raster& output, CancelToken cancellation)
     return DibStatus(DecodeClipboardDib(copy._dib, copy._pixelBudget, output, cancellation));
 }
 
-Status HasPrivateOrigin(const ImageCopy& copy, const ClipboardFingerprint::Binding& binding,
-                        const ClipboardReceipt::Key& currentPrivate, bool& matches, CancelToken cancellation)
+Status HasPrivateOrigin(
+    const ImageCopy& copy, const ClipboardFingerprint::Binding& binding, const ClipboardReceipt::Key& currentPrivate, bool& matches, CancelToken cancellation)
 {
     matches = false;
     if (cancellation.IsCancelled())
         return Status::Cancelled;
-    if (!copy._receipt || copy._receipt.value() != binding.key || currentPrivate != binding.key)
+    if (! copy._receipt || copy._receipt.value() != binding.key || currentPrivate != binding.key)
         return Status::Ok;
     ClipboardFingerprint::Format png, dib;
-    if (!copy._png.empty())
+    if (! copy._png.empty())
     {
         const auto status = HashStatus(ClipboardFingerprint::Hash(copy._png, png, cancellation));
         if (status != Status::Ok)
             return status;
     }
-    if (!copy._dib.empty())
+    if (! copy._dib.empty())
     {
         const auto status = HashStatus(ClipboardFingerprint::Hash(copy._dib, dib, cancellation));
         if (status != Status::Ok)

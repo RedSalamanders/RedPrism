@@ -17,7 +17,7 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
     static_assert(std::is_nothrow_copy_constructible_v<Sample> && std::is_nothrow_copy_assignable_v<Sample>);
     static_assert(std::is_nothrow_destructible_v<Context> && std::is_nothrow_destructible_v<Sample>);
 
-  public:
+public:
     enum class Action : std::uint8_t
     {
         Down,
@@ -40,11 +40,11 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
         Sample sample;
     };
 
-    PointerInputStream() noexcept = default;
-    PointerInputStream(const PointerInputStream&) = delete;
+    PointerInputStream() noexcept                            = default;
+    PointerInputStream(const PointerInputStream&)            = delete;
     PointerInputStream& operator=(const PointerInputStream&) = delete;
-    PointerInputStream(PointerInputStream&&) = delete;
-    PointerInputStream& operator=(PointerInputStream&&) = delete;
+    PointerInputStream(PointerInputStream&&)                 = delete;
+    PointerInputStream& operator=(PointerInputStream&&)      = delete;
 
     [[nodiscard]] bool Begin(std::uint64_t opening, const Context& context, const Sample& down) noexcept
     {
@@ -53,18 +53,18 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
         if (_context || opening == 0 || opening <= _lastOpening)
             return false;
         _context.emplace(context);
-        _opening = opening;
+        _opening     = opening;
         _lastOpening = opening;
         _events[0].emplace(Event{Action::Down, down});
         _front = 0;
-        _size = 1;
+        _size  = 1;
         _lastSample.emplace(down);
         return true;
     }
 
     [[nodiscard]] Admission Move(std::uint64_t opening, const Sample& sample) noexcept
     {
-        if (!_context || opening != _opening)
+        if (! _context || opening != _opening)
             return Admission::Stale;
         if (_terminal || _terminalConsumed)
             return Admission::Closed;
@@ -84,7 +84,7 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
 
     [[nodiscard]] Admission End(std::uint64_t opening, const Sample& sample, bool lost) noexcept
     {
-        if (!_context || opening != _opening)
+        if (! _context || opening != _opening)
             return Admission::Stale;
         if (_terminal || _terminalConsumed)
             return Admission::Closed;
@@ -94,7 +94,7 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
 
     [[nodiscard]] std::optional<Event> Peek(std::uint64_t opening) const noexcept
     {
-        if (!_context || opening != _opening)
+        if (! _context || opening != _opening)
             return std::nullopt;
         if (_size != 0)
             return _events[_front];
@@ -103,7 +103,7 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
 
     [[nodiscard]] std::optional<Event> Take(std::uint64_t opening) noexcept
     {
-        if (!_context || opening != _opening)
+        if (! _context || opening != _opening)
             return std::nullopt;
         if (_size != 0)
         {
@@ -127,7 +127,7 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
     // cannot reuse the buffer while a dependent history worker still owns the selected host ordinal.
     [[nodiscard]] bool Acknowledge(std::uint64_t opening) noexcept
     {
-        if (!_context || opening != _opening || !_terminalConsumed || _size != 0 || _terminal)
+        if (! _context || opening != _opening || ! _terminalConsumed || _size != 0 || _terminal)
             return false;
         Clear();
         return true;
@@ -137,7 +137,7 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
     // according to the owning tool contract; dropping storage alone is not a canvas cancellation policy.
     [[nodiscard]] bool Drop(std::uint64_t opening) noexcept
     {
-        if (!_context || opening != _opening)
+        if (! _context || opening != _opening)
             return false;
         Clear();
         return true;
@@ -157,7 +157,7 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
     }
     [[nodiscard]] bool Sampling() const noexcept
     {
-        return _context && !_terminal && !_terminalConsumed;
+        return _context && ! _terminal && ! _terminalConsumed;
     }
     [[nodiscard]] bool TerminalConsumed() const noexcept
     {
@@ -173,7 +173,7 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
     }
     static constexpr std::size_t kCapacity = Capacity;
 
-  private:
+private:
     void Clear() noexcept
     {
         // Capacity is fixed. No allocation, callback or unbounded graph release is allowed in these value slots.
@@ -186,21 +186,21 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
         _context.reset();
         _lastSample.reset();
         _terminal.reset();
-        _opening = 0;
-        _front = 0;
-        _size = 0;
+        _opening          = 0;
+        _front            = 0;
+        _size             = 0;
         _terminalConsumed = false;
-        _overflow = false;
+        _overflow         = false;
     }
 
     std::array<std::optional<Event>, Capacity> _events{};
     std::optional<Context> _context;
     std::optional<Sample> _lastSample;
     std::optional<Event> _terminal;
-    std::uint64_t _opening = 0;
+    std::uint64_t _opening     = 0;
     std::uint64_t _lastOpening = 0;
-    std::size_t _front = 0;
-    std::size_t _size = 0;
-    bool _terminalConsumed = false;
-    bool _overflow = false;
+    std::size_t _front         = 0;
+    std::size_t _size          = 0;
+    bool _terminalConsumed     = false;
+    bool _overflow             = false;
 };

@@ -12,7 +12,7 @@ if ($RedPrismVisualStudioVersionRange -ne '[18.0,19.0)') {
     throw "The Visual Studio version range drifted from Visual Studio 2026: '$RedPrismVisualStudioVersionRange'."
 }
 
-foreach ($function in 'Find-RedPrismVisualStudioInstallationPath', 'Find-RedPrismMSBuild', 'Find-RedPrismClangFormat') {
+foreach ($function in 'Find-RedPrismVisualStudioInstallationPath', 'Find-RedPrismMSBuild') {
     if (-not (Get-Command $function -Module VisualStudioDiscovery -ErrorAction SilentlyContinue)) {
         throw "$function was not exported by Build/VisualStudioDiscovery.psm1."
     }
@@ -21,25 +21,16 @@ Write-Host 'PASS tooldiscovery.module-exports'
 
 & (Join-Path $PSScriptRoot 'ToolArchitectureTests.ps1')
 
-$installation = Find-RedPrismVisualStudioInstallationPath
-if ($installation) {
-    $bundled = @('VC/Tools/Llvm/x64/bin/clang-format.exe','VC/Tools/Llvm/bin/clang-format.exe') |
-        ForEach-Object { Join-Path $installation $_ } | Where-Object { Test-Path -LiteralPath $_ }
-    if (@($bundled).Count -and (Find-RedPrismClangFormat) -notin $bundled) {
-        throw 'An unrelated PATH formatter overrides the supported Visual Studio bundle.'
-    }
-}
-Write-Host 'PASS tooldiscovery.formatter-follows-supported-visual-studio'
-
-$formatter = Find-RedPrismClangFormat
-if ($formatter) {
+# format.ps1 formats with the clang-format the pinned engine names; that pin is part of tooling evidence identity.
+$formatterPin = Join-Path $repo '.ci-engine/Policy/clang-format.json'
+if (Test-Path -LiteralPath $formatterPin -PathType Leaf) {
     Import-Module (Join-Path $repo 'Build/ScopedTesting.psm1') -Force
-    $fingerprint = 'formatter=' + $formatter + ':' + (Get-FileHash -LiteralPath $formatter).Hash
+    $fingerprint = 'formatter=ci-engine:' + (Get-FileHash -LiteralPath $formatterPin).Hash
     if ($fingerprint -cnotin @(Get-ScopedEnvironmentInputs -Tooling)) {
-        throw 'The selected formatter bytes are missing from tooling evidence identity.'
+        throw 'The pinned formatter is missing from tooling evidence identity.'
     }
 }
-Write-Host 'PASS tooldiscovery.formatter-bytes-attested'
+Write-Host 'PASS tooldiscovery.formatter-pin-attested'
 
 # Every script that used to run its own vswhere lookup now goes through the shared, version-ranged helper.
 $buildScript = Get-Content -LiteralPath (Join-Path $repo 'build.ps1') -Raw
@@ -56,8 +47,8 @@ if ($restoreScript -notmatch 'Find-RedPrismMSBuild' -or $restoreScript -match 'v
 if ($packageScript -notmatch 'Find-RedPrismVisualStudioInstallationPath' -or $packageScript -match '(?m)^\s*function Find-VisualStudio') {
     throw 'package.ps1 no longer routes Visual Studio discovery through the shared, version-ranged helper.'
 }
-if ($formatScript -notmatch 'Find-RedPrismClangFormat') {
-    throw 'format.ps1 no longer routes clang-format discovery through the shared helper.'
+if ($formatScript -notmatch 'Install-CiFormatter' -or $formatScript -match 'vswhere|Llvm|Get-Command') {
+    throw 'format.ps1 no longer takes clang-format from the pinned engine formatter alone.'
 }
 Write-Host 'PASS tooldiscovery.scripts-use-shared-helper'
 

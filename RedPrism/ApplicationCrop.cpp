@@ -28,22 +28,22 @@ namespace
 void Application::BeginCropDrag(Vec2 view) noexcept
 {
     const std::optional<CropRect> frame = _session.VisibleCropRect();
-    if (!frame.has_value())
+    if (! frame.has_value())
     {
         return;
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     CropDrag drag;
-    drag.start = pixel;
+    drag.start    = pixel;
     drag.original = frame.value();
-    drag.mode = CropDrag::Mode::Create;
+    drag.mode     = CropDrag::Mode::Create;
     // A handle resizes, the inside moves, the outside starts a new frame (a click alone leaves the frame as it is).
     if (_overlayGeometry.has_value())
     {
         const std::optional<TransformHit> hit = _overlayGeometry->Hit(view);
         if (hit.has_value() && hit->mode == TransformDrag::Mode::Resize && hit->handle >= 0)
         {
-            drag.mode = CropDrag::Mode::Resize;
+            drag.mode   = CropDrag::Mode::Resize;
             drag.handle = hit->handle;
         }
     }
@@ -59,15 +59,15 @@ void Application::BeginCropDrag(Vec2 view) noexcept
 void Application::ContinueCropDrag(Vec2 view) noexcept
 {
     const CropDrag* drag = std::get_if<CropDrag>(&_drag);
-    if (drag == nullptr || !_session.Document().has_value())
+    if (drag == nullptr || ! _session.Document().has_value())
     {
         return;
     }
-    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    const bool symmetric = KeyboardState::Held(VK_MENU);
+    const Vec2 pixel                  = _viewport.DocumentFromView(view, DocumentSize());
+    const bool symmetric              = KeyboardState::Held(VK_MENU);
     const std::optional<double> ratio = _session.CropRatio();
-    CropRect rect = drag->Updated(pixel, ratio, symmetric);
-    const SnapTargets targets = _session.CropSnapTargets();
+    CropRect rect                     = drag->Updated(pixel, ratio, symmetric);
+    const SnapTargets targets         = _session.CropSnapTargets();
     const CropSnap snap{targets.xs, targets.ys, _viewport.DipToDocument(TransformSnap::kDistanceDip)};
     rect = snap.Apply(rect, *drag, pixel, ratio, symmetric);
     if (CropGeometry::Valid(rect))
@@ -108,31 +108,26 @@ void Application::CancelCropFrame() noexcept
 
 void Application::OnCropAction(CropAction action, double value) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    if (! _hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return;
     }
-    if (!std::isfinite(value))
+    if (! std::isfinite(value))
     {
         return;
     }
     switch (action)
     {
-    case CropAction::SetRatio:
-        _session.cropRatioChoice = std::clamp(static_cast<int>(value), 0, 4);
-        _session.ChangeCropRatio();
-        SyncChrome();
-        InvalidateFrame();
-        break;
-    case CropAction::Cancel:
-        CancelCropFrame();
-        break;
-    case CropAction::Apply:
-        ApplyCrop();
-        break;
-    default:
-        break;
+        case CropAction::SetRatio:
+            _session.cropRatioChoice = std::clamp(static_cast<int>(value), 0, 4);
+            _session.ChangeCropRatio();
+            SyncChrome();
+            InvalidateFrame();
+            break;
+        case CropAction::Cancel: CancelCropFrame(); break;
+        case CropAction::Apply: ApplyCrop(); break;
+        default: break;
     }
 }
 
@@ -140,20 +135,20 @@ void Application::OnCropAction(CropAction action, double value) noexcept
 // (no rotation knob) and everything outside it dims.
 void Application::SyncCropChrome() noexcept
 {
-    if (!_chrome)
+    if (! _chrome)
     {
         return;
     }
-    const bool hasDocument = _session.Document().has_value();
-    const bool active = _tool == EditorTool::Crop && hasDocument;
+    const bool hasDocument              = _session.Document().has_value();
+    const bool active                   = _tool == EditorTool::Crop && hasDocument;
     const std::optional<CropRect> frame = active ? _session.VisibleCropRect() : std::nullopt;
     CropInspectorState state;
-    state.enabled = hasDocument;
-    state.ratio = _session.cropRatioChoice;
+    state.enabled  = hasDocument;
+    state.ratio    = _session.cropRatioChoice;
     state.hasFrame = frame.has_value();
     if (frame.has_value())
     {
-        state.width = static_cast<int>(std::lround(frame->width));
+        state.width  = static_cast<int>(std::lround(frame->width));
         state.height = static_cast<int>(std::lround(frame->height));
     }
     _chrome->SetCropInspector(state);
@@ -163,14 +158,13 @@ void Application::SyncCropChrome() noexcept
     {
         const Vec2 documentSize = DocumentSize();
         LayerTransform box;
-        box.origin = Vec2{frame->x, frame->y};
-        box.size = Vec2{frame->width, frame->height};
-        geometry = TransformOverlayGeometry::FromTransform(box, _viewport, documentSize);
+        box.origin              = Vec2{frame->x, frame->y};
+        box.size                = Vec2{frame->width, frame->height};
+        geometry                = TransformOverlayGeometry::FromTransform(box, _viewport, documentSize);
         geometry->showsRotation = false;
-        const Vec2 topLeft = _viewport.ViewFromDocument(Vec2{frame->MinX(), frame->MinY()}, documentSize);
-        const Vec2 bottomRight = _viewport.ViewFromDocument(Vec2{frame->MaxX(), frame->MaxY()}, documentSize);
-        shade = D2D1::RectF(static_cast<float>(topLeft.x), static_cast<float>(topLeft.y),
-                            static_cast<float>(bottomRight.x), static_cast<float>(bottomRight.y));
+        const Vec2 topLeft      = _viewport.ViewFromDocument(Vec2{frame->MinX(), frame->MinY()}, documentSize);
+        const Vec2 bottomRight  = _viewport.ViewFromDocument(Vec2{frame->MaxX(), frame->MaxY()}, documentSize);
+        shade = D2D1::RectF(static_cast<float>(topLeft.x), static_cast<float>(topLeft.y), static_cast<float>(bottomRight.x), static_cast<float>(bottomRight.y));
     }
     if (active)
     {
@@ -217,13 +211,13 @@ LPCWSTR Application::CropCursor(Vec2 view) const noexcept
 
 int Application::RunCropSelfTest() noexcept
 {
-    if (!_chrome || !_window)
+    if (! _chrome || ! _window)
     {
         SelfTestFailure(L"The crop self-test needs the chrome and the window.\n");
         return 5;
     }
     const auto document = [&]() -> const CanvasDocument* { return _session.DisplayDocument(); };
-    _forcedDiscard = true;
+    _forcedDiscard      = true;
     OnCommand(ChromeHost::kCommandNew);
     if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
     {
@@ -233,19 +227,15 @@ int Application::RunCropSelfTest() noexcept
     _forcedDiscard.reset();
     OnTool(EditorTool::Crop);
     SyncChrome();
-    if (_tool != EditorTool::Crop || _chrome->Tool() != EditorTool::Crop ||
-        _session.CropFrame() != CropRect{0, 0, 1280, 800} || !_overlayGeometry.has_value())
+    if (_tool != EditorTool::Crop || _chrome->Tool() != EditorTool::Crop || _session.CropFrame() != CropRect{0, 0, 1280, 800} || ! _overlayGeometry.has_value())
     {
         SelfTestFailure(L"Choosing the Crop tool did not frame the whole canvas.\n");
         return 5;
     }
     // Dragging the bottom-right handle to the document's (640, 400) resizes the frame through the pointer path.
     const CanvasHole hole = _chrome->HolePixels();
-    const auto pointerAt = [&](Vec2 view) noexcept
-    {
-        return MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
-                          static_cast<int>(std::lround(hole.top + view.y)));
-    };
+    const auto pointerAt  = [&](Vec2 view) noexcept
+    { return MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)), static_cast<int>(std::lround(hole.top + view.y))); };
     const Vec2 handle = _overlayGeometry->handles[4];
     const Vec2 target = _viewport.ViewFromDocument(Vec2{640, 400}, DocumentSize());
     OnPointer(WM_MOUSEMOVE, 0, pointerAt(handle));
@@ -258,39 +248,44 @@ int Application::RunCropSelfTest() noexcept
         const std::optional<CropRect> frame = _session.CropFrame();
         SelfTestFailure(std::format(L"Dragging the crop frame's corner did not resize it to 640 × 400 "
                                     L"({}, {}, {} × {}).\n",
-                                    frame ? frame->x : -1.0, frame ? frame->y : -1.0, frame ? frame->width : -1.0,
+                                    frame ? frame->x : -1.0,
+                                    frame ? frame->y : -1.0,
+                                    frame ? frame->width : -1.0,
                                     frame ? frame->height : -1.0));
         return 5;
     }
     // Enter crops: the canvas takes the frame, the layer keeps its pixels and moves with the frame's origin.
     _chrome->SetCanvasFocused(true);
-    if (!HandleAccelerator(VK_RETURN, 0) || document() == nullptr || document()->width != 640 ||
-        document()->height != 400 || _session.history.UndoName() != L"Crop" || _session.CropFrame().has_value() ||
-        _session.VisibleCropRect() != CropRect{0, 0, 640, 400})
+    if (! HandleAccelerator(VK_RETURN, 0) || document() == nullptr || document()->width != 640 || document()->height != 400 ||
+        _session.history.UndoName() != L"Crop" || _session.CropFrame().has_value() || _session.VisibleCropRect() != CropRect{0, 0, 640, 400})
     {
         SelfTestFailure(std::format(L"Enter did not crop the canvas to the frame ({} × {}, undo '{}').\n",
-                                    document() ? document()->width : 0, document() ? document()->height : 0,
+                                    document() ? document()->width : 0,
+                                    document() ? document()->height : 0,
                                     _session.history.UndoName()));
         return 5;
     }
     // A frame dragged inside the canvas moves as a whole; Escape drops it and the whole canvas frames again.
     SyncChrome();
     const Vec2 inside = _viewport.ViewFromDocument(Vec2{320, 200}, DocumentSize());
-    const Vec2 moved = _viewport.ViewFromDocument(Vec2{420, 250}, DocumentSize());
+    const Vec2 moved  = _viewport.ViewFromDocument(Vec2{420, 250}, DocumentSize());
     OnPointer(WM_MOUSEMOVE, 0, pointerAt(inside));
     OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, pointerAt(inside));
     OnPointer(WM_MOUSEMOVE, MK_LBUTTON, pointerAt(moved));
     OnPointer(WM_LBUTTONUP, 0, pointerAt(moved));
     const bool movedFrame = _session.CropFrame() == CropRect{100, 50, 640, 400};
     _chrome->SetCanvasFocused(true);
-    if (!movedFrame || !HandleAccelerator(VK_ESCAPE, 0) || _session.CropFrame().has_value() ||
-        _session.VisibleCropRect() != CropRect{0, 0, 640, 400} || document()->width != 640)
+    if (! movedFrame || ! HandleAccelerator(VK_ESCAPE, 0) || _session.CropFrame().has_value() || _session.VisibleCropRect() != CropRect{0, 0, 640, 400} ||
+        document()->width != 640)
     {
         const std::optional<CropRect> frame = _session.CropFrame();
         SelfTestFailure(std::format(L"Moving the frame and Escape did not behave (moved {}, frame {} {} "
                                     L"{} × {}).\n",
-                                    movedFrame, frame ? frame->x : -1.0, frame ? frame->y : -1.0,
-                                    frame ? frame->width : -1.0, frame ? frame->height : -1.0));
+                                    movedFrame,
+                                    frame ? frame->x : -1.0,
+                                    frame ? frame->y : -1.0,
+                                    frame ? frame->width : -1.0,
+                                    frame ? frame->height : -1.0));
         return 5;
     }
     // The header's ratio re-shapes the frame about its center; Cancel drops it.
@@ -304,18 +299,19 @@ int Application::RunCropSelfTest() noexcept
     OnTool(EditorTool::Crop);
     const bool reframed = _session.CropFrame() == CropRect{0, 0, 640, 400};
     _chrome->SetCanvasFocused(true);
-    const bool undoAccepted = HandleAccelerator('Z', MK_CONTROL);
+    const bool undoAccepted   = HandleAccelerator('Z', MK_CONTROL);
     const bool restoreSettled = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled;
-    const bool undone = undoAccepted && restoreSettled && document() != nullptr && document()->width == 1280 &&
-                        document()->height == 800 && _session.VisibleCropRect() == CropRect{0, 0, 1280, 800} &&
-                        _tool == EditorTool::Crop;
+    const bool undone         = undoAccepted && restoreSettled && document() != nullptr && document()->width == 1280 && document()->height == 800 &&
+                                _session.VisibleCropRect() == CropRect{0, 0, 1280, 800} && _tool == EditorTool::Crop;
     OnTool(EditorTool::Move);
-    if (!squared || !reframed || !undone || document() == nullptr || document()->width != 1280 ||
-        document()->height != 800 || _session.CropFrame().has_value())
+    if (! squared || ! reframed || ! undone || document() == nullptr || document()->width != 1280 || document()->height != 800 ||
+        _session.CropFrame().has_value())
     {
         SelfTestFailure(std::format(L"The crop ratio, Cancel, the first Ctrl+Z with the Crop tool or leaving "
                                     L"the tool did not behave (squared {}, reframed {}, undone {}).\n",
-                                    squared, reframed, undone));
+                                    squared,
+                                    reframed,
+                                    undone));
         return 5;
     }
     return 0;

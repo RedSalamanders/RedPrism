@@ -39,7 +39,7 @@ enum class StrokeFinishStage : std::uint8_t
 struct StrokeFinishObserver final
 {
     void (*checkpoint)(void*, StrokeFinishStage) = nullptr;
-    void* context = nullptr;
+    void* context                                = nullptr;
 };
 
 // Capture only after the original job's complete peak and retirement reservation is admitted. The owner
@@ -47,13 +47,19 @@ struct StrokeFinishObserver final
 // The returned engine borrow stays on the owner until all final GPU copy sources have been retained.
 class StrokeFinishInput final
 {
-  public:
-    StrokeFinishInput(const StrokeFinishInput&) = delete;
+public:
+    StrokeFinishInput(const StrokeFinishInput&)            = delete;
     StrokeFinishInput& operator=(const StrokeFinishInput&) = delete;
     StrokeFinishInput(StrokeFinishInput&& input) noexcept
-        : _authority(std::move(input._authority)), _source(std::move(input._source)), _active(input._active),
-          _history(std::move(input._history)), _stroke(std::move(input._stroke)), _opening(input._opening),
-          _healSeed(input._healSeed), _kind(input._kind), _warp(std::move(input._warp)),
+        : _authority(std::move(input._authority)),
+          _source(std::move(input._source)),
+          _active(input._active),
+          _history(std::move(input._history)),
+          _stroke(std::move(input._stroke)),
+          _opening(input._opening),
+          _healSeed(input._healSeed),
+          _kind(input._kind),
+          _warp(std::move(input._warp)),
           _valid(std::exchange(input._valid, false))
     {
     }
@@ -69,15 +75,24 @@ class StrokeFinishInput final
         return *_stroke;
     }
 
-  private:
+private:
     friend class DocumentSession;
     friend class PreparedStrokeFinish;
     friend class WarpFinishInput;
-    StrokeFinishInput(ImageImportAuthority authority, CanvasDocument source, std::optional<Guid> active,
-                      DocumentHistory::StateView history, std::shared_ptr<BrushStroke> stroke, std::uint64_t opening,
+    StrokeFinishInput(ImageImportAuthority authority,
+                      CanvasDocument source,
+                      std::optional<Guid> active,
+                      DocumentHistory::StateView history,
+                      std::shared_ptr<BrushStroke> stroke,
+                      std::uint64_t opening,
                       std::uint32_t healSeed) noexcept
-        : _authority(std::move(authority)), _source(std::move(source)), _active(active), _history(std::move(history)),
-          _stroke(std::move(stroke)), _opening(opening), _healSeed(healSeed)
+        : _authority(std::move(authority)),
+          _source(std::move(source)),
+          _active(active),
+          _history(std::move(history)),
+          _stroke(std::move(stroke)),
+          _opening(opening),
+          _healSeed(healSeed)
     {
     }
     ImageImportAuthority _authority;
@@ -96,30 +111,30 @@ class StrokeFinishInput final
 // publication swaps complete retired document/display/history/preview owners into this same charged aggregate.
 class PreparedStrokeFinish final
 {
-  public:
-    PreparedStrokeFinish(const PreparedStrokeFinish&) = delete;
+public:
+    PreparedStrokeFinish(const PreparedStrokeFinish&)            = delete;
     PreparedStrokeFinish& operator=(const PreparedStrokeFinish&) = delete;
-    PreparedStrokeFinish(PreparedStrokeFinish&&) noexcept = default;
-    PreparedStrokeFinish& operator=(PreparedStrokeFinish&&) = delete;
-    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
-        DocumentHistory::ResidencyPermit& permit) noexcept;
-    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
-                                               DocumentHistory::PrepareObserver observer = {});
+    PreparedStrokeFinish(PreparedStrokeFinish&&) noexcept        = default;
+    PreparedStrokeFinish& operator=(PreparedStrokeFinish&&)      = delete;
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(DocumentHistory::ResidencyPermit& permit) noexcept;
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
     // Lifetime-bound immutable preparation views; these grant no publication authority. Null after apply/move.
     [[nodiscard]] const CanvasDocument* FinalDocument() const noexcept
     {
-        return !_applied && _input._valid && _document && _commit ? &*_document : nullptr;
+        return ! _applied && _input._valid && _document && _commit ? &*_document : nullptr;
     }
     [[nodiscard]] const BrushCommitInfo* CommitInfo() const noexcept
     {
-        return !_applied && _input._valid && _document && _commit ? &*_commit : nullptr;
+        return ! _applied && _input._valid && _document && _commit ? &*_commit : nullptr;
     }
 
-  private:
+private:
     friend class DocumentSession;
-    PreparedStrokeFinish(StrokeFinishInput input, CanvasDocument document, DocumentHistory::Publication history,
-                         BrushCommitInfo commit) noexcept
-        : _input(std::move(input)), _document(std::move(document)), _history(std::move(history)), _commit(commit)
+    PreparedStrokeFinish(StrokeFinishInput input, CanvasDocument document, DocumentHistory::Publication history, BrushCommitInfo commit) noexcept
+        : _input(std::move(input)),
+          _document(std::move(document)),
+          _history(std::move(history)),
+          _commit(commit)
     {
     }
     StrokeFinishInput _input;

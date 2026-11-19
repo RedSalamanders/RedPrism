@@ -9,7 +9,7 @@
 #include <span>
 #include <string_view>
 
-inline constexpr std::size_t kMaxPathClassificationBatch = 256;
+inline constexpr std::size_t kMaxPathClassificationBatch  = 256;
 inline constexpr std::size_t kMaxPathClassificationLength = 32767;
 
 enum class PathClassification : std::uint8_t
@@ -31,7 +31,7 @@ using PathClassificationScratch = std::array<wchar_t, kMaxPathClassificationLeng
 // a successful source from supplying an undersized allocation. Empty/default uses the production allocator.
 struct PathClassificationScratchSource final
 {
-    void* context = nullptr;
+    void* context                                                        = nullptr;
     std::unique_ptr<PathClassificationScratch> (*create)(void*) noexcept = nullptr;
 };
 
@@ -47,5 +47,5 @@ struct PathClassificationBatch final
 // Its complete allocation is covered by the admitted job's existing 96 KiB scratch allowance. Refusal returns
 // OutOfMemory with no partial result. Each read/cancellation is acknowledged before reuse/release.
 [[nodiscard]] PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> paths,
-                                                        const CancelToken& cancellation = {},
+                                                        const CancelToken& cancellation               = {},
                                                         PathClassificationScratchSource scratchSource = {}) noexcept;

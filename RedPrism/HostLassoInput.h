@@ -16,17 +16,17 @@
 #pragma warning(disable : 4625 4626 5026 5027)
 class HostLassoInput final
 {
-  public:
+public:
     struct Context final
     {
         DocumentReadAuthority document;
         std::optional<Guid> active;
         std::optional<CropRect> crop;
-        std::uint64_t ordinal = 0;
+        std::uint64_t ordinal   = 0;
         std::uint64_t viewEpoch = 0;
-        LassoKind kind = LassoKind::Freehand;
-        SelectionMode mode = SelectionMode::New;
-        bool mask = false;
+        LassoKind kind          = LassoKind::Freehand;
+        SelectionMode mode      = SelectionMode::New;
+        bool mask               = false;
     };
     enum class Operation : std::uint8_t
     {
@@ -40,18 +40,18 @@ class HostLassoInput final
     struct Sample final
     {
         Vec2 point{};
-        Operation operation = Operation::Point;
-        bool cursorPresent = false;
-        bool square = false;
-        bool fromCenter = false;
-        bool antialiased = true;
-        bool nearFirst = false;
-        bool doubleClick = false;
+        Operation operation         = Operation::Point;
+        bool cursorPresent          = false;
+        bool square                 = false;
+        bool fromCenter             = false;
+        bool antialiased            = true;
+        bool nearFirst              = false;
+        bool doubleClick            = false;
         std::uint64_t closingIntent = 0;
-        std::uint64_t ordinal = 0; // shared event-time host order; zero is a component-only descriptor
+        std::uint64_t ordinal       = 0; // shared event-time host order; zero is a component-only descriptor
     };
     using Stream = PointerInputStream<Context, Sample, 512>;
-    using Event = Stream::Event;
+    using Event  = Stream::Event;
     using Action = Stream::Action;
     enum class Admission : std::uint8_t
     {
@@ -63,9 +63,8 @@ class HostLassoInput final
     };
     [[nodiscard]] bool Begin(std::uint64_t opening, Context context, Vec2 point) noexcept
     {
-        if (_selectedTerminal || !context.ordinal || !context.document.documentSerial || !context.viewEpoch ||
-            context.document.canvasWidth <= 0 || context.document.canvasHeight <= 0 || !Finite(point) ||
-            context.kind > LassoKind::Ellipse || context.mode > SelectionMode::Subtract)
+        if (_selectedTerminal || ! context.ordinal || ! context.document.documentSerial || ! context.viewEpoch || context.document.canvasWidth <= 0 ||
+            context.document.canvasHeight <= 0 || ! Finite(point) || context.kind > LassoKind::Ellipse || context.mode > SelectionMode::Subtract)
             return false;
         Sample down{point};
         down.ordinal = context.ordinal;
@@ -74,11 +73,11 @@ class HostLassoInput final
     [[nodiscard]] Admission Point(std::uint64_t opening, Vec2 point, std::uint64_t ordinal = 0) noexcept
     {
         const auto* context = CapturedContext(opening);
-        if (!context)
+        if (! context)
             return Admission::Stale;
-        if (!_stream.Sampling())
+        if (! _stream.Sampling())
             return Admission::Closed;
-        if (!Finite(point) || (context->kind != LassoKind::Freehand && context->kind != LassoKind::Polygonal))
+        if (! Finite(point) || (context->kind != LassoKind::Freehand && context->kind != LassoKind::Polygonal))
             return Admission::Invalid;
         Sample sample{point};
         sample.ordinal = ordinal;
@@ -87,25 +86,24 @@ class HostLassoInput final
     [[nodiscard]] Admission Cursor(std::uint64_t opening, std::optional<Vec2> point, std::uint64_t ordinal = 0) noexcept
     {
         const auto* context = CapturedContext(opening);
-        if (!context)
+        if (! context)
             return Admission::Stale;
-        if (!_stream.Sampling())
+        if (! _stream.Sampling())
             return Admission::Closed;
-        if (context->kind != LassoKind::Polygonal || (point && !Finite(point.value())))
+        if (context->kind != LassoKind::Polygonal || (point && ! Finite(point.value())))
             return Admission::Invalid;
         Sample sample{point.value_or(Vec2{}), Operation::Cursor, point.has_value()};
         sample.ordinal = ordinal;
         return Convert(_stream.Move(opening, sample));
     }
-    [[nodiscard]] Admission Marquee(std::uint64_t opening, Vec2 point, bool square, bool fromCenter,
-                                    std::uint64_t ordinal = 0) noexcept
+    [[nodiscard]] Admission Marquee(std::uint64_t opening, Vec2 point, bool square, bool fromCenter, std::uint64_t ordinal = 0) noexcept
     {
         const auto* context = CapturedContext(opening);
-        if (!context)
+        if (! context)
             return Admission::Stale;
-        if (!_stream.Sampling())
+        if (! _stream.Sampling())
             return Admission::Closed;
-        if (!Finite(point) || (context->kind != LassoKind::Rectangle && context->kind != LassoKind::Ellipse))
+        if (! Finite(point) || (context->kind != LassoKind::Rectangle && context->kind != LassoKind::Ellipse))
             return Admission::Invalid;
         Sample sample{point, Operation::Marquee, false, square, fromCenter};
         sample.ordinal = ordinal;
@@ -114,9 +112,9 @@ class HostLassoInput final
     [[nodiscard]] Admission Backspace(std::uint64_t opening, std::uint64_t ordinal = 0) noexcept
     {
         const auto* context = CapturedContext(opening);
-        if (!context)
+        if (! context)
             return Admission::Stale;
-        if (!_stream.Sampling())
+        if (! _stream.Sampling())
             return Admission::Closed;
         if (context->kind != LassoKind::Polygonal)
             return Admission::Invalid;
@@ -126,38 +124,41 @@ class HostLassoInput final
     }
     // Store the physical click's close decision inputs. Replay evaluates the three-corner condition only after
     // all older accepted corners/backspaces have reached the actual writer; acquisition timing changes no rule.
-    [[nodiscard]] Admission PolygonPress(std::uint64_t opening, Vec2 point, bool nearFirst, bool doubleClick,
-                                         bool antialiased, std::uint64_t closingIntent = 0,
-                                         std::uint64_t ordinal = 0) noexcept
+    [[nodiscard]] Admission PolygonPress(std::uint64_t opening,
+                                         Vec2 point,
+                                         bool nearFirst,
+                                         bool doubleClick,
+                                         bool antialiased,
+                                         std::uint64_t closingIntent = 0,
+                                         std::uint64_t ordinal       = 0) noexcept
     {
         const auto* context = CapturedContext(opening);
-        if (!context)
+        if (! context)
             return Admission::Stale;
-        if (!Sampling())
+        if (! Sampling())
             return Admission::Closed;
-        if (context->kind != LassoKind::Polygonal || !Finite(point))
+        if (context->kind != LassoKind::Polygonal || ! Finite(point))
             return Admission::Invalid;
         Sample sample{point, Operation::PolygonPress};
-        sample.antialiased = antialiased;
-        sample.nearFirst = nearFirst;
-        sample.doubleClick = doubleClick;
+        sample.antialiased   = antialiased;
+        sample.nearFirst     = nearFirst;
+        sample.doubleClick   = doubleClick;
         sample.closingIntent = closingIntent;
-        sample.ordinal = ordinal;
+        sample.ordinal       = ordinal;
         return Convert(_stream.Move(opening, sample));
     }
     [[nodiscard]] bool SelectReplayedPolygonClose(std::uint64_t opening) noexcept
     {
         const auto* context = _stream.CapturedContext(opening);
-        if (_selectedTerminal || !context || context->kind != LassoKind::Polygonal || _stream.Overflowed() ||
-            !_lastTaken || _lastTakenOpening != opening || _lastTaken->action != Action::Move ||
-            _lastTaken->sample.operation != Operation::PolygonPress ||
-            (!_lastTaken->sample.nearFirst && !_lastTaken->sample.doubleClick))
+        if (_selectedTerminal || ! context || context->kind != LassoKind::Polygonal || _stream.Overflowed() || ! _lastTaken || _lastTakenOpening != opening ||
+            _lastTaken->action != Action::Move || _lastTaken->sample.operation != Operation::PolygonPress ||
+            (! _lastTaken->sample.nearFirst && ! _lastTaken->sample.doubleClick))
             return false;
         const auto captured = *context;
         Sample finish{{}, Operation::Finish};
         finish.antialiased = _lastTaken->sample.antialiased;
         // Only fixed trivially destructible samples are discarded. No point arena/document owner is released.
-        if (!_stream.Drop(opening))
+        if (! _stream.Drop(opening))
             return false;
         _selectedTerminal.emplace(SelectedTerminal{captured, {Action::Up, finish}, opening});
         _lastTaken.reset();
@@ -175,9 +176,7 @@ class HostLassoInput final
     [[nodiscard]] std::optional<Event> Peek(std::uint64_t opening) const noexcept
     {
         if (_selectedTerminal)
-            return _selectedTerminal->opening == opening && !_selectedTerminal->consumed
-                       ? std::optional(_selectedTerminal->event)
-                       : std::nullopt;
+            return _selectedTerminal->opening == opening && ! _selectedTerminal->consumed ? std::optional(_selectedTerminal->event) : std::nullopt;
         return _stream.Peek(opening);
     }
     [[nodiscard]] std::optional<Event> Take(std::uint64_t opening) noexcept
@@ -190,7 +189,7 @@ class HostLassoInput final
         }
         else
             result = _stream.Take(opening);
-        _lastTaken = result;
+        _lastTaken        = result;
         _lastTakenOpening = result ? opening : 0;
         return result;
     }
@@ -204,7 +203,7 @@ class HostLassoInput final
     {
         if (_selectedTerminal)
         {
-            if (_selectedTerminal->opening != opening || !_selectedTerminal->consumed)
+            if (_selectedTerminal->opening != opening || ! _selectedTerminal->consumed)
                 return false;
             _selectedTerminal.reset();
             _lastTaken.reset();
@@ -254,7 +253,7 @@ class HostLassoInput final
     }
     static constexpr std::size_t kCapacity = Stream::kCapacity;
 
-  private:
+private:
     [[nodiscard]] static bool Finite(Vec2 point) noexcept
     {
         return std::isfinite(point.x) && std::isfinite(point.y);
@@ -263,14 +262,10 @@ class HostLassoInput final
     {
         switch (result)
         {
-        case Stream::Admission::Recorded:
-            return Admission::Recorded;
-        case Stream::Admission::Stale:
-            return Admission::Stale;
-        case Stream::Admission::Closed:
-            return Admission::Closed;
-        case Stream::Admission::Overflow:
-            return Admission::Overflow;
+            case Stream::Admission::Recorded: return Admission::Recorded;
+            case Stream::Admission::Stale: return Admission::Stale;
+            case Stream::Admission::Closed: return Admission::Closed;
+            case Stream::Admission::Overflow: return Admission::Overflow;
         }
         return Admission::Invalid;
     }

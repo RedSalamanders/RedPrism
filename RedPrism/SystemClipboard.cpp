@@ -28,10 +28,10 @@ namespace
 // Opens the clipboard for the call's lifetime; a busy clipboard (another app holds it) is retried, 10 ms apart.
 class ClipboardScope
 {
-  public:
+public:
     explicit ClipboardScope(HWND owner, int attempts) noexcept
     {
-        for (int attempt = 0; attempt < attempts && !_open; ++attempt)
+        for (int attempt = 0; attempt < attempts && ! _open; ++attempt)
         {
             if (attempt > 0)
             {
@@ -47,14 +47,14 @@ class ClipboardScope
             (void)CloseClipboard();
         }
     }
-    ClipboardScope(const ClipboardScope&) = delete;
+    ClipboardScope(const ClipboardScope&)            = delete;
     ClipboardScope& operator=(const ClipboardScope&) = delete;
     [[nodiscard]] bool IsOpen() const noexcept
     {
         return _open;
     }
 
-  private:
+private:
     bool _open = false;
 };
 
@@ -62,7 +62,7 @@ class ClipboardScope
 [[nodiscard]] wil::unique_hglobal GlobalCopy(const void* bytes, std::size_t size) noexcept
 {
     wil::unique_hglobal handle(GlobalAlloc(GMEM_MOVEABLE, size));
-    if (!handle)
+    if (! handle)
     {
         return handle;
     }
@@ -83,7 +83,7 @@ class ClipboardScope
 [[nodiscard]] bool PlaceData(UINT format, const void* bytes, std::size_t size) noexcept
 {
     wil::unique_hglobal handle = GlobalCopy(bytes, size);
-    if (!handle || SetClipboardData(format, handle.get()) == nullptr)
+    if (! handle || SetClipboardData(format, handle.get()) == nullptr)
     {
         return false;
     }
@@ -97,19 +97,16 @@ class ClipboardScope
 {
     switch (format)
     {
-    case CF_BITMAP:
-    case CF_METAFILEPICT:
-    case CF_PALETTE:
-    case CF_ENHMETAFILE:
-    case CF_OWNERDISPLAY:
-    case CF_DSPBITMAP:
-    case CF_DSPMETAFILEPICT:
-    case CF_DSPENHMETAFILE:
-    case CF_LOCALE:
-        return false;
-    default:
-        return !(format >= CF_PRIVATEFIRST && format <= CF_PRIVATELAST) &&
-               !(format >= CF_GDIOBJFIRST && format <= CF_GDIOBJLAST);
+        case CF_BITMAP:
+        case CF_METAFILEPICT:
+        case CF_PALETTE:
+        case CF_ENHMETAFILE:
+        case CF_OWNERDISPLAY:
+        case CF_DSPBITMAP:
+        case CF_DSPMETAFILEPICT:
+        case CF_DSPENHMETAFILE:
+        case CF_LOCALE: return false;
+        default: return ! (format >= CF_PRIVATEFIRST && format <= CF_PRIVATELAST) && ! (format >= CF_GDIOBJFIRST && format <= CF_GDIOBJLAST);
     }
 }
 
@@ -128,33 +125,29 @@ enum class SynthesisGroup : std::uint8_t
 {
     switch (format)
     {
-    case CF_TEXT:
-    case CF_OEMTEXT:
-    case CF_UNICODETEXT:
-        return SynthesisGroup::Text;
-    case CF_BITMAP:
-    case CF_DIB:
-    case CF_DIBV5:
-    case CF_PALETTE:
-        return SynthesisGroup::Image;
-    case CF_METAFILEPICT:
-    case CF_ENHMETAFILE:
-        return SynthesisGroup::Metafile;
-    default:
-        return SynthesisGroup::None;
+        case CF_TEXT:
+        case CF_OEMTEXT:
+        case CF_UNICODETEXT: return SynthesisGroup::Text;
+        case CF_BITMAP:
+        case CF_DIB:
+        case CF_DIBV5:
+        case CF_PALETTE: return SynthesisGroup::Image;
+        case CF_METAFILEPICT:
+        case CF_ENHMETAFILE: return SynthesisGroup::Metafile;
+        default: return SynthesisGroup::None;
     }
 }
 
 // A 32-bit BGRA DIB (V5 header, bitfields, bottom-up) with straight alpha, the form other editors write and read.
 [[nodiscard]] bool MakeDibV5(const Raster& image, std::vector<std::uint8_t>& out) noexcept
 {
-    const int width = image.Width();
+    const int width  = image.Width();
     const int height = image.Height();
     if (width < 1 || height < 1)
     {
         return false;
     }
-    const std::size_t rowBytes = static_cast<std::size_t>(width) * 4u;
+    const std::size_t rowBytes   = static_cast<std::size_t>(width) * 4u;
     const std::size_t pixelBytes = rowBytes * static_cast<std::size_t>(height);
     std::vector<std::uint8_t> pixels;
     try
@@ -168,30 +161,30 @@ enum class SynthesisGroup : std::uint8_t
     }
     image.ReadRegion(0, 0, width, height, pixels.data(), width * 4, 0);
     BITMAPV5HEADER header{};
-    header.bV5Size = sizeof(BITMAPV5HEADER);
-    header.bV5Width = width;
-    header.bV5Height = height; // bottom-up
-    header.bV5Planes = 1;
-    header.bV5BitCount = 32;
+    header.bV5Size        = sizeof(BITMAPV5HEADER);
+    header.bV5Width       = width;
+    header.bV5Height      = height; // bottom-up
+    header.bV5Planes      = 1;
+    header.bV5BitCount    = 32;
     header.bV5Compression = BI_BITFIELDS;
-    header.bV5SizeImage = static_cast<DWORD>(pixelBytes);
-    header.bV5RedMask = 0x00FF0000u;
-    header.bV5GreenMask = 0x0000FF00u;
-    header.bV5BlueMask = 0x000000FFu;
-    header.bV5AlphaMask = 0xFF000000u;
-    header.bV5CSType = LCS_sRGB;
-    header.bV5Intent = LCS_GM_IMAGES;
+    header.bV5SizeImage   = static_cast<DWORD>(pixelBytes);
+    header.bV5RedMask     = 0x00FF0000u;
+    header.bV5GreenMask   = 0x0000FF00u;
+    header.bV5BlueMask    = 0x000000FFu;
+    header.bV5AlphaMask   = 0xFF000000u;
+    header.bV5CSType      = LCS_sRGB;
+    header.bV5Intent      = LCS_GM_IMAGES;
     std::memcpy(out.data(), &header, sizeof(header));
     std::uint8_t* rows = out.data() + sizeof(BITMAPV5HEADER);
     for (int y = 0; y < height; ++y)
     {
         const std::uint8_t* source = pixels.data() + static_cast<std::size_t>(y) * rowBytes;
-        std::uint8_t* target = rows + static_cast<std::size_t>(height - 1 - y) * rowBytes;
+        std::uint8_t* target       = rows + static_cast<std::size_t>(height - 1 - y) * rowBytes;
         for (int x = 0; x < width; ++x)
         {
             const std::uint8_t* in = source + static_cast<std::size_t>(x) * 4u;
-            std::uint8_t* px = target + static_cast<std::size_t>(x) * 4u;
-            const int alpha = in[3];
+            std::uint8_t* px       = target + static_cast<std::size_t>(x) * 4u;
+            const int alpha        = in[3];
             if (alpha == 0)
             {
                 px[0] = px[1] = px[2] = px[3] = 0;
@@ -208,8 +201,7 @@ enum class SynthesisGroup : std::uint8_t
 }
 
 // A DIB (V5 with an alpha mask, or any 24/32-bit header without one) as premultiplied BGRA.
-[[nodiscard]] bool DecodeDib(const std::uint8_t* bytes, std::size_t size, std::int64_t pixelBudget,
-                             Raster& image) noexcept
+[[nodiscard]] bool DecodeDib(const std::uint8_t* bytes, std::size_t size, std::int64_t pixelBudget, Raster& image) noexcept
 {
     if (bytes == nullptr || size < sizeof(BITMAPINFOHEADER))
     {
@@ -217,22 +209,21 @@ enum class SynthesisGroup : std::uint8_t
     }
     BITMAPINFOHEADER header{};
     std::memcpy(&header, bytes, sizeof(header));
-    if (header.biSize < sizeof(BITMAPINFOHEADER) || header.biSize > size || header.biPlanes != 1 ||
-        (header.biBitCount != 32 && header.biBitCount != 24) ||
+    if (header.biSize < sizeof(BITMAPINFOHEADER) || header.biSize > size || header.biPlanes != 1 || (header.biBitCount != 32 && header.biBitCount != 24) ||
         (header.biCompression != BI_RGB && header.biCompression != BI_BITFIELDS))
     {
         return false;
     }
-    const bool topDown = header.biHeight < 0;
-    const std::int64_t width = header.biWidth;
+    const bool topDown        = header.biHeight < 0;
+    const std::int64_t width  = header.biWidth;
     const std::int64_t height = topDown ? -static_cast<std::int64_t>(header.biHeight) : header.biHeight;
     if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide || width * height > pixelBudget)
     {
         return false;
     }
-    std::uint32_t redMask = 0x00FF0000u;
+    std::uint32_t redMask   = 0x00FF0000u;
     std::uint32_t greenMask = 0x0000FF00u;
-    std::uint32_t blueMask = 0x000000FFu;
+    std::uint32_t blueMask  = 0x000000FFu;
     std::uint32_t alphaMask = 0;
     std::size_t pixelOffset = header.biSize;
     if (header.biCompression == BI_BITFIELDS)
@@ -241,9 +232,9 @@ enum class SynthesisGroup : std::uint8_t
         {
             BITMAPV4HEADER v4{};
             std::memcpy(&v4, bytes, sizeof(v4));
-            redMask = v4.bV4RedMask;
+            redMask   = v4.bV4RedMask;
             greenMask = v4.bV4GreenMask;
-            blueMask = v4.bV4BlueMask;
+            blueMask  = v4.bV4BlueMask;
             alphaMask = v4.bV4AlphaMask;
         }
         else
@@ -272,13 +263,13 @@ enum class SynthesisGroup : std::uint8_t
         pixelOffset += static_cast<std::size_t>(header.biClrUsed) * sizeof(RGBQUAD);
     }
     const std::size_t bytesPerPixel = header.biBitCount / 8u;
-    const std::size_t stride = ((static_cast<std::size_t>(width) * bytesPerPixel + 3u) / 4u) * 4u;
+    const std::size_t stride        = ((static_cast<std::size_t>(width) * bytesPerPixel + 3u) / 4u) * 4u;
     if (size < pixelOffset + stride * static_cast<std::size_t>(height))
     {
         return false;
     }
-    if (header.biBitCount == 32 && (redMask != 0x00FF0000u || greenMask != 0x0000FF00u || blueMask != 0x000000FFu ||
-                                    (alphaMask != 0 && alphaMask != 0xFF000000u)))
+    if (header.biBitCount == 32 &&
+        (redMask != 0x00FF0000u || greenMask != 0x0000FF00u || blueMask != 0x000000FFu || (alphaMask != 0 && alphaMask != 0xFF000000u)))
     {
         return false;
     }
@@ -295,13 +286,13 @@ enum class SynthesisGroup : std::uint8_t
     for (std::int64_t y = 0; y < height; ++y)
     {
         const std::int64_t sourceRow = topDown ? y : height - 1 - y;
-        const std::uint8_t* source = rows + static_cast<std::size_t>(sourceRow) * stride;
-        std::uint8_t* target = out.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width) * 4u;
+        const std::uint8_t* source   = rows + static_cast<std::size_t>(sourceRow) * stride;
+        std::uint8_t* target         = out.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width) * 4u;
         for (std::int64_t x = 0; x < width; ++x)
         {
             const std::uint8_t* in = source + static_cast<std::size_t>(x) * bytesPerPixel;
-            std::uint8_t* px = target + static_cast<std::size_t>(x) * 4u;
-            const int alpha = (bytesPerPixel == 4 && alphaMask != 0) ? in[3] : 255;
+            std::uint8_t* px       = target + static_cast<std::size_t>(x) * 4u;
+            const int alpha        = (bytesPerPixel == 4 && alphaMask != 0) ? in[3] : 255;
             // Straight to premultiplied.
             px[0] = static_cast<std::uint8_t>((in[0] * alpha + 127) / 255);
             px[1] = static_cast<std::uint8_t>((in[1] * alpha + 127) / 255);
@@ -309,8 +300,7 @@ enum class SynthesisGroup : std::uint8_t
             px[3] = static_cast<std::uint8_t>(alpha);
         }
     }
-    image =
-        Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888, out.data(), out.size());
+    image = Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888, out.data(), out.size());
     return image.HasStorage();
 }
 } // namespace
@@ -319,7 +309,7 @@ namespace SystemClipboard
 {
 bool WriteImage(HWND owner, const Raster& image, int attempts) noexcept
 {
-    if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888)
+    if (! image.HasStorage() || image.Format() != RasterFormat::Bgra8888)
     {
         return false;
     }
@@ -331,7 +321,7 @@ bool WriteImage(HWND owner, const Raster& image, int attempts) noexcept
     std::vector<std::uint8_t> dib;
     const bool hasDib = MakeDibV5(image, dib);
     const ClipboardScope scope(owner, attempts);
-    if (!scope.IsOpen() || !EmptyClipboard())
+    if (! scope.IsOpen() || ! EmptyClipboard())
     {
         return false;
     }
@@ -342,14 +332,13 @@ bool WriteImage(HWND owner, const Raster& image, int attempts) noexcept
 
 bool HasImage() noexcept
 {
-    return IsClipboardFormatAvailable(PngFormat()) != FALSE || IsClipboardFormatAvailable(CF_DIBV5) != FALSE ||
-           IsClipboardFormatAvailable(CF_DIB) != FALSE;
+    return IsClipboardFormatAvailable(PngFormat()) != FALSE || IsClipboardFormatAvailable(CF_DIBV5) != FALSE || IsClipboardFormatAvailable(CF_DIB) != FALSE;
 }
 
 bool ReadImage(HWND owner, std::int64_t pixelBudget, Raster& image, int attempts) noexcept
 {
     const ClipboardScope scope(owner, attempts);
-    if (!scope.IsOpen())
+    if (! scope.IsOpen())
     {
         return false;
     }
@@ -357,12 +346,11 @@ bool ReadImage(HWND owner, std::int64_t pixelBudget, Raster& image, int attempts
     if (const HANDLE data = GetClipboardData(PngFormat()); data != nullptr)
     {
         const wil::unique_hglobal_locked locked(data);
-        const auto* bytes = static_cast<const std::uint8_t*>(locked.get());
+        const auto* bytes      = static_cast<const std::uint8_t*>(locked.get());
         const std::size_t size = bytes != nullptr ? GlobalSize(data) : 0;
         DecodedImage decoded;
         if (size > 0 && pixelBudget > 0 &&
-            DecodeProjectPng(bytes, size, false, static_cast<int>(std::min<std::int64_t>(pixelBudget, INT_MAX)),
-                             decoded) == ImageCodecStatus::Ok &&
+            DecodeProjectPng(bytes, size, false, static_cast<int>(std::min<std::int64_t>(pixelBudget, INT_MAX)), decoded) == ImageCodecStatus::Ok &&
             decoded.image.HasStorage())
         {
             image = decoded.image;
@@ -400,7 +388,7 @@ bool SaveContents(HWND owner, SavedContents& contents) noexcept
     contents.formats.clear();
     // Longer than a copy waits: clipboard listeners read the clipboard right after every change.
     const ClipboardScope scope(owner, kHarnessAttempts);
-    if (!scope.IsOpen())
+    if (! scope.IsOpen())
     {
         return false;
     }
@@ -422,7 +410,7 @@ bool SaveContents(HWND owner, SavedContents& contents) noexcept
                 }
                 seen = true;
             }
-            if (!MemoryFormat(format))
+            if (! MemoryFormat(format))
             {
                 continue;
             }
@@ -451,7 +439,7 @@ bool SaveContents(HWND owner, SavedContents& contents) noexcept
 bool RestoreContents(HWND owner, const SavedContents& contents) noexcept
 {
     const ClipboardScope scope(owner, kHarnessAttempts);
-    if (!scope.IsOpen() || !EmptyClipboard())
+    if (! scope.IsOpen() || ! EmptyClipboard())
     {
         return false;
     }

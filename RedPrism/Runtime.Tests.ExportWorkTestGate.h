@@ -18,7 +18,7 @@
 #pragma warning(disable : 4625 4626 5026 5027)
 struct ExportWorkTestGate final
 {
-    static constexpr UINT kMessage = WM_APP + 0x4b6;
+    static constexpr UINT kMessage         = WM_APP + 0x4b6;
     static constexpr UINT kReadbackMessage = WM_APP + 0x5f4;
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     std::atomic<unsigned int> visits{0}, encodeAttempts{0};
@@ -26,10 +26,10 @@ struct ExportWorkTestGate final
     JobResult result;
     // Worker facts read only after the original writer acknowledgement; absent with no harness gate.
     ImageCodecStatus encodedStatusForTest = ImageCodecStatus::Encode;
-    bool publishedForTest = false;
-    bool afterPublication = false;
-    bool holdReadback = false; // hold the actual worker snapshot stage before any GPU tile
-    bool throwAllocationFailure = false;
-    bool throwAdmissionFailure = false;
+    bool publishedForTest                 = false;
+    bool afterPublication                 = false;
+    bool holdReadback                     = false; // hold the actual worker snapshot stage before any GPU tile
+    bool throwAllocationFailure           = false;
+    bool throwAdmissionFailure            = false;
 };
 #pragma warning(pop)

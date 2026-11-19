@@ -15,10 +15,10 @@
 
 namespace
 {
-using Loops = std::vector<SelectionLoop>;
-using Point = std::pair<double, double>;
+using Loops   = std::vector<SelectionLoop>;
+using Point   = std::pair<double, double>;
 using LoopKey = std::vector<Point>;
-using Key = std::vector<LoopKey>;
+using Key     = std::vector<LoopKey>;
 
 struct StopPoint
 {
@@ -32,7 +32,7 @@ void StopAt(void* context, std::uint64_t work) noexcept
     auto& point = *static_cast<StopPoint*>(context);
     if (work == point.at)
     {
-        point.observed = work;
+        point.observed  = work;
         point.requested = std::chrono::steady_clock::now();
         (void)point.source.request_stop();
     }
@@ -83,7 +83,7 @@ Loops Original(const Loops& subject, const Loops& clip, BoundedSelectionBoolean:
                       : operation == BoundedSelectionBoolean::Operation::Union   ? Clipper2Lib::ClipType::Union
                                                                                  : Clipper2Lib::ClipType::Difference;
     Clipper2Lib::PathsD paths;
-    if (!engine.Execute(kind, Clipper2Lib::FillRule::NonZero, paths))
+    if (! engine.Execute(kind, Clipper2Lib::FillRule::NonZero, paths))
         return {};
     Loops result;
     for (const auto& path : paths)
@@ -108,38 +108,26 @@ int RunDocumentWandCompatibilityTests()
         {"shared-edge", {{{0, 0}, {2, 0}, {2, 2}, {0, 2}}}, {{{2, 0}, {4, 0}, {4, 2}, {2, 2}}}},
         {"corner-touch", {{{0, 0}, {2, 0}, {2, 2}, {0, 2}}}, {{{2, 2}, {4, 2}, {4, 4}, {2, 4}}}},
         {"overlap", {{{0, 0}, {10, 0}, {10, 10}, {0, 10}}}, {{{5, 5}, {15, 5}, {15, 15}, {5, 15}}}},
-        {"hole",
-         {{{0, 0}, {3, 0}, {3, 3}, {0, 3}}, {{1, 1}, {1, 2}, {2, 2}, {2, 1}}},
-         {{{-1, -1}, {4, -1}, {4, 4}, {-1, 4}}}},
-        {"nested",
-         {{{0, 0}, {8, 0}, {8, 8}, {0, 8}}, {{1, 1}, {1, 7}, {7, 7}, {7, 1}}, {{2, 2}, {6, 2}, {6, 6}, {2, 6}}},
-         {{{3, 0}, {5, 0}, {5, 8}, {3, 8}}}},
-        {"duplicates",
-         {{{0, 0}, {2, 0}, {2, 2}, {0, 2}}, {{0, 0}, {2, 0}, {2, 2}, {0, 2}}},
-         {{{1, -1}, {3, -1}, {3, 3}, {1, 3}}}},
+        {"hole", {{{0, 0}, {3, 0}, {3, 3}, {0, 3}}, {{1, 1}, {1, 2}, {2, 2}, {2, 1}}}, {{{-1, -1}, {4, -1}, {4, 4}, {-1, 4}}}},
+        {"nested", {{{0, 0}, {8, 0}, {8, 8}, {0, 8}}, {{1, 1}, {1, 7}, {7, 7}, {7, 1}}, {{2, 2}, {6, 2}, {6, 6}, {2, 6}}}, {{{3, 0}, {5, 0}, {5, 8}, {3, 8}}}},
+        {"duplicates", {{{0, 0}, {2, 0}, {2, 2}, {0, 2}}, {{0, 0}, {2, 0}, {2, 2}, {0, 2}}}, {{{1, -1}, {3, -1}, {3, 3}, {1, 3}}}},
         {"self-intersection", {{{0, 0}, {4, 4}, {0, 4}, {4, 0}}}, {{{-1, -1}, {5, -1}, {5, 5}, {-1, 5}}}},
-        {"fractional",
-         {{{0.3, 0.2}, {3.7, 0.2}, {3.7, 2.9}, {0.3, 2.9}}},
-         {{{1.1, -1}, {2.7, -1}, {2.7, 4}, {1.1, 4}}}},
-        {"translated",
-         {{{-1000, -20}, {-995, -20}, {-995, -15}, {-1000, -15}}},
-         {{{-999, -21}, {-994, -21}, {-994, -16}, {-999, -16}}}},
+        {"fractional", {{{0.3, 0.2}, {3.7, 0.2}, {3.7, 2.9}, {0.3, 2.9}}}, {{{1.1, -1}, {2.7, -1}, {2.7, 4}, {1.1, 4}}}},
+        {"translated", {{{-1000, -20}, {-995, -20}, {-995, -15}, {-1000, -15}}}, {{{-999, -21}, {-994, -21}, {-994, -16}, {-999, -16}}}},
         {"empty", {}, {{{0, 0}, {2, 0}, {2, 2}, {0, 2}}}},
     };
-    int failures = 0;
+    int failures                = 0;
     std::size_t failurePrefixes = 0, cancellationPrefixes = 0;
     double maximumStopToReturnMs = 0;
     for (const auto& item : cases)
         for (const auto operation :
-             {BoundedSelectionBoolean::Operation::Intersect, BoundedSelectionBoolean::Operation::Union,
-              BoundedSelectionBoolean::Operation::Subtract})
+             {BoundedSelectionBoolean::Operation::Intersect, BoundedSelectionBoolean::Operation::Union, BoundedSelectionBoolean::Operation::Subtract})
         {
             BoundedSelectionBoolean::Statistics statistics;
-            auto actual = BoundedSelectionBoolean::Run(item.subject, item.clip, operation, {}, {}, &statistics);
+            auto actual         = BoundedSelectionBoolean::Run(item.subject, item.clip, operation, {}, {}, &statistics);
             const auto expected = Canonical(Original(item.subject, item.clip, operation));
-            const bool pass = actual && Canonical(*actual) == expected;
-            std::printf("%s private-wand.pinned-compatibility.%s.%u\n", pass ? "PASS" : "FAIL", item.name,
-                        static_cast<unsigned>(operation));
+            const bool pass     = actual && Canonical(*actual) == expected;
+            std::printf("%s private-wand.pinned-compatibility.%s.%u\n", pass ? "PASS" : "FAIL", item.name, static_cast<unsigned>(operation));
             failures += pass ? 0 : 1;
             const auto savedSubject = item.subject, savedClip = item.clip;
             bool allFailed = true;
@@ -147,7 +135,7 @@ int RunDocumentWandCompatibilityTests()
             {
                 BoundedSelectionBoolean::Limits limits;
                 limits.allocations = prefix;
-                bool refused = false;
+                bool refused       = false;
                 try
                 {
                     (void)BoundedSelectionBoolean::Run(item.subject, item.clip, operation, {}, limits);
@@ -161,10 +149,13 @@ int RunDocumentWandCompatibilityTests()
             }
             BoundedSelectionBoolean::Limits exact;
             exact.allocations = statistics.allocations;
-            auto afterFaults = BoundedSelectionBoolean::Run(item.subject, item.clip, operation, {}, exact);
-            allFailed = allFailed && afterFaults && Canonical(*afterFaults) == expected;
-            std::printf("%s private-wand.allocation-prefixes.%s.%u count=%zu\n", allFailed ? "PASS" : "FAIL", item.name,
-                        static_cast<unsigned>(operation), statistics.allocations);
+            auto afterFaults  = BoundedSelectionBoolean::Run(item.subject, item.clip, operation, {}, exact);
+            allFailed         = allFailed && afterFaults && Canonical(*afterFaults) == expected;
+            std::printf("%s private-wand.allocation-prefixes.%s.%u count=%zu\n",
+                        allFailed ? "PASS" : "FAIL",
+                        item.name,
+                        static_cast<unsigned>(operation),
+                        statistics.allocations);
             failures += allFailed ? 0 : 1;
 
             bool allCancelled = true;
@@ -174,31 +165,31 @@ int RunDocumentWandCompatibilityTests()
                 bool refused = false;
                 try
                 {
-                    (void)BoundedSelectionBoolean::Run(item.subject, item.clip, operation,
-                                                       CancelToken{point.source.get_token()}, {}, nullptr, StopAt,
-                                                       &point);
+                    (void)BoundedSelectionBoolean::Run(item.subject, item.clip, operation, CancelToken{point.source.get_token()}, {}, nullptr, StopAt, &point);
                 }
                 catch (const std::bad_alloc&)
                 {
                     refused = true;
                 }
                 const auto returned = std::chrono::steady_clock::now();
-                allCancelled = allCancelled && refused && point.source.stop_requested() &&
-                               point.observed == checkpoint && item.subject == savedSubject && item.clip == savedClip;
+                allCancelled = allCancelled && refused && point.source.stop_requested() && point.observed == checkpoint && item.subject == savedSubject &&
+                               item.clip == savedClip;
                 if (point.observed)
-                    maximumStopToReturnMs =
-                        std::max(maximumStopToReturnMs,
-                                 std::chrono::duration<double, std::milli>(returned - point.requested).count());
+                    maximumStopToReturnMs = std::max(maximumStopToReturnMs, std::chrono::duration<double, std::milli>(returned - point.requested).count());
                 ++cancellationPrefixes;
             }
             auto afterStops = BoundedSelectionBoolean::Run(item.subject, item.clip, operation, {});
-            allCancelled = allCancelled && afterStops && Canonical(*afterStops) == expected;
-            std::printf("%s private-wand.cancellation-prefixes.%s.%u count=%llu\n", allCancelled ? "PASS" : "FAIL",
-                        item.name, static_cast<unsigned>(operation),
+            allCancelled    = allCancelled && afterStops && Canonical(*afterStops) == expected;
+            std::printf("%s private-wand.cancellation-prefixes.%s.%u count=%llu\n",
+                        allCancelled ? "PASS" : "FAIL",
+                        item.name,
+                        static_cast<unsigned>(operation),
                         static_cast<unsigned long long>(statistics.workUnits / 64));
             failures += allCancelled ? 0 : 1;
         }
     std::printf("private-wand.prefix-summary allocations=%zu cancellations=%zu stop-to-return-max-ms=%.6f\n",
-                failurePrefixes, cancellationPrefixes, maximumStopToReturnMs);
+                failurePrefixes,
+                cancellationPrefixes,
+                maximumStopToReturnMs);
     return failures;
 }

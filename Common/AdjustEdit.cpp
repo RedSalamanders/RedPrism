@@ -24,25 +24,24 @@ namespace
 {
     LayerTransform transform;
     transform.origin = Vec2{0, 0};
-    transform.size = Vec2{static_cast<double>(document.width), static_cast<double>(document.height)};
+    transform.size   = Vec2{static_cast<double>(document.width), static_cast<double>(document.height)};
     return transform;
 }
 
 // The straight color of a preview pixel through the layer's mapping; nullopt outside or transparent.
-[[nodiscard]] std::optional<std::array<double, 3>> StraightPixel(const Raster& image, const LayerTransform& transform,
-                                                                 Vec2 point) noexcept
+[[nodiscard]] std::optional<std::array<double, 3>> StraightPixel(const Raster& image, const LayerTransform& transform, Vec2 point) noexcept
 {
-    if (!image.HasStorage())
+    if (! image.HasStorage())
     {
         return std::nullopt;
     }
     const Vec2 pixel = PixelToDocument(transform, image.Width(), image.Height()).Inverted().Apply(point);
-    if (!(pixel.x >= 0) || !(pixel.y >= 0) || !(pixel.x < image.Width()) || !(pixel.y < image.Height()))
+    if (! (pixel.x >= 0) || ! (pixel.y >= 0) || ! (pixel.x < image.Width()) || ! (pixel.y < image.Height()))
     {
         return std::nullopt;
     }
     std::array<std::uint8_t, 4> sampled{};
-    if (!ReadRasterRegionForWork(image, {static_cast<int>(pixel.x), static_cast<int>(pixel.y), 1, 1}, sampled, 4, 0))
+    if (! ReadRasterRegionForWork(image, {static_cast<int>(pixel.x), static_cast<int>(pixel.y), 1, 1}, sampled, 4, 0))
     {
         return std::nullopt;
     }
@@ -51,38 +50,33 @@ namespace
     {
         return std::nullopt;
     }
-    return std::array<double, 3>{std::min(1.0, p[2] / static_cast<double>(p[3])),
-                                 std::min(1.0, p[1] / static_cast<double>(p[3])),
-                                 std::min(1.0, p[0] / static_cast<double>(p[3]))};
+    return std::array<double, 3>{
+        std::min(1.0, p[2] / static_cast<double>(p[3])), std::min(1.0, p[1] / static_cast<double>(p[3])), std::min(1.0, p[0] / static_cast<double>(p[3]))};
 }
 
 } // namespace
 
 bool DocumentSession::CanAdjustColors() const noexcept
 {
-    if (!_document.has_value() || HasColorEdit() || _brush || HasPendingWarp() || _pixelMove || _maskSelected)
+    if (! _document.has_value() || HasColorEdit() || _brush || HasPendingWarp() || _pixelMove || _maskSelected)
     {
         return false;
     }
     const ImageLayer* layer = ActiveLayer();
-    if (layer == nullptr || layer->isGroup || !layer->asset.has_value() ||
-        !EffectivelyVisible(_document.value(), layer->id))
+    if (layer == nullptr || layer->isGroup || ! layer->asset.has_value() || ! EffectivelyVisible(_document.value(), layer->id))
     {
         return false;
     }
-    return !(_document->selection.has_value() && _document->selection->IsEmpty());
+    return ! (_document->selection.has_value() && _document->selection->IsEmpty());
 }
 
 DocumentSession::PreviewLayer DocumentSession::PreviewedLayer() const noexcept
 {
-    if (_adjustmentEditingID.has_value() || !_colorEdit.has_value() ||
-        (!_colorEdit->previewRaster.HasStorage() && !_colorEdit->previewLookup))
+    if (_adjustmentEditingID.has_value() || ! _colorEdit.has_value() || (! _colorEdit->previewRaster.HasStorage() && ! _colorEdit->previewLookup))
     {
         return {};
     }
-    return PreviewLayer{_colorEdit->layerID,
-                        _colorEdit->previewLookup ? _colorEdit->previewSource : _colorEdit->previewRaster,
-                        _colorEdit->previewTransform};
+    return PreviewLayer{_colorEdit->layerID, _colorEdit->previewLookup ? _colorEdit->previewSource : _colorEdit->previewRaster, _colorEdit->previewTransform};
 }
 
 ColorEdit* DocumentSession::OpenColorEdit(FilterKind kind) noexcept
@@ -94,14 +88,14 @@ ColorEdit* DocumentSession::OpenColorEdit(FilterKind kind) noexcept
 
 bool DocumentSession::GrowFilterForBlur()
 {
-    ColorEdit& edit = _colorEdit.value();
+    ColorEdit& edit     = _colorEdit.value();
     const double margin = Adjust::BlurMargin(edit.kind, edit.settings);
-    if (!(margin > edit.grownMargin))
+    if (! (margin > edit.grownMargin))
     {
         return true;
     }
     const int pad = static_cast<int>(std::ceil(margin));
-    if (!GrowFilterGrid(-pad, -pad, edit.original.Width() + pad, edit.original.Height() + pad))
+    if (! GrowFilterGrid(-pad, -pad, edit.original.Width() + pad, edit.original.Height() + pad))
     {
         return false;
     }
@@ -111,7 +105,7 @@ bool DocumentSession::GrowFilterForBlur()
 
 bool DocumentSession::HoldColorDisplayOwners() const noexcept
 {
-    return _colorDisplayJobsEnabled && _colorEdit && _colorEdit->deferred && !_adjustmentEditingID;
+    return _colorDisplayJobsEnabled && _colorEdit && _colorEdit->deferred && ! _adjustmentEditingID;
 }
 
 void DocumentSession::InvalidateColorPreviewOwners() noexcept
@@ -125,36 +119,33 @@ void DocumentSession::InvalidateColorPreviewOwners() noexcept
 
 bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
 {
-    ColorEdit& edit = _colorEdit.value();
-    const int width = edit.original.Width();
+    ColorEdit& edit  = _colorEdit.value();
+    const int width  = edit.original.Width();
     const int height = edit.original.Height();
     // The grid already grown (or the original) unioned with the extent, all in the original's pixels.
-    int grownLeft = -edit.grownOffsetX;
-    int grownTop = -edit.grownOffsetY;
-    int grownRight = grownLeft + edit.SourceWidth();
-    int grownBottom = grownTop + edit.SourceHeight();
-    const int targetLeft = std::min(grownLeft, left);
-    const int targetTop = std::min(grownTop, top);
-    const int targetRight = std::max(grownRight, right);
+    int grownLeft          = -edit.grownOffsetX;
+    int grownTop           = -edit.grownOffsetY;
+    int grownRight         = grownLeft + edit.SourceWidth();
+    int grownBottom        = grownTop + edit.SourceHeight();
+    const int targetLeft   = std::min(grownLeft, left);
+    const int targetTop    = std::min(grownTop, top);
+    const int targetRight  = std::max(grownRight, right);
     const int targetBottom = std::max(grownBottom, bottom);
     if (targetLeft == grownLeft && targetTop == grownTop && targetRight == grownRight && targetBottom == grownBottom)
     {
         return true;
     }
-    const std::int64_t grownWidth = static_cast<std::int64_t>(targetRight) - targetLeft;
+    const std::int64_t grownWidth  = static_cast<std::int64_t>(targetRight) - targetLeft;
     const std::int64_t grownHeight = static_cast<std::int64_t>(targetBottom) - targetTop;
-    if (grownWidth < 1 || grownHeight < 1 || grownWidth > kMaxCanvasSide || grownHeight > kMaxCanvasSide ||
-        grownWidth * grownHeight > 100'000'000)
+    if (grownWidth < 1 || grownHeight < 1 || grownWidth > kMaxCanvasSide || grownHeight > kMaxCanvasSide || grownWidth * grownHeight > 100'000'000)
     {
         _budgetRefused = true;
         return false;
     }
     // Decision D7: the grown layer (and a mask on its grid carried onto it) fits the document's budget.
     const ImageLayer* layer = FindLayer(edit.layerID);
-    const bool maskGrows = layer != nullptr && layer->mask.has_value() && !layer->mask->placement.has_value() &&
-                           layer->mask->asset.image.PixelCount() > 1;
-    if (grownWidth * grownHeight > PixelBudgetLeft(false, {edit.layerID}) ||
-        (maskGrows && grownWidth * grownHeight > PixelBudgetLeft(true, {edit.layerID})))
+    const bool maskGrows    = layer != nullptr && layer->mask.has_value() && ! layer->mask->placement.has_value() && layer->mask->asset.image.PixelCount() > 1;
+    if (grownWidth * grownHeight > PixelBudgetLeft(false, {edit.layerID}) || (maskGrows && grownWidth * grownHeight > PixelBudgetLeft(true, {edit.layerID})))
     {
         _budgetRefused = true;
         return false;
@@ -168,21 +159,20 @@ bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
             return false;
         std::swap(edit.grownImage, edit.retiredGrownImage);
     }
-    edit.grownGrid = ColorEditGrid{targetLeft, targetTop, grownRect.width, grownRect.height};
+    edit.grownGrid  = ColorEditGrid{targetLeft, targetTop, grownRect.width, grownRect.height};
     edit.grownImage = {};
-    if (!HoldColorDisplayOwners())
+    if (! HoldColorDisplayOwners())
         edit.previewSource = {};
     edit.previewSequence = 0;
-    edit.grownTransform = PlacementOfRect(edit.transform, width, height, grownRect);
-    edit.grownOffsetX = -targetLeft;
-    edit.grownOffsetY = -targetTop;
+    edit.grownTransform  = PlacementOfRect(edit.transform, width, height, grownRect);
+    edit.grownOffsetX    = -targetLeft;
+    edit.grownOffsetY    = -targetTop;
     return true;
 }
 
 bool DocumentSession::CanContentAwareFill() const noexcept
 {
-    return CanAdjustColors() && _document.has_value() && _document->selection.has_value() &&
-           !_document->selection->IsEmpty();
+    return CanAdjustColors() && _document.has_value() && _document->selection.has_value() && ! _document->selection->IsEmpty();
 }
 
 // ── The panel session ─────────────────────────────────────────────────────
@@ -191,28 +181,28 @@ void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
 {
     if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
-    if (!CanAdjustColors() || (kind == FilterKind::ContentAwareFill && !CanContentAwareFill()))
+    if (! CanAdjustColors() || (kind == FilterKind::ContentAwareFill && ! CanContentAwareFill()))
     {
         return;
     }
     // Every kind settles the same pending work first: a pending transform commits, a pending gradient applies and a
     // lasso draft goes, so the edit reads the layer and the selection as they will stay.
     CommitTransform();
-    if (!ResolveGradient())
+    if (! ResolveGradient())
         return;
     CancelLasso();
     const ImageLayer* layer = ActiveLayer();
-    if (layer == nullptr || !layer->asset.has_value() || !_document.has_value())
+    if (layer == nullptr || ! layer->asset.has_value() || ! _document.has_value())
     {
         return;
     }
     ColorEdit edit;
-    edit.deferred = deferred;
-    edit.kind = kind;
-    edit.layerID = layer->id;
-    edit.original = layer->asset->image;
-    edit.transform = layer->transform;
-    edit.selection = _document->selection;
+    edit.deferred    = deferred;
+    edit.kind        = kind;
+    edit.layerID     = layer->id;
+    edit.original    = layer->asset->image;
+    edit.transform   = layer->transform;
+    edit.selection   = _document->selection;
     edit.sourceToken = CaptureJobToken(deferred ? std::nullopt : std::optional{layer->id});
     if (deferred)
     {
@@ -222,13 +212,12 @@ void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
     }
     // The last applied settings; Levels and Hue/Saturation start at identity and a Gradient Map from the foreground
     // and background colors, as in Photoshop.
-    edit.settings = filterSettings.Normalized();
+    edit.settings        = filterSettings.Normalized();
     edit.settings.levels = {};
-    edit.settings.hsv = {};
+    edit.settings.hsv    = {};
     if (kind == FilterKind::GradientMap)
     {
-        edit.settings.gradientMap =
-            GradientMapSettings{ColorFromArgb(_foregroundArgb), ColorFromArgb(_backgroundArgb), false};
+        edit.settings.gradientMap = GradientMapSettings{ColorFromArgb(_foregroundArgb), ColorFromArgb(_backgroundArgb), false};
     }
     // Add Noise and Grain keep a pattern of their own while the panel is open; no other kind reads a seed.
     if (kind == FilterKind::AddNoise || kind == FilterKind::Grain)
@@ -236,35 +225,34 @@ void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
         edit.seed = NextHealSeed();
     }
     edit.openingSequence = ++_colorEditSequence;
-    _colorEdit = std::move(edit);
+    _colorEdit           = std::move(edit);
     if (kind == FilterKind::ContentAwareFill)
     {
         // The fill extends the layer over any of the selection on the canvas past its edge.
         const std::optional<SelectionBounds> bounds = _colorEdit->selection->Bounds();
         if (bounds.has_value())
         {
-            const Affine2 toPixels =
-                PixelToDocument(_colorEdit->transform, _colorEdit->original.Width(), _colorEdit->original.Height())
-                    .Inverted();
-            const double x0 = std::max(0.0, bounds->minX);
-            const double y0 = std::max(0.0, bounds->minY);
-            const double x1 = std::min(static_cast<double>(_document->width), bounds->maxX);
-            const double y1 = std::min(static_cast<double>(_document->height), bounds->maxY);
+            const Affine2 toPixels = PixelToDocument(_colorEdit->transform, _colorEdit->original.Width(), _colorEdit->original.Height()).Inverted();
+            const double x0        = std::max(0.0, bounds->minX);
+            const double y0        = std::max(0.0, bounds->minY);
+            const double x1        = std::min(static_cast<double>(_document->width), bounds->maxX);
+            const double y1        = std::min(static_cast<double>(_document->height), bounds->maxY);
             if (x1 > x0 && y1 > y0)
             {
-                const std::array<Vec2, 4> corners{toPixels.Apply(Vec2{x0, y0}), toPixels.Apply(Vec2{x1, y0}),
-                                                  toPixels.Apply(Vec2{x0, y1}), toPixels.Apply(Vec2{x1, y1})};
+                const std::array<Vec2, 4> corners{
+                    toPixels.Apply(Vec2{x0, y0}), toPixels.Apply(Vec2{x1, y0}), toPixels.Apply(Vec2{x0, y1}), toPixels.Apply(Vec2{x1, y1})};
                 const SelectionBounds box = PointBounds(corners);
-                if (!std::isfinite(box.minX) || !std::isfinite(box.minY) || !std::isfinite(box.maxX) ||
-                    !std::isfinite(box.maxY) || box.minX < -kMaxCanvasSide || box.minY < -kMaxCanvasSide ||
-                    box.maxX > kMaxCanvasSide || box.maxY > kMaxCanvasSide)
+                if (! std::isfinite(box.minX) || ! std::isfinite(box.minY) || ! std::isfinite(box.maxX) || ! std::isfinite(box.maxY) ||
+                    box.minX < -kMaxCanvasSide || box.minY < -kMaxCanvasSide || box.maxX > kMaxCanvasSide || box.maxY > kMaxCanvasSide)
                 {
                     _budgetRefused = true;
                     _colorEdit.reset();
                     return;
                 }
-                if (!GrowFilterGrid(static_cast<int>(std::floor(box.minX)), static_cast<int>(std::floor(box.minY)),
-                                    static_cast<int>(std::ceil(box.maxX)), static_cast<int>(std::ceil(box.maxY))))
+                if (! GrowFilterGrid(static_cast<int>(std::floor(box.minX)),
+                                     static_cast<int>(std::floor(box.minY)),
+                                     static_cast<int>(std::ceil(box.maxX)),
+                                     static_cast<int>(std::ceil(box.maxY))))
                 {
                     _colorEdit.reset();
                     return;
@@ -272,13 +260,13 @@ void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
             }
         }
     }
-    if (!GrowFilterForBlur())
+    if (! GrowFilterForBlur())
     {
         _colorEdit.reset();
         return;
     }
     UpdateColorEdit(_colorEdit->settings, true);
-    if (!deferred)
+    if (! deferred)
     {
         MeasureColorEditHistogramInline();
     }
@@ -286,20 +274,20 @@ void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
 
 void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool preview)
 {
-    if (!_colorEdit.has_value())
+    if (! _colorEdit.has_value())
     {
         return;
     }
     ColorEdit& edit = _colorEdit.value();
-    edit.settings = settings.Normalized();
+    edit.settings   = settings.Normalized();
     ++_colorEditSequence;
     edit.commitFailed = false;
-    edit.preview = preview;
+    edit.preview      = preview;
     // A bigger blur needs more room around the layer than it was given.
-    if (Adjust::BlurMargin(edit.kind, edit.settings) > edit.grownMargin && !GrowFilterForBlur())
+    if (Adjust::BlurMargin(edit.kind, edit.settings) > edit.grownMargin && ! GrowFilterForBlur())
     {
         InvalidateColorPreviewOwners();
-        edit.previewSequence = 0;
+        edit.previewSequence            = 0;
         edit.previewInvalidatedSequence = _colorEditSequence;
         ++_editRevision;
         return;
@@ -308,14 +296,14 @@ void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool previ
     {
         return;
     }
-    if (!preview || ColorEditChangesNothing(edit.kind, edit.settings))
+    if (! preview || ColorEditChangesNothing(edit.kind, edit.settings))
     {
         InvalidateColorPreviewOwners();
-        edit.previewSequence = 0;
-        edit.previewFailed = false;
+        edit.previewSequence            = 0;
+        edit.previewFailed              = false;
         edit.previewInvalidatedSequence = _colorEditSequence;
     }
-    else if (!edit.deferred)
+    else if (! edit.deferred)
     {
         RenderColorEditInline();
     }
@@ -327,7 +315,7 @@ void DocumentSession::UpdateLevels(const LevelsSettings& settings, bool preview)
     if (const ColorEdit* edit = OpenColorEdit(FilterKind::Levels); edit != nullptr)
     {
         FilterSettings all = edit->settings;
-        all.levels = settings;
+        all.levels         = settings;
         UpdateColorEdit(all, preview);
     }
 }
@@ -337,14 +325,14 @@ void DocumentSession::UpdateHueSaturation(const HueSaturationSettings& settings,
     if (const ColorEdit* edit = OpenColorEdit(FilterKind::HueSaturation); edit != nullptr)
     {
         FilterSettings all = edit->settings;
-        all.hsv = settings;
+        all.hsv            = settings;
         UpdateColorEdit(all, preview);
     }
 }
 
 void DocumentSession::CancelColorEdit()
 {
-    if (FinishAdjustmentEditing(false) || !_colorEdit.has_value())
+    if (FinishAdjustmentEditing(false) || ! _colorEdit.has_value())
     {
         return;
     }
@@ -358,7 +346,7 @@ void DocumentSession::CancelColorEdit()
 void DocumentSession::AutoLevels(LevelsAuto mode)
 {
     ColorEdit* edit = OpenColorEdit(FilterKind::Levels);
-    if (edit == nullptr || !edit->histogramReady)
+    if (edit == nullptr || ! edit->histogramReady)
     {
         return;
     }
@@ -377,13 +365,13 @@ void DocumentSession::SetLevelsSampleMode(std::optional<LevelsSample> mode) noex
 void DocumentSession::SampleLevels(Vec2 point)
 {
     const ColorEdit* edit = OpenColorEdit(FilterKind::Levels);
-    if (edit == nullptr || !edit->levelsSample.has_value() || !_document.has_value() || !(point.x >= 0) ||
-        !(point.y >= 0) || !(point.x < _document->width) || !(point.y < _document->height))
+    if (edit == nullptr || ! edit->levelsSample.has_value() || ! _document.has_value() || ! (point.x >= 0) || ! (point.y >= 0) ||
+        ! (point.x < _document->width) || ! (point.y < _document->height))
     {
         return;
     }
     const std::optional<std::array<double, 3>> rgb = StraightPixel(edit->original, edit->transform, point);
-    if (!rgb.has_value())
+    if (! rgb.has_value())
     {
         return;
     }
@@ -419,18 +407,18 @@ void DocumentSession::SetHueTargeting(bool targeting) noexcept
 std::optional<double> DocumentSession::SampledHue(const Raster& composite, Vec2 point) noexcept
 {
     const std::optional<std::uint32_t> color = SampleCompositeColor(composite, point);
-    if (!color.has_value())
+    if (! color.has_value())
     {
         return std::nullopt;
     }
-    const double red = ((color.value() >> 16) & 0xFFu) / 255.0;
-    const double green = ((color.value() >> 8) & 0xFFu) / 255.0;
-    const double blue = (color.value() & 0xFFu) / 255.0;
-    const double high = std::max({red, green, blue});
-    const double low = std::min({red, green, blue});
-    const double delta = high - low;
+    const double red        = ((color.value() >> 16) & 0xFFu) / 255.0;
+    const double green      = ((color.value() >> 8) & 0xFFu) / 255.0;
+    const double blue       = (color.value() & 0xFFu) / 255.0;
+    const double high       = std::max({red, green, blue});
+    const double low        = std::min({red, green, blue});
+    const double delta      = high - low;
     const double saturation = high > 0 ? delta / high : 0;
-    if (!(saturation > 0.02) || !(delta > 0))
+    if (! (saturation > 0.02) || ! (delta > 0))
     {
         return std::nullopt;
     }
@@ -458,7 +446,7 @@ std::optional<double> DocumentSession::SampledHue(const Raster& composite, Vec2 
 void DocumentSession::SampleHueRange(const Raster& composite, Vec2 point)
 {
     const ColorEdit* edit = OpenColorEdit(FilterKind::HueSaturation);
-    if (edit == nullptr || !edit->hueSample.has_value())
+    if (edit == nullptr || ! edit->hueSample.has_value())
     {
         return;
     }
@@ -468,28 +456,21 @@ void DocumentSession::SampleHueRange(const Raster& composite, Vec2 point)
 void DocumentSession::SampleHueRangeValue(std::optional<double> hue)
 {
     const ColorEdit* edit = OpenColorEdit(FilterKind::HueSaturation);
-    if (edit == nullptr || !edit->hueSample.has_value())
+    if (edit == nullptr || ! edit->hueSample.has_value())
     {
         return;
     }
     HueSaturationSettings settings = edit->settings.hsv;
-    if (settings.range == ColorRange::Master || settings.colorize || !hue.has_value() || !std::isfinite(hue.value()) ||
-        hue.value() < 0 || hue.value() >= 360)
+    if (settings.range == ColorRange::Master || settings.colorize || ! hue.has_value() || ! std::isfinite(hue.value()) || hue.value() < 0 || hue.value() >= 360)
     {
         return;
     }
     HueBand& band = Adjust::BandOf(settings);
     switch (edit->hueSample.value())
     {
-    case HueSampleMode::Replace:
-        band = Adjust::BandCentered(band, hue.value());
-        break;
-    case HueSampleMode::Add:
-        Adjust::BandInclude(band, hue.value());
-        break;
-    case HueSampleMode::Remove:
-        Adjust::BandExclude(band, hue.value());
-        break;
+        case HueSampleMode::Replace: band = Adjust::BandCentered(band, hue.value()); break;
+        case HueSampleMode::Add: Adjust::BandInclude(band, hue.value()); break;
+        case HueSampleMode::Remove: Adjust::BandExclude(band, hue.value()); break;
     }
     UpdateHueSaturation(settings, edit->preview);
 }
@@ -497,7 +478,7 @@ void DocumentSession::SampleHueRangeValue(std::optional<double> hue)
 bool DocumentSession::BeginHueTargeting(const Raster& composite, Vec2 point)
 {
     ColorEdit* edit = OpenColorEdit(FilterKind::HueSaturation);
-    if (edit == nullptr || !edit->targeting || edit->settings.hsv.colorize)
+    if (edit == nullptr || ! edit->targeting || edit->settings.hsv.colorize)
     {
         return false;
     }
@@ -507,20 +488,20 @@ bool DocumentSession::BeginHueTargeting(const Raster& composite, Vec2 point)
 bool DocumentSession::BeginHueTargetingValue(std::optional<double> hue)
 {
     ColorEdit* edit = OpenColorEdit(FilterKind::HueSaturation);
-    if (edit == nullptr || !edit->targeting || edit->settings.hsv.colorize || !hue.has_value() ||
-        !std::isfinite(hue.value()) || hue.value() < 0 || hue.value() >= 360)
+    if (edit == nullptr || ! edit->targeting || edit->settings.hsv.colorize || ! hue.has_value() || ! std::isfinite(hue.value()) || hue.value() < 0 ||
+        hue.value() >= 360)
     {
         return false;
     }
     HueSaturationSettings settings = edit->settings.hsv;
-    ColorRange range = ColorRange::Reds;
-    double best = -1;
+    ColorRange range               = ColorRange::Reds;
+    double best                    = -1;
     for (int index = static_cast<int>(ColorRange::Reds); index < static_cast<int>(ColorRange::Count); ++index)
     {
         const double weight = Adjust::RangeWeight(settings, static_cast<ColorRange>(index), hue.value());
         if (weight > best)
         {
-            best = weight;
+            best  = weight;
             range = static_cast<ColorRange>(index);
         }
     }
@@ -529,9 +510,9 @@ bool DocumentSession::BeginHueTargetingValue(std::optional<double> hue)
     {
         return false;
     }
-    settings.range = range;
+    settings.range                    = range;
     const RangeAdjustment& adjustment = settings.adjustments[rangeIndex];
-    edit->targetDrag = HueTargetDrag{range, adjustment.hue, adjustment.saturation};
+    edit->targetDrag                  = HueTargetDrag{range, adjustment.hue, adjustment.saturation};
     UpdateHueSaturation(settings, edit->preview);
     return true;
 }
@@ -539,13 +520,13 @@ bool DocumentSession::BeginHueTargetingValue(std::optional<double> hue)
 void DocumentSession::DragHueTargeting(double viewDelta, bool adjustsHue)
 {
     const ColorEdit* edit = OpenColorEdit(FilterKind::HueSaturation);
-    if (edit == nullptr || !edit->targetDrag.has_value() || !std::isfinite(viewDelta))
+    if (edit == nullptr || ! edit->targetDrag.has_value() || ! std::isfinite(viewDelta))
     {
         return;
     }
-    const HueTargetDrag drag = edit->targetDrag.value();
+    const HueTargetDrag drag       = edit->targetDrag.value();
     HueSaturationSettings settings = edit->settings.hsv;
-    RangeAdjustment& adjustment = settings.adjustments[static_cast<std::size_t>(drag.range)];
+    RangeAdjustment& adjustment    = settings.adjustments[static_cast<std::size_t>(drag.range)];
     // Dragging right raises the value, left lowers it; one unit per two view points, measured from the start.
     if (adjustsHue)
     {
@@ -573,30 +554,28 @@ void DocumentSession::AddAdjustment(AdjustmentKind kind)
     if (HasDeferredTransform())
         return;
 
-    if (!_document.has_value() || static_cast<int>(_document->layers.size()) >= kMaxLayerCount || HasColorEdit())
+    if (! _document.has_value() || static_cast<int>(_document->layers.size()) >= kMaxLayerCount || HasColorEdit())
     {
         return;
     }
     const std::wstring name = FilterKindName(AdjustmentFilterKind(kind));
-    ImageLayer layer =
-        ImageLayer::Blank(name, Vec2{static_cast<double>(_document->width), static_cast<double>(_document->height)});
+    ImageLayer layer        = ImageLayer::Blank(name, Vec2{static_cast<double>(_document->width), static_cast<double>(_document->height)});
     LayerAdjustment adjustment;
     adjustment.kind = kind;
     // A new Gradient Map runs from the foreground to the background color, as in Photoshop; each Grain layer gets
     // a pattern of its own.
     if (kind == AdjustmentKind::GradientMap)
     {
-        adjustment.gradientMapSettings =
-            GradientMapSettings{ColorFromArgb(_foregroundArgb), ColorFromArgb(_backgroundArgb), false};
+        adjustment.gradientMapSettings = GradientMapSettings{ColorFromArgb(_foregroundArgb), ColorFromArgb(_backgroundArgb), false};
     }
     if (kind == AdjustmentKind::Grain)
     {
         GrainSettings grain;
-        grain.seed = NextHealSeed();
+        grain.seed               = NextHealSeed();
         adjustment.grainSettings = grain;
     }
     layer.adjustment = adjustment;
-    const Guid id = layer.id;
+    const Guid id    = layer.id;
     InsertLayerAboveActive(std::move(layer), L"New " + name + L" Adjustment", false);
     _adjustmentEditingID = id;
     ++_editRevision;
@@ -607,21 +586,21 @@ bool DocumentSession::UpdateAdjustment(const Guid& id, const LayerAdjustment& va
     if (HasDeferredTransform())
         return false;
     const ImageLayer* layer = FindLayer(id);
-    if (layer == nullptr || !layer->adjustment.has_value() || !value.IsValid())
+    if (layer == nullptr || ! layer->adjustment.has_value() || ! value.IsValid())
     {
         return false;
     }
     if (layer->adjustment.value() == value)
         return true; // An exact restore/no-op keeps the immutable root and generation.
     const auto index = IndexOf(_document.value().layers, id);
-    if (!index)
+    if (! index)
         return false;
     auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
-    if (!draft)
+    if (! draft)
         return false;
     draft.value().EditLayers()[index.value()].adjustment = value;
-    auto after = draft.value().Seal();
-    if (!after)
+    auto after                                           = draft.value().Seal();
+    if (! after)
         return false;
     std::swap(_document.value(), after.value());
     NoteDocumentMutation();
@@ -632,14 +611,13 @@ bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below
 {
     if (HasDeferredTransform())
         return false;
-    if (!_adjustmentEditingID.has_value() || !(_adjustmentEditingID.value() == id) || _adjustmentOriginal.has_value() ||
-        HasColorEdit() || !_document.has_value())
+    if (! _adjustmentEditingID.has_value() || ! (_adjustmentEditingID.value() == id) || _adjustmentOriginal.has_value() || HasColorEdit() ||
+        ! _document.has_value())
     {
         return false;
     }
     const ImageLayer* layer = FindLayer(id);
-    if (layer == nullptr || !layer->adjustment.has_value() || !below.HasStorage() ||
-        below.Format() != RasterFormat::Bgra8888)
+    if (layer == nullptr || ! layer->adjustment.has_value() || ! below.HasStorage() || below.Format() != RasterFormat::Bgra8888)
     {
         _adjustmentEditingID.reset();
         return false;
@@ -647,26 +625,26 @@ bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below
     const LayerAdjustment original = layer->adjustment.value();
     // The source is only for the histogram and sampling; it never replaces layer pixels.
     ColorEdit edit;
-    edit.deferred = deferred;
-    edit.kind = AdjustmentFilterKind(original.kind);
-    edit.layerID = id;
-    edit.original = below;
-    edit.transform = CanvasTransform(_document.value());
-    edit.settings = Adjust::AdjustmentSettings(original);
-    edit.seed = original.Grain().seed;
+    edit.deferred        = deferred;
+    edit.kind            = AdjustmentFilterKind(original.kind);
+    edit.layerID         = id;
+    edit.original        = below;
+    edit.transform       = CanvasTransform(_document.value());
+    edit.settings        = Adjust::AdjustmentSettings(original);
+    edit.seed            = original.Grain().seed;
     edit.openingSequence = ++_colorEditSequence;
     if (deferred)
     {
         edit.sourceToken = CaptureJobToken(std::nullopt, edit.openingSequence);
-        if (!edit.sourceToken)
+        if (! edit.sourceToken)
             return false;
-        edit.sourceLayers = _document->layers;
+        edit.sourceLayers        = _document->layers;
         edit.sourceToken->target = DescribeColorEditTarget(*layer);
     }
-    _colorEdit = std::move(edit);
+    _colorEdit          = std::move(edit);
     _adjustmentOriginal = original;
     BeginEdit(L"Edit " + std::wstring(FilterKindName(AdjustmentFilterKind(original.kind))) + L" Adjustment");
-    if (!deferred)
+    if (! deferred)
     {
         MeasureColorEditHistogramInline();
     }
@@ -675,7 +653,7 @@ bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below
 
 std::optional<LayerAdjustment> DocumentSession::EditedAdjustment() const
 {
-    if (!_adjustmentOriginal.has_value() || !_colorEdit.has_value())
+    if (! _adjustmentOriginal.has_value() || ! _colorEdit.has_value())
     {
         return std::nullopt;
     }
@@ -684,7 +662,7 @@ std::optional<LayerAdjustment> DocumentSession::EditedAdjustment() const
 
 bool DocumentSession::PreviewAdjustmentEditing(bool preview)
 {
-    if (!_adjustmentEditingID.has_value() || !_adjustmentOriginal.has_value())
+    if (! _adjustmentEditingID.has_value() || ! _adjustmentOriginal.has_value())
     {
         return false;
     }
@@ -696,7 +674,7 @@ bool DocumentSession::PreviewAdjustmentEditing(bool preview)
         return true;
     }
     const std::optional<LayerAdjustment> value = EditedAdjustment();
-    if (!value.has_value())
+    if (! value.has_value())
     {
         return false;
     }
@@ -706,11 +684,11 @@ bool DocumentSession::PreviewAdjustmentEditing(bool preview)
 
 bool DocumentSession::FinishAdjustmentEditing(bool commit)
 {
-    if (!_adjustmentEditingID.has_value() || !_adjustmentOriginal.has_value())
+    if (! _adjustmentEditingID.has_value() || ! _adjustmentOriginal.has_value())
     {
         return false;
     }
-    const Guid id = _adjustmentEditingID.value();
+    const Guid id                  = _adjustmentEditingID.value();
     const LayerAdjustment original = _adjustmentOriginal.value();
     // OK keeps editable settings; Cancel (including the panel's close) restores them.
     UpdateAdjustment(id, commit ? EditedAdjustment().value_or(original) : original);
@@ -731,7 +709,7 @@ void DocumentSession::StepBlendMode(bool forward)
         return;
     }
     constexpr int count = LayerBlendModeCount();
-    const int current = static_cast<int>(layer->blendMode);
-    const int next = (current + (forward ? 1 : count - 1)) % count;
+    const int current   = static_cast<int>(layer->blendMode);
+    const int next      = (current + (forward ? 1 : count - 1)) % count;
     SetBlendMode(static_cast<LayerBlendMode>(next));
 }

@@ -30,9 +30,8 @@ struct HueReadbackPayload final : DeferredReleaseNode
 
     HueReadbackPayload() noexcept
     {
-        bytes = kDeferredReleaseThreshold;
-        destroy = [](DeferredReleaseNode* node) noexcept
-        { const std::unique_ptr<HueReadbackPayload> owner(static_cast<HueReadbackPayload*>(node)); };
+        bytes   = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* node) noexcept { const std::unique_ptr<HueReadbackPayload> owner(static_cast<HueReadbackPayload*>(node)); };
     }
 };
 #pragma warning(pop)
@@ -42,7 +41,7 @@ struct RetireHueReadback final
 {
     void operator()(HueReadbackPayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload, DeferredReleasePolicy::AlwaysOnOwner))
+        if (payload && ! TryDeferRelease(*payload, DeferredReleasePolicy::AlwaysOnOwner))
             std::terminate();
     }
 };
@@ -61,14 +60,28 @@ bool AddHueBytes(std::uint64_t& total, std::uint64_t extra) noexcept
 #pragma warning(disable : 4625 4626)
 class Application::HueReadbackHostJob final : public RecordedDocumentReadbackJob
 {
-  public:
-    HueReadbackHostJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t opening, D3D11_BOX region,
-                       UtilityReadbackAdmission::Envelope envelope, GpuResidencyReservation reservation,
+public:
+    HueReadbackHostJob(Application& owner,
+                       HistoryWorkStamp stamp,
+                       std::uint64_t opening,
+                       D3D11_BOX region,
+                       UtilityReadbackAdmission::Envelope envelope,
+                       GpuResidencyReservation reservation,
                        std::shared_ptr<ColorWorkTestGate> gate) noexcept
-        : RecordedDocumentReadbackJob(owner._jobs, owner._gpuWork, owner._recordedCommands, owner._utilityReadback,
-                                      owner._graphGpuBudget, envelope, std::move(reservation), region,
+        : RecordedDocumentReadbackJob(owner._jobs,
+                                      owner._gpuWork,
+                                      owner._recordedCommands,
+                                      owner._utilityReadback,
+                                      owner._graphGpuBudget,
+                                      envelope,
+                                      std::move(reservation),
+                                      region,
                                       owner._renderer.IsWarp()),
-          _owner(owner), _stamp(stamp), _opening(opening), _retirement(envelope.cpuBytes), _gate(std::move(gate))
+          _owner(owner),
+          _stamp(stamp),
+          _opening(opening),
+          _retirement(envelope.cpuBytes),
+          _gate(std::move(gate))
     {
     }
     ~HueReadbackHostJob() override
@@ -77,15 +90,15 @@ class Application::HueReadbackHostJob final : public RecordedDocumentReadbackJob
             TransferReadbackOwners(_payload->document, _payload->pixels, _payload->image, _payload->memory);
     }
 
-  private:
+private:
     bool Current() const noexcept
     {
-        return !_owner._shutdownStarted && _owner._hueReadbackStamp == _stamp &&
-               _owner._historyWork.IsCurrent(_stamp) && _owner.HueInputCurrentOwner(_opening);
+        return ! _owner._shutdownStarted && _owner._hueReadbackStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
+               _owner.HueInputCurrentOwner(_opening);
     }
     HRESULT CaptureReadbackDocument(CanvasDocument& document) noexcept override
     {
-        if (!Current() || _owner._historyWork.CancelRequested(_stamp))
+        if (! Current() || _owner._historyWork.CancelRequested(_stamp))
             return E_ABORT;
         if (_owner._hueCapturesForTest)
             ++*_owner._hueCapturesForTest;
@@ -94,12 +107,11 @@ class Application::HueReadbackHostJob final : public RecordedDocumentReadbackJob
     }
     JobResult PrepareReadbackSnapshot(CanvasDocument&, JobContext&) override
     {
-        if (!_payload)
+        if (! _payload)
         {
-            std::unique_ptr<HueReadbackPayload, RetireHueReadback> payload(
-                std::make_unique<HueReadbackPayload>().release());
+            std::unique_ptr<HueReadbackPayload, RetireHueReadback> payload(std::make_unique<HueReadbackPayload>().release());
             payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
-            _payload = std::move(payload);
+            _payload       = std::move(payload);
         }
         return {};
     }
@@ -115,14 +127,13 @@ class Application::HueReadbackHostJob final : public RecordedDocumentReadbackJob
     {
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
-        if (!image.HasStorage() || image.Width() != 1 || image.Height() != 1 ||
-            image.Format() != RasterFormat::Bgra8888)
+        if (! image.HasStorage() || image.Width() != 1 || image.Height() != 1 || image.Format() != RasterFormat::Bgra8888)
             return {JobStatus::Failed, E_UNEXPECTED};
         if (_gate)
         {
             _gate->captureReservationHeld.store(context.reservedMemoryBytes >= _retirement);
             _gate->reservationBytes = context.reservedMemoryBytes;
-            const auto held = PassColorWorkTestGate(_gate, ColorWorkTestKind::Preview, context);
+            const auto held         = PassColorWorkTestGate(_gate, ColorWorkTestKind::Preview, context);
             if (held.status != JobStatus::Finished)
                 return held;
         }
@@ -137,7 +148,7 @@ class Application::HueReadbackHostJob final : public RecordedDocumentReadbackJob
     {
         if (_payload)
             _payload->completedImage = std::move(image);
-        if (!Current())
+        if (! Current())
             result = {JobStatus::Cancelled, E_ABORT};
         else if (_owner._historyWork.CancelRequested(_stamp))
             result = {JobStatus::Cancelled, E_ABORT};
@@ -157,36 +168,34 @@ class Application::HueReadbackHostJob final : public RecordedDocumentReadbackJob
 HRESULT Application::StartHueReadbackOwner(std::uint64_t opening) noexcept
 {
     const auto* captured = _hueInput.CapturedContext(opening);
-    if (_shutdownStarted || !_hueReadbackEnabled || !_activeHostRequest || !captured || _hueReadbackTicket ||
-        !HueInputCurrentOwner(opening))
+    if (_shutdownStarted || ! _hueReadbackEnabled || ! _activeHostRequest || ! captured || _hueReadbackTicket || ! HueInputCurrentOwner(opening))
         return E_ABORT;
     const auto x = static_cast<unsigned int>(captured->documentPoint.x);
     const auto y = static_cast<unsigned int>(captured->documentPoint.y);
     const D3D11_BOX region{x, y, 0, x + 1, y + 1, 1};
     auto memory = RecordedDocumentReadbackJob::RequiredMemory(region);
-    const auto metadata = sizeof(HueReadbackHostJob) + sizeof(HueReadbackPayload) + sizeof(HostHueInput) +
-                          SharedPublicationMemory::OwnershipAllowance() + 8192ull;
-    if (!memory || !AddHueBytes(memory, metadata))
+    const auto metadata =
+        sizeof(HueReadbackHostJob) + sizeof(HueReadbackPayload) + sizeof(HostHueInput) + SharedPublicationMemory::OwnershipAllowance() + 8192ull;
+    if (! memory || ! AddHueBytes(memory, metadata))
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     UtilityReadbackAdmission::Envelope envelope;
     GpuResidencyReservation reservation;
     RETURN_IF_FAILED(PrepareRecordedUtilityAdmission(_session.Document().value(), memory, envelope, reservation));
-    _hueReadbackStamp =
-        _historyWork.Begin(_session.DocumentSerial(), _activeHostRequest->ordinal, HistoryWorkKind::Selection);
-    if (!_hueReadbackStamp)
+    _hueReadbackStamp = _historyWork.Begin(_session.DocumentSerial(), _activeHostRequest->ordinal, HistoryWorkKind::Selection);
+    if (! _hueReadbackStamp)
         return E_UNEXPECTED;
     HRESULT error = E_OUTOFMEMORY;
     try
     {
-        std::unique_ptr<Job> job = std::make_unique<HueReadbackHostJob>(
-            *this, _hueReadbackStamp.value(), opening, region, envelope, std::move(reservation), _hueReadbackTestGate);
+        std::unique_ptr<Job> job =
+            std::make_unique<HueReadbackHostJob>(*this, _hueReadbackStamp.value(), opening, region, envelope, std::move(reservation), _hueReadbackTestGate);
         JobTicket ticket;
         error = static_cast<HRESULT>(_jobs.Submit(job,
-                                                  {.kind = JobClass::Selection,
-                                                   .serialKey = _session.DocumentSerial(),
-                                                   .memoryBytes = envelope.cpuBytes,
-                                                   .deferredRetirement = true,
-                                                   .allowMemoryWaiting = true,
+                                                  {.kind                  = JobClass::Selection,
+                                                   .serialKey             = _session.DocumentSerial(),
+                                                   .memoryBytes           = envelope.cpuBytes,
+                                                   .deferredRetirement    = true,
+                                                   .allowMemoryWaiting    = true,
                                                    .reserveRetainedMemory = true},
                                                   ticket));
         if (SUCCEEDED(error))
@@ -202,7 +211,7 @@ HRESULT Application::StartHueReadbackOwner(std::uint64_t opening) noexcept
         _hueReadbackStamp.reset();
         return error;
     }
-    _hostCommitStamp = _hueReadbackStamp;
+    _hostCommitStamp       = _hueReadbackStamp;
     _hostAfterPrerequisite = HostStage::Complete;
     return S_OK;
 }

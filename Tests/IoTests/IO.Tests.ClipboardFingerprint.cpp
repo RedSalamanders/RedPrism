@@ -16,7 +16,7 @@
 
 namespace
 {
-int gFailures = 0;
+int gFailures              = 0;
 unsigned int gExpectations = 0;
 
 void Expect(bool condition, const char* name) noexcept
@@ -26,18 +26,15 @@ void Expect(bool condition, const char* name) noexcept
     gFailures += condition ? 0 : 1;
 }
 
-constexpr std::array<std::uint8_t, 32> kEmptySha256{0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4,
-                                                    0xc8, 0x99, 0x6f, 0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b,
-                                                    0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55};
-constexpr std::array<std::uint8_t, 32> kAbcSha256{0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40,
-                                                  0xde, 0x5d, 0xae, 0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17,
-                                                  0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad};
+constexpr std::array<std::uint8_t, 32> kEmptySha256{0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
+                                                    0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55};
+constexpr std::array<std::uint8_t, 32> kAbcSha256{0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae, 0x22, 0x23,
+                                                  0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad};
 // Independent fixture: byte[i] = (i*131 + floor(i/256)*17 + 29) mod 256, for i in [0,65537).
 // PowerShell generated the bytes with that formula and SHA256.HashData; expected digest:
 // e48cfdd36089b5a7afbae6fabca70d5d49a72293c030c346afd512c69f6983d2.
-constexpr std::array<std::uint8_t, 32> kCoordinatePatternSha256{
-    0xe4, 0x8c, 0xfd, 0xd3, 0x60, 0x89, 0xb5, 0xa7, 0xaf, 0xba, 0xe6, 0xfa, 0xbc, 0xa7, 0x0d, 0x5d,
-    0x49, 0xa7, 0x22, 0x93, 0xc0, 0x30, 0xc3, 0x46, 0xaf, 0xd5, 0x12, 0xc6, 0x9f, 0x69, 0x83, 0xd2};
+constexpr std::array<std::uint8_t, 32> kCoordinatePatternSha256{0xe4, 0x8c, 0xfd, 0xd3, 0x60, 0x89, 0xb5, 0xa7, 0xaf, 0xba, 0xe6, 0xfa, 0xbc, 0xa7, 0x0d, 0x5d,
+                                                                0x49, 0xa7, 0x22, 0x93, 0xc0, 0x30, 0xc3, 0x46, 0xaf, 0xd5, 0x12, 0xc6, 0x9f, 0x69, 0x83, 0xd2};
 
 bool IsZero(const ClipboardFingerprint::Format& format) noexcept
 {
@@ -53,10 +50,10 @@ bool IsZero(const ClipboardFingerprint::Format& format) noexcept
 
 struct Observation final
 {
-    std::stop_source* stop = nullptr;
+    std::stop_source* stop               = nullptr;
     ClipboardFingerprint::Stage cancelAt = ClipboardFingerprint::Stage::Create;
-    ClipboardFingerprint::Stage faultAt = ClipboardFingerprint::Stage::Create;
-    std::int32_t faultStatus = 0;
+    ClipboardFingerprint::Stage faultAt  = ClipboardFingerprint::Stage::Create;
+    std::int32_t faultStatus             = 0;
     std::array<unsigned int, 3> reached{};
     std::array<std::size_t, 3> offsets{};
     std::array<unsigned int, 3> faultCalls{};
@@ -70,7 +67,7 @@ constexpr std::size_t StageIndex(ClipboardFingerprint::Stage stage) noexcept
 
 void OnReached(void* context, ClipboardFingerprint::Stage stage, std::size_t offset) noexcept
 {
-    auto& observation = *static_cast<Observation*>(context);
+    auto& observation       = *static_cast<Observation*>(context);
     const std::size_t index = StageIndex(stage);
     ++observation.reached[index];
     observation.offsets[index] = offset;
@@ -100,8 +97,7 @@ ClipboardFingerprint::Observer Observe(Observation& observation) noexcept
     return {&observation, OnReached, OnFault};
 }
 
-bool HashIs(ClipboardFingerprint::Format actual, std::uint64_t bytes,
-            const std::array<std::uint8_t, 32>& digest) noexcept
+bool HashIs(ClipboardFingerprint::Format actual, std::uint64_t bytes, const std::array<std::uint8_t, 32>& digest) noexcept
 {
     return actual.bytes == bytes && actual.sha256 == digest;
 }
@@ -123,45 +119,40 @@ void HashTests()
     for (std::size_t index = 0; index < pattern.size(); ++index)
     {
         const std::size_t value = index * 131 + (index / 256) * 17 + 29;
-        pattern[index] = static_cast<std::uint8_t>(value % 256);
+        pattern[index]          = static_cast<std::uint8_t>(value % 256);
     }
     Expect(Hash(pattern, output) == S_OK, "hash.coordinate-pattern.status");
     Expect(HashIs(output, pattern.size(), kCoordinatePatternSha256), "hash.coordinate-pattern.independent-sha256");
     Observation bands;
-    Expect(Hash(pattern, output, {}, Observe(bands)) == S_OK &&
-               bands.bands == std::array<std::size_t, 2>{65'536, 65'537} && bands.reached[StageIndex(Stage::Band)] == 2,
+    Expect(Hash(pattern, output, {}, Observe(bands)) == S_OK && bands.bands == std::array<std::size_t, 2>{65'536, 65'537} &&
+               bands.reached[StageIndex(Stage::Band)] == 2,
            "hash.coordinate-pattern-exact-two-bounded-bands");
 
     std::stop_source preCancelled;
     (void)preCancelled.request_stop();
     output = SeededOutput();
     Observation preObservation;
-    Expect(Hash(abc, output, CancelToken{preCancelled.get_token()}, Observe(preObservation)) == E_ABORT,
-           "cancel.pre.status");
+    Expect(Hash(abc, output, CancelToken{preCancelled.get_token()}, Observe(preObservation)) == E_ABORT, "cancel.pre.status");
     Expect(IsZero(output), "cancel.pre.clears-seeded-output");
-    Expect(preObservation.reached == std::array<unsigned int, 3>{} &&
-               preObservation.faultCalls == std::array<unsigned int, 3>{},
+    Expect(preObservation.reached == std::array<unsigned int, 3>{} && preObservation.faultCalls == std::array<unsigned int, 3>{},
            "cancel.pre.no-observer-call");
 
     constexpr std::array<std::uint8_t, 1> tiny{0x5a};
-    constexpr std::array<const char*, 3> cancelStatusNames{"cancel.create.status", "cancel.first-band.status",
-                                                           "cancel.finish.status"};
-    constexpr std::array<const char*, 3> cancelOutputNames{"cancel.create.clears-seeded-output",
-                                                           "cancel.first-band.clears-seeded-output",
-                                                           "cancel.finish.clears-seeded-output"};
+    constexpr std::array<const char*, 3> cancelStatusNames{"cancel.create.status", "cancel.first-band.status", "cancel.finish.status"};
+    constexpr std::array<const char*, 3> cancelOutputNames{
+        "cancel.create.clears-seeded-output", "cancel.first-band.clears-seeded-output", "cancel.finish.clears-seeded-output"};
     constexpr std::array<const char*, 3> cancelObserverNames{
         "cancel.create.observer-reached", "cancel.first-band.observer-reached", "cancel.finish.observer-reached"};
     for (const Stage stage : {Stage::Create, Stage::Band, Stage::Finish})
     {
         std::stop_source stop;
         Observation observation;
-        observation.stop = &stop;
-        observation.cancelAt = stage;
-        output = SeededOutput();
-        const auto source =
-            stage == Stage::Band ? std::span<const std::uint8_t>{pattern} : std::span<const std::uint8_t>{tiny};
+        observation.stop          = &stop;
+        observation.cancelAt      = stage;
+        output                    = SeededOutput();
+        const auto source         = stage == Stage::Band ? std::span<const std::uint8_t>{pattern} : std::span<const std::uint8_t>{tiny};
         const std::int32_t status = Hash(source, output, CancelToken{stop.get_token()}, Observe(observation));
-        const std::size_t index = StageIndex(stage);
+        const std::size_t index   = StageIndex(stage);
         Expect(status == E_ABORT, cancelStatusNames[index]);
         Expect(IsZero(output), cancelOutputNames[index]);
         Expect(observation.reached[index] == 1, cancelObserverNames[index]);
@@ -171,23 +162,21 @@ void HashTests()
     }
 
     constexpr std::int32_t kInjectedNtStatus = -1'073'741'823; // 0xC0000001, STATUS_UNSUCCESSFUL.
-    constexpr std::array<const char*, 3> faultStatusNames{"fault.create.exact-hresult-from-nt",
-                                                          "fault.first-band.exact-hresult-from-nt",
-                                                          "fault.finish.exact-hresult-from-nt"};
-    constexpr std::array<const char*, 3> faultOutputNames{"fault.create.clears-seeded-output",
-                                                          "fault.first-band.clears-seeded-output",
-                                                          "fault.finish.clears-seeded-output"};
+    constexpr std::array<const char*, 3> faultStatusNames{
+        "fault.create.exact-hresult-from-nt", "fault.first-band.exact-hresult-from-nt", "fault.finish.exact-hresult-from-nt"};
+    constexpr std::array<const char*, 3> faultOutputNames{
+        "fault.create.clears-seeded-output", "fault.first-band.clears-seeded-output", "fault.finish.clears-seeded-output"};
     constexpr std::array<const char*, 3> faultObserverNames{
         "fault.create.injection-observed", "fault.first-band.injection-observed", "fault.finish.injection-observed"};
     for (const Stage stage : {Stage::Create, Stage::Band, Stage::Finish})
     {
         Observation observation;
-        observation.faultAt = stage;
-        observation.faultStatus = kInjectedNtStatus;
-        output = SeededOutput();
-        const std::int32_t status = Hash(tiny, output, {}, Observe(observation));
+        observation.faultAt         = stage;
+        observation.faultStatus     = kInjectedNtStatus;
+        output                      = SeededOutput();
+        const std::int32_t status   = Hash(tiny, output, {}, Observe(observation));
         const std::int32_t expected = static_cast<std::int32_t>(HRESULT_FROM_NT(kInjectedNtStatus));
-        const std::size_t index = StageIndex(stage);
+        const std::size_t index     = StageIndex(stage);
         Expect(status == expected, faultStatusNames[index]);
         Expect(IsZero(output), faultOutputNames[index]);
         Expect(observation.faultCalls[index] == 1, faultObserverNames[index]);
@@ -215,59 +204,50 @@ void MatchTests()
     const std::optional<ClipboardReceipt::Key> receipt{key};
     const Binding expected{key, png, dib};
 
-    Expect(ClipboardFingerprint::Matches(expected, key, receipt, png, dib),
-           "matches.full-current-private-session-serial-receipt");
+    Expect(ClipboardFingerprint::Matches(expected, key, receipt, png, dib), "matches.full-current-private-session-serial-receipt");
 
     ClipboardReceipt::Key wrongPrivateSession = key;
     wrongPrivateSession.session[0] ^= 0x40;
-    Expect(!ClipboardFingerprint::Matches(expected, wrongPrivateSession, receipt, png, dib),
-           "matches.rejects-current-private-session-mismatch");
+    Expect(! ClipboardFingerprint::Matches(expected, wrongPrivateSession, receipt, png, dib), "matches.rejects-current-private-session-mismatch");
     ClipboardReceipt::Key wrongPrivateSerial = key;
     ++wrongPrivateSerial.serial;
-    Expect(!ClipboardFingerprint::Matches(expected, wrongPrivateSerial, receipt, png, dib),
-           "matches.rejects-current-private-serial-mismatch");
+    Expect(! ClipboardFingerprint::Matches(expected, wrongPrivateSerial, receipt, png, dib), "matches.rejects-current-private-serial-mismatch");
     ClipboardReceipt::Key wrongReceiptSession = key;
     wrongReceiptSession.session[15] ^= 0x80;
-    Expect(!ClipboardFingerprint::Matches(expected, key, wrongReceiptSession, png, dib),
-           "matches.rejects-receipt-session-mismatch");
+    Expect(! ClipboardFingerprint::Matches(expected, key, wrongReceiptSession, png, dib), "matches.rejects-receipt-session-mismatch");
     ClipboardReceipt::Key wrongReceiptSerial = key;
     --wrongReceiptSerial.serial;
-    Expect(!ClipboardFingerprint::Matches(expected, key, wrongReceiptSerial, png, dib),
-           "matches.rejects-receipt-serial-mismatch");
-    Expect(!ClipboardFingerprint::Matches(expected, key, std::nullopt, png, dib), "matches.rejects-missing-receipt");
+    Expect(! ClipboardFingerprint::Matches(expected, key, wrongReceiptSerial, png, dib), "matches.rejects-receipt-serial-mismatch");
+    Expect(! ClipboardFingerprint::Matches(expected, key, std::nullopt, png, dib), "matches.rejects-missing-receipt");
 
     Expect(ClipboardFingerprint::Matches(expected, key, receipt, png, dib), "matches.accepts-both-formats");
     Expect(ClipboardFingerprint::Matches(expected, key, receipt, png, {}), "matches.accepts-png-only");
     Expect(ClipboardFingerprint::Matches(expected, key, receipt, {}, dib), "matches.accepts-dib-only");
-    Expect(!ClipboardFingerprint::Matches(expected, key, receipt, {}, {}), "matches.rejects-absent-payload");
+    Expect(! ClipboardFingerprint::Matches(expected, key, receipt, {}, {}), "matches.rejects-absent-payload");
 
     Format alteredPng = png;
     alteredPng.sha256[0] ^= 0x01;
-    Expect(!ClipboardFingerprint::Matches(expected, key, receipt, alteredPng, {}),
-           "matches.rejects-altered-same-length-digest");
+    Expect(! ClipboardFingerprint::Matches(expected, key, receipt, alteredPng, {}), "matches.rejects-altered-same-length-digest");
     Format badLength = png;
     ++badLength.bytes;
-    Expect(!ClipboardFingerprint::Matches(expected, key, receipt, badLength, {}), "matches.rejects-bad-png-length");
+    Expect(! ClipboardFingerprint::Matches(expected, key, receipt, badLength, {}), "matches.rejects-bad-png-length");
     Format badDibLength = dib;
     ++badDibLength.bytes;
-    Expect(!ClipboardFingerprint::Matches(expected, key, receipt, {}, badDibLength), "matches.rejects-bad-dib-length");
-    Expect(!ClipboardFingerprint::Matches(expected, key, receipt, alteredPng, dib),
-           "matches.rejects-png-altered-while-dib-valid");
+    Expect(! ClipboardFingerprint::Matches(expected, key, receipt, {}, badDibLength), "matches.rejects-bad-dib-length");
+    Expect(! ClipboardFingerprint::Matches(expected, key, receipt, alteredPng, dib), "matches.rejects-png-altered-while-dib-valid");
     Format alteredDib = dib;
     alteredDib.sha256[31] ^= 0x01;
-    Expect(!ClipboardFingerprint::Matches(expected, key, receipt, png, alteredDib),
-           "matches.rejects-dib-altered-while-png-valid");
+    Expect(! ClipboardFingerprint::Matches(expected, key, receipt, png, alteredDib), "matches.rejects-dib-altered-while-png-valid");
 
     const ClipboardReceipt::Key zeroKey{};
     const Binding invalidExpected{zeroKey, png, dib};
-    Expect(!ClipboardFingerprint::Matches(invalidExpected, zeroKey, zeroKey, png, dib),
-           "matches.rejects-all-zero-expected-key");
+    Expect(! ClipboardFingerprint::Matches(invalidExpected, zeroKey, zeroKey, png, dib), "matches.rejects-all-zero-expected-key");
 }
 } // namespace
 
 int RunClipboardFingerprintTests()
 {
-    gFailures = 0;
+    gFailures     = 0;
     gExpectations = 0;
     HashTests();
     MatchTests();

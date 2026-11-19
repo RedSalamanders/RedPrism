@@ -23,7 +23,7 @@ struct CanvasDocument;
 
 class Renderer final
 {
-  public:
+public:
     static constexpr UINT kOcclusionStatusMessage = WM_APP + 1;
 
     // The stages of a frame, in order (Rendering_Composition.md "Present order").
@@ -37,11 +37,10 @@ class Renderer final
     };
 
     // Harness-only numeric capture of the actual completed frame before Present. No ordinary readback.
-    using FrameReadbackForTest = HRESULT (*)(void*, ID3D11Device*, ID3D11DeviceContext*,
-                                             ID3D11RenderTargetView*) noexcept;
+    using FrameReadbackForTest = HRESULT (*)(void*, ID3D11Device*, ID3D11DeviceContext*, ID3D11RenderTargetView*) noexcept;
     void SetFrameReadbackForTest(FrameReadbackForTest callback, void* context) noexcept
     {
-        _frameReadbackForTest = callback;
+        _frameReadbackForTest        = callback;
         _frameReadbackContextForTest = context;
     }
     void SuppressSelectionOutlineForTest(bool suppress) noexcept
@@ -51,33 +50,32 @@ class Renderer final
 
     struct SelectionOutlineFrame final
     {
-        CanvasRenderer* composition = nullptr;
-        ID3D11ShaderResourceView* solid = nullptr;
+        CanvasRenderer* composition      = nullptr;
+        ID3D11ShaderResourceView* solid  = nullptr;
         ID3D11ShaderResourceView* dashes = nullptr;
-        unsigned int width = 0;
-        unsigned int height = 0;
-        float pixelLeft = 0.0f;
-        float pixelTop = 0.0f;
-        bool clipped = false;
+        unsigned int width               = 0;
+        unsigned int height              = 0;
+        float pixelLeft                  = 0.0f;
+        float pixelTop                   = 0.0f;
+        bool clipped                     = false;
         std::array<float, 4> clip{};
     };
     struct LassoDraftFrame final
     {
-        CanvasRenderer* composition = nullptr;
+        CanvasRenderer* composition     = nullptr;
         ID3D11ShaderResourceView* color = nullptr;
-        unsigned int width = 0;
-        unsigned int height = 0;
-        float pixelLeft = 0.0f;
-        float pixelTop = 0.0f;
-        bool clipped = false;
+        unsigned int width              = 0;
+        unsigned int height             = 0;
+        float pixelLeft                 = 0.0f;
+        float pixelTop                  = 0.0f;
+        bool clipped                    = false;
         std::array<float, 4> clip{};
     };
     class SelectionOutlineFrameSource
     {
-      public:
-        virtual ~SelectionOutlineFrameSource() = default;
-        [[nodiscard]] virtual SelectionOutlineFrame BorrowSelectionOutlineFrameOwner(float left, float top, float width,
-                                                                                     float height) noexcept = 0;
+    public:
+        virtual ~SelectionOutlineFrameSource()                                                                                                  = default;
+        [[nodiscard]] virtual SelectionOutlineFrame BorrowSelectionOutlineFrameOwner(float left, float top, float width, float height) noexcept = 0;
         // Both current graph borrows occur after chrome preparation; an absent draft records no pass.
         [[nodiscard]] virtual LassoDraftFrame BorrowLassoDraftFrameOwner(float, float, float, float) noexcept
         {
@@ -105,7 +103,7 @@ class Renderer final
     struct DeviceIdentity final
     {
         LUID adapterLuid{};
-        bool warp = false;
+        bool warp                     = false;
         bool adapterOwnsWindowMonitor = false;
         std::array<wchar_t, 128> adapterName{};
     };
@@ -113,10 +111,10 @@ class Renderer final
     Renderer() = default;
     ~Renderer();
 
-    Renderer(const Renderer&) = delete;
+    Renderer(const Renderer&)            = delete;
     Renderer& operator=(const Renderer&) = delete;
-    Renderer(Renderer&&) = delete;
-    Renderer& operator=(Renderer&&) = delete;
+    Renderer(Renderer&&)                 = delete;
+    Renderer& operator=(Renderer&&)      = delete;
 
     HRESULT Initialize(HWND window, bool forceWarp) noexcept;
     void Shutdown() noexcept;
@@ -127,8 +125,11 @@ class Renderer final
     // which draws nothing (the host rebinds and draws again); a failure otherwise. A
     // canvas stage that fails without device loss leaves the hole empty and still presents the chrome
     // (CanvasFailure reports it), so the window keeps working (Decision D1).
-    HRESULT Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
-                   const CanvasDocument* document, RecordedDisplayGraph* acknowledgedDisplay = nullptr,
+    HRESULT Render(ChromeHost* chrome,
+                   CanvasRenderer* composition,
+                   const CanvasViewport* viewport,
+                   const CanvasDocument* document,
+                   RecordedDisplayGraph* acknowledgedDisplay     = nullptr,
                    SelectionOutlineFrameSource* selectionOutline = nullptr) noexcept;
     // The canvas stage's failure in the last Render, S_OK when the canvas drew.
     [[nodiscard]] HRESULT CanvasFailure() const noexcept
@@ -204,9 +205,9 @@ class Renderer final
     // the stage look like a removed device).
     void FailNextStageForTest(Stage stage, HRESULT result) noexcept
     {
-        _injectedStage = stage;
+        _injectedStage  = stage;
         _injectedResult = result;
-        _injecting = true;
+        _injecting      = true;
     }
     // Self-test seam: IsOccluded() reports `occluded` (the state a Present that reported DXGI_STATUS_OCCLUDED
     // leaves, or not) until cleared with nullopt, whatever the real Present of the hidden harness window returns
@@ -216,13 +217,12 @@ class Renderer final
         _occludedForTest = occluded;
     }
 
-  private:
+private:
     static constexpr DXGI_FORMAT kTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
     HRESULT CreateDeviceResources() noexcept;
     HRESULT CreateDevice(bool useWarp) noexcept;
-    static HRESULT FindAdapterForMonitor(HMONITOR monitor, wil::com_ptr_nothrow<IDXGIAdapter1>& adapter,
-                                         LUID& adapterLuid) noexcept;
+    static HRESULT FindAdapterForMonitor(HMONITOR monitor, wil::com_ptr_nothrow<IDXGIAdapter1>& adapter, LUID& adapterLuid) noexcept;
     void RecordDeviceIdentity(bool warp, bool adapterOwnsWindowMonitor) noexcept;
     HRESULT CreateSwapChain() noexcept;
     HRESULT CreateRenderTarget(UINT width, UINT height) noexcept;
@@ -237,21 +237,21 @@ class Renderer final
     void RegisterOcclusionStatus() noexcept;
 
     std::uint64_t _selectionOutlineDraws = 0;
-    std::uint64_t _lassoDraftDraws = 0;
-    HRESULT _lassoDraftFailure = S_OK;
-    HRESULT _selectionOutlineFailure = S_OK;
-    HWND _window = nullptr;
-    ChromeHost* _chrome = nullptr;
-    bool _forceWarp = false;
-    bool _suspended = true;
-    bool _occluded = false;
+    std::uint64_t _lassoDraftDraws       = 0;
+    HRESULT _lassoDraftFailure           = S_OK;
+    HRESULT _selectionOutlineFailure     = S_OK;
+    HWND _window                         = nullptr;
+    ChromeHost* _chrome                  = nullptr;
+    bool _forceWarp                      = false;
+    bool _suspended                      = true;
+    bool _occluded                       = false;
     std::optional<bool> _occludedForTest;
     FrameReadbackForTest _frameReadbackForTest = nullptr;
-    void* _frameReadbackContextForTest = nullptr;
-    bool _suppressSelectionOutlineForTest = false;
-    UINT _width = 0;
-    UINT _height = 0;
-    D3D_FEATURE_LEVEL _featureLevel = D3D_FEATURE_LEVEL_11_0;
+    void* _frameReadbackContextForTest         = nullptr;
+    bool _suppressSelectionOutlineForTest      = false;
+    UINT _width                                = 0;
+    UINT _height                               = 0;
+    D3D_FEATURE_LEVEL _featureLevel            = D3D_FEATURE_LEVEL_11_0;
 
     wil::com_ptr_nothrow<ID3D11Device> _device;
     wil::com_ptr_nothrow<ID3D11DeviceContext> _context;
@@ -261,19 +261,19 @@ class Renderer final
     wil::com_ptr_nothrow<ID3D11RenderTargetView> _renderTarget;
     wil::unique_handle _frameLatencyWaitable;
     DeviceIdentity _deviceInfo{};
-    HMONITOR _deviceMonitor = nullptr;
-    DWORD _occlusionStatusCookie = 0;
-    bool _occlusionStatusRegistered = false;
-    HRESULT _canvasFailure = S_OK;
-    bool _canvasDrawn = false;
-    std::uint64_t _presentCount = 0;
+    HMONITOR _deviceMonitor            = nullptr;
+    DWORD _occlusionStatusCookie       = 0;
+    bool _occlusionStatusRegistered    = false;
+    HRESULT _canvasFailure             = S_OK;
+    bool _canvasDrawn                  = false;
+    std::uint64_t _presentCount        = 0;
     std::uint64_t _presentAttemptCount = 0;
-    HRESULT _lastPresentResult = E_PENDING;
-    std::uint64_t _deviceGeneration = 0;
-    Stage _injectedStage = Stage::Present;
-    HRESULT _injectedResult = S_OK;
-    bool _injecting = false;
-    Stage _failedStage = Stage::Present;
-    float _layoutDpi = 0;
+    HRESULT _lastPresentResult         = E_PENDING;
+    std::uint64_t _deviceGeneration    = 0;
+    Stage _injectedStage               = Stage::Present;
+    HRESULT _injectedResult            = S_OK;
+    bool _injecting                    = false;
+    Stage _failedStage                 = Stage::Present;
+    float _layoutDpi                   = 0;
     std::array<float, 4> _clearColor{0.118f, 0.118f, 0.133f, 1.0f};
 };

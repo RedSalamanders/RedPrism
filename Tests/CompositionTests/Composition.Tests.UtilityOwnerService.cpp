@@ -24,7 +24,7 @@ int g_failures = 0;
 void Expect(bool condition, const char* name) noexcept
 {
     std::printf("%s utility-owner.%s\n", condition ? "PASS" : "FAIL", name);
-    if (!condition)
+    if (! condition)
         ++g_failures;
 }
 
@@ -40,13 +40,13 @@ bool StableMemory(void* context, MemorySnapshot& snapshot) noexcept
     ++*static_cast<std::size_t*>(context);
     // This injected sampler disables live system-pressure waits for the routing fixture.
     constexpr std::uint64_t available = 8ULL * 1024 * 1024 * 1024;
-    snapshot = {available, available};
+    snapshot                          = {available, available};
     return true;
 }
 
 class Receiver final : public UtilityReadbackOwner
 {
-  public:
+public:
     [[nodiscard]] bool HasUtilityOwnerWork() const noexcept override
     {
         return false;
@@ -63,16 +63,16 @@ class Receiver final : public UtilityReadbackOwner
         ++pumpCalls;
         if (order && orderCount && *orderCount < order->size())
             (*order)[(*orderCount)++] = index;
-        detachDuringPumpRefused = service && original.generation && !service->DetachOwner(original, *this);
+        detachDuringPumpRefused = service && original.generation && ! service->DetachOwner(original, *this);
     }
 
     void StopUtilityOwner() noexcept override
     {
         ++stopCalls;
-        if (!service || !original.generation)
+        if (! service || ! original.generation)
             return;
-        detachDuringStopRefused = !service->DetachOwner(original, *this);
-        attachDuringStopRefused = !service->AttachOwner(original, *this);
+        detachDuringStopRefused = ! service->DetachOwner(original, *this);
+        attachDuringStopRefused = ! service->AttachOwner(original, *this);
     }
 
     void MarkReady(bool value) noexcept
@@ -82,27 +82,27 @@ class Receiver final : public UtilityReadbackOwner
 
     UtilityReadbackOwnerService* service = nullptr;
     JobTicket original{};
-    std::size_t index = 0;
-    bool ready = false;
-    mutable std::size_t readinessQueries = 0;
-    std::size_t pumpCalls = 0;
-    std::size_t stopCalls = 0;
+    std::size_t index                                       = 0;
+    bool ready                                              = false;
+    mutable std::size_t readinessQueries                    = 0;
+    std::size_t pumpCalls                                   = 0;
+    std::size_t stopCalls                                   = 0;
     std::array<std::size_t, JobScheduler::kCapacity>* order = nullptr;
-    std::size_t* orderCount = nullptr;
-    bool detachDuringPumpRefused = false;
-    bool detachDuringStopRefused = false;
-    bool attachDuringStopRefused = false;
+    std::size_t* orderCount                                 = nullptr;
+    bool detachDuringPumpRefused                            = false;
+    bool detachDuringStopRefused                            = false;
+    bool attachDuringStopRefused                            = false;
 };
 
 struct Entry final
 {
     Receiver receiver;
     JobTicket ticket{};
-    bool firstAttachAccepted = false;
-    bool duplicateAttachRefused = false;
+    bool firstAttachAccepted           = false;
+    bool duplicateAttachRefused        = false;
     bool secondGenerationAttachRefused = false;
-    bool callbackStartupRefused = false;
-    std::size_t completed = 0;
+    bool callbackStartupRefused        = false;
+    std::size_t completed              = 0;
 };
 
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
@@ -111,9 +111,11 @@ struct Entry final
 #pragma warning(disable : 4626 5027)
 class AdmittedRoutingJob final : public Job
 {
-  public:
+public:
     AdmittedRoutingJob(Entry& entry, UtilityReadbackOwnerService& service, JobScheduler& scheduler) noexcept
-        : _entry(entry), _service(service), _scheduler(scheduler)
+        : _entry(entry),
+          _service(service),
+          _scheduler(scheduler)
     {
     }
 
@@ -127,19 +129,19 @@ class AdmittedRoutingJob final : public Job
         if (result.status != JobStatus::Finished || _deferred)
             return false;
 
-        _deferred = true;
-        _entry.ticket = ticket;
+        _deferred                = true;
+        _entry.ticket            = ticket;
         _entry.receiver.original = ticket;
         UtilityReadbackOwnerService callbackService;
         OwnerWorkMultiplexer callbackRoutes;
-        _entry.callbackStartupRefused = FAILED(callbackService.InitializeOwner(_scheduler, callbackRoutes)) &&
-                                        !callbackService.HasPending() && !callbackRoutes.HasPending();
-        _entry.firstAttachAccepted = _service.AttachOwner(ticket, _entry.receiver);
-        _entry.duplicateAttachRefused = !_service.AttachOwner(ticket, _entry.receiver);
+        _entry.callbackStartupRefused =
+            FAILED(callbackService.InitializeOwner(_scheduler, callbackRoutes)) && ! callbackService.HasPending() && ! callbackRoutes.HasPending();
+        _entry.firstAttachAccepted    = _service.AttachOwner(ticket, _entry.receiver);
+        _entry.duplicateAttachRefused = ! _service.AttachOwner(ticket, _entry.receiver);
 
         JobTicket otherGeneration = ticket;
         ++otherGeneration.generation;
-        _entry.secondGenerationAttachRefused = !_service.AttachOwner(otherGeneration, _entry.receiver);
+        _entry.secondGenerationAttachRefused = ! _service.AttachOwner(otherGeneration, _entry.receiver);
         return _entry.firstAttachAccepted;
     }
 
@@ -148,7 +150,7 @@ class AdmittedRoutingJob final : public Job
         ++_entry.completed;
     }
 
-  private:
+private:
     Entry& _entry;
     UtilityReadbackOwnerService& _service;
     JobScheduler& _scheduler;
@@ -172,7 +174,7 @@ bool DrainUntilDeferred(JobScheduler& scheduler, const std::vector<Entry>& entri
         if (now >= deadline)
             return false;
         const auto remaining = static_cast<DWORD>(deadline - now);
-        const DWORD waited = WaitForSingleObject(static_cast<HANDLE>(scheduler.WakeHandle()), remaining);
+        const DWORD waited   = WaitForSingleObject(static_cast<HANDLE>(scheduler.WakeHandle()), remaining);
         if (waited == WAIT_FAILED || (waited == WAIT_TIMEOUT && GetTickCount64() >= deadline))
             return false;
     }
@@ -182,14 +184,13 @@ void TestCrossThreadRefusal(UtilityReadbackOwnerService& service, Entry& entry)
 {
     bool attachRefused = false;
     bool detachRefused = false;
-    bool readyRefused = false;
-    std::thread caller(
-        [&]() noexcept
-        {
-            attachRefused = !service.AttachOwner(entry.ticket, entry.receiver);
-            detachRefused = !service.DetachOwner(entry.ticket, entry.receiver);
-            readyRefused = !service.HasReady();
-        });
+    bool readyRefused  = false;
+    std::thread caller([&]() noexcept
+    {
+        attachRefused = ! service.AttachOwner(entry.ticket, entry.receiver);
+        detachRefused = ! service.DetachOwner(entry.ticket, entry.receiver);
+        readyRefused  = ! service.HasReady();
+    });
     caller.join();
     Expect(attachRefused, "off-owner-attach-refused");
     Expect(detachRefused, "off-owner-detach-refused");
@@ -216,35 +217,35 @@ int RunUtilityOwnerServiceRoutingTests()
     Expect(scheduler.RegisterOwnerWork(routes), "scheduler-routes-registered");
     Expect(SUCCEEDED(service->InitializeOwner(scheduler, routes)), "service-initialized");
 
-    Expect(!service->HasPending(), "empty-service-not-pending");
-    Expect(!service->HasReady(), "empty-service-not-ready");
+    Expect(! service->HasPending(), "empty-service-not-pending");
+    Expect(! service->HasReady(), "empty-service-not-ready");
     Expect(scheduler.IsIdle(), "empty-scheduler-is-idle");
     // A notification is ready scheduler work even when this utility service owns no records.
     // Check both states explicitly without relying on the timing of live system-pressure callbacks.
     scheduler.NotifyMemoryChanged();
-    Expect(!scheduler.IsIdle() && scheduler.HasUiWork(), "memory-event-makes-empty-scheduler-nonidle");
-    Expect(!service->HasPending() && !service->HasReady(), "memory-event-keeps-empty-utility-quiescent");
+    Expect(! scheduler.IsIdle() && scheduler.HasUiWork(), "memory-event-makes-empty-scheduler-nonidle");
+    Expect(! service->HasPending() && ! service->HasReady(), "memory-event-keeps-empty-utility-quiescent");
     (void)DrainCompletions(scheduler);
-    Expect(scheduler.IsIdle() && !scheduler.HasUiWork(), "drained-memory-event-restores-empty-idle");
+    Expect(scheduler.IsIdle() && ! scheduler.HasUiWork(), "drained-memory-event-restores-empty-idle");
     bool emptyHadReadinessVisits = false;
     for (const auto& entry : *entries)
         emptyHadReadinessVisits = emptyHadReadinessVisits || entry.receiver.readinessQueries != 0;
-    Expect(!emptyHadReadinessVisits, "empty-service-does-not-visit-receivers");
+    Expect(! emptyHadReadinessVisits, "empty-service-does-not-visit-receivers");
     routes.Pump();
 
     bool allAdmitted = true;
     for (std::size_t index = 0; index < entries->size(); ++index)
     {
-        auto& entry = (*entries)[index];
+        auto& entry            = (*entries)[index];
         entry.receiver.service = service.get();
-        entry.receiver.index = index;
+        entry.receiver.index   = index;
 
         std::unique_ptr<Job> job = std::make_unique<AdmittedRoutingJob>(entry, *service, scheduler);
         JobTicket ticket{};
         JobOptions options{};
-        options.memoryBytes = 1; // Exercise the installed sampler through actual admission.
+        options.memoryBytes          = 1; // Exercise the installed sampler through actual admission.
         const std::int32_t submitted = scheduler.Submit(job, options, ticket);
-        allAdmitted = allAdmitted && submitted >= 0 && !job;
+        allAdmitted                  = allAdmitted && submitted >= 0 && ! job;
         if (submitted < 0 || job)
             FailFast("original-job-admission-failed", static_cast<DWORD>(submitted));
         entry.ticket = ticket;
@@ -253,23 +254,22 @@ int RunUtilityOwnerServiceRoutingTests()
     Expect(memorySamples == entries->size(), "injected-memory-sampled-for-every-original-admission");
     Expect(scheduler.ReservedMemoryBytes() == entries->size(), "original-admissions-retain-synthetic-memory");
 
-    if (!DrainUntilDeferred(scheduler, *entries))
+    if (! DrainUntilDeferred(scheduler, *entries))
         FailFast("original-owner-callback-timeout", WAIT_TIMEOUT);
 
     bool everyActualSlotMatches = true;
     for (std::size_t index = 0; index < entries->size(); ++index)
     {
-        const auto& entry = (*entries)[index];
-        everyActualSlotMatches = everyActualSlotMatches && entry.ticket.slot == index && entry.ticket.generation != 0 &&
-                                 entry.firstAttachAccepted && entry.duplicateAttachRefused &&
-                                 entry.secondGenerationAttachRefused && entry.callbackStartupRefused;
+        const auto& entry      = (*entries)[index];
+        everyActualSlotMatches = everyActualSlotMatches && entry.ticket.slot == index && entry.ticket.generation != 0 && entry.firstAttachAccepted &&
+                                 entry.duplicateAttachRefused && entry.secondGenerationAttachRefused && entry.callbackStartupRefused;
     }
     Expect(everyActualSlotMatches, "actual-tickets-fill-slots-0-through-127");
     Expect((*entries)[63].ticket.slot == 63 && (*entries)[64].ticket.slot == 64 && (*entries)[127].ticket.slot == 127,
            "actual-ticket-word-boundary-slots-63-64-127");
     Expect(service->HasPending(), "borrowed-receivers-are-pending");
-    Expect(!scheduler.IsIdle(), "original-jobs-stay-suspended-in-their-admissions");
-    Expect(!routes.HasReady(), "attached-receivers-remain-dormant");
+    Expect(! scheduler.IsIdle(), "original-jobs-stay-suspended-in-their-admissions");
+    Expect(! routes.HasReady(), "attached-receivers-remain-dormant");
     routes.Pump();
     bool dormantReceiversUnpumped = true;
     for (const auto& entry : *entries)
@@ -278,16 +278,15 @@ int RunUtilityOwnerServiceRoutingTests()
 
     JobTicket foreignGeneration = (*entries)[0].ticket;
     ++foreignGeneration.generation;
-    Expect(!service->DetachOwner(foreignGeneration, (*entries)[0].receiver), "foreign-generation-detach-refused");
-    Expect(!service->AttachOwner((*entries)[1].ticket, (*entries)[0].receiver),
-           "duplicate-parent-on-another-ticket-refused");
+    Expect(! service->DetachOwner(foreignGeneration, (*entries)[0].receiver), "foreign-generation-detach-refused");
+    Expect(! service->AttachOwner((*entries)[1].ticket, (*entries)[0].receiver), "duplicate-parent-on-another-ticket-refused");
     TestCrossThreadRefusal(*service, (*entries)[0]);
 
     std::array<std::size_t, JobScheduler::kCapacity> order{};
     std::size_t orderCount = 0;
     for (auto& entry : *entries)
     {
-        entry.receiver.order = &order;
+        entry.receiver.order      = &order;
         entry.receiver.orderCount = &orderCount;
         entry.receiver.MarkReady(true);
     }
@@ -308,14 +307,13 @@ int RunUtilityOwnerServiceRoutingTests()
 
     bool everyPumpDetachRefused = true;
     for (const auto& entry : *entries)
-        everyPumpDetachRefused =
-            everyPumpDetachRefused && entry.receiver.pumpCalls == 1 && entry.receiver.detachDuringPumpRefused;
+        everyPumpDetachRefused = everyPumpDetachRefused && entry.receiver.pumpCalls == 1 && entry.receiver.detachDuringPumpRefused;
     Expect(everyPumpDetachRefused, "pump-callback-cannot-detach-receiver");
 
     for (auto& entry : *entries)
         entry.receiver.MarkReady(false);
     scheduler.NotifyOwnerWork();
-    Expect(!routes.HasReady(), "readiness-cleared-before-stop");
+    Expect(! routes.HasReady(), "readiness-cleared-before-stop");
 
     // Drop three actual word-boundary slots while the remaining original parents stay suspended.
     constexpr std::array<std::size_t, 3> removed{63, 64, 127};
@@ -326,25 +324,23 @@ int RunUtilityOwnerServiceRoutingTests()
         Expect(service->DetachOwner(entry.ticket, entry.receiver), "actual-word-boundary-slot-detached");
         removedQueries[i] = entry.receiver.readinessQueries;
     }
-    Expect(service->HasPending() && !service->HasReady(), "partially-detached-original-parents-stay-dormant");
+    Expect(service->HasPending() && ! service->HasReady(), "partially-detached-original-parents-stay-dormant");
     bool removedNotQueried = true;
     for (std::size_t i = 0; i < removed.size(); ++i)
         removedNotQueried = removedNotQueried && (*entries)[removed[i]].receiver.readinessQueries == removedQueries[i];
     Expect(removedNotQueried, "cleared-bitmap-slots-are-not-queried");
     // An unchanged original ticket outside its acknowledged callback is not new attachment authority.
-    Expect(!service->AttachOwner((*entries)[63].ticket, (*entries)[63].receiver),
-           "detached-original-cannot-reattach-outside-exact-acknowledged-callback");
+    Expect(! service->AttachOwner((*entries)[63].ticket, (*entries)[63].receiver), "detached-original-cannot-reattach-outside-exact-acknowledged-callback");
 
     service->StopOwner();
     bool stopCallbacksExcluded = service->HasPending();
     for (std::size_t i = 0; i < entries->size(); ++i)
     {
-        const auto& entry = (*entries)[i];
+        const auto& entry     = (*entries)[i];
         const bool wasRemoved = i == 63 || i == 64 || i == 127;
-        stopCallbacksExcluded = stopCallbacksExcluded &&
-                                (wasRemoved ? entry.receiver.stopCalls == 0
-                                            : entry.receiver.stopCalls == 1 && entry.receiver.detachDuringStopRefused &&
-                                                  entry.receiver.attachDuringStopRefused);
+        stopCallbacksExcluded = stopCallbacksExcluded && (wasRemoved ? entry.receiver.stopCalls == 0
+                                                                     : entry.receiver.stopCalls == 1 && entry.receiver.detachDuringStopRefused &&
+                                                                           entry.receiver.attachDuringStopRefused);
     }
     Expect(stopCallbacksExcluded, "stop-callbacks-cannot-mutate-route");
 
@@ -355,7 +351,7 @@ int RunUtilityOwnerServiceRoutingTests()
             auto& entry = (*entries)[i];
             allDetached = service->DetachOwner(entry.ticket, entry.receiver) && allDetached;
         }
-    Expect(allDetached && !service->HasPending(), "all-borrowed-receivers-detached");
+    Expect(allDetached && ! service->HasPending(), "all-borrowed-receivers-detached");
 
     bool allResumed = true;
     for (const auto& entry : *entries)

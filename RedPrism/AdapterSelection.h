@@ -8,7 +8,7 @@
 struct AdapterOutputRecord final
 {
     LUID adapterLuid{};
-    HMONITOR monitor = nullptr;
+    HMONITOR monitor     = nullptr;
     bool softwareAdapter = false;
 };
 
@@ -18,16 +18,15 @@ struct AdapterOutputRecord final
 }
 
 // Adapter-of-output: first non-software record whose output owns `target`, or SIZE_MAX when nothing matches.
-[[nodiscard]] constexpr size_t SelectAdapterRecordForMonitor(std::span<const AdapterOutputRecord> records,
-                                                             HMONITOR target) noexcept
+[[nodiscard]] constexpr size_t SelectAdapterRecordForMonitor(std::span<const AdapterOutputRecord> records, HMONITOR target) noexcept
 {
-    if (!target)
+    if (! target)
     {
         return SIZE_MAX;
     }
     for (size_t index = 0; index < records.size(); ++index)
     {
-        if (!records[index].softwareAdapter && records[index].monitor == target)
+        if (! records[index].softwareAdapter && records[index].monitor == target)
         {
             return index;
         }

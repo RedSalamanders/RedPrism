@@ -15,7 +15,7 @@
 #pragma warning(disable : 4626 5027)
 class UiCancellationBody final
 {
-  public:
+public:
     enum class State
     {
         Waiting,
@@ -48,10 +48,13 @@ class UiCancellationBody final
     };
 
     UiCancellationBody(JobTicket ticket, JobClass kind, JobExecutionLane lane, std::uint64_t ordinal) noexcept
-        : _ticket(ticket), _kind(kind), _lane(lane), _selectedOrdinal(ordinal)
+        : _ticket(ticket),
+          _kind(kind),
+          _lane(lane),
+          _selectedOrdinal(ordinal)
     {
-        _malformed = ticket.slot >= JobScheduler::kCapacity || ticket.generation == 0 || ordinal == 0 ||
-                     kind >= JobClass::Count || lane >= JobExecutionLane::Count;
+        _malformed =
+            ticket.slot >= JobScheduler::kCapacity || ticket.generation == 0 || ordinal == 0 || kind >= JobClass::Count || lane >= JobExecutionLane::Count;
     }
 
     void Observe(JobExecutionNotice notice, std::int64_t ticks) noexcept
@@ -69,58 +72,57 @@ class UiCancellationBody final
         _lastTicks = ticks;
         switch (notice.boundary)
         {
-        case JobExecutionBoundary::BodyEntered:
-            if (_running || notice.result || _ordinal == (std::numeric_limits<std::uint64_t>::max)())
-            {
-                _malformed = true;
-                return;
-            }
-            ++_ordinal;
-            _running = true;
-            _checkSeenThisRun = false;
-            if (_ordinal == _selectedOrdinal)
-            {
-                _entered = true;
-                _entryTicks = ticks;
-            }
-            break;
-        case JobExecutionBoundary::BodyExited:
-            if (!_running || !ValidResult(notice.result))
-            {
-                _malformed = true;
-                return;
-            }
-            _running = false;
-            if (_ordinal == _selectedOrdinal)
-            {
-                _exited = true;
-                _exitTicks = ticks;
-                _result = notice.result;
-            }
-            break;
-        case JobExecutionBoundary::CancellationObserved:
-            if (!_running || notice.result || _checkSeenThisRun)
-            {
-                _malformed = true;
-                return;
-            }
-            _checkSeenThisRun = true;
-            if (_ordinal == _selectedOrdinal)
-                _checkTicks = ticks;
-            break;
-        case JobExecutionBoundary::BodySkipped:
-            if (_running || !notice.result || notice.result.value().status != JobStatus::Cancelled ||
-                notice.result.value().error != 0 || _ordinal == (std::numeric_limits<std::uint64_t>::max)())
-            {
-                _malformed = true;
-                return;
-            }
-            ++_ordinal;
-            if (_ordinal == _selectedOrdinal)
-                _skipped = true;
-            break;
-        default:
-            _malformed = true;
+            case JobExecutionBoundary::BodyEntered:
+                if (_running || notice.result || _ordinal == (std::numeric_limits<std::uint64_t>::max)())
+                {
+                    _malformed = true;
+                    return;
+                }
+                ++_ordinal;
+                _running          = true;
+                _checkSeenThisRun = false;
+                if (_ordinal == _selectedOrdinal)
+                {
+                    _entered    = true;
+                    _entryTicks = ticks;
+                }
+                break;
+            case JobExecutionBoundary::BodyExited:
+                if (! _running || ! ValidResult(notice.result))
+                {
+                    _malformed = true;
+                    return;
+                }
+                _running = false;
+                if (_ordinal == _selectedOrdinal)
+                {
+                    _exited    = true;
+                    _exitTicks = ticks;
+                    _result    = notice.result;
+                }
+                break;
+            case JobExecutionBoundary::CancellationObserved:
+                if (! _running || notice.result || _checkSeenThisRun)
+                {
+                    _malformed = true;
+                    return;
+                }
+                _checkSeenThisRun = true;
+                if (_ordinal == _selectedOrdinal)
+                    _checkTicks = ticks;
+                break;
+            case JobExecutionBoundary::BodySkipped:
+                if (_running || ! notice.result || notice.result.value().status != JobStatus::Cancelled || notice.result.value().error != 0 ||
+                    _ordinal == (std::numeric_limits<std::uint64_t>::max)())
+                {
+                    _malformed = true;
+                    return;
+                }
+                ++_ordinal;
+                if (_ordinal == _selectedOrdinal)
+                    _skipped = true;
+                break;
+            default: _malformed = true;
         }
     }
 
@@ -148,11 +150,11 @@ class UiCancellationBody final
             return StopOutcome::ClockFailed;
         if (_skipped)
             return StopOutcome::Skipped;
-        if (!_entered)
+        if (! _entered)
             return StopOutcome::Pending;
         if (begin < _entryTicks)
             return StopOutcome::BeforeBody;
-        if (!_exited)
+        if (! _exited)
             return StopOutcome::Pending;
         if (_exitTicks < begin)
             return StopOutcome::AlreadyFinished;
@@ -193,20 +195,17 @@ class UiCancellationBody final
         return _result;
     }
 
-  private:
+private:
     [[nodiscard]] static bool ValidResult(const std::optional<JobResult>& result) noexcept
     {
-        if (!result)
+        if (! result)
             return false;
         switch (result.value().status)
         {
-        case JobStatus::Finished:
-        case JobStatus::Cancelled:
-            return result.value().error == 0;
-        case JobStatus::Failed:
-            return result.value().error < 0;
-        default:
-            return false;
+            case JobStatus::Finished:
+            case JobStatus::Cancelled: return result.value().error == 0;
+            case JobStatus::Failed: return result.value().error < 0;
+            default: return false;
         }
     }
 
@@ -214,18 +213,18 @@ class UiCancellationBody final
     const JobClass _kind;
     const JobExecutionLane _lane;
     const std::uint64_t _selectedOrdinal;
-    std::uint64_t _ordinal = 0;
-    std::int64_t _lastTicks = -1;
+    std::uint64_t _ordinal   = 0;
+    std::int64_t _lastTicks  = -1;
     std::int64_t _entryTicks = -1;
-    std::int64_t _exitTicks = -1;
+    std::int64_t _exitTicks  = -1;
     std::int64_t _checkTicks = -1;
     std::optional<JobResult> _result;
-    bool _running = false;
+    bool _running          = false;
     bool _checkSeenThisRun = false;
-    bool _entered = false;
-    bool _exited = false;
-    bool _skipped = false;
-    bool _clockFailed = false;
-    bool _malformed = false;
+    bool _entered          = false;
+    bool _exited           = false;
+    bool _skipped          = false;
+    bool _clockFailed      = false;
+    bool _malformed        = false;
 };
 #pragma warning(pop)

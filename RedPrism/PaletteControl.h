@@ -21,7 +21,7 @@
 // separate field from PaletteZone's own _pressed below, and nothing ever wires a mnemonic to a PaletteZone).
 class PaletteZone final : public DxUi::Button
 {
-  public:
+public:
     enum class Kind
     {
         Foreground,
@@ -31,10 +31,10 @@ class PaletteZone final : public DxUi::Button
     };
 
     PaletteZone(Kind kind, std::function<void()> onClick);
-    PaletteZone(const PaletteZone&) = delete;
+    PaletteZone(const PaletteZone&)            = delete;
     PaletteZone& operator=(const PaletteZone&) = delete;
-    PaletteZone(PaletteZone&&) = delete;
-    PaletteZone& operator=(PaletteZone&&) = delete;
+    PaletteZone(PaletteZone&&)                 = delete;
+    PaletteZone& operator=(PaletteZone&&)      = delete;
 
     void SetSwatch(std::uint32_t argb) noexcept;
     [[nodiscard]] std::uint32_t Swatch() const noexcept
@@ -53,25 +53,23 @@ class PaletteZone final : public DxUi::Button
         DxUi::Control::OnHoverChanged(host, hovered);
     }
 
-  private:
-    Kind _kind = Kind::Foreground;
+private:
+    Kind _kind          = Kind::Foreground;
     std::uint32_t _argb = 0xFF000000u;
-    bool _pressed = false;
+    bool _pressed       = false;
     std::function<void()> _onClick;
 };
 
 class PaletteControl final : public DxUi::Panel
 {
-  public:
-    PaletteControl(std::wstring foregroundName, std::wstring backgroundName, std::wstring swapName,
-                   std::wstring resetName);
-    PaletteControl(const PaletteControl&) = delete;
+public:
+    PaletteControl(std::wstring foregroundName, std::wstring backgroundName, std::wstring swapName, std::wstring resetName);
+    PaletteControl(const PaletteControl&)            = delete;
     PaletteControl& operator=(const PaletteControl&) = delete;
-    PaletteControl(PaletteControl&&) = delete;
-    PaletteControl& operator=(PaletteControl&&) = delete;
+    PaletteControl(PaletteControl&&)                 = delete;
+    PaletteControl& operator=(PaletteControl&&)      = delete;
 
-    void SetHandlers(std::function<void()> onForeground, std::function<void()> onBackground,
-                     std::function<void()> onSwap, std::function<void()> onReset);
+    void SetHandlers(std::function<void()> onForeground, std::function<void()> onBackground, std::function<void()> onSwap, std::function<void()> onReset);
     void SetForeground(std::uint32_t argb) noexcept;
     void SetBackground(std::uint32_t argb) noexcept;
     // The colors the wells show (RF-1113 self-test).
@@ -92,9 +90,9 @@ class PaletteControl final : public DxUi::Panel
     bool OnMouseDown(DxUi::ControlHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
     bool OnMouseUp(DxUi::ControlHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
 
-  private:
+private:
     PaletteZone* _foreground = nullptr;
     PaletteZone* _background = nullptr;
-    PaletteZone* _swap = nullptr;
-    PaletteZone* _reset = nullptr;
+    PaletteZone* _swap       = nullptr;
+    PaletteZone* _reset      = nullptr;
 };

@@ -29,7 +29,7 @@ void Expect(bool condition, const char* name, int& failures) noexcept
 wil::unique_handle Event()
 {
     wil::unique_handle event{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    if (!event)
+    if (! event)
     {
         std::printf("FAIL job-close-hook.create-event\n");
         std::fflush(stdout);
@@ -124,8 +124,10 @@ JobScheduler::CloseHooks Hooks(HookState& state) noexcept
 #pragma warning(disable : 4626)
 class GatedCloseJob final : public Job
 {
-  public:
-    GatedCloseJob(HookState& state, HANDLE entered) noexcept : _state(state), _entered(entered) {}
+public:
+    GatedCloseJob(HookState& state, HANDLE entered) noexcept : _state(state), _entered(entered)
+    {
+    }
 
     ~GatedCloseJob() override
     {
@@ -152,7 +154,7 @@ class GatedCloseJob final : public Job
         _state.completedCalls.fetch_add(1);
     }
 
-  private:
+private:
     HookState& _state;
     HANDLE _entered;
 };
@@ -183,8 +185,7 @@ void TestIdleStoppedPool(int& failures)
     Expect(state.ownerOnOwnerThread.load(), "idle-owner-hook-runs-on-owner", failures);
     CheckHooks(state, "idle-owner-hook-called-once", failures);
     scheduler.Close(Hooks(state));
-    Expect(state.ownerCalls.load() == 1 && state.workerCalls.load() == 1, "idle-repeated-close-ignores-hooks",
-           failures);
+    Expect(state.ownerCalls.load() == 1 && state.workerCalls.load() == 1, "idle-repeated-close-ignores-hooks", failures);
 }
 
 void TestRunningJob(int& failures)
@@ -197,12 +198,11 @@ void TestRunningJob(int& failures)
 
     auto entered = Event();
     HookState state;
-    state.scheduler = &scheduler;
+    state.scheduler          = &scheduler;
     std::unique_ptr<Job> job = std::make_unique<GatedCloseJob>(state, entered.get());
     JobTicket ticket;
-    const HRESULT submitted =
-        static_cast<HRESULT>(scheduler.Submit(job, {JobClass::Commit, 7, kReservationBytes}, ticket));
-    Expect(SUCCEEDED(submitted) && !job, "gated-job-submitted-with-reservation", failures);
+    const HRESULT submitted = static_cast<HRESULT>(scheduler.Submit(job, {JobClass::Commit, 7, kReservationBytes}, ticket));
+    Expect(SUCCEEDED(submitted) && ! job, "gated-job-submitted-with-reservation", failures);
     if (FAILED(submitted))
     {
         scheduler.Close();
@@ -214,19 +214,15 @@ void TestRunningJob(int& failures)
     scheduler.Close(Hooks(state));
 
     Expect(state.wrapperThread.load() == state.ownerThread, "job-wrapper-destroyed-on-owner", failures);
-    Expect(state.ownerOnOwnerThread.load() && state.ownerSawWrapperDestroyed.load(),
-           "owner-hook-follows-owner-wrapper-destruction", failures);
-    Expect(state.ownerSawWakeHandle.load() && state.ownerSawReservation.load(),
-           "owner-hook-sees-live-wake-handle-and-reservation", failures);
+    Expect(state.ownerOnOwnerThread.load() && state.ownerSawWrapperDestroyed.load(), "owner-hook-follows-owner-wrapper-destruction", failures);
+    Expect(state.ownerSawWakeHandle.load() && state.ownerSawReservation.load(), "owner-hook-sees-live-wake-handle-and-reservation", failures);
     Expect(state.ownerSawWorkerJoined.load(), "owner-hook-runs-after-gated-worker-joins", failures);
-    Expect(state.ownerSawNoCompletion.load() && state.completedCalls.load() == 0,
-           "shutdown-drops-completion-without-callback", failures);
+    Expect(state.ownerSawNoCompletion.load() && state.completedCalls.load() == 0, "shutdown-drops-completion-without-callback", failures);
     CheckHooks(state, "gated-owner-hook-called-once", failures);
     Expect(state.workerThread.load() != state.ownerThread, "worker-hook-thread-is-distinct-from-owner", failures);
 
     scheduler.Close(Hooks(state));
-    Expect(state.ownerCalls.load() == 1 && state.workerCalls.load() == 1, "gated-repeated-close-ignores-hooks",
-           failures);
+    Expect(state.ownerCalls.load() == 1 && state.workerCalls.load() == 1, "gated-repeated-close-ignores-hooks", failures);
 }
 
 void TestUninitializedClose(int& failures)
@@ -236,8 +232,7 @@ void TestUninitializedClose(int& failures)
     state.scheduler = &scheduler;
     scheduler.Close(Hooks(state));
     scheduler.Close(Hooks(state));
-    Expect(state.ownerCalls.load() == 0 && state.workerCalls.load() == 0, "uninitialized-close-invokes-neither-hook",
-           failures);
+    Expect(state.ownerCalls.load() == 0 && state.workerCalls.load() == 0, "uninitialized-close-invokes-neither-hook", failures);
 }
 } // namespace
 

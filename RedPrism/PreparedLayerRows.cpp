@@ -26,9 +26,9 @@ constexpr std::size_t kControlBlockLimit = 4096;
 
 void ReleaseMemoryNode(PreparedLayerRowsMemoryNode* node) noexcept
 {
-    if (!node || node->owners.fetch_sub(1, std::memory_order_acq_rel) != 1)
+    if (! node || node->owners.fetch_sub(1, std::memory_order_acq_rel) != 1)
         return;
-    auto lease = std::move(node->lease);
+    auto lease             = std::move(node->lease);
     auto publicationMemory = std::move(node->publicationMemory);
     delete node;
     lease.Reset();
@@ -41,13 +41,17 @@ template <class T> struct RowOwnerAllocator
 {
     using value_type = T;
     PreparedLayerRowsMemoryNode* node;
-    explicit RowOwnerAllocator(PreparedLayerRowsMemoryNode* value) noexcept : node(value) {}
-    template <class U> RowOwnerAllocator(const RowOwnerAllocator<U>& other) noexcept : node(other.node) {}
+    explicit RowOwnerAllocator(PreparedLayerRowsMemoryNode* value) noexcept : node(value)
+    {
+    }
+    template <class U> RowOwnerAllocator(const RowOwnerAllocator<U>& other) noexcept : node(other.node)
+    {
+    }
     [[nodiscard]] T* allocate(std::size_t count)
     {
         if (node->allocated || count > kControlBlockLimit / sizeof(T))
             throw std::bad_alloc{};
-        auto* storage = std::allocator<T>{}.allocate(count);
+        auto* storage   = std::allocator<T>{}.allocate(count);
         node->allocated = true;
         (void)node->owners.fetch_add(1, std::memory_order_relaxed);
         return storage;
@@ -64,10 +68,9 @@ template <class T> struct RowOwnerAllocator
 };
 } // namespace
 
-PreparedLayerRows::PreparedLayerRows(LayerRowsWork::Handle rows, std::uint64_t retirementBound) noexcept
-    : _rows(std::move(rows))
+PreparedLayerRows::PreparedLayerRows(LayerRowsWork::Handle rows, std::uint64_t retirementBound) noexcept : _rows(std::move(rows))
 {
-    bytes = retirementBound;
+    bytes   = retirementBound;
     destroy = &PreparedLayerRows::DestroyNode;
 }
 
@@ -80,51 +83,47 @@ std::uint64_t PreparedLayerRows::OwnershipAllowance(std::size_t layerCount) noex
            layerCount * (sizeof(LayerIdentity) + sizeof(std::uint64_t) + sizeof(VisibleIdentity));
 }
 
-std::shared_ptr<PreparedLayerRows> PreparedLayerRows::Create(LayerRowsWork::Handle rows, std::uint64_t retirementBound,
-                                                             std::uint64_t documentSerial, std::uint64_t firstItemId,
-                                                             const PreparedLayerRows* previous)
+std::shared_ptr<PreparedLayerRows> PreparedLayerRows::Create(
+    LayerRowsWork::Handle rows, std::uint64_t retirementBound, std::uint64_t documentSerial, std::uint64_t firstItemId, const PreparedLayerRows* previous)
 {
-    if (!rows)
+    if (! rows)
         return {};
     const auto layerCount = rows->Source().layers.size();
-    const auto allowance = OwnershipAllowance(layerCount);
+    const auto allowance  = OwnershipAllowance(layerCount);
     if (allowance == 0 || rows->Rows().size() > layerCount || documentSerial == 0 || firstItemId < FirstItemIdentity ||
-        layerCount > (std::numeric_limits<std::uint64_t>::max)() - firstItemId || retirementBound < rows->bytes ||
-        retirementBound - rows->bytes < allowance)
+        layerCount > (std::numeric_limits<std::uint64_t>::max)() - firstItemId || retirementBound < rows->bytes || retirementBound - rows->bytes < allowance)
         return {};
 
-    auto memory = std::make_unique<PreparedLayerRowsMemoryNode>();
-    auto* prepared = new PreparedLayerRows(std::move(rows), retirementBound);
+    auto memory       = std::make_unique<PreparedLayerRowsMemoryNode>();
+    auto* prepared    = new PreparedLayerRows(std::move(rows), retirementBound);
     prepared->_memory = memory.release();
     // The shared_ptr constructor invokes Release(prepared) if allocating its control block throws.
-    auto result = std::shared_ptr<PreparedLayerRows>(prepared, &PreparedLayerRows::Release,
-                                                     RowOwnerAllocator<PreparedLayerRows>{prepared->_memory});
+    auto result = std::shared_ptr<PreparedLayerRows>(prepared, &PreparedLayerRows::Release, RowOwnerAllocator<PreparedLayerRows>{prepared->_memory});
     result->PrepareIdentities(documentSerial, firstItemId, previous);
     return result;
 }
 
-void PreparedLayerRows::PrepareIdentities(std::uint64_t documentSerial, std::uint64_t firstItemId,
-                                          const PreparedLayerRows* previous)
+void PreparedLayerRows::PrepareIdentities(std::uint64_t documentSerial, std::uint64_t firstItemId, const PreparedLayerRows* previous)
 {
     _documentSerial = documentSerial;
-    _layerCount = Source().layers.size();
+    _layerCount     = Source().layers.size();
     if (_layerCount != 0)
         _layerIdentities = std::make_unique<LayerIdentity[]>(_layerCount);
     // Retain hidden descendants as well: a collapse/reopen never reassigns their item identity.
     for (std::size_t index = 0; index < _layerCount; ++index)
     {
-        const auto& id = Source().layers[index].id;
-        const auto existing = previous && previous->_documentSerial == documentSerial ? previous->FindLayerItem(id) : 0;
+        const auto& id          = Source().layers[index].id;
+        const auto existing     = previous && previous->_documentSerial == documentSerial ? previous->FindLayerItem(id) : 0;
         _layerIdentities[index] = {id, existing != 0 ? existing : firstItemId + index};
     }
     if (_layerCount > 1)
-        std::sort(_layerIdentities.get(), _layerIdentities.get() + _layerCount,
-                  [](const auto& left, const auto& right) noexcept { return left.id < right.id; });
+        std::sort(
+            _layerIdentities.get(), _layerIdentities.get() + _layerCount, [](const auto& left, const auto& right) noexcept { return left.id < right.id; });
     const auto visibleCount = GetCount();
     if (visibleCount != 0)
     {
         _visibleItemIds = std::make_unique<std::uint64_t[]>(visibleCount);
-        _visibleLookup = std::make_unique<VisibleIdentity[]>(visibleCount);
+        _visibleLookup  = std::make_unique<VisibleIdentity[]>(visibleCount);
     }
     for (std::size_t index = 0; index < visibleCount; ++index)
     {
@@ -132,11 +131,11 @@ void PreparedLayerRows::PrepareIdentities(std::uint64_t documentSerial, std::uin
         if (itemId == 0)
             std::terminate(); // The prepared hierarchy must refer to the admitted sealed document.
         _visibleItemIds[index] = itemId;
-        _visibleLookup[index] = {itemId, index};
+        _visibleLookup[index]  = {itemId, index};
     }
     if (visibleCount > 1)
-        std::sort(_visibleLookup.get(), _visibleLookup.get() + visibleCount,
-                  [](const auto& left, const auto& right) noexcept { return left.itemId < right.itemId; });
+        std::sort(
+            _visibleLookup.get(), _visibleLookup.get() + visibleCount, [](const auto& left, const auto& right) noexcept { return left.itemId < right.itemId; });
 }
 
 std::uint64_t PreparedLayerRows::FindLayerItem(const Guid& id) const noexcept
@@ -144,7 +143,7 @@ std::uint64_t PreparedLayerRows::FindLayerItem(const Guid& id) const noexcept
     std::size_t lower = 0, upper = _layerCount;
     while (lower < upper)
     {
-        const auto middle = lower + (upper - lower) / 2;
+        const auto middle     = lower + (upper - lower) / 2;
         const auto& candidate = _layerIdentities[middle];
         if (candidate.id == id)
             return candidate.itemId;
@@ -166,7 +165,7 @@ std::optional<std::size_t> PreparedLayerRows::FindVisibleItem(std::uint64_t item
     std::size_t lower = 0, upper = GetCount();
     while (lower < upper)
     {
-        const auto middle = lower + (upper - lower) / 2;
+        const auto middle     = lower + (upper - lower) / 2;
         const auto& candidate = _visibleLookup[middle];
         if (candidate.itemId == itemId)
             return candidate.visibleIndex;
@@ -210,14 +209,14 @@ std::optional<DxUi::TreeAccessibilityItemView> PreparedLayerRows::GetItem(std::s
         return std::nullopt;
 
     const HierarchyEntry& row = rows[visibleIndex];
-    const bool isGroup = row.isGroup;
+    const bool isGroup        = row.isGroup;
     // By member: the view grows fields (DxUi API revision 4 added badgeText, which this source leaves empty).
     return DxUi::TreeAccessibilityItemView{.visibleIndex = visibleIndex,
-                                           .itemId = ItemIdAt(visibleIndex),
-                                           .text = DisplayText()[visibleIndex],
-                                           .depth = static_cast<std::size_t>(row.depth),
-                                           .hasChildren = isGroup,
-                                           .expanded = isGroup && !row.collapsed};
+                                           .itemId       = ItemIdAt(visibleIndex),
+                                           .text         = DisplayText()[visibleIndex],
+                                           .depth        = static_cast<std::size_t>(row.depth),
+                                           .hasChildren  = isGroup,
+                                           .expanded     = isGroup && ! row.collapsed};
 }
 
 std::optional<DxUi::TreeAccessibilityItemView> PreparedLayerRows::FindItem(std::uint64_t itemId) const noexcept
@@ -233,11 +232,9 @@ std::int32_t PreparedLayerRows::BindMemory(JobScheduler& scheduler, JobTicket ti
     return scheduler.RetainMemory(ticket, _memory->lease);
 }
 
-std::int32_t PreparedLayerRows::BindPublicationMemory(
-    const std::shared_ptr<const SharedPublicationMemory>& memory) noexcept
+std::int32_t PreparedLayerRows::BindPublicationMemory(const std::shared_ptr<const SharedPublicationMemory>& memory) noexcept
 {
-    if (_sealedForPublication || _memory->lease || _memory->publicationMemory || !memory || !memory->IsBound() ||
-        memory->Bytes() < bytes)
+    if (_sealedForPublication || _memory->lease || _memory->publicationMemory || ! memory || ! memory->IsBound() || memory->Bytes() < bytes)
         return static_cast<std::int32_t>(0x80070057u); // E_INVALIDARG, no ownership change
     _memory->publicationMemory = memory;
     return 0;
@@ -245,7 +242,7 @@ std::int32_t PreparedLayerRows::BindPublicationMemory(
 
 bool PreparedLayerRows::SealForPublication() noexcept
 {
-    if (_sealedForPublication || !HasMemoryLease())
+    if (_sealedForPublication || ! HasMemoryLease())
         return false;
     _sealedForPublication = true;
     return true;
@@ -258,25 +255,23 @@ bool PreparedLayerRows::HasMemoryLease() const noexcept
 
 std::uint64_t PreparedLayerRows::MemoryBytes() const noexcept
 {
-    return _memory->lease ? _memory->lease.Bytes()
-                          : (_memory->publicationMemory ? _memory->publicationMemory->Bytes() : 0);
+    return _memory->lease ? _memory->lease.Bytes() : (_memory->publicationMemory ? _memory->publicationMemory->Bytes() : 0);
 }
 
 std::uint64_t PreparedLayerRows::ResidentBytes() const noexcept
 {
-    return _memory->lease ? _memory->lease.ResidentBytes()
-                          : (_memory->publicationMemory ? _memory->publicationMemory->ResidentBytes() : 0);
+    return _memory->lease ? _memory->lease.ResidentBytes() : (_memory->publicationMemory ? _memory->publicationMemory->ResidentBytes() : 0);
 }
 
 void PreparedLayerRows::Release(PreparedLayerRows* rows) noexcept
 {
-    if (rows && !TryDeferRelease(*rows, DeferredReleasePolicy::AlwaysOnOwner))
+    if (rows && ! TryDeferRelease(*rows, DeferredReleasePolicy::AlwaysOnOwner))
         rows->destroy(rows);
 }
 
 void PreparedLayerRows::DestroyNode(DeferredReleaseNode* node) noexcept
 {
-    auto* rows = static_cast<PreparedLayerRows*>(node);
+    auto* rows   = static_cast<PreparedLayerRows*>(node);
     auto* memory = rows->_memory;
     delete rows;
     ReleaseMemoryNode(memory);

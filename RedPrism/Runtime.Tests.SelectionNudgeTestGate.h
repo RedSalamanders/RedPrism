@@ -20,7 +20,7 @@ struct SelectionNudgeTestGate final
     static constexpr UINT kMessage = WM_APP + 0x4cb;
     wil::unique_handle release;
     JobResult result;
-    bool hold = true;
+    bool hold                = true;
     bool throwCaptureFailure = false;
     std::optional<DocumentHistory::PrepareStage> throwHistoryStage;
     Raster lateResidencySource;

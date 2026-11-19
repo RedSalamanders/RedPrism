@@ -19,13 +19,13 @@
 namespace
 {
 int gFailures = 0;
-int gChecks = 0;
+int gChecks   = 0;
 
 void Expect(bool condition, const char* name) noexcept
 {
     ++gChecks;
     std::printf("%s document-record-root.%s\n", condition ? "PASS" : "FAIL", name);
-    if (!condition)
+    if (! condition)
         ++gFailures;
 }
 
@@ -35,8 +35,7 @@ struct Child final
     std::string name;
     std::thread::id* destroyedOn = nullptr;
 
-    Child(int childValue, std::string childName, std::thread::id* thread = nullptr)
-        : value(childValue), name(std::move(childName)), destroyedOn(thread)
+    Child(int childValue, std::string childName, std::thread::id* thread = nullptr) : value(childValue), name(std::move(childName)), destroyedOn(thread)
     {
     }
 
@@ -82,7 +81,9 @@ struct Record final
     std::shared_ptr<const Child> child;
 
     Record(int recordValue, std::string recordName, std::shared_ptr<const Child> recordChild = {})
-        : value(recordValue), name(std::move(recordName)), child(std::move(recordChild))
+        : value(recordValue),
+          name(std::move(recordName)),
+          child(std::move(recordChild))
     {
     }
 
@@ -90,10 +91,9 @@ struct Record final
     {
         CopyControl::Copied();
     }
-    Record& operator=(const Record&) = default;
+    Record& operator=(const Record&)                            = default;
     [[nodiscard]] bool operator==(const Record&) const noexcept = default;
-    Record(Record&& other) noexcept
-        : value(std::exchange(other.value, -1)), name(std::move(other.name)), child(std::move(other.child))
+    Record(Record&& other) noexcept : value(std::exchange(other.value, -1)), name(std::move(other.name)), child(std::move(other.child))
     {
     }
     Record& operator=(Record&& other) noexcept
@@ -101,7 +101,7 @@ struct Record final
         if (this != &other)
         {
             value = std::exchange(other.value, -1);
-            name = std::move(other.name);
+            name  = std::move(other.name);
             child = std::move(other.child);
         }
         return *this;
@@ -128,19 +128,23 @@ struct AllocationProbe final
 
 template <typename T> struct FaultAllocator final
 {
-    using value_type = T;
+    using value_type                             = T;
     using propagate_on_container_move_assignment = std::true_type;
-    using is_always_equal = std::false_type;
-    AllocationProbe* probe = nullptr;
+    using is_always_equal                        = std::false_type;
+    AllocationProbe* probe                       = nullptr;
 
     FaultAllocator() noexcept = default;
-    explicit FaultAllocator(AllocationProbe* value) noexcept : probe(value) {}
-    template <typename U> FaultAllocator(const FaultAllocator<U>& other) noexcept : probe(other.probe) {}
+    explicit FaultAllocator(AllocationProbe* value) noexcept : probe(value)
+    {
+    }
+    template <typename U> FaultAllocator(const FaultAllocator<U>& other) noexcept : probe(other.probe)
+    {
+    }
 
     [[nodiscard]] T* allocate(std::size_t count)
     {
         const auto attempt = probe ? probe->attempts.fetch_add(1) + 1 : 0;
-        bool failBuffer = false;
+        bool failBuffer    = false;
         if constexpr (std::is_same_v<T, Record>)
             failBuffer = probe && probe->bufferAttempts.fetch_add(1) + 1 == probe->failBufferAt.load();
         if (probe && (failBuffer || attempt == probe->failAt.load()))
@@ -191,8 +195,7 @@ Root MakeRoot(std::initializer_list<std::pair<int, const char*>> values)
 
 bool SameRecord(const Record& record, int value, const char* name, int childValue, const char* childName)
 {
-    return record.value == value && record.name == name && record.child && record.child->value == childValue &&
-           record.child->name == childName;
+    return record.value == value && record.name == name && record.child && record.child->value == childValue && record.child->name == childName;
 }
 
 template <typename T>
@@ -207,26 +210,24 @@ static_assert(std::is_same_v<decltype(std::declval<Root&>().Read()), const Root:
 static_assert(std::is_same_v<decltype(std::declval<Root&>()[0]), const Record&>);
 static_assert(std::is_same_v<decltype(std::declval<Root&>().begin()), Root::const_iterator>);
 static_assert(std::is_same_v<decltype(std::declval<Root::Builder&>().Read()), const Root::Container&>);
-static_assert(!MutableRootRecordRead<Root>);
-static_assert(!MutableBuilderRecordRead<Root::Builder>);
+static_assert(! MutableRootRecordRead<Root>);
+static_assert(! MutableBuilderRecordRead<Root::Builder>);
 static_assert(noexcept(std::declval<const Root&>() == std::declval<const Root&>()));
 } // namespace
 
 int RunRecordRootTests()
 {
     gFailures = 0;
-    gChecks = 0;
+    gChecks   = 0;
     CopyControl::Reset();
 
     {
         Root empty;
-        Expect(empty.empty() && empty.size() == 0 && empty.Identity() == nullptr && empty.Read().empty(),
-               "default-root-is-empty");
-        Root captured = MakeRoot({{4, "four"}});
+        Expect(empty.empty() && empty.size() == 0 && empty.Identity() == nullptr && empty.Read().empty(), "default-root-is-empty");
+        Root captured              = MakeRoot({{4, "four"}});
         const void* const identity = captured.Identity();
         Root moved(std::move(captured));
-        Expect(moved.size() == 1 && moved.Identity() == identity && captured.empty() && captured.Identity() == nullptr,
-               "captured-and-moved-root-behavior");
+        Expect(moved.size() == 1 && moved.Identity() == identity && captured.empty() && captured.Identity() == nullptr, "captured-and-moved-root-behavior");
     }
 
     {
@@ -234,9 +235,8 @@ int RunRecordRootTests()
         Root::Builder builder(recordCount);
         for (int index = 0; index < recordCount; ++index)
         {
-            Record record(index * 3, "literal-record-" + std::to_string(index),
-                          MakeChild(index * 7, "literal-child-" + std::to_string(index)));
-            if (!builder.Append(std::move(record)))
+            Record record(index * 3, "literal-record-" + std::to_string(index), MakeChild(index * 7, "literal-child-" + std::to_string(index)));
+            if (! builder.Append(std::move(record)))
                 Expect(false, "large-fixture-append");
         }
         CopyControl::copies.store(0, std::memory_order_relaxed);
@@ -245,66 +245,59 @@ int RunRecordRootTests()
         Root published = sealed.has_value() ? std::move(sealed.value()) : Root{};
         CopyControl::copies.store(0, std::memory_order_relaxed);
 
-        Root firstCapture = published;
-        Root secondCapture = published;
+        Root firstCapture                   = published;
+        Root secondCapture                  = published;
         const Root::Container& nonConstRead = published.Read();
-        const Root& constPublished = published;
-        const bool literalEdges =
-            nonConstRead.size() == recordCount && nonConstRead.front().name == "literal-record-0" &&
-            nonConstRead[recordCount / 2].value == 15000 && nonConstRead.back().child->name == "literal-child-9999" &&
-            constPublished.size() == recordCount &&
-            SameRecord(constPublished[0], 0, "literal-record-0", 0, "literal-child-0") &&
-            SameRecord(constPublished[recordCount / 2], 15000, "literal-record-5000", 35000, "literal-child-5000") &&
-            SameRecord(constPublished[recordCount - 1], 29997, "literal-record-9999", 69993, "literal-child-9999");
+        const Root& constPublished          = published;
+        const bool literalEdges = nonConstRead.size() == recordCount && nonConstRead.front().name == "literal-record-0" &&
+                                  nonConstRead[recordCount / 2].value == 15000 && nonConstRead.back().child->name == "literal-child-9999" &&
+                                  constPublished.size() == recordCount && SameRecord(constPublished[0], 0, "literal-record-0", 0, "literal-child-0") &&
+                                  SameRecord(constPublished[recordCount / 2], 15000, "literal-record-5000", 35000, "literal-child-5000") &&
+                                  SameRecord(constPublished[recordCount - 1], 29997, "literal-record-9999", 69993, "literal-child-9999");
         std::atomic<bool> readerOkay{false};
-        std::thread reader(
-            [capture = std::move(secondCapture), &readerOkay]() mutable
-            {
-                const auto& records = capture.Read();
-                readerOkay.store(
-                    records.size() == 10000 && records.front().name == "literal-record-0" &&
-                        records[5000].value == 15000 && records[5000].child->name == "literal-child-5000" &&
-                        records.back().name == "literal-record-9999" && records.back().child->value == 69993,
-                    std::memory_order_relaxed);
-            });
+        std::thread reader([capture = std::move(secondCapture), &readerOkay]() mutable
+        {
+            const auto& records = capture.Read();
+            readerOkay.store(records.size() == 10000 && records.front().name == "literal-record-0" && records[5000].value == 15000 &&
+                                 records[5000].child->name == "literal-child-5000" && records.back().name == "literal-record-9999" &&
+                                 records.back().child->value == 69993,
+                             std::memory_order_relaxed);
+        });
         reader.join();
-        Expect(firstCapture.Identity() == published.Identity() && literalEdges &&
-                   readerOkay.load(std::memory_order_relaxed),
+        Expect(firstCapture.Identity() == published.Identity() && literalEdges && readerOkay.load(std::memory_order_relaxed),
                "10000-captures-and-concurrent-reads-preserve-literal-content");
         Expect(CopyControl::copies.load(std::memory_order_relaxed) == 0, "10000-captures-and-reads-copy-no-records");
     }
 
     {
-        Root published = MakeRoot({{1, "original-a"}, {2, "original-b"}});
+        Root published                     = MakeRoot({{1, "original-a"}, {2, "original-b"}});
         const void* const originalIdentity = published.Identity();
-        auto siblingA = Root::Builder::Clone(published, 3);
-        auto siblingB = Root::Builder::Clone(published, 3);
-        const bool buildersReady = siblingA.has_value() && siblingB.has_value();
-        bool siblingSeals = false;
+        auto siblingA                      = Root::Builder::Clone(published, 3);
+        auto siblingB                      = Root::Builder::Clone(published, 3);
+        const bool buildersReady           = siblingA.has_value() && siblingB.has_value();
+        bool siblingSeals                  = false;
         if (buildersReady)
         {
             (void)siblingA.value().Append(MakeRecord(3, "sibling-a"));
             (void)siblingB.value().Replace(0, MakeRecord(8, "sibling-b"));
-            auto rootA = siblingA.value().Seal();
-            auto rootB = siblingB.value().Seal();
-            siblingSeals = rootA.has_value() && rootB.has_value() && rootA.value().size() == 3 &&
-                           rootB.value().size() == 2 && (rootA.value())[0].name == "original-a" &&
-                           (rootA.value())[2].name == "sibling-a" && (rootB.value())[0].name == "sibling-b" &&
+            auto rootA   = siblingA.value().Seal();
+            auto rootB   = siblingB.value().Seal();
+            siblingSeals = rootA.has_value() && rootB.has_value() && rootA.value().size() == 3 && rootB.value().size() == 2 &&
+                           (rootA.value())[0].name == "original-a" && (rootA.value())[2].name == "sibling-a" && (rootB.value())[0].name == "sibling-b" &&
                            (rootB.value())[1].name == "original-b";
         }
-        Expect(buildersReady && siblingSeals && published.Identity() == originalIdentity && published.size() == 2 &&
-                   published[0].name == "original-a" && published[1].name == "original-b",
+        Expect(buildersReady && siblingSeals && published.Identity() == originalIdentity && published.size() == 2 && published[0].name == "original-a" &&
+                   published[1].name == "original-b",
                "sibling-builders-leave-sole-published-root-unchanged");
     }
 
     {
         Root::Builder builder(1);
-        Record first = MakeRecord(1, "first");
-        Record refused = MakeRecord(2, "must-remain-unmoved");
-        const bool appended = builder.Append(std::move(first));
+        Record first             = MakeRecord(1, "first");
+        Record refused           = MakeRecord(2, "must-remain-unmoved");
+        const bool appended      = builder.Append(std::move(first));
         const bool refusedAppend = builder.Append(std::move(refused));
-        Expect(appended && !refusedAppend && refused.value == 2 && refused.name == "must-remain-unmoved" &&
-                   refused.child && refused.child->value == 20,
+        Expect(appended && ! refusedAppend && refused.value == 2 && refused.name == "must-remain-unmoved" && refused.child && refused.child->value == 20,
                "capacity-refusal-precedes-rvalue-mutation");
     }
 
@@ -314,7 +307,7 @@ int RunRecordRootTests()
         (void)builder.Append(MakeRecord(3, "three"));
         const bool inserted = builder.Insert(1, MakeRecord(2, "two"));
         const bool replaced = builder.Replace(2, MakeRecord(30, "thirty"));
-        const bool erased = builder.Erase(0);
+        const bool erased   = builder.Erase(0);
         constexpr std::array<std::pair<int, const char*>, 2> expected{{{2, "two"}, {30, "thirty"}}};
         bool matches = builder.Read().size() == expected.size();
         for (std::size_t i = 0; matches && i < expected.size(); ++i)
@@ -326,25 +319,21 @@ int RunRecordRootTests()
         Root::Builder source(2);
         (void)source.Append(MakeRecord(1, "one"));
         Root::Builder moved(std::move(source));
-        Record rejected = MakeRecord(9, "moved-builder-refusal");
-        const bool movedRefuses = !source.CanSeal() && !source.Append(std::move(rejected)) && rejected.value == 9 &&
-                                  rejected.name == "moved-builder-refusal";
-        auto sealed = moved.Seal();
-        Record afterSeal = MakeRecord(10, "consumed-builder-refusal");
-        const bool consumedRefuses = sealed.has_value() && !moved.CanSeal() && !moved.Append(std::move(afterSeal)) &&
-                                     afterSeal.value == 10 && afterSeal.name == "consumed-builder-refusal" &&
-                                     !moved.Seal().has_value();
+        Record rejected         = MakeRecord(9, "moved-builder-refusal");
+        const bool movedRefuses = ! source.CanSeal() && ! source.Append(std::move(rejected)) && rejected.value == 9 && rejected.name == "moved-builder-refusal";
+        auto sealed             = moved.Seal();
+        Record afterSeal        = MakeRecord(10, "consumed-builder-refusal");
+        const bool consumedRefuses = sealed.has_value() && ! moved.CanSeal() && ! moved.Append(std::move(afterSeal)) && afterSeal.value == 10 &&
+                                     afterSeal.name == "consumed-builder-refusal" && ! moved.Seal().has_value();
         Expect(movedRefuses && consumedRefuses, "moved-and-consumed-builders-refuse-and-seal-once");
     }
 
     {
         Root::Builder builder(2);
         (void)builder.Append(MakeRecord(1, "one"));
-        const bool invalidOps = !builder.Insert(2, MakeRecord(2, "bad-insert")) &&
-                                !builder.Replace(1, MakeRecord(3, "bad-replace")) && !builder.Erase(1) &&
-                                !builder.Insert(99, MakeRecord(4, "far-insert"));
-        Expect(invalidOps && builder.Read().size() == 1 && builder.Read()[0].name == "one",
-               "invalid-builder-indices-refuse-without-changing-records");
+        const bool invalidOps = ! builder.Insert(2, MakeRecord(2, "bad-insert")) && ! builder.Replace(1, MakeRecord(3, "bad-replace")) && ! builder.Erase(1) &&
+                                ! builder.Insert(99, MakeRecord(4, "far-insert"));
+        Expect(invalidOps && builder.Read().size() == 1 && builder.Read()[0].name == "one", "invalid-builder-indices-refuse-without-changing-records");
     }
 
     {
@@ -353,31 +342,27 @@ int RunRecordRootTests()
         CancelSource alreadyCancelled;
         (void)alreadyCancelled.Cancel();
         auto beforeCopy = Root::Builder::Clone(source, 4, alreadyCancelled.Token());
-        Expect(!beforeCopy.has_value() && CopyControl::copies.load(std::memory_order_relaxed) == 0,
-               "clone-cancellation-before-copy");
+        Expect(! beforeCopy.has_value() && CopyControl::copies.load(std::memory_order_relaxed) == 0, "clone-cancellation-before-copy");
 
         CopyControl::Reset();
         CancelSource nthCopy;
         CopyControl::cancelOnCopy.store(2, std::memory_order_relaxed);
         CopyControl::cancellation.store(&nthCopy, std::memory_order_relaxed);
         auto duringCopy = Root::Builder::Clone(source, 4, nthCopy.Token());
-        Expect(!duringCopy.has_value() && CopyControl::copies.load(std::memory_order_relaxed) == 2,
-               "clone-cancellation-at-reached-nth-copy");
+        Expect(! duringCopy.has_value() && CopyControl::copies.load(std::memory_order_relaxed) == 2, "clone-cancellation-at-reached-nth-copy");
 
         CopyControl::Reset();
         CancelSource finalCopy;
         CopyControl::cancelOnCopy.store(4, std::memory_order_relaxed);
         CopyControl::cancellation.store(&finalCopy, std::memory_order_relaxed);
         auto atFinalCopy = Root::Builder::Clone(source, 4, finalCopy.Token());
-        Expect(!atFinalCopy.has_value() && CopyControl::copies.load(std::memory_order_relaxed) == 4,
-               "clone-cancellation-at-reached-final-copy");
-        Expect(source.size() == 4 && source[0].name == "before-a" && source[3].name == "before-d",
-               "cancelled-clones-preserve-source-root");
+        Expect(! atFinalCopy.has_value() && CopyControl::copies.load(std::memory_order_relaxed) == 4, "clone-cancellation-at-reached-final-copy");
+        Expect(source.size() == 4 && source[0].name == "before-a" && source[3].name == "before-d", "cancelled-clones-preserve-source-root");
         CopyControl::Reset();
     }
 
     {
-        Root source = MakeRoot({{11, "fault-old-a"}, {12, "fault-old-b"}, {13, "fault-old-c"}});
+        Root source                = MakeRoot({{11, "fault-old-a"}, {12, "fault-old-b"}, {13, "fault-old-c"}});
         const void* const identity = source.Identity();
         CopyControl::Reset();
         CopyControl::throwOnCopy.store(2, std::memory_order_relaxed);
@@ -391,14 +376,12 @@ int RunRecordRootTests()
         {
             reachedBadAlloc = true;
         }
-        const bool preserved = CopyControl::copies.load() == 2 && source.Identity() == identity && source.size() == 3 &&
-                               source[0].name == "fault-old-a" && source[1].value == 12 &&
-                               source[2].name == "fault-old-c";
+        const bool preserved = CopyControl::copies.load() == 2 && source.Identity() == identity && source.size() == 3 && source[0].name == "fault-old-a" &&
+                               source[1].value == 12 && source[2].name == "fault-old-c";
         CopyControl::Reset();
-        auto retry = Root::Builder::Clone(source, 3);
+        auto retry       = Root::Builder::Clone(source, 3);
         auto retriedRoot = retry.has_value() ? retry.value().Seal() : std::optional<Root>{};
-        Expect(reachedBadAlloc && preserved && retriedRoot.has_value() && retriedRoot.value().size() == 3 &&
-                   (retriedRoot.value())[1].name == "fault-old-b",
+        Expect(reachedBadAlloc && preserved && retriedRoot.has_value() && retriedRoot.value().size() == 3 && (retriedRoot.value())[1].name == "fault-old-b",
                "reached-bad-alloc-preserves-published-root-and-fresh-retry-succeeds");
         CopyControl::Reset();
     }
@@ -413,19 +396,17 @@ int RunRecordRootTests()
         Record record(7, "retired-record", child);
         child.reset();
         (void)builder.Append(std::move(record));
-        auto sealed = builder.Seal();
-        Root root = sealed.has_value() ? std::move(sealed.value()) : Root{};
-        const bool retainedByRoot = !childOwner.expired() && root.size() == 1 && root[0].child->name == "retired-child";
+        auto sealed                          = builder.Seal();
+        Root root                            = sealed.has_value() ? std::move(sealed.value()) : Root{};
+        const bool retainedByRoot            = ! childOwner.expired() && root.size() == 1 && root[0].child->name == "retired-child";
         const std::thread::id expectedThread = std::this_thread::get_id();
-        std::thread retirement(
-            [root = std::move(root), &observedRetirementThread]() mutable
-            {
-                observedRetirementThread = std::this_thread::get_id();
-                root = Root{};
-            });
+        std::thread retirement([root = std::move(root), &observedRetirementThread]() mutable
+        {
+            observedRetirementThread = std::this_thread::get_id();
+            root                     = Root{};
+        });
         retirement.join();
-        Expect(retainedByRoot && childOwner.expired() && retirementThread == observedRetirementThread &&
-                   retirementThread != expectedThread,
+        Expect(retainedByRoot && childOwner.expired() && retirementThread == observedRetirementThread && retirementThread != expectedThread,
                "child-weak-owner-lives-through-root-and-final-release-runs-on-retirement-thread");
     }
 
@@ -444,19 +425,17 @@ int RunRecordRootTests()
         {
             refused = true;
         }
-        Expect(refused && probe.failures.load() == 1 && probe.bufferAttempts.load() == 1 &&
-                   probe.successes.load() == probe.releases.load(),
+        Expect(refused && probe.failures.load() == 1 && probe.bufferAttempts.load() == 1 && probe.successes.load() == probe.releases.load(),
                "constructor-allocation-fault-reached-before-any-record-owner");
         probe.failBufferAt.store(0);
         {
             FaultRoot::Builder retry(2, FaultAllocator<Record>{&probe});
             const bool appended = retry.Append(MakeRecord(42, "constructor-retry"));
-            auto root = retry.Seal();
+            auto root           = retry.Seal();
             Expect(appended && root && root.value().size() == 1 && (root.value())[0].name == "constructor-retry",
                    "constructor-allocation-refusal-has-fresh-successful-retry");
         }
-        Expect(probe.successes.load() > 0 && probe.releases.load() == probe.successes.load(),
-               "constructor-retry-vector-and-root-allocations-fully-released");
+        Expect(probe.successes.load() > 0 && probe.releases.load() == probe.successes.load(), "constructor-retry-vector-and-root-allocations-fully-released");
     }
 
     {
@@ -477,28 +456,26 @@ int RunRecordRootTests()
             {
                 refused = true;
             }
-            Expect(refused && probe.failures.load() == 1 && probe.attempts.load() == initialAllocations + 1 &&
-                       builder.CanSeal() && builder.Limit() == 2 && builder.Read().size() == 2 &&
-                       builder.Read()[0].name == "seal-before-a" && builder.Read()[1].child->value == 130,
+            Expect(refused && probe.failures.load() == 1 && probe.attempts.load() == initialAllocations + 1 && builder.CanSeal() && builder.Limit() == 2 &&
+                       builder.Read().size() == 2 && builder.Read()[0].name == "seal-before-a" && builder.Read()[1].child->value == 130,
                    "seal-root-allocation-fault-preserves-complete-retryable-builder");
             probe.failAt.store(0);
             auto root = builder.Seal();
-            Expect(root && root.value().size() == 2 && (root.value())[0].name == "seal-before-a" &&
-                       (root.value())[1].name == "seal-before-b" && !builder.CanSeal() && !builder.Seal(),
+            Expect(root && root.value().size() == 2 && (root.value())[0].name == "seal-before-a" && (root.value())[1].name == "seal-before-b" &&
+                       ! builder.CanSeal() && ! builder.Seal(),
                    "seal-allocation-retry-publishes-exact-records-once");
             const auto allocatedBeforeCapture = probe.attempts.load();
             probe.failAt.store(allocatedBeforeCapture + 1);
             CopyControl::Reset();
             FaultRoot capture = root.value();
-            Expect(capture.Identity() == root.value().Identity() && capture.Read()[0].name == "seal-before-a" &&
-                       CopyControl::copies.load() == 0 && probe.attempts.load() == allocatedBeforeCapture,
+            Expect(capture.Identity() == root.value().Identity() && capture.Read()[0].name == "seal-before-a" && CopyControl::copies.load() == 0 &&
+                       probe.attempts.load() == allocatedBeforeCapture,
                    "capture-and-nonconst-read-do-not-call-record-or-root-allocator");
             capture = FaultRoot{};
             probe.failAt.store(0);
             root.reset();
         }
-        Expect(probe.releases.load() == probe.successes.load(),
-               "seal-retry-releases-exact-root-and-record-buffer-allocations");
+        Expect(probe.releases.load() == probe.successes.load(), "seal-retry-releases-exact-root-and-record-buffer-allocations");
     }
 
     {
@@ -507,12 +484,12 @@ int RunRecordRootTests()
         {
             FaultRoot::Builder builder(1, FaultAllocator<Record>{&sourceProbe});
             (void)builder.Append(MakeRecord(63, "separate-allocation-source"));
-            auto root = builder.Seal();
+            auto root                 = builder.Seal();
             const auto sourceAttempts = sourceProbe.attempts.load();
             cloneProbe.failBufferAt.store(1);
             CopyControl::Reset();
             auto tooSmall = FaultRoot::Builder::Clone(root.value(), 0, {}, FaultAllocator<Record>{&cloneProbe});
-            Expect(!tooSmall && cloneProbe.attempts.load() == 0 && CopyControl::copies.load() == 0,
+            Expect(! tooSmall && cloneProbe.attempts.load() == 0 && CopyControl::copies.load() == 0,
                    "clone-output-limit-refuses-before-allocation-or-record-copy");
             bool refused = false;
             try
@@ -524,9 +501,8 @@ int RunRecordRootTests()
             {
                 refused = true;
             }
-            Expect(refused && cloneProbe.failures.load() == 1 && CopyControl::copies.load() == 0 &&
-                       sourceProbe.attempts.load() == sourceAttempts && root.value().size() == 1 &&
-                       (root.value())[0].name == "separate-allocation-source",
+            Expect(refused && cloneProbe.failures.load() == 1 && CopyControl::copies.load() == 0 && sourceProbe.attempts.load() == sourceAttempts &&
+                       root.value().size() == 1 && (root.value())[0].name == "separate-allocation-source",
                    "clone-uses-new-allocation-owner-and-refusal-preserves-old-root");
             cloneProbe.failBufferAt.store(0);
             CopyControl::Reset();
@@ -541,22 +517,19 @@ int RunRecordRootTests()
             {
                 copyRefused = true;
             }
-            Expect(copyRefused && CopyControl::copies.load() == 1 &&
-                       cloneProbe.successes.load() == cloneProbe.releases.load() &&
+            Expect(copyRefused && CopyControl::copies.load() == 1 && cloneProbe.successes.load() == cloneProbe.releases.load() &&
                        (root.value())[0].child->value == 630 && sourceProbe.attempts.load() == sourceAttempts,
                    "clone-copy-fault-retires-new-buffer-and-preserves-old-allocation-owner");
             CopyControl::Reset();
             auto clone = FaultRoot::Builder::Clone(root.value(), 1, {}, FaultAllocator<Record>{&cloneProbe});
-            auto next = clone.value().Seal();
-            Expect(next && next.value().size() == 1 && (next.value())[0].value == 63 &&
-                       (next.value())[0].child->value == 630,
+            auto next  = clone.value().Seal();
+            Expect(next && next.value().size() == 1 && (next.value())[0].value == 63 && (next.value())[0].child->value == 630,
                    "clone-new-allocation-owner-fresh-retry-has-literal-content");
             next.reset();
             clone.reset();
             root.reset();
         }
-        Expect(sourceProbe.releases.load() == sourceProbe.successes.load() &&
-                   cloneProbe.releases.load() == cloneProbe.successes.load(),
+        Expect(sourceProbe.releases.load() == sourceProbe.successes.load() && cloneProbe.releases.load() == cloneProbe.successes.load(),
                "clone-old-and-new-allocation-owners-retire-independently");
     }
 
@@ -565,22 +538,20 @@ int RunRecordRootTests()
         std::latch readerStarted(1);
         std::latch writerPublished(1);
         bool readerOkay = false;
-        std::thread reader(
-            [capture = original, &readerStarted, &writerPublished, &readerOkay]()
-            {
-                readerStarted.count_down();
-                writerPublished.wait();
-                readerOkay = capture.size() == 2 && capture[0].value == 17 && capture[1].name == "concurrent-old-b" &&
-                             capture[1].child->value == 190;
-            });
+        std::thread reader([capture = original, &readerStarted, &writerPublished, &readerOkay]()
+        {
+            readerStarted.count_down();
+            writerPublished.wait();
+            readerOkay = capture.size() == 2 && capture[0].value == 17 && capture[1].name == "concurrent-old-b" && capture[1].child->value == 190;
+        });
         readerStarted.wait();
         auto builder = Root::Builder::Clone(original, 2);
         (void)builder.value().Replace(0, MakeRecord(23, "concurrent-new-a"));
         auto next = builder.value().Seal();
         writerPublished.count_down();
         reader.join();
-        Expect(readerOkay && next && (next.value())[0].value == 23 && (next.value())[1].name == "concurrent-old-b" &&
-                   original[0].name == "concurrent-old-a" && original.Identity() != next.value().Identity(),
+        Expect(readerOkay && next && (next.value())[0].value == 23 && (next.value())[1].name == "concurrent-old-b" && original[0].name == "concurrent-old-a" &&
+                   original.Identity() != next.value().Identity(),
                "event-ordered-reader-keeps-old-root-through-new-builder-publication");
     }
 
@@ -588,29 +559,26 @@ int RunRecordRootTests()
         AllocationProbe probe;
         FaultRoot::Builder invalid((std::numeric_limits<std::size_t>::max)(), FaultAllocator<Record>{&probe});
         auto incoming = MakeRecord(88, "capacity-overflow-refusal");
-        Expect(!invalid.CanSeal() && invalid.Limit() == 0 && invalid.Read().empty() &&
-                   !invalid.Append(std::move(incoming)) && incoming.value == 88 && !invalid.Seal() &&
-                   probe.bufferAttempts.load() == 0,
+        Expect(! invalid.CanSeal() && invalid.Limit() == 0 && invalid.Read().empty() && ! invalid.Append(std::move(incoming)) && incoming.value == 88 &&
+                   ! invalid.Seal() && probe.bufferAttempts.load() == 0,
                "unrepresentable-capacity-refuses-before-record-buffer-or-input-move");
         Root empty;
-        Expect(!Root::Builder::Clone(empty, (std::numeric_limits<std::size_t>::max)()),
-               "unrepresentable-clone-capacity-refuses-even-for-empty-source");
+        Expect(! Root::Builder::Clone(empty, (std::numeric_limits<std::size_t>::max)()), "unrepresentable-clone-capacity-refuses-even-for-empty-source");
     }
 
     {
-        Root source = MakeRoot({{101, "equality-a"}, {103, "equality-b"}});
+        Root source   = MakeRoot({{101, "equality-a"}, {103, "equality-b"}});
         Root captured = source;
         CopyControl::Reset();
         auto builder = Root::Builder::Clone(source, 3);
-        auto equal = builder.value().Seal();
+        auto equal   = builder.value().Seal();
         CopyControl::Reset();
-        Expect(source == captured && source == equal.value() && source.Identity() != equal.value().Identity() &&
-                   CopyControl::copies.load() == 0,
+        Expect(source == captured && source == equal.value() && source.Identity() != equal.value().Identity() && CopyControl::copies.load() == 0,
                "value-equality-compares-records-across-independent-roots-without-copying");
         auto replacement = Root::Builder::Clone(source, 2);
-        auto changed = MakeRecord(107, "equality-changed");
+        auto changed     = MakeRecord(107, "equality-changed");
         (void)replacement.value().Replace(1, std::move(changed));
-        auto different = replacement.value().Seal();
+        auto different      = replacement.value().Seal();
         auto shorterBuilder = Root::Builder::Clone(source, 2);
         (void)shorterBuilder.value().Erase(1);
         auto shorter = shorterBuilder.value().Seal();
@@ -620,13 +588,12 @@ int RunRecordRootTests()
         Expect(source != different.value() && source != shorter.value() && empty == sealedEmpty.value(),
                "value-equality-preserves-differences-order-and-empty-sequences");
         auto reorderedBuilder = Root::Builder::Clone(source, 2);
-        auto first = source[0];
-        auto last = source[1];
+        auto first            = source[0];
+        auto last             = source[1];
         (void)reorderedBuilder.value().Replace(0, std::move(last));
         (void)reorderedBuilder.value().Replace(1, std::move(first));
         auto reordered = reorderedBuilder.value().Seal();
-        Expect(source != reordered.value() && source[0].value == 101 && source[1].value == 103,
-               "value-equality-retains-sequence-order-and-original-root");
+        Expect(source != reordered.value() && source[0].value == 101 && source[1].value == 103, "value-equality-retains-sequence-order-and-original-root");
     }
 
     std::printf("SUMMARY document-record-root checks=%d failures=%d\n", gChecks, gFailures);

@@ -19,11 +19,11 @@ class ContinuationCompletion;
 // this state. A receipt survives queue removal and publisher teardown, without borrowing the host or document.
 class ContinuationReceipt final
 {
-  public:
+public:
     struct Result final
     {
-        ContinuationOutcome outcome = ContinuationOutcome::Failed;
-        std::int32_t error = 0;
+        ContinuationOutcome outcome                                 = ContinuationOutcome::Failed;
+        std::int32_t error                                          = 0;
         [[nodiscard]] bool operator==(const Result&) const noexcept = default;
     };
 
@@ -42,13 +42,15 @@ class ContinuationReceipt final
         return receipt;
     }
 
-  private:
+private:
     struct State final
     {
         Result result{ContinuationOutcome::Pending, 0};
     };
 
-    explicit ContinuationReceipt(std::shared_ptr<const State> state) noexcept : _state(std::move(state)) {}
+    explicit ContinuationReceipt(std::shared_ptr<const State> state) noexcept : _state(std::move(state))
+    {
+    }
 
     std::shared_ptr<const State> _state;
     Result _immediate;
@@ -59,15 +61,17 @@ class ContinuationReceipt final
 // stay Pending after that owner disappears. Explicit retirement publishes Stale/Failed before release instead.
 class ContinuationCompletion final
 {
-  public:
+public:
     ContinuationCompletion() noexcept = default;
     ~ContinuationCompletion() noexcept
     {
         Abandon();
     }
-    ContinuationCompletion(const ContinuationCompletion&) = delete;
+    ContinuationCompletion(const ContinuationCompletion&)            = delete;
     ContinuationCompletion& operator=(const ContinuationCompletion&) = delete;
-    ContinuationCompletion(ContinuationCompletion&& other) noexcept : _state(std::move(other._state)) {}
+    ContinuationCompletion(ContinuationCompletion&& other) noexcept : _state(std::move(other._state))
+    {
+    }
     ContinuationCompletion& operator=(ContinuationCompletion&& other) noexcept
     {
         if (this != &other)
@@ -92,9 +96,9 @@ class ContinuationCompletion final
 
     [[nodiscard]] bool Publish(ContinuationOutcome outcome, std::int32_t error = 0) noexcept
     {
-        if (!_state || _state->result.outcome != ContinuationOutcome::Pending ||
-            (outcome != ContinuationOutcome::Succeeded && outcome != ContinuationOutcome::Cancelled &&
-             outcome != ContinuationOutcome::Failed && outcome != ContinuationOutcome::Stale))
+        if (! _state || _state->result.outcome != ContinuationOutcome::Pending ||
+            (outcome != ContinuationOutcome::Succeeded && outcome != ContinuationOutcome::Cancelled && outcome != ContinuationOutcome::Failed &&
+             outcome != ContinuationOutcome::Stale))
         {
             return false;
         }
@@ -102,9 +106,8 @@ class ContinuationCompletion final
         return true;
     }
 
-  private:
-    explicit ContinuationCompletion(std::shared_ptr<ContinuationReceipt::State> state) noexcept
-        : _state(std::move(state))
+private:
+    explicit ContinuationCompletion(std::shared_ptr<ContinuationReceipt::State> state) noexcept : _state(std::move(state))
     {
     }
     void Abandon() noexcept

@@ -11,12 +11,11 @@ namespace
 {
 using namespace RedPrismBoundedClipper;
 
-bool ValidInput(const std::vector<SelectionLoop>& subject, const std::vector<SelectionLoop>& clip, const Limits& limits,
-                const CancelToken& cancellation)
+bool ValidInput(const std::vector<SelectionLoop>& subject, const std::vector<SelectionLoop>& clip, const Limits& limits, const CancelToken& cancellation)
 {
     std::uint64_t points = 0, loops = 0, work = 0;
     // ClipperD(precision2) computes scale128, not scale100. Keep that original conversion exactly.
-    constexpr double scale = 128.0;
+    constexpr double scale           = 128.0;
     constexpr double coordinateLimit = static_cast<double>(MAX_COORD) / scale;
     for (const auto* collection : {&subject, &clip})
         for (const auto& loop : *collection)
@@ -31,8 +30,7 @@ bool ValidInput(const std::vector<SelectionLoop>& subject, const std::vector<Sel
             {
                 if ((work++ & (Workspace::Quantum - 1)) == 0 && cancellation.IsCancelled())
                     return false;
-                if (!std::isfinite(point.x) || !std::isfinite(point.y) || std::abs(point.x) >= coordinateLimit ||
-                    std::abs(point.y) >= coordinateLimit)
+                if (! std::isfinite(point.x) || ! std::isfinite(point.y) || std::abs(point.x) >= coordinateLimit || std::abs(point.y) >= coordinateLimit)
                     return false;
             }
         }
@@ -62,24 +60,26 @@ PathsD InputPaths(const std::vector<SelectionLoop>& loops)
 } // namespace
 
 std::optional<std::vector<SelectionLoop>> Run(const std::vector<SelectionLoop>& subject,
-                                              const std::vector<SelectionLoop>& clip, Operation operation,
-                                              CancelToken cancellation, Limits limits, Statistics* statistics,
-                                              void (*checkpoint)(void*, std::uint64_t) noexcept, void* context)
+                                              const std::vector<SelectionLoop>& clip,
+                                              Operation operation,
+                                              CancelToken cancellation,
+                                              Limits limits,
+                                              Statistics* statistics,
+                                              void (*checkpoint)(void*, std::uint64_t) noexcept,
+                                              void* context)
 {
     if (statistics)
         *statistics = {};
-    if (operation > Operation::Subtract || !limits.workspaceBytes || !limits.outputPoints || !limits.outputLoops ||
-        !limits.inputPoints || !limits.inputLoops || !ValidInput(subject, clip, limits, cancellation))
+    if (operation > Operation::Subtract || ! limits.workspaceBytes || ! limits.outputPoints || ! limits.outputLoops || ! limits.inputPoints ||
+        ! limits.inputLoops || ! ValidInput(subject, clip, limits, cancellation))
         return std::nullopt;
     Workspace workspace(limits.workspaceBytes, cancellation, checkpoint, context, limits.allocations);
     ClipperD engine(2);
     engine.AddSubject(InputPaths(subject));
     engine.AddClip(InputPaths(clip));
-    const auto kind = operation == Operation::Intersect ? ClipType::Intersection
-                      : operation == Operation::Union   ? ClipType::Union
-                                                        : ClipType::Difference;
+    const auto kind = operation == Operation::Intersect ? ClipType::Intersection : operation == Operation::Union ? ClipType::Union : ClipType::Difference;
     PathsD paths;
-    if (!engine.Execute(kind, FillRule::NonZero, paths))
+    if (! engine.Execute(kind, FillRule::NonZero, paths))
         Workspace::Refuse();
     std::uint64_t outputPoints = 0, outputLoops = 0;
     for (const auto& path : paths)
@@ -115,8 +115,7 @@ std::optional<std::vector<SelectionLoop>> Run(const std::vector<SelectionLoop>& 
     if (statistics)
     {
         const auto measured = workspace.GetStatistics();
-        *statistics = {measured.capacity,  measured.consumed, measured.allocations,
-                       measured.workUnits, outputPoints,      outputLoops};
+        *statistics         = {measured.capacity, measured.consumed, measured.allocations, measured.workUnits, outputPoints, outputLoops};
     }
     return result;
 }

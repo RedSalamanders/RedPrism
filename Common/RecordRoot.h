@@ -16,11 +16,11 @@
 
 struct RecordOwnershipBounds final
 {
-    std::uint64_t metadataBytes = 0;
-    std::uint64_t ownershipBytes = 0;
-    std::uint64_t rasterNodes = 0;
-    std::uint64_t imagePixels = 0;
-    std::uint64_t maskPixels = 0;
+    std::uint64_t metadataBytes                                                = 0;
+    std::uint64_t ownershipBytes                                               = 0;
+    std::uint64_t rasterNodes                                                  = 0;
+    std::uint64_t imagePixels                                                  = 0;
+    std::uint64_t maskPixels                                                   = 0;
     [[nodiscard]] bool operator==(const RecordOwnershipBounds&) const noexcept = default;
 };
 
@@ -36,17 +36,17 @@ template <typename Record> struct RecordOwnershipPolicy
 template <typename Record> struct RecordLookupPolicy
 {
     static constexpr bool enabled = false;
-    using Key = std::uint64_t;
+    using Key                     = std::uint64_t;
 };
 
 // Immutable save admission projection, prepared with the records. Invalid serialization inputs keep a
 // failed projection without changing the owning root's general validation/capture semantics.
 struct RecordSavePlan final
 {
-    std::uint64_t metadataBytes = 0;
-    std::uint64_t largestAssetBytes = 0;
-    std::uint64_t assetCount = 0;
-    bool valid = true;
+    std::uint64_t metadataBytes                                         = 0;
+    std::uint64_t largestAssetBytes                                     = 0;
+    std::uint64_t assetCount                                            = 0;
+    bool valid                                                          = true;
     [[nodiscard]] bool operator==(const RecordSavePlan&) const noexcept = default;
 };
 template <typename Record> struct RecordSavePolicy
@@ -63,15 +63,14 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
     static_assert(std::is_nothrow_move_constructible_v<Record>);
     static_assert(std::is_nothrow_move_assignable_v<Record>);
     static_assert(std::is_nothrow_destructible_v<Record>);
-    static_assert(!RecordLookupPolicy<Record>::enabled ||
-                  (std::is_nothrow_move_constructible_v<typename RecordLookupPolicy<Record>::Key> &&
-                   std::is_nothrow_move_assignable_v<typename RecordLookupPolicy<Record>::Key> &&
-                   std::is_nothrow_destructible_v<typename RecordLookupPolicy<Record>::Key>));
+    static_assert(! RecordLookupPolicy<Record>::enabled || (std::is_nothrow_move_constructible_v<typename RecordLookupPolicy<Record>::Key> &&
+                                                            std::is_nothrow_move_assignable_v<typename RecordLookupPolicy<Record>::Key> &&
+                                                            std::is_nothrow_destructible_v<typename RecordLookupPolicy<Record>::Key>));
 
-    using Key = typename RecordLookupPolicy<Record>::Key;
-    using KeyEntry = std::pair<Key, std::size_t>;
+    using Key          = typename RecordLookupPolicy<Record>::Key;
+    using KeyEntry     = std::pair<Key, std::size_t>;
     using KeyAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<KeyEntry>;
-    using KeyIndex = std::vector<KeyEntry, KeyAllocator>;
+    using KeyIndex     = std::vector<KeyEntry, KeyAllocator>;
     struct NoLookup final
     {
     };
@@ -80,7 +79,7 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
     };
     using SavePlan = std::conditional_t<RecordSavePolicy<Record>::enabled, RecordSavePlan, NoSavePlan>;
 
-    using Lookup = std::conditional_t<RecordLookupPolicy<Record>::enabled, KeyIndex, NoLookup>;
+    using Lookup                                  = std::conditional_t<RecordLookupPolicy<Record>::enabled, KeyIndex, NoLookup>;
     static constexpr bool kAllowUnindexedOverflow = []() consteval
     {
         if constexpr (requires { RecordLookupPolicy<Record>::allowUnindexedOverflow; })
@@ -89,17 +88,17 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
             return false;
     }();
 
-  public:
-    using Container = std::vector<Record, Allocator>;
+public:
+    using Container      = std::vector<Record, Allocator>;
     using const_iterator = typename Container::const_iterator;
     static_assert(std::is_nothrow_move_constructible_v<Container>);
     static_assert(std::is_nothrow_move_assignable_v<Container>);
 
-    RecordRoot() noexcept = default;
-    RecordRoot(const RecordRoot&) noexcept = default;
+    RecordRoot() noexcept                             = default;
+    RecordRoot(const RecordRoot&) noexcept            = default;
     RecordRoot& operator=(const RecordRoot&) noexcept = default;
-    RecordRoot(RecordRoot&&) noexcept = default;
-    RecordRoot& operator=(RecordRoot&&) noexcept = default;
+    RecordRoot(RecordRoot&&) noexcept                 = default;
+    RecordRoot& operator=(RecordRoot&&) noexcept      = default;
 
     [[nodiscard]] const Container& Read() const noexcept
     {
@@ -157,7 +156,7 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
         return _root.get();
     }
     [[nodiscard]] const SavePlan& SaveMemoryPlan() const noexcept
-        requires(RecordSavePolicy<Record>::enabled)
+    requires(RecordSavePolicy<Record>::enabled)
     {
         if (_root)
             return _root->savePlan;
@@ -174,34 +173,32 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
     }
     // Borrow/copy no record children and allocate nothing. The source root owns index and records together.
     [[nodiscard]] std::optional<std::size_t> FindIndex(const Key& key) const noexcept
-        requires(RecordLookupPolicy<Record>::enabled)
+    requires(RecordLookupPolicy<Record>::enabled)
     {
-        if (!_root)
+        if (! _root)
             return std::nullopt;
         const auto& index = _root->lookup;
         const auto found =
-            std::lower_bound(index.begin(), index.end(), key,
-                             [](const KeyEntry& entry, const Key& value) noexcept { return entry.first < value; });
-        return found != index.end() && !(key < found->first) ? std::optional(found->second) : std::nullopt;
+            std::lower_bound(index.begin(), index.end(), key, [](const KeyEntry& entry, const Key& value) noexcept { return entry.first < value; });
+        return found != index.end() && ! (key < found->first) ? std::optional(found->second) : std::nullopt;
     }
     [[nodiscard]] const Record* FindKey(const Key& key) const noexcept
-        requires(RecordLookupPolicy<Record>::enabled)
+    requires(RecordLookupPolicy<Record>::enabled)
     {
         const auto index = FindIndex(key);
         return index ? &_root->records[index.value()] : nullptr;
     }
     [[nodiscard]] bool HasUniqueKeys() const noexcept
-        requires(RecordLookupPolicy<Record>::enabled)
+    requires(RecordLookupPolicy<Record>::enabled)
     {
-        return !_root || _root->uniqueKeys;
+        return ! _root || _root->uniqueKeys;
     }
     void swap(RecordRoot& other) noexcept
     {
         _root.swap(other._root);
     }
     // Identity is a fast path, never the value-equality contract of independently prepared roots.
-    [[nodiscard]] bool operator==(const RecordRoot& other) const
-        noexcept(noexcept(std::declval<const Record&>() == std::declval<const Record&>()))
+    [[nodiscard]] bool operator==(const RecordRoot& other) const noexcept(noexcept(std::declval<const Record&>() == std::declval<const Record&>()))
     {
         if (_root == other._root)
             return true;
@@ -215,24 +212,24 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
 
     class Builder final
     {
-      public:
+    public:
         // The caller admits the requested record capacity plus children and the sealing allocation first.
         // No insertion grows this buffer. Cached capacity exposes the actual allocator-provided capacity.
-        explicit Builder(std::size_t limit, const Allocator& allocator = {})
-            : _records(allocator), _limit(limit), _sealable(true)
+        explicit Builder(std::size_t limit, const Allocator& allocator = {}) : _records(allocator), _limit(limit), _sealable(true)
         {
             if (limit > _records.max_size())
             {
-                _limit = 0;
+                _limit    = 0;
                 _sealable = false;
                 return;
             }
             _records.reserve(limit);
         }
-        Builder(const Builder&) = delete;
+        Builder(const Builder&)            = delete;
         Builder& operator=(const Builder&) = delete;
         Builder(Builder&& other) noexcept
-            : _records(std::move(other._records)), _limit(std::exchange(other._limit, 0)),
+            : _records(std::move(other._records)),
+              _limit(std::exchange(other._limit, 0)),
               _sealable(std::exchange(other._sealable, false))
         {
         }
@@ -240,8 +237,8 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
         {
             if (this != &other)
             {
-                _records = std::move(other._records);
-                _limit = std::exchange(other._limit, 0);
+                _records  = std::move(other._records);
+                _limit    = std::exchange(other._limit, 0);
                 _sealable = std::exchange(other._sealable, false);
             }
             return *this;
@@ -262,35 +259,35 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
         }
         [[nodiscard]] bool Append(const Record& record)
         {
-            if (!_sealable || _records.size() >= _limit)
+            if (! _sealable || _records.size() >= _limit)
                 return false;
             _records.push_back(record);
             return true;
         }
         [[nodiscard]] bool Append(Record&& record) noexcept
         {
-            if (!_sealable || _records.size() >= _limit)
+            if (! _sealable || _records.size() >= _limit)
                 return false;
             _records.push_back(std::move(record));
             return true;
         }
         [[nodiscard]] bool Replace(std::size_t index, Record&& record) noexcept
         {
-            if (!_sealable || index >= _records.size())
+            if (! _sealable || index >= _records.size())
                 return false;
             _records[index] = std::move(record);
             return true;
         }
         [[nodiscard]] bool Insert(std::size_t index, Record&& record) noexcept
         {
-            if (!_sealable || index > _records.size() || _records.size() >= _limit)
+            if (! _sealable || index > _records.size() || _records.size() >= _limit)
                 return false;
             _records.insert(_records.begin() + static_cast<std::ptrdiff_t>(index), std::move(record));
             return true;
         }
         [[nodiscard]] bool Erase(std::size_t index) noexcept
         {
-            if (!_sealable || index >= _records.size())
+            if (! _sealable || index >= _records.size())
                 return false;
             _records.erase(_records.begin() + static_cast<std::ptrdiff_t>(index));
             return true;
@@ -311,26 +308,24 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
         // Worker-only under the original complete reservation. The owning route requires checked complete
         // bounds. Once allocation starts it consumes this builder; failure ends the selected operation.
         // The reference Seal retains its existing allocation-failure retry contract.
-        [[nodiscard]] std::optional<RecordRoot> SealOwned(std::shared_ptr<const SharedPublicationMemory> memory,
-                                                          CancelToken cancellation = {})
+        [[nodiscard]] std::optional<RecordRoot> SealOwned(std::shared_ptr<const SharedPublicationMemory> memory, CancelToken cancellation = {})
         {
             return memory && memory.use_count() ? SealImpl(cancellation, std::move(memory)) : std::nullopt;
         }
 
-      private:
-        [[nodiscard]] std::optional<RecordRoot> SealImpl(CancelToken cancellation,
-                                                         std::shared_ptr<const SharedPublicationMemory> memory)
+    private:
+        [[nodiscard]] std::optional<RecordRoot> SealImpl(CancelToken cancellation, std::shared_ptr<const SharedPublicationMemory> memory)
         {
-            if (!_sealable || cancellation.IsCancelled())
+            if (! _sealable || cancellation.IsCancelled())
                 return std::nullopt;
-            bool uniqueKeys = true;
+            bool uniqueKeys                  = true;
             [[maybe_unused]] bool buildIndex = true;
             if constexpr (RecordLookupPolicy<Record>::enabled)
             {
                 static_assert(RecordLookupPolicy<Record>::maximumRecords > 0);
                 if (_records.size() > RecordLookupPolicy<Record>::maximumRecords)
                 {
-                    if constexpr (!kAllowUnindexedOverflow)
+                    if constexpr (! kAllowUnindexedOverflow)
                         return std::nullopt;
                     else
                     {
@@ -361,94 +356,91 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
                             return std::nullopt;
                         lookup.emplace_back(RecordLookupPolicy<Record>::KeyOf(_records[i]), i);
                     }
-                    std::sort(lookup.begin(), lookup.end(),
-                              [](const KeyEntry& left, const KeyEntry& right) noexcept
-                              {
-                                  return left.first < right.first ||
-                                         (!(right.first < left.first) && left.second < right.second);
-                              });
+                    std::sort(lookup.begin(), lookup.end(), [](const KeyEntry& left, const KeyEntry& right) noexcept {
+                        return left.first < right.first || (! (right.first < left.first) && left.second < right.second);
+                    });
                     for (std::size_t i = 1; i < lookup.size(); ++i)
                     {
                         if (cancellation.IsCancelled())
                             return std::nullopt;
-                        if (!(lookup[i - 1].first < lookup[i].first))
+                        if (! (lookup[i - 1].first < lookup[i].first))
                             uniqueKeys = false;
                     }
                 }
             }
-            auto bounds = MeasureRecords(_records, lookup, cancellation);
+            auto bounds         = MeasureRecords(_records, lookup, cancellation);
             const auto savePlan = MeasureSavePlan(_records, cancellation);
             if (cancellation.IsCancelled())
                 return std::nullopt;
             std::shared_ptr<const Storage> root;
             if (memory.use_count())
             {
-                constexpr auto extra = AccountedPublicationObjectAllowance<Storage>() - sizeof(Storage) - 64;
+                constexpr auto extra   = AccountedPublicationObjectAllowance<Storage>() - sizeof(Storage) - 64;
                 constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
-                if (!bounds || bounds->ownershipBytes < bounds->metadataBytes ||
-                    bounds->metadataBytes > maximum - extra || bounds->ownershipBytes > maximum - extra)
+                if (! bounds || bounds->ownershipBytes < bounds->metadataBytes || bounds->metadataBytes > maximum - extra ||
+                    bounds->ownershipBytes > maximum - extra)
                     return std::nullopt;
                 bounds->metadataBytes += extra;
                 bounds->ownershipBytes += extra;
                 // Seal exact complete bounds before constructing shared controls. No formerly published
                 // storage becomes writable. Both data and its last weak control retain the original owner.
-                _sealable = false;
-                _limit = 0;
+                _sealable                = false;
+                _limit                   = 0;
                 const auto localChildren = bounds->metadataBytes - extra - sizeof(Storage) - 64;
-                root = MakeAccountedPublicationObject<const Storage>(std::move(memory), bounds->ownershipBytes,
-                                                                     localChildren, std::move(_records),
-                                                                     std::move(lookup), bounds, uniqueKeys, savePlan);
+                root                     = MakeAccountedPublicationObject<const Storage>(
+                    std::move(memory), bounds->ownershipBytes, localChildren, std::move(_records), std::move(lookup), bounds, uniqueKeys, savePlan);
             }
             else
             {
                 // Reference route: allocation precedes moving private records and remains retryable.
-                root = std::allocate_shared<const Storage>(_records.get_allocator(), std::move(_records),
-                                                           std::move(lookup), bounds, uniqueKeys, savePlan);
+                root = std::allocate_shared<const Storage>(_records.get_allocator(), std::move(_records), std::move(lookup), bounds, uniqueKeys, savePlan);
             }
             _sealable = false;
-            _limit = 0;
+            _limit    = 0;
             return RecordRoot(std::move(root));
         }
 
-      public:
-        [[nodiscard]] static std::optional<Builder> Clone(const RecordRoot& source, std::size_t limit,
-                                                          CancelToken cancellation = {},
+    public:
+        [[nodiscard]] static std::optional<Builder> Clone(const RecordRoot& source,
+                                                          std::size_t limit,
+                                                          CancelToken cancellation   = {},
                                                           const Allocator& allocator = {})
         {
             if (cancellation.IsCancelled() || source.size() > limit)
                 return std::nullopt;
             Builder copy(limit, allocator);
-            if (!copy.CanSeal())
+            if (! copy.CanSeal())
                 return std::nullopt;
             for (const auto& record : source)
             {
                 if (cancellation.IsCancelled())
                     return std::nullopt;
-                if (!copy.Append(record))
+                if (! copy.Append(record))
                     return std::nullopt;
             }
             return cancellation.IsCancelled() ? std::nullopt : std::optional<Builder>(std::move(copy));
         }
 
-      private:
+    private:
         struct AdoptTag
         {
         };
-        Builder(Container&& records, std::size_t limit, AdoptTag) noexcept
-            : _records(std::move(records)), _limit(limit), _sealable(true)
+        Builder(Container&& records, std::size_t limit, AdoptTag) noexcept : _records(std::move(records)), _limit(limit), _sealable(true)
         {
         }
         Container _records;
         std::size_t _limit = 0;
-        bool _sealable = false;
+        bool _sealable     = false;
     };
 
-  private:
+private:
     struct Storage final
     {
-        Storage(Container&& values, Lookup&& preparedLookup, std::optional<RecordOwnershipBounds> measured, bool unique,
-                SavePlan preparedSavePlan) noexcept
-            : records(std::move(values)), lookup(std::move(preparedLookup)), bounds(measured), uniqueKeys(unique),
+        Storage(Container&& values, Lookup&& preparedLookup, std::optional<RecordOwnershipBounds> measured, bool unique, SavePlan preparedSavePlan) noexcept
+            : records(std::move(values)),
+              lookup(std::move(preparedLookup)),
+              bounds(measured),
+              uniqueKeys(unique),
               savePlan(preparedSavePlan)
         {
         }
@@ -468,7 +460,7 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
             static_assert(noexcept(RecordSavePolicy<Record>::Accumulate(plan, std::declval<const Record&>())));
             for (const auto& record : records)
             {
-                if (cancellation.IsCancelled() || !RecordSavePolicy<Record>::Accumulate(plan, record))
+                if (cancellation.IsCancelled() || ! RecordSavePolicy<Record>::Accumulate(plan, record))
                 {
                     plan.valid = false;
                     break;
@@ -477,13 +469,11 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
         }
         return plan;
     }
-    [[nodiscard]] static std::optional<RecordOwnershipBounds> MeasureRecords(const Container& records,
-                                                                             const Lookup& lookup,
-                                                                             CancelToken cancellation) noexcept
+    [[nodiscard]] static std::optional<RecordOwnershipBounds> MeasureRecords(const Container& records, const Lookup& lookup, CancelToken cancellation) noexcept
     {
         if (cancellation.IsCancelled())
             return std::nullopt;
-        if constexpr (!RecordOwnershipPolicy<Record>::enabled)
+        if constexpr (! RecordOwnershipPolicy<Record>::enabled)
         {
             return std::nullopt;
         }
@@ -514,17 +504,16 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
                 if (cancellation.IsCancelled())
                     return std::nullopt;
                 const auto bounds = RecordOwnershipPolicy<Record>::Measure(record);
-                if (!bounds || bounds.value().ownershipBytes < bounds.value().metadataBytes ||
-                    !add(total.metadataBytes, bounds.value().metadataBytes) ||
-                    !add(total.ownershipBytes, bounds.value().ownershipBytes) ||
-                    !add(total.rasterNodes, bounds.value().rasterNodes) ||
-                    !add(total.imagePixels, bounds.value().imagePixels) ||
-                    !add(total.maskPixels, bounds.value().maskPixels))
+                if (! bounds || bounds.value().ownershipBytes < bounds.value().metadataBytes || ! add(total.metadataBytes, bounds.value().metadataBytes) ||
+                    ! add(total.ownershipBytes, bounds.value().ownershipBytes) || ! add(total.rasterNodes, bounds.value().rasterNodes) ||
+                    ! add(total.imagePixels, bounds.value().imagePixels) || ! add(total.maskPixels, bounds.value().maskPixels))
                     return std::nullopt;
             }
             return total;
         }
     }
-    explicit RecordRoot(std::shared_ptr<const Storage> root) noexcept : _root(std::move(root)) {}
+    explicit RecordRoot(std::shared_ptr<const Storage> root) noexcept : _root(std::move(root))
+    {
+    }
     std::shared_ptr<const Storage> _root;
 };

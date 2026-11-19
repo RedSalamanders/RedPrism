@@ -12,10 +12,10 @@ namespace SpotHealing
 namespace
 {
 constexpr std::uint8_t kOutside = 0;
-constexpr std::uint8_t kRing = 1;
-constexpr std::uint8_t kHole = 2;
-constexpr double kPi = 3.14159265358979323846;
-constexpr double kInfinity = std::numeric_limits<double>::infinity();
+constexpr std::uint8_t kRing    = 1;
+constexpr std::uint8_t kHole    = 2;
+constexpr double kPi            = 3.14159265358979323846;
+constexpr double kInfinity      = std::numeric_limits<double>::infinity();
 
 using Index = std::int64_t;
 
@@ -33,7 +33,7 @@ struct Work final
             return false;
         if (observer.checkpoint)
             observer.checkpoint(observer.context, stage);
-        return !cancellation.IsCancelled();
+        return ! cancellation.IsCancelled();
     }
 };
 #pragma warning(pop)
@@ -65,8 +65,18 @@ struct Work final
 
 // Mean squared difference between the ring around the spot and the ring around the patch offset by (dx, dy).
 // Infinite when the patch would overlap the spot or leave the image.
-[[nodiscard]] double Score(const std::uint8_t* rgba, std::size_t stride, const std::uint8_t* role, Index wx0, Index wy0,
-                           Index ww, Index wh, Index dx, Index dy, Index W, Index H, const Work* work) noexcept
+[[nodiscard]] double Score(const std::uint8_t* rgba,
+                           std::size_t stride,
+                           const std::uint8_t* role,
+                           Index wx0,
+                           Index wy0,
+                           Index ww,
+                           Index wh,
+                           Index dx,
+                           Index dy,
+                           Index W,
+                           Index H,
+                           const Work* work) noexcept
 {
     if (std::llabs(dx) < ww && std::llabs(dy) < wh)
     {
@@ -77,10 +87,10 @@ struct Work final
         return kInfinity;
     }
     double sum = 0;
-    Index n = 0;
+    Index n    = 0;
     for (Index y = 0; y < wh; ++y)
     {
-        if (work && !work->Continue(WorkStage::PatchSearch))
+        if (work && ! work->Continue(WorkStage::PatchSearch))
             return kInfinity;
         for (Index x = 0; x < ww; ++x)
         {
@@ -114,14 +124,14 @@ struct Work final
         std::vector<std::uint8_t> coarseRole(static_cast<std::size_t>(cw * ch), 0);
         for (Index y = 0; y < ch; ++y)
         {
-            if (work && !work->Continue(WorkStage::SolveCoarse))
+            if (work && ! work->Continue(WorkStage::SolveCoarse))
                 return false;
             for (Index x = 0; x < cw; ++x)
             {
-                int known = 0;
-                int hole = 0;
+                int known         = 0;
+                int hole          = 0;
                 float knownSum[4] = {0, 0, 0, 0};
-                float holeSum[4] = {0, 0, 0, 0};
+                float holeSum[4]  = {0, 0, 0, 0};
                 for (Index j = 0; j < 2; ++j)
                 {
                     for (Index i = 0; i < 2; ++i)
@@ -170,11 +180,11 @@ struct Work final
                 }
             }
         }
-        if (!Solve(coarse.data(), coarseRole.data(), cw, ch, depth + 1, work))
+        if (! Solve(coarse.data(), coarseRole.data(), cw, ch, depth + 1, work))
             return false;
         for (Index y = 0; y < h; ++y)
         {
-            if (work && !work->Continue(WorkStage::Solve))
+            if (work && ! work->Continue(WorkStage::Solve))
                 return false;
             for (Index x = 0; x < w; ++x)
             {
@@ -193,7 +203,7 @@ struct Work final
     {
         for (Index y = 0; y < h; ++y)
         {
-            if (work && !work->Continue(WorkStage::Solve))
+            if (work && ! work->Continue(WorkStage::Solve))
                 return false;
             for (Index x = 0; x < w; ++x)
             {
@@ -202,8 +212,8 @@ struct Work final
                 {
                     continue;
                 }
-                float sum[4] = {0, 0, 0, 0};
-                int n = 0;
+                float sum[4]                = {0, 0, 0, 0};
+                int n                       = 0;
                 const Index neighbors[4][2] = {{x - 1, y}, {x + 1, y}, {x, y - 1}, {x, y + 1}};
                 for (int k = 0; k < 4; ++k)
                 {
@@ -224,7 +234,7 @@ struct Work final
                     }
                     ++n;
                 }
-                if (!n)
+                if (! n)
                 {
                     continue;
                 }
@@ -236,15 +246,21 @@ struct Work final
             }
         }
     }
-    return !work || !work->cancellation.IsCancelled();
+    return ! work || ! work->cancellation.IsCancelled();
 }
 
-[[nodiscard]] bool HealUnchecked(std::uint8_t* rgba, const std::uint8_t* coverage, std::size_t width,
-                                 std::size_t height, std::size_t stride, float opacity, SpotHealingMode mode,
-                                 std::uint32_t seed, const Work* work)
+[[nodiscard]] bool HealUnchecked(std::uint8_t* rgba,
+                                 const std::uint8_t* coverage,
+                                 std::size_t width,
+                                 std::size_t height,
+                                 std::size_t stride,
+                                 float opacity,
+                                 SpotHealingMode mode,
+                                 std::uint32_t seed,
+                                 const Work* work)
 {
-    const Index W = static_cast<Index>(width);
-    const Index H = static_cast<Index>(height);
+    const Index W       = static_cast<Index>(width);
+    const Index H       = static_cast<Index>(height);
     const Bounds bounds = CoverageBounds(coverage, width, height, width, work ? work->cancellation : CancelToken{});
     if (work && work->cancellation.IsCancelled())
         return false;
@@ -252,10 +268,10 @@ struct Work final
     {
         return true;
     }
-    const Index bw = bounds.x1 - bounds.x0;
-    const Index bh = bounds.y1 - bounds.y0;
+    const Index bw   = bounds.x1 - bounds.x0;
+    const Index bh   = bounds.y1 - bounds.y0;
     const Index size = bw > bh ? bw : bh;
-    Index ring = size / 8;
+    Index ring       = size / 8;
     if (ring < 2)
     {
         ring = 2;
@@ -265,12 +281,12 @@ struct Work final
         ring = 16;
     }
     // Work box: the spot plus its ring, clipped to the image.
-    const Index wx0 = bounds.x0 - ring < 0 ? 0 : bounds.x0 - ring;
-    const Index wy0 = bounds.y0 - ring < 0 ? 0 : bounds.y0 - ring;
-    const Index wx1 = bounds.x1 + ring > W ? W : bounds.x1 + ring;
-    const Index wy1 = bounds.y1 + ring > H ? H : bounds.y1 + ring;
-    const Index ww = wx1 - wx0;
-    const Index wh = wy1 - wy0;
+    const Index wx0      = bounds.x0 - ring < 0 ? 0 : bounds.x0 - ring;
+    const Index wy0      = bounds.y0 - ring < 0 ? 0 : bounds.y0 - ring;
+    const Index wx1      = bounds.x1 + ring > W ? W : bounds.x1 + ring;
+    const Index wy1      = bounds.y1 + ring > H ? H : bounds.y1 + ring;
+    const Index ww       = wx1 - wx0;
+    const Index wh       = wy1 - wy0;
     const std::size_t wn = static_cast<std::size_t>(ww * wh);
 
     std::vector<std::uint8_t> role(wn, 0);
@@ -279,48 +295,44 @@ struct Work final
     std::vector<float> value(wn * 4, 0.0f);
     for (Index y = 0; y < wh; ++y)
     {
-        if (work && !work->Continue(WorkStage::Role))
+        if (work && ! work->Continue(WorkStage::Role))
             return false;
         for (Index x = 0; x < ww; ++x)
         {
             role[static_cast<std::size_t>(y * ww + x)] =
-                coverage[static_cast<std::size_t>(wy0 + y) * width + static_cast<std::size_t>(wx0 + x)] ? kHole
-                                                                                                        : kOutside;
+                coverage[static_cast<std::size_t>(wy0 + y) * width + static_cast<std::size_t>(wx0 + x)] ? kHole : kOutside;
         }
     }
     // The ring: pixels within `ring` of the spot (a square dilation, row pass then column pass).
     for (Index y = 0; y < wh; ++y)
     {
-        if (work && !work->Continue(WorkStage::RingRows))
+        if (work && ! work->Continue(WorkStage::RingRows))
             return false;
         prefix[0] = 0;
         for (Index x = 0; x < ww; ++x)
         {
-            prefix[static_cast<std::size_t>(x + 1)] =
-                prefix[static_cast<std::size_t>(x)] + (role[static_cast<std::size_t>(y * ww + x)] == kHole ? 1 : 0);
+            prefix[static_cast<std::size_t>(x + 1)] = prefix[static_cast<std::size_t>(x)] + (role[static_cast<std::size_t>(y * ww + x)] == kHole ? 1 : 0);
         }
         for (Index x = 0; x < ww; ++x)
         {
-            const Index lo = x - ring < 0 ? 0 : x - ring;
-            const Index hi = x + ring + 1 > ww ? ww : x + ring + 1;
-            near[static_cast<std::size_t>(y * ww + x)] =
-                prefix[static_cast<std::size_t>(hi)] - prefix[static_cast<std::size_t>(lo)] > 0 ? 1 : 0;
+            const Index lo                             = x - ring < 0 ? 0 : x - ring;
+            const Index hi                             = x + ring + 1 > ww ? ww : x + ring + 1;
+            near[static_cast<std::size_t>(y * ww + x)] = prefix[static_cast<std::size_t>(hi)] - prefix[static_cast<std::size_t>(lo)] > 0 ? 1 : 0;
         }
     }
     for (Index x = 0; x < ww; ++x)
     {
-        if (work && !work->Continue(WorkStage::RingColumns))
+        if (work && ! work->Continue(WorkStage::RingColumns))
             return false;
         prefix[0] = 0;
         for (Index y = 0; y < wh; ++y)
         {
-            prefix[static_cast<std::size_t>(y + 1)] =
-                prefix[static_cast<std::size_t>(y)] + near[static_cast<std::size_t>(y * ww + x)];
+            prefix[static_cast<std::size_t>(y + 1)] = prefix[static_cast<std::size_t>(y)] + near[static_cast<std::size_t>(y * ww + x)];
         }
         for (Index y = 0; y < wh; ++y)
         {
-            const Index lo = y - ring < 0 ? 0 : y - ring;
-            const Index hi = y + ring + 1 > wh ? wh : y + ring + 1;
+            const Index lo        = y - ring < 0 ? 0 : y - ring;
+            const Index hi        = y + ring + 1 > wh ? wh : y + ring + 1;
             std::uint8_t& current = role[static_cast<std::size_t>(y * ww + x)];
             if (current == kOutside && prefix[static_cast<std::size_t>(hi)] - prefix[static_cast<std::size_t>(lo)] > 0)
             {
@@ -331,47 +343,44 @@ struct Work final
     Index ringCount = 0;
     for (std::size_t p = 0; p < wn; ++p)
     {
-        if (work && p % static_cast<std::size_t>(ww) == 0 && !work->Continue(WorkStage::Statistics))
+        if (work && p % static_cast<std::size_t>(ww) == 0 && ! work->Continue(WorkStage::Statistics))
             return false;
         ringCount += role[p] == kRing ? 1 : 0;
     }
-    if (!ringCount)
+    if (! ringCount)
     {
         return true;
     }
 
     // Source patch for Content-Aware and Proximity Match.
-    Index ox = 0;
-    Index oy = 0;
+    Index ox        = 0;
+    Index oy        = 0;
     bool haveSource = false;
     if (mode != SpotHealingMode::CreateTexture)
     {
         static constexpr double factors[5] = {1.05, 1.35, 1.75, 2.25, 2.8};
-        const int count = mode == SpotHealingMode::ProximityMatch ? 2 : 5;
-        double best = kInfinity;
+        const int count                    = mode == SpotHealingMode::ProximityMatch ? 2 : 5;
+        double best                        = kInfinity;
         for (int f = 0; f < count; ++f)
         {
             for (int a = 0; a < 24; ++a)
             {
-                if (work && !work->Continue(WorkStage::PatchSearch))
+                if (work && ! work->Continue(WorkStage::PatchSearch))
                     return false;
                 const double angle = a * kPi / 12.0;
-                const Index dx =
-                    static_cast<Index>(std::lround(std::cos(angle) * factors[f] * static_cast<double>(ww)));
-                const Index dy =
-                    static_cast<Index>(std::lround(std::sin(angle) * factors[f] * static_cast<double>(wh)));
-                double score = Score(rgba, stride, role.data(), wx0, wy0, ww, wh, dx, dy, W, H, work);
-                if (!std::isfinite(score))
+                const Index dx     = static_cast<Index>(std::lround(std::cos(angle) * factors[f] * static_cast<double>(ww)));
+                const Index dy     = static_cast<Index>(std::lround(std::sin(angle) * factors[f] * static_cast<double>(wh)));
+                double score       = Score(rgba, stride, role.data(), wx0, wy0, ww, wh, dx, dy, W, H, work);
+                if (! std::isfinite(score))
                 {
                     continue;
                 }
-                score *=
-                    mode == SpotHealingMode::ProximityMatch ? 1.0 + 0.6 * f : 1.0 + 0.1 * f; // nearer patches win ties
+                score *= mode == SpotHealingMode::ProximityMatch ? 1.0 + 0.6 * f : 1.0 + 0.1 * f; // nearer patches win ties
                 if (score < best)
                 {
                     best = score;
-                    ox = dx;
-                    oy = dy;
+                    ox   = dx;
+                    oy   = dy;
                 }
             }
         }
@@ -385,14 +394,14 @@ struct Work final
             {
                 for (Index i = -3; i <= 3; ++i)
                 {
-                    if (work && !work->Continue(WorkStage::PatchSearch))
+                    if (work && ! work->Continue(WorkStage::PatchSearch))
                         return false;
                     const double score = Score(rgba, stride, role.data(), wx0, wy0, ww, wh, cx + i, cy + j, W, H, work);
                     if (score < refined)
                     {
                         refined = score;
-                        ox = cx + i;
-                        oy = cy + j;
+                        ox      = cx + i;
+                        oy      = cy + j;
                     }
                 }
             }
@@ -402,11 +411,11 @@ struct Work final
 
     // Membrane: the edge difference between the original and the patch (or the original itself for a smooth
     // fill), spread across the spot.
-    double mean[4] = {0, 0, 0, 0};
+    double mean[4]   = {0, 0, 0, 0};
     double detail[3] = {0, 0, 0};
     for (Index y = 0; y < wh; ++y)
     {
-        if (work && !work->Continue(WorkStage::Statistics))
+        if (work && ! work->Continue(WorkStage::Statistics))
             return false;
         for (Index x = 0; x < ww; ++x)
         {
@@ -416,23 +425,22 @@ struct Work final
                 std::memset(value.data() + p * 4, 0, 4 * sizeof(float));
                 continue;
             }
-            const Index ix = wx0 + x;
-            const Index iy = wy0 + y;
+            const Index ix        = wx0 + x;
+            const Index iy        = wy0 + y;
             const std::uint8_t* t = PixelAt(rgba, stride, ix, iy);
             const std::uint8_t* s = haveSource ? PixelAt(rgba, stride, ix + ox, iy + oy) : nullptr;
             for (int c = 0; c < 4; ++c)
             {
-                value[p * 4 + static_cast<std::size_t>(c)] =
-                    static_cast<float>(t[c]) - static_cast<float>(s ? s[c] : 0);
+                value[p * 4 + static_cast<std::size_t>(c)] = static_cast<float>(t[c]) - static_cast<float>(s ? s[c] : 0);
                 mean[c] += value[p * 4 + static_cast<std::size_t>(c)];
             }
-            if (!haveSource)
+            if (! haveSource)
             {
                 // Fine detail around the spot: each pixel against the average of its neighbours.
                 for (int c = 0; c < 3; ++c)
                 {
-                    double around = 0;
-                    int n = 0;
+                    double around             = 0;
+                    int n                     = 0;
                     const Index offsets[4][2] = {{ix - 1, iy}, {ix + 1, iy}, {ix, iy - 1}, {ix, iy + 1}};
                     for (int k = 0; k < 4; ++k)
                     {
@@ -458,7 +466,7 @@ struct Work final
     }
     for (std::size_t p = 0; p < wn; ++p)
     {
-        if (work && p % static_cast<std::size_t>(ww) == 0 && !work->Continue(WorkStage::Statistics))
+        if (work && p % static_cast<std::size_t>(ww) == 0 && ! work->Continue(WorkStage::Statistics))
             return false;
         if (role[p] == kHole)
         {
@@ -468,7 +476,7 @@ struct Work final
             }
         }
     }
-    if (!Solve(value.data(), role.data(), ww, wh, 0, work))
+    if (! Solve(value.data(), role.data(), ww, wh, 0, work))
         return false;
     for (int c = 0; c < 3; ++c)
     {
@@ -477,7 +485,7 @@ struct Work final
 
     for (Index y = 0; y < wh; ++y)
     {
-        if (work && !work->Continue(WorkStage::Output))
+        if (work && ! work->Continue(WorkStage::Output))
             return false;
         for (Index x = 0; x < ww; ++x)
         {
@@ -486,42 +494,39 @@ struct Work final
             {
                 continue;
             }
-            const Index ix = wx0 + x;
-            const Index iy = wy0 + y;
-            std::uint8_t* t = PixelAt(rgba, stride, ix, iy);
+            const Index ix        = wx0 + x;
+            const Index iy        = wy0 + y;
+            std::uint8_t* t       = PixelAt(rgba, stride, ix, iy);
             const std::uint8_t* s = haveSource ? PixelAt(rgba, stride, ix + ox, iy + oy) : nullptr;
-            const double amount =
-                coverage[static_cast<std::size_t>(iy) * width + static_cast<std::size_t>(ix)] / 255.0 * opacity;
-            double grain = 0;
-            if (!haveSource)
+            const double amount   = coverage[static_cast<std::size_t>(iy) * width + static_cast<std::size_t>(ix)] / 255.0 * opacity;
+            double grain          = 0;
+            if (! haveSource)
             {
                 const std::uint32_t key = HashKey(seed ^ HashKey(static_cast<std::uint32_t>(iy * W + ix)));
-                const double u1 = Unit(key);
-                const double u2 = Unit(key ^ 0x68e31da4U);
-                grain = std::sqrt(-2.0 * std::log(1.0 - u1)) * std::cos(2.0 * kPi * u2);
+                const double u1         = Unit(key);
+                const double u2         = Unit(key ^ 0x68e31da4U);
+                grain                   = std::sqrt(-2.0 * std::log(1.0 - u1)) * std::cos(2.0 * kPi * u2);
             }
             double out[4];
             for (int c = 0; c < 4; ++c)
             {
-                const double healed = static_cast<float>(s ? s[c] : 0) + value[p * 4 + static_cast<std::size_t>(c)] +
-                                      (c < 3 ? grain * detail[c] : 0);
-                out[c] = t[c] + (healed - t[c]) * amount;
+                const double healed = static_cast<float>(s ? s[c] : 0) + value[p * 4 + static_cast<std::size_t>(c)] + (c < 3 ? grain * detail[c] : 0);
+                out[c]              = t[c] + (healed - t[c]) * amount;
             }
             const double alpha = out[3] < 0 ? 0 : out[3] > 255 ? 255 : out[3];
-            t[3] = static_cast<std::uint8_t>(std::lround(alpha));
+            t[3]               = static_cast<std::uint8_t>(std::lround(alpha));
             for (int c = 0; c < 3; ++c)
             {
                 const double v = out[c] < 0 ? 0 : out[c] > t[3] ? t[3] : out[c];
-                t[c] = static_cast<std::uint8_t>(std::lround(v));
+                t[c]           = static_cast<std::uint8_t>(std::lround(v));
             }
         }
     }
-    return !work || !work->cancellation.IsCancelled();
+    return ! work || ! work->cancellation.IsCancelled();
 }
 } // namespace
 
-Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t height, std::size_t stride,
-                      const CancelToken& cancellation) noexcept
+Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t height, std::size_t stride, const CancelToken& cancellation) noexcept
 {
     Index x0 = static_cast<Index>(width);
     Index y0 = static_cast<Index>(height);
@@ -534,7 +539,7 @@ Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t h
         const std::uint8_t* row = gray + y * stride;
         for (std::size_t x = 0; x < width; ++x)
         {
-            if (!row[x])
+            if (! row[x])
             {
                 continue;
             }
@@ -551,17 +556,21 @@ Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t h
     return Bounds{x0, y0, x1, y1};
 }
 
-bool HealForWork(std::span<std::uint8_t> bgra, std::span<const std::uint8_t> coverage, std::size_t width,
-                 std::size_t height, std::size_t stride, float opacity, SpotHealingMode mode, std::uint32_t seed,
-                 const CancelToken& cancellation, WorkObserver observer)
+bool HealForWork(std::span<std::uint8_t> bgra,
+                 std::span<const std::uint8_t> coverage,
+                 std::size_t width,
+                 std::size_t height,
+                 std::size_t stride,
+                 float opacity,
+                 SpotHealingMode mode,
+                 std::uint32_t seed,
+                 const CancelToken& cancellation,
+                 WorkObserver observer)
 {
-    if (cancellation.IsCancelled() || bgra.empty() || coverage.empty() || width == 0 || height == 0 ||
-        width > static_cast<std::size_t>(kMaxCanvasSide) || height > static_cast<std::size_t>(kMaxCanvasSide) ||
-        width * height > static_cast<std::size_t>(kMaxLayerPixels) || stride < width * 4 ||
-        (height > 1 && stride > ((std::numeric_limits<std::size_t>::max)() - width * 4) / (height - 1)) ||
-        !std::isfinite(opacity) || opacity < 0 || opacity > 1 ||
-        (mode != SpotHealingMode::ContentAware && mode != SpotHealingMode::CreateTexture &&
-         mode != SpotHealingMode::ProximityMatch))
+    if (cancellation.IsCancelled() || bgra.empty() || coverage.empty() || width == 0 || height == 0 || width > static_cast<std::size_t>(kMaxCanvasSide) ||
+        height > static_cast<std::size_t>(kMaxCanvasSide) || width * height > static_cast<std::size_t>(kMaxLayerPixels) || stride < width * 4 ||
+        (height > 1 && stride > ((std::numeric_limits<std::size_t>::max)() - width * 4) / (height - 1)) || ! std::isfinite(opacity) || opacity < 0 ||
+        opacity > 1 || (mode != SpotHealingMode::ContentAware && mode != SpotHealingMode::CreateTexture && mode != SpotHealingMode::ProximityMatch))
         return false;
     const auto pixelExtent = (height - 1) * stride + width * 4;
     if (bgra.size() < pixelExtent || coverage.size() < width * height)
@@ -570,8 +579,14 @@ bool HealForWork(std::span<std::uint8_t> bgra, std::span<const std::uint8_t> cov
     return HealUnchecked(bgra.data(), coverage.data(), width, height, stride, opacity, mode, seed, &work);
 }
 
-bool Heal(std::uint8_t* bgra, const std::uint8_t* coverage, std::size_t width, std::size_t height, std::size_t stride,
-          float opacity, SpotHealingMode mode, std::uint32_t seed)
+bool Heal(std::uint8_t* bgra,
+          const std::uint8_t* coverage,
+          std::size_t width,
+          std::size_t height,
+          std::size_t stride,
+          float opacity,
+          SpotHealingMode mode,
+          std::uint32_t seed)
 {
     if (bgra == nullptr || coverage == nullptr || width == 0 || height == 0 || stride < width * 4)
     {

@@ -6,8 +6,8 @@
 
 struct GpuResidencySnapshot final
 {
-    std::uint64_t deviceGeneration = 0;
-    std::uint64_t budgetBytes = 0;
+    std::uint64_t deviceGeneration  = 0;
+    std::uint64_t budgetBytes       = 0;
     std::uint64_t currentUsageBytes = 0;
 };
 
@@ -27,10 +27,10 @@ class GpuResidencyBudget;
 // neither device nor CPU owners. The budget outlives all reservations, including retired device generations.
 class GpuResidencyReservation final
 {
-  public:
+public:
     GpuResidencyReservation() noexcept = default;
     ~GpuResidencyReservation();
-    GpuResidencyReservation(const GpuResidencyReservation&) = delete;
+    GpuResidencyReservation(const GpuResidencyReservation&)            = delete;
     GpuResidencyReservation& operator=(const GpuResidencyReservation&) = delete;
     GpuResidencyReservation(GpuResidencyReservation&& other) noexcept;
     GpuResidencyReservation& operator=(GpuResidencyReservation&& other) noexcept;
@@ -52,12 +52,12 @@ class GpuResidencyReservation final
     }
     void ResetOwner() noexcept;
 
-  private:
+private:
     friend class GpuResidencyBudget;
-    GpuResidencyBudget* _budget = nullptr;
-    std::size_t _slot = 128;
-    std::uint64_t _ticket = 0;
-    std::uint64_t _bytes = 0;
+    GpuResidencyBudget* _budget     = nullptr;
+    std::size_t _slot               = 128;
+    std::uint64_t _ticket           = 0;
+    std::uint64_t _bytes            = 0;
     std::uint64_t _deviceGeneration = 0;
 };
 
@@ -68,37 +68,38 @@ class GpuResidencyReservation final
 // allocation, overwrite or partial reservation occurs here. This is not a responsiveness or capacity proof.
 class GpuResidencyBudget final
 {
-  public:
-    static constexpr std::size_t kCapacity = 128;
+public:
+    static constexpr std::size_t kCapacity          = 128;
     static constexpr std::uint64_t kMinimumHeadroom = 64ull * 1024 * 1024;
     GpuResidencyBudget() noexcept;
     ~GpuResidencyBudget();
-    GpuResidencyBudget(const GpuResidencyBudget&) = delete;
+    GpuResidencyBudget(const GpuResidencyBudget&)            = delete;
     GpuResidencyBudget& operator=(const GpuResidencyBudget&) = delete;
-    [[nodiscard]] GpuResidencyReservation ReserveOwner(std::uint64_t bytes, GpuResidencySnapshot snapshot,
-                                                       GpuResidencyAdmission& result) noexcept;
+    [[nodiscard]] GpuResidencyReservation ReserveOwner(std::uint64_t bytes, GpuResidencySnapshot snapshot, GpuResidencyAdmission& result) noexcept;
     // Serialized owner before a new useful phase, under a fresh successful same-generation device query.
     // Grow only the complete graph's delta. Preserve its original slot/ticket and every overlapping charge;
     // no new owner, allocation, wait or ticket is created. Equal total is a no-op; shrink/foreign/invalid
     // provenance and pressure refuse without changing the reservation or accounting.
-    [[nodiscard]] bool IncreaseOwner(GpuResidencyReservation& original, std::uint64_t totalBytes,
-                                     GpuResidencySnapshot snapshot, GpuResidencyAdmission& result) noexcept;
+    [[nodiscard]] bool IncreaseOwner(GpuResidencyReservation& original,
+                                     std::uint64_t totalBytes,
+                                     GpuResidencySnapshot snapshot,
+                                     GpuResidencyAdmission& result) noexcept;
     [[nodiscard]] std::uint64_t ReservedOwner() const noexcept;
     [[nodiscard]] std::size_t ActiveOwner() const noexcept;
     [[nodiscard]] bool ExhaustTicketsForTest() noexcept;
 
-  private:
+private:
     friend class GpuResidencyReservation;
     struct Slot final
     {
         std::uint64_t ticket = 0;
-        std::uint64_t bytes = 0;
+        std::uint64_t bytes  = 0;
     };
     [[nodiscard]] bool ReleaseOwner(std::size_t slot, std::uint64_t ticket, std::uint64_t bytes) noexcept;
     [[nodiscard]] bool IsOwner() const noexcept;
     std::array<Slot, kCapacity> _slots{};
-    std::uint64_t _reserved = 0;
-    std::uint64_t _nextTicket = 0;
-    std::size_t _active = 0;
+    std::uint64_t _reserved    = 0;
+    std::uint64_t _nextTicket  = 0;
+    std::size_t _active        = 0;
     std::uint32_t _ownerThread = 0;
 };

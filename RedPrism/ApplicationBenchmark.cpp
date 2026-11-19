@@ -98,9 +98,7 @@ constexpr std::array<Operation, 3> kSizeOperations{{
 
 Operation CurrentOperation(const UiBenchmarkState& state) noexcept
 {
-    auto operation = state.sizeOnly      ? kSizeOperations[state.operation]
-                     : state.samplerOnly ? kOperations[kOperations.size() - 1]
-                                         : kOperations[state.operation];
+    auto operation = state.sizeOnly ? kSizeOperations[state.operation] : state.samplerOnly ? kOperations[kOperations.size() - 1] : kOperations[state.operation];
     if (state.fixture.width == 10000 && operation.prepareCommand == ChromeHost::kCommandGaussianBlur)
     {
         // At today's pixel ceiling even the initial blur grow is refused. Measure that real command
@@ -113,18 +111,10 @@ Operation CurrentOperation(const UiBenchmarkState& state) noexcept
         for (const auto& layer : state.fixture.layers)
             if (layer.asset)
                 usedPixels += static_cast<std::int64_t>(layer.asset->image.Width()) * layer.asset->image.Height();
-        if (static_cast<std::int64_t>(state.fixture.width + 16) * (state.fixture.height + 16) >
-            kMaxLayerPixels - usedPixels)
-            operation = {"canvas-size-fill-refused-pixel-budget",
-                         ChromeHost::kCommandCanvasSize,
-                         0,
-                         {},
-                         0,
-                         Expected::Refusal,
-                         true};
+        if (static_cast<std::int64_t>(state.fixture.width + 16) * (state.fixture.height + 16) > kMaxLayerPixels - usedPixels)
+            operation = {"canvas-size-fill-refused-pixel-budget", ChromeHost::kCommandCanvasSize, 0, {}, 0, Expected::Refusal, true};
     }
-    if (operation.expected == Expected::ImportedLayers &&
-        static_cast<std::int64_t>(state.fixture.width) * state.fixture.height * 2 > kMaxLayerPixels)
+    if (operation.expected == Expected::ImportedLayers && static_cast<std::int64_t>(state.fixture.width) * state.fixture.height * 2 > kMaxLayerPixels)
     {
         operation = {"image-import-existing-refused-pixel-budget", 0, 0, {}, 0, Expected::ImportedLayersRefused};
     }
@@ -144,15 +134,13 @@ Operation CurrentOperation(const UiBenchmarkState& state) noexcept
         return {};
     }
     const int length = static_cast<int>(value.size());
-    const int count =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), length, nullptr, 0, nullptr, nullptr);
+    const int count  = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), length, nullptr, 0, nullptr, nullptr);
     if (count <= 0)
     {
         return "unknown";
     }
     std::string result(static_cast<std::size_t>(count), '\0');
-    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), length, result.data(), count, nullptr,
-                            nullptr) != count)
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), length, result.data(), count, nullptr, nullptr) != count)
     {
         return "unknown";
     }
@@ -174,11 +162,11 @@ BenchmarkMonitorSnapshot ReadBenchmarkMonitor(HWND window)
     const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
     MONITORINFOEXW info{};
     info.cbSize = sizeof(info);
-    if (!monitor || !GetMonitorInfoW(monitor, static_cast<MONITORINFO*>(&info)))
+    if (! monitor || ! GetMonitorInfoW(monitor, static_cast<MONITORINFO*>(&info)))
         return result;
-    result.monitorIdentity = reinterpret_cast<std::uintptr_t>(monitor);
-    result.deviceName = Utf8(info.szDevice);
-    constexpr UINT32 flags = QDC_ONLY_ACTIVE_PATHS | QDC_VIRTUAL_MODE_AWARE | QDC_VIRTUAL_REFRESH_RATE_AWARE;
+    result.monitorIdentity        = reinterpret_cast<std::uintptr_t>(monitor);
+    result.deviceName             = Utf8(info.szDevice);
+    constexpr UINT32 flags        = QDC_ONLY_ACTIVE_PATHS | QDC_VIRTUAL_MODE_AWARE | QDC_VIRTUAL_REFRESH_RATE_AWARE;
     constexpr UINT32 maximumPaths = 128;
     constexpr UINT32 maximumModes = 512;
     std::vector<DISPLAYCONFIG_PATH_INFO> paths;
@@ -188,8 +176,8 @@ BenchmarkMonitorSnapshot ReadBenchmarkMonitor(HWND window)
     {
         UINT32 pathCount = 0;
         UINT32 modeCount = 0;
-        if (GetDisplayConfigBufferSizes(flags, &pathCount, &modeCount) != ERROR_SUCCESS || pathCount == 0 ||
-            pathCount > maximumPaths || modeCount == 0 || modeCount > maximumModes)
+        if (GetDisplayConfigBufferSizes(flags, &pathCount, &modeCount) != ERROR_SUCCESS || pathCount == 0 || pathCount > maximumPaths || modeCount == 0 ||
+            modeCount > maximumModes)
             return result;
         paths.resize(pathCount);
         modes.resize(modeCount);
@@ -204,27 +192,26 @@ BenchmarkMonitorSnapshot ReadBenchmarkMonitor(HWND window)
         {
             const auto& path = paths[index];
             DISPLAYCONFIG_SOURCE_DEVICE_NAME source{};
-            source.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
-            source.header.size = sizeof(source);
+            source.header.type      = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+            source.header.size      = sizeof(source);
             source.header.adapterId = path.sourceInfo.adapterId;
-            source.header.id = path.sourceInfo.id;
+            source.header.id        = path.sourceInfo.id;
             if (DisplayConfigGetDeviceInfo(&source.header) != ERROR_SUCCESS)
                 return result; // An unresolved source could be another matching clone.
             const int comparison = CompareStringOrdinal(source.viewGdiDeviceName, -1, info.szDevice, -1, TRUE);
             if (comparison == 0)
                 return result;
-            const bool matches = comparison == CSTR_EQUAL;
+            const bool matches  = comparison == CSTR_EQUAL;
             const bool eligible = (path.flags & DISPLAYCONFIG_PATH_ACTIVE) && path.targetInfo.targetAvailable &&
-                                  !(path.flags & DISPLAYCONFIG_PATH_BOOST_REFRESH_RATE) &&
+                                  ! (path.flags & DISPLAYCONFIG_PATH_BOOST_REFRESH_RATE) &&
                                   path.targetInfo.scanLineOrdering == DISPLAYCONFIG_SCANLINE_ORDERING_PROGRESSIVE;
-            candidates.push_back(
-                {matches, eligible, {path.targetInfo.refreshRate.Numerator, path.targetInfo.refreshRate.Denominator}});
+            candidates.push_back({matches, eligible, {path.targetInfo.refreshRate.Numerator, path.targetInfo.refreshRate.Denominator}});
         }
         if (MonitorFromWindow(window, MONITOR_DEFAULTTONULL) != monitor)
             return {};
         MONITORINFOEXW current{};
         current.cbSize = sizeof(current);
-        if (!GetMonitorInfoW(monitor, static_cast<MONITORINFO*>(&current)) ||
+        if (! GetMonitorInfoW(monitor, static_cast<MONITORINFO*>(&current)) ||
             CompareStringOrdinal(info.szDevice, -1, current.szDevice, -1, TRUE) != CSTR_EQUAL)
             return {};
         result.refresh = SelectBenchmarkRefreshRate(candidates);
@@ -238,19 +225,18 @@ BenchmarkMonitorSnapshot ReadBenchmarkMonitor(HWND window)
 {
     if (left.has_value() != right.has_value())
         return false;
-    if (!left)
+    if (! left)
         return true;
     if (left->numerator == 0 || left->denominator == 0 || right->numerator == 0 || right->denominator == 0)
         return false;
-    return static_cast<std::uint64_t>(left->numerator) * right->denominator ==
-           static_cast<std::uint64_t>(right->numerator) * left->denominator;
+    return static_cast<std::uint64_t>(left->numerator) * right->denominator == static_cast<std::uint64_t>(right->numerator) * left->denominator;
 }
 
 [[nodiscard]] Raster Pattern(int width, int height, unsigned int seed, bool mask, std::uint64_t& checksum)
 {
     const unsigned int channels = mask ? 1 : 4;
-    auto buffer = PixelBuffer::TryAllocate(static_cast<std::size_t>(width) * height * channels);
-    if (!buffer)
+    auto buffer                 = PixelBuffer::TryAllocate(static_cast<std::size_t>(width) * height * channels);
+    if (! buffer)
     {
         return {};
     }
@@ -281,8 +267,7 @@ BenchmarkMonitorSnapshot ReadBenchmarkMonitor(HWND window)
 
 [[nodiscard]] bool GradientEndpointPixelsMatch(const Raster& image, int row) noexcept
 {
-    if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888 || image.Width() < 2 || row < 0 ||
-        row >= image.Height())
+    if (! image.HasStorage() || image.Format() != RasterFormat::Bgra8888 || image.Width() < 2 || row < 0 || row >= image.Height())
         return false;
     std::array<std::uint8_t, 4> first{};
     std::array<std::uint8_t, 4> last{};
@@ -294,13 +279,11 @@ BenchmarkMonitorSnapshot ReadBenchmarkMonitor(HWND window)
     return first == kForegroundBgra && last == kBackgroundBgra;
 }
 
-[[nodiscard]] bool ReadGradientPreviewPixel(const BrushStroke& preview, int x, int y,
-                                            std::array<std::uint8_t, 4>& pixel) noexcept
+[[nodiscard]] bool ReadGradientPreviewPixel(const BrushStroke& preview, int x, int y, std::array<std::uint8_t, 4>& pixel) noexcept
 {
     for (const auto& tile : preview.Tiles())
     {
-        if (!tile.image.HasStorage() || x < tile.rect.x || y < tile.rect.y || x >= tile.rect.x + tile.rect.width ||
-            y >= tile.rect.y + tile.rect.height)
+        if (! tile.image.HasStorage() || x < tile.rect.x || y < tile.rect.y || x >= tile.rect.x + tile.rect.width || y >= tile.rect.y + tile.rect.height)
             continue;
         tile.image.ReadRegion(x - tile.rect.x, y - tile.rect.y, 1, 1, pixel.data(), 4, 0);
         return true;
@@ -312,10 +295,8 @@ BenchmarkMonitorSnapshot ReadBenchmarkMonitor(HWND window)
 {
     std::array<std::uint8_t, 4> first{};
     std::array<std::uint8_t, 4> last{};
-    return width >= 2 && ReadGradientPreviewPixel(preview, 0, row, first) &&
-           ReadGradientPreviewPixel(preview, width - 1, row, last) &&
-           first == std::array<std::uint8_t, 4>{0x27, 0x64, 0x93, 0xff} &&
-           last == std::array<std::uint8_t, 4>{0xff, 0xff, 0xff, 0xff};
+    return width >= 2 && ReadGradientPreviewPixel(preview, 0, row, first) && ReadGradientPreviewPixel(preview, width - 1, row, last) &&
+           first == std::array<std::uint8_t, 4>{0x27, 0x64, 0x93, 0xff} && last == std::array<std::uint8_t, 4>{0xff, 0xff, 0xff, 0xff};
 }
 
 HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState>& state) noexcept
@@ -323,131 +304,121 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
     // Setup is a recoverable construction boundary. Nothing measured or published exists on failure.
     try
     {
-        auto next = std::make_unique<UiBenchmarkState>();
+        auto next               = std::make_unique<UiBenchmarkState>();
         const bool cancellation = IsUiCancellationBenchmark(mode);
         if (cancellation)
         {
             next->cancellation = std::make_unique<UiCancellationBenchmark>();
             // Explicit diagnostic opt-in. Ordinary runs and timing gates use the unchanged wall histogram.
             wchar_t attribution[2]{};
-            next->timing.attributionEnabled =
-                GetEnvironmentVariableW(L"REDPRISM_UI_TIMING_ATTRIBUTION", attribution, 2) == 1 &&
-                attribution[0] == L'1';
+            next->timing.attributionEnabled = GetEnvironmentVariableW(L"REDPRISM_UI_TIMING_ATTRIBUTION", attribution, 2) == 1 && attribution[0] == L'1';
         }
-        const bool samplerOnly =
-            mode == L"ui-sampler" || mode == L"ui-sampler45" || mode == L"ui-sampler100" || mode == L"ui-sampler-smoke";
-        const bool sizeOnly = mode == L"ui-size-prepared" || mode == L"ui-size-prepared45" ||
-                              mode == L"ui-size-prepared100" || mode == L"ui-size-prepared-smoke";
+        const bool samplerOnly = mode == L"ui-sampler" || mode == L"ui-sampler45" || mode == L"ui-sampler100" || mode == L"ui-sampler-smoke";
+        const bool sizeOnly =
+            mode == L"ui-size-prepared" || mode == L"ui-size-prepared45" || mode == L"ui-size-prepared100" || mode == L"ui-size-prepared-smoke";
         if (sizeOnly)
         {
             wchar_t attribution[2]{};
-            next->timing.attributionEnabled =
-                GetEnvironmentVariableW(L"REDPRISM_UI_TIMING_ATTRIBUTION", attribution, 2) == 1 &&
-                attribution[0] == L'1';
+            next->timing.attributionEnabled = GetEnvironmentVariableW(L"REDPRISM_UI_TIMING_ATTRIBUTION", attribution, 2) == 1 && attribution[0] == L'1';
         }
-        const bool preparedDisplay = mode == L"ui-prepared" || mode == L"ui-prepared45" || mode == L"ui-prepared100" ||
-                                     mode == L"ui-prepared-smoke" || sizeOnly || mode == L"ui-cancel-prepared" ||
-                                     mode == L"ui-cancel-prepared45" || mode == L"ui-cancel-prepared100" ||
-                                     mode == L"ui-cancel-prepared-smoke";
-        const bool smoke = mode == L"ui-smoke" || mode == L"ui-sampler-smoke" || mode == L"ui-prepared-smoke" ||
-                           mode == L"ui-size-prepared-smoke" || mode == L"ui-cancel-smoke" ||
-                           mode == L"ui-cancel-prepared-smoke";
-        const bool ceiling = mode == L"ui100" || mode == L"ui-sampler100" || mode == L"ui-prepared100" ||
-                             mode == L"ui-size-prepared100" || mode == L"ui-cancel100" ||
-                             mode == L"ui-cancel-prepared100";
-        const bool layered45 = mode == L"ui45" || mode == L"ui-sampler45" || mode == L"ui-prepared45" ||
-                               mode == L"ui-size-prepared45" || mode == L"ui-cancel45" ||
-                               mode == L"ui-cancel-prepared45";
-        const int width = smoke ? 64 : ceiling ? 10000 : layered45 ? 8192 : 3840;
-        const int height = smoke ? 48 : ceiling ? 10000 : layered45 ? 5464 : 2160;
-        next->runs = smoke ? 2 : 10;
-        next->smoke = smoke;
-        next->samplerOnly = samplerOnly;
-        next->preparedDisplay = preparedDisplay;
-        next->sizeOnly = sizeOnly;
-        next->operation = samplerOnly ? kOperations.size() - 1 : 0;
+        const bool preparedDisplay  = mode == L"ui-prepared" || mode == L"ui-prepared45" || mode == L"ui-prepared100" || mode == L"ui-prepared-smoke" ||
+                                      sizeOnly || mode == L"ui-cancel-prepared" || mode == L"ui-cancel-prepared45" || mode == L"ui-cancel-prepared100" ||
+                                      mode == L"ui-cancel-prepared-smoke";
+        const bool smoke            = mode == L"ui-smoke" || mode == L"ui-sampler-smoke" || mode == L"ui-prepared-smoke" || mode == L"ui-size-prepared-smoke" ||
+                                      mode == L"ui-cancel-smoke" || mode == L"ui-cancel-prepared-smoke";
+        const bool ceiling          = mode == L"ui100" || mode == L"ui-sampler100" || mode == L"ui-prepared100" || mode == L"ui-size-prepared100" ||
+                                      mode == L"ui-cancel100" || mode == L"ui-cancel-prepared100";
+        const bool layered45        = mode == L"ui45" || mode == L"ui-sampler45" || mode == L"ui-prepared45" || mode == L"ui-size-prepared45" ||
+                                      mode == L"ui-cancel45" || mode == L"ui-cancel-prepared45";
+        const int width             = smoke ? 64 : ceiling ? 10000 : layered45 ? 8192 : 3840;
+        const int height            = smoke ? 48 : ceiling ? 10000 : layered45 ? 5464 : 2160;
+        next->runs                  = smoke ? 2 : 10;
+        next->smoke                 = smoke;
+        next->samplerOnly           = samplerOnly;
+        next->preparedDisplay       = preparedDisplay;
+        next->sizeOnly              = sizeOnly;
+        next->operation             = samplerOnly ? kOperations.size() - 1 : 0;
         const auto temporaryStorage = std::make_unique<std::array<wchar_t, 32768>>();
-        auto& temporary = *temporaryStorage;
-        const DWORD units = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
+        auto& temporary             = *temporaryStorage;
+        const DWORD units           = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
         if (units == 0 || units >= temporary.size())
             return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
-        next->saveDirectory =
-            std::wstring(temporary.data(), units) + L"RedPrism.UiBench." + Guid::Generate().ToString();
-        if (!CreateDirectoryW(next->saveDirectory.c_str(), nullptr))
+        next->saveDirectory = std::wstring(temporary.data(), units) + L"RedPrism.UiBench." + Guid::Generate().ToString();
+        if (! CreateDirectoryW(next->saveDirectory.c_str(), nullptr))
             return HRESULT_FROM_WIN32(GetLastError());
         next->ownsSaveDirectory = true;
-        next->savePath = next->saveDirectory + L"\\saved.prism";
-        next->pngExportPath = next->saveDirectory + L"\\export.png";
-        next->jpegExportPath = next->saveDirectory + L"\\export.jpg";
-        next->fixture.id = Guid::Generate();
-        next->fixture.width = width;
-        next->fixture.height = height;
-        next->fixtureChecksum = 14695981039346656037ULL;
+        next->savePath          = next->saveDirectory + L"\\saved.prism";
+        next->pngExportPath     = next->saveDirectory + L"\\export.png";
+        next->jpegExportPath    = next->saveDirectory + L"\\export.jpg";
+        next->fixture.id        = Guid::Generate();
+        next->fixture.width     = width;
+        next->fixture.height    = height;
+        next->fixtureChecksum   = 14695981039346656037ULL;
         const Vec2 size{static_cast<double>(width), static_cast<double>(height)};
-        auto top = ImageLayer::Blank(L"Benchmark active", size);
+        auto top     = ImageLayer::Blank(L"Benchmark active", size);
         Raster image = Pattern(width, height, 29, false, next->fixtureChecksum);
-        if (!image.HasStorage())
+        if (! image.HasStorage())
         {
             return E_OUTOFMEMORY;
         }
-        top.asset = RasterAsset{image, Raster::MakeThumbnail(image), L"Benchmark active"};
-        next->activeLayer = top.id;
-        next->imageImportBaseline.id = Guid::Generate();
-        next->imageImportBaseline.width = width;
+        top.asset                        = RasterAsset{image, Raster::MakeThumbnail(image), L"Benchmark active"};
+        next->activeLayer                = top.id;
+        next->imageImportBaseline.id     = Guid::Generate();
+        next->imageImportBaseline.width  = width;
         next->imageImportBaseline.height = height;
-        auto importDraft = CanvasDocumentDraft::Rebuild(next->imageImportBaseline, 1);
-        auto fixtureDraft = CanvasDocumentDraft::Rebuild(next->fixture, ceiling ? 1 : 3);
-        if (!importDraft || !fixtureDraft)
+        auto importDraft                 = CanvasDocumentDraft::Rebuild(next->imageImportBaseline, 1);
+        auto fixtureDraft                = CanvasDocumentDraft::Rebuild(next->fixture, ceiling ? 1 : 3);
+        if (! importDraft || ! fixtureDraft)
             return E_INVALIDARG;
         auto importBaseLayer = top;
         importBaseLayer.mask.reset();
-        if (!importDraft.value().Append(std::move(importBaseLayer)))
+        if (! importDraft.value().Append(std::move(importBaseLayer)))
             return E_INVALIDARG;
-        if (!ceiling)
+        if (! ceiling)
         {
-            Raster mask = Pattern(width, height, 0, true, next->fixtureChecksum);
+            Raster mask         = Pattern(width, height, 0, true, next->fixtureChecksum);
             Raster bottomPixels = Pattern(width, height, 71, false, next->fixtureChecksum);
-            if (!mask.HasStorage() || !bottomPixels.HasStorage())
+            if (! mask.HasStorage() || ! bottomPixels.HasStorage())
             {
                 return E_OUTOFMEMORY;
             }
-            top.mask = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), L"Benchmark mask"}};
-            auto bottom = ImageLayer::Blank(L"Benchmark bottom", size);
+            top.mask     = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), L"Benchmark mask"}};
+            auto bottom  = ImageLayer::Blank(L"Benchmark bottom", size);
             bottom.asset = RasterAsset{bottomPixels, Raster::MakeThumbnail(bottomPixels), L"Benchmark bottom"};
-            if (!fixtureDraft.value().Append(std::move(bottom)))
+            if (! fixtureDraft.value().Append(std::move(bottom)))
                 return E_INVALIDARG;
         }
-        if (!fixtureDraft.value().Append(std::move(top)))
+        if (! fixtureDraft.value().Append(std::move(top)))
             return E_INVALIDARG;
-        if (!ceiling)
+        if (! ceiling)
         {
             ImageLayer adjustment;
-            adjustment.id = Guid::Generate();
-            adjustment.name = L"Benchmark exposure adjustment";
-            adjustment.transform.size = size;
-            adjustment.adjustment = LayerAdjustment{};
-            adjustment.adjustment->kind = AdjustmentKind::Exposure;
+            adjustment.id                           = Guid::Generate();
+            adjustment.name                         = L"Benchmark exposure adjustment";
+            adjustment.transform.size               = size;
+            adjustment.adjustment                   = LayerAdjustment{};
+            adjustment.adjustment->kind             = AdjustmentKind::Exposure;
             adjustment.adjustment->exposureSettings = ExposureSettings{0.25, 0, 1};
-            if (!fixtureDraft.value().Append(std::move(adjustment)))
+            if (! fixtureDraft.value().Append(std::move(adjustment)))
                 return E_INVALIDARG;
         }
-        auto importDocument = importDraft.value().Seal();
+        auto importDocument  = importDraft.value().Seal();
         auto fixtureDocument = fixtureDraft.value().Seal();
-        if (!importDocument || !fixtureDocument)
+        if (! importDocument || ! fixtureDocument)
             return E_INVALIDARG;
         next->imageImportBaseline = std::move(importDocument.value());
-        next->fixture = std::move(fixtureDocument.value());
+        next->fixture             = std::move(fixtureDocument.value());
         if (ValidateDocument(next->fixture) != DocumentStatus::Ok)
         {
             return E_INVALIDARG;
         }
-        if (ValidateDocument(next->imageImportBaseline) != DocumentStatus::Ok ||
-            next->imageImportBaseline.layers.size() != 1 || !next->imageImportBaseline.layers.front().asset.has_value())
+        if (ValidateDocument(next->imageImportBaseline) != DocumentStatus::Ok || next->imageImportBaseline.layers.size() != 1 ||
+            ! next->imageImportBaseline.layers.front().asset.has_value())
         {
             return E_INVALIDARG;
         }
         next->machine = ReadBenchmarkMachine();
-        state = std::move(next);
+        state         = std::move(next);
         return S_OK;
     }
     catch (const std::bad_alloc&)
@@ -458,9 +429,9 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
 
 struct Distribution final
 {
-    std::uint64_t samples = 0;
+    std::uint64_t samples    = 0;
     std::uint64_t p99UpperUs = 0;
-    std::uint64_t maximumUs = 0;
+    std::uint64_t maximumUs  = 0;
 };
 
 template <typename Select> Distribution SummarizeSelected(const UiBenchmarkState& state, Select select) noexcept
@@ -490,8 +461,7 @@ template <typename Select> Distribution SummarizeSelected(const UiBenchmarkState
         cumulative += buckets[bucket];
         if (cumulative >= rank)
         {
-            result.p99UpperUs =
-                bucket + 1 == buckets.size() ? result.maximumUs : UiTimingHistogram::kUpperBounds[bucket];
+            result.p99UpperUs = bucket + 1 == buckets.size() ? result.maximumUs : UiTimingHistogram::kUpperBounds[bucket];
             break;
         }
     }
@@ -500,8 +470,7 @@ template <typename Select> Distribution SummarizeSelected(const UiBenchmarkState
 
 Distribution Summarize(const UiBenchmarkState& state, UiTimingKind kind)
 {
-    return SummarizeSelected(state, [kind](const UiTimingStats& stats) -> const UiTimingHistogram&
-                             { return stats.durations[static_cast<std::size_t>(kind)]; });
+    return SummarizeSelected(state, [kind](const UiTimingStats& stats) -> const UiTimingHistogram& { return stats.durations[static_cast<std::size_t>(kind)]; });
 }
 
 constexpr std::array<std::pair<UiTimingKind, const char*>, 6> kResourceStages{{
@@ -515,8 +484,8 @@ constexpr std::array<std::pair<UiTimingKind, const char*>, 6> kResourceStages{{
 
 void ResetBenchmarkTiming(UiTimingStats& timing) noexcept
 {
-    const bool attribution = timing.attributionEnabled;
-    timing = {};
+    const bool attribution    = timing.attributionEnabled;
+    timing                    = {};
     timing.attributionEnabled = attribution;
 }
 
@@ -534,7 +503,7 @@ void PrintSizeAttributionString(const char* value) noexcept
 
 void ReportSizeAttribution(const UiBenchmarkState& state, const char* boundary) noexcept
 {
-    if (!state.sizeOnly || !state.timing.attributionEnabled)
+    if (! state.sizeOnly || ! state.timing.attributionEnabled)
         return;
     for (std::uint32_t index = 0; index < state.timing.attributionCursor; ++index)
     {
@@ -542,11 +511,19 @@ void ReportSizeAttribution(const UiBenchmarkState& state, const char* boundary) 
         std::printf("UI SIZE ATTRIBUTION name=%s trial=%u boundary=%s index=%u kind=%u detail=%u "
                     "wallUs=%llu qpcBegin=%lld qpcEnd=%lld qpcFrequency=%lld cyclesKnown=%d "
                     "threadCycles=%llu sourceLine=%u source=",
-                    CurrentOperation(state).name, state.trial, boundary, index, static_cast<unsigned int>(record.kind),
-                    record.detail, static_cast<unsigned long long>(record.wallMicroseconds),
-                    static_cast<long long>(record.qpcBegin), static_cast<long long>(record.qpcEnd),
-                    static_cast<long long>(record.qpcFrequency), record.threadCycleKnown,
-                    static_cast<unsigned long long>(record.threadCycleDelta), static_cast<unsigned int>(record.line));
+                    CurrentOperation(state).name,
+                    state.trial,
+                    boundary,
+                    index,
+                    static_cast<unsigned int>(record.kind),
+                    record.detail,
+                    static_cast<unsigned long long>(record.wallMicroseconds),
+                    static_cast<long long>(record.qpcBegin),
+                    static_cast<long long>(record.qpcEnd),
+                    static_cast<long long>(record.qpcFrequency),
+                    record.threadCycleKnown,
+                    static_cast<unsigned long long>(record.threadCycleDelta),
+                    static_cast<unsigned int>(record.line));
         PrintSizeAttributionString(record.file);
         std::printf(" function=");
         PrintSizeAttributionString(record.function);
@@ -554,9 +531,13 @@ void ReportSizeAttribution(const UiBenchmarkState& state, const char* boundary) 
     }
     std::printf("UI SIZE ATTRIBUTION SUMMARY name=%s trial=%u boundary=%s count=%u overflow=%llu "
                 "clockFailures=%llu capacity=%zu minimumUs=%llu diagnostic=1\n",
-                CurrentOperation(state).name, state.trial, boundary, state.timing.attributionCursor,
+                CurrentOperation(state).name,
+                state.trial,
+                boundary,
+                state.timing.attributionCursor,
                 static_cast<unsigned long long>(state.timing.attributionOverflowCount),
-                static_cast<unsigned long long>(state.timing.attributionClockFailures), kUiTimingAttributionCapacity,
+                static_cast<unsigned long long>(state.timing.attributionClockFailures),
+                kUiTimingAttributionCapacity,
                 static_cast<unsigned long long>(kUiTimingAttributionMinimumMicroseconds));
 }
 
@@ -570,15 +551,19 @@ void ReportResourceStages(const UiBenchmarkState& state, const char* boundary, b
         else
         {
             const auto& histogram = state.timing.durations[static_cast<std::size_t>(kind)];
-            distribution = {histogram.SampleCount(), histogram.PercentileUpperBound(99),
-                            histogram.MaximumMicroseconds()};
+            distribution          = {histogram.SampleCount(), histogram.PercentileUpperBound(99), histogram.MaximumMicroseconds()};
         }
         // Zero samples means this boundary performed none of that work, not a measured zero-duration stage.
-        std::printf("%s\n", std::format("UI RESOURCE name={} boundary={} stage={} samples={} "
-                                        "p99UpperUs={} maxUs={} inclusive=1",
-                                        CurrentOperation(state).name, boundary, name, distribution.samples,
-                                        distribution.p99UpperUs, distribution.maximumUs)
-                                .c_str());
+        std::printf("%s\n",
+                    std::format("UI RESOURCE name={} boundary={} stage={} samples={} "
+                                "p99UpperUs={} maxUs={} inclusive=1",
+                                CurrentOperation(state).name,
+                                boundary,
+                                name,
+                                distribution.samples,
+                                distribution.p99UpperUs,
+                                distribution.maximumUs)
+                        .c_str());
     }
 }
 
@@ -591,9 +576,9 @@ void Report(const UiBenchmarkState& state)
         std::fprintf(stderr, "UI BENCH report rejected invalid run count=%u\n", state.runs);
         return;
     }
-    std::uint64_t frames = 0;
-    std::uint64_t clockFailures = 0;
-    std::uint64_t abandonedFrames = 0;
+    std::uint64_t frames                = 0;
+    std::uint64_t clockFailures         = 0;
+    std::uint64_t abandonedFrames       = 0;
     std::uint64_t sizeFinalPublications = 0;
     GpuReadbackStatistics readback;
     for (std::size_t run = 0; run < runs; ++run)
@@ -609,36 +594,56 @@ void Report(const UiBenchmarkState& state)
         readback.busyFailures += state.samples[run].readback.busyFailures;
     }
     std::sort(elapsed.begin(), elapsed.begin() + static_cast<std::ptrdiff_t>(runs));
-    const auto dispatch = Summarize(state, UiTimingKind::MessageDispatch);
-    const auto message = Summarize(state, UiTimingKind::WindowMessage);
-    const auto drain = Summarize(state, UiTimingKind::CompletionDrain);
-    const auto apply = Summarize(state, UiTimingKind::ResultApply);
-    const auto action = Summarize(state, UiTimingKind::UiAction);
-    const auto frame = Summarize(state, UiTimingKind::Frame);
-    const auto frameLatency = SummarizeSelected(state, [](const UiTimingStats& stats) -> const UiTimingHistogram&
-                                                { return stats.frameLatency; });
-    const double median =
-        static_cast<double>(elapsed.at((runs - 1) / 2)) * 0.5 + static_cast<double>(elapsed.at(runs / 2)) * 0.5;
-    std::printf(
-        "%s\n",
-        std::format("UI BENCH name={} width={} height={} runs={} warmup=1 elapsedMedianUs={:.1f} "
-                    "elapsedP95Us={} elapsedMaxUs={} "
-                    "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
-                    "drainP99UpperUs={} drainMaxUs={} "
-                    "applyMaxUs={} actionP99UpperUs={} actionMaxUs={} frameP99UpperUs={} frameMaxUs={} frames={} "
-                    "invalidationToPresentSamples={} invalidationToPresentP99UpperUs={} "
-                    "invalidationToPresentMaxUs={} clockFailures={} abandonedFrameIntervals={} "
-                    "readbackCopies={} readbackMaps={} readinessBarriers={} busyFailures={}",
-                    CurrentOperation(state).name, state.fixture.width, state.fixture.height, state.runs, median,
-                    elapsed.at((runs * 95 + 99) / 100 - 1), elapsed.at(runs - 1), dispatch.p99UpperUs,
-                    dispatch.maximumUs, message.p99UpperUs, message.maximumUs, drain.p99UpperUs, drain.maximumUs,
-                    apply.maximumUs, action.p99UpperUs, action.maximumUs, frame.p99UpperUs, frame.maximumUs, frames,
-                    frameLatency.samples, frameLatency.p99UpperUs, frameLatency.maximumUs, clockFailures,
-                    abandonedFrames, readback.copies, readback.maps, readback.readinessBarriers, readback.busyFailures)
-            .c_str());
+    const auto dispatch     = Summarize(state, UiTimingKind::MessageDispatch);
+    const auto message      = Summarize(state, UiTimingKind::WindowMessage);
+    const auto drain        = Summarize(state, UiTimingKind::CompletionDrain);
+    const auto apply        = Summarize(state, UiTimingKind::ResultApply);
+    const auto action       = Summarize(state, UiTimingKind::UiAction);
+    const auto frame        = Summarize(state, UiTimingKind::Frame);
+    const auto frameLatency = SummarizeSelected(state, [](const UiTimingStats& stats) -> const UiTimingHistogram& { return stats.frameLatency; });
+    const double median     = static_cast<double>(elapsed.at((runs - 1) / 2)) * 0.5 + static_cast<double>(elapsed.at(runs / 2)) * 0.5;
+    std::printf("%s\n",
+                std::format("UI BENCH name={} width={} height={} runs={} warmup=1 elapsedMedianUs={:.1f} "
+                            "elapsedP95Us={} elapsedMaxUs={} "
+                            "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
+                            "drainP99UpperUs={} drainMaxUs={} "
+                            "applyMaxUs={} actionP99UpperUs={} actionMaxUs={} frameP99UpperUs={} frameMaxUs={} frames={} "
+                            "invalidationToPresentSamples={} invalidationToPresentP99UpperUs={} "
+                            "invalidationToPresentMaxUs={} clockFailures={} abandonedFrameIntervals={} "
+                            "readbackCopies={} readbackMaps={} readinessBarriers={} busyFailures={}",
+                            CurrentOperation(state).name,
+                            state.fixture.width,
+                            state.fixture.height,
+                            state.runs,
+                            median,
+                            elapsed.at((runs * 95 + 99) / 100 - 1),
+                            elapsed.at(runs - 1),
+                            dispatch.p99UpperUs,
+                            dispatch.maximumUs,
+                            message.p99UpperUs,
+                            message.maximumUs,
+                            drain.p99UpperUs,
+                            drain.maximumUs,
+                            apply.maximumUs,
+                            action.p99UpperUs,
+                            action.maximumUs,
+                            frame.p99UpperUs,
+                            frame.maximumUs,
+                            frames,
+                            frameLatency.samples,
+                            frameLatency.p99UpperUs,
+                            frameLatency.maximumUs,
+                            clockFailures,
+                            abandonedFrames,
+                            readback.copies,
+                            readback.maps,
+                            readback.readinessBarriers,
+                            readback.busyFailures)
+                    .c_str());
     if (state.sizeOnly)
         std::printf("UI SIZE PUBLICATION name=%s recorded=%llu expected=%llu warmupExcluded=1\n",
-                    CurrentOperation(state).name, static_cast<unsigned long long>(sizeFinalPublications),
+                    CurrentOperation(state).name,
+                    static_cast<unsigned long long>(sizeFinalPublications),
                     static_cast<unsigned long long>(CurrentOperation(state).expected == Expected::Size ? runs : 0));
     std::fflush(stdout);
     ReportResourceStages(state, "recorded", true);
@@ -648,29 +653,42 @@ void ReportFocusedBoundary(const UiBenchmarkState& state, const char* boundary)
 {
     // Report initial display preparation and the excluded first trial separately. The recorded distribution
     // must not hide their owner-thread cost, and neither row is an isolated GPU upload timer.
-    const auto& timing = state.timing;
+    const auto& timing   = state.timing;
     const auto& dispatch = timing.durations[static_cast<std::size_t>(UiTimingKind::MessageDispatch)];
-    const auto& message = timing.durations[static_cast<std::size_t>(UiTimingKind::WindowMessage)];
-    const auto& drain = timing.durations[static_cast<std::size_t>(UiTimingKind::CompletionDrain)];
-    const auto& apply = timing.durations[static_cast<std::size_t>(UiTimingKind::ResultApply)];
-    const auto& action = timing.durations[static_cast<std::size_t>(UiTimingKind::UiAction)];
-    const auto& frame = timing.durations[static_cast<std::size_t>(UiTimingKind::Frame)];
-    std::printf("%s\n", std::format("UI BENCH BOUNDARY name={} boundary={} width={} height={} "
-                                    "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
-                                    "drainP99UpperUs={} drainMaxUs={} applyMaxUs={} actionP99UpperUs={} actionMaxUs={} "
-                                    "frameP99UpperUs={} frameMaxUs={} frames={} clockFailures={} "
-                                    "invalidationToPresentSamples={} invalidationToPresentP99UpperUs={} "
-                                    "invalidationToPresentMaxUs={} abandonedFrameIntervals={}",
-                                    CurrentOperation(state).name, boundary, state.fixture.width, state.fixture.height,
-                                    dispatch.PercentileUpperBound(99), dispatch.MaximumMicroseconds(),
-                                    message.PercentileUpperBound(99), message.MaximumMicroseconds(),
-                                    drain.PercentileUpperBound(99), drain.MaximumMicroseconds(),
-                                    apply.MaximumMicroseconds(), action.PercentileUpperBound(99),
-                                    action.MaximumMicroseconds(), frame.PercentileUpperBound(99),
-                                    frame.MaximumMicroseconds(), frame.SampleCount(), timing.clockFailures,
-                                    timing.frameLatency.SampleCount(), timing.frameLatency.PercentileUpperBound(99),
-                                    timing.frameLatency.MaximumMicroseconds(), timing.abandonedFrameIntervals)
-                            .c_str());
+    const auto& message  = timing.durations[static_cast<std::size_t>(UiTimingKind::WindowMessage)];
+    const auto& drain    = timing.durations[static_cast<std::size_t>(UiTimingKind::CompletionDrain)];
+    const auto& apply    = timing.durations[static_cast<std::size_t>(UiTimingKind::ResultApply)];
+    const auto& action   = timing.durations[static_cast<std::size_t>(UiTimingKind::UiAction)];
+    const auto& frame    = timing.durations[static_cast<std::size_t>(UiTimingKind::Frame)];
+    std::printf("%s\n",
+                std::format("UI BENCH BOUNDARY name={} boundary={} width={} height={} "
+                            "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
+                            "drainP99UpperUs={} drainMaxUs={} applyMaxUs={} actionP99UpperUs={} actionMaxUs={} "
+                            "frameP99UpperUs={} frameMaxUs={} frames={} clockFailures={} "
+                            "invalidationToPresentSamples={} invalidationToPresentP99UpperUs={} "
+                            "invalidationToPresentMaxUs={} abandonedFrameIntervals={}",
+                            CurrentOperation(state).name,
+                            boundary,
+                            state.fixture.width,
+                            state.fixture.height,
+                            dispatch.PercentileUpperBound(99),
+                            dispatch.MaximumMicroseconds(),
+                            message.PercentileUpperBound(99),
+                            message.MaximumMicroseconds(),
+                            drain.PercentileUpperBound(99),
+                            drain.MaximumMicroseconds(),
+                            apply.MaximumMicroseconds(),
+                            action.PercentileUpperBound(99),
+                            action.MaximumMicroseconds(),
+                            frame.PercentileUpperBound(99),
+                            frame.MaximumMicroseconds(),
+                            frame.SampleCount(),
+                            timing.clockFailures,
+                            timing.frameLatency.SampleCount(),
+                            timing.frameLatency.PercentileUpperBound(99),
+                            timing.frameLatency.MaximumMicroseconds(),
+                            timing.abandonedFrameIntervals)
+                    .c_str());
     std::fflush(stdout);
     ReportResourceStages(state, boundary, false);
     ReportSizeAttribution(state, boundary);
@@ -684,35 +702,33 @@ UiBenchmarkState::~UiBenchmarkState()
     // destination. The directory is removed only after those known files are gone.
     if (ownsSaveDirectory)
     {
-        if (!savePath.empty())
+        if (! savePath.empty())
             (void)DeleteFileW(savePath.c_str());
-        if (!pngExportPath.empty())
+        if (! pngExportPath.empty())
             (void)DeleteFileW(pngExportPath.c_str());
-        if (!jpegExportPath.empty())
+        if (! jpegExportPath.empty())
             (void)DeleteFileW(jpegExportPath.c_str());
-        if (!RemoveDirectoryW(saveDirectory.c_str()))
+        if (! RemoveDirectoryW(saveDirectory.c_str()))
             std::fprintf(stderr, "UI BENCH cleanup failed win32=%lu\n", GetLastError());
     }
 }
 
 int Application::RunUiBenchmark() noexcept
 {
-    if (!_screenshotPath.empty() || !_demo.empty())
+    if (! _screenshotPath.empty() || ! _demo.empty())
     {
         return 2;
     }
     // This opt-in foreground-frame measurement needs an awake display, without periodic keep-alive calls.
     // Restore this thread's prior request on every exit; ordinary application runs never take this lease.
-    const EXECUTION_STATE previousExecution =
-        SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+    const EXECUTION_STATE previousExecution = SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
     if (previousExecution == 0)
     {
         std::printf("UI BENCH REPORT status=failed reason=display-lease\n");
         return 5;
     }
-    const auto restoreExecution =
-        wil::scope_exit([previousExecution]() noexcept { (void)SetThreadExecutionState(previousExecution); });
-    const HRESULT status = CreateBenchmark(_bench, _uiBenchmark);
+    const auto restoreExecution = wil::scope_exit([previousExecution]() noexcept { (void)SetThreadExecutionState(previousExecution); });
+    const HRESULT status        = CreateBenchmark(_bench, _uiBenchmark);
     if (FAILED(status))
     {
         std::printf("UI BENCH REPORT status=failed setup=0x%08lx\n", static_cast<unsigned long>(status));
@@ -720,7 +736,7 @@ int Application::RunUiBenchmark() noexcept
     }
     if (_uiBenchmark->cancellation)
     {
-        if (!_preUiCancellationObservation)
+        if (! _preUiCancellationObservation)
         {
             std::printf("UI BENCH REPORT status=failed reason=missing-startup-observer\n");
             return 5;
@@ -728,8 +744,8 @@ int Application::RunUiBenchmark() noexcept
         // Transfer ownership, not the object: the scheduler already borrows this stable context/event.
         _uiBenchmark->cancellation->observation = std::move(_preUiCancellationObservation);
     }
-    _quietUi = true;
-    _prompts = &QuietPrompts();
+    _quietUi       = true;
+    _prompts       = &QuietPrompts();
     _screenshotDpi = 0;
     _renderer.SetLayoutDpi(0);
     // Bounded correctness fixtures own their modifier state like the hidden self-test. The
@@ -740,18 +756,18 @@ int Application::RunUiBenchmark() noexcept
         smokeKeyboard.emplace();
     const UiTimingCapture capture{_uiBenchmark->timing};
     const int result = Run(SW_SHOWNOACTIVATE);
-    return result == 0 && _uiBenchmark->complete && !_uiBenchmark->failed ? 0 : 5;
+    return result == 0 && _uiBenchmark->complete && ! _uiBenchmark->failed ? 0 : 5;
 }
 
 HRESULT Application::InitializeUiBenchmark() noexcept
 {
     try
     {
-        auto& state = *_uiBenchmark;
+        auto& state   = *_uiBenchmark;
         auto& machine = state.machine;
         // Explicit experiment only: qualify the actual prepared controller/row caller chain before normal
         // activation. Refusal is an operation failure; no fallback silently measures the legacy display.
-        if (state.preparedDisplay && !InitializeResponsiveSourcesOwner(false))
+        if (state.preparedDisplay && ! InitializeResponsiveSourcesOwner(false))
             return E_FAIL;
         if (state.sizeOnly)
         {
@@ -760,8 +776,8 @@ HRESULT Application::InitializeUiBenchmark() noexcept
             _selectionPixelFinalPublicationEnabled = true;
         }
         machine.applicationVersion = Utf8(RedPrism::FormatRunningModuleVersion(L"unknown"));
-        machine.isa = Utf8(KernelIsaName(ActiveKernels().isa));
-        machine.workerCount = _jobs.WorkerCount();
+        machine.isa                = Utf8(KernelIsaName(ActiveKernels().isa));
+        machine.workerCount        = _jobs.WorkerCount();
         wil::com_ptr_nothrow<IDXGIDevice> dxgiDevice;
         wil::com_ptr_nothrow<IDXGIAdapter> adapter;
         DXGI_ADAPTER_DESC description{};
@@ -769,30 +785,29 @@ HRESULT Application::InitializeUiBenchmark() noexcept
             SUCCEEDED(dxgiDevice->GetAdapter(adapter.put())) && SUCCEEDED(adapter->GetDesc(&description)))
         {
             machine.adapterName = Utf8(description.Description);
-            machine.adapterLuid =
-                std::format("{:08x}:{:08x}", static_cast<std::uint32_t>(description.AdapterLuid.HighPart),
-                            description.AdapterLuid.LowPart);
+            machine.adapterLuid = std::format("{:08x}:{:08x}", static_cast<std::uint32_t>(description.AdapterLuid.HighPart), description.AdapterLuid.LowPart);
             LARGE_INTEGER driver{};
             if (SUCCEEDED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &driver)))
             {
-                machine.driverVersion = std::format("{}.{}.{}.{}", HIWORD(driver.HighPart), LOWORD(driver.HighPart),
-                                                    HIWORD(driver.LowPart), LOWORD(driver.LowPart));
+                machine.driverVersion =
+                    std::format("{}.{}.{}.{}", HIWORD(driver.HighPart), LOWORD(driver.HighPart), HIWORD(driver.LowPart), LOWORD(driver.LowPart));
             }
         }
-        const auto monitor = ReadBenchmarkMonitor(_window.get());
-        machine.monitorDeviceName = monitor.deviceName;
-        machine.refreshRate = monitor.refresh;
-        state.displayAuthorityKnown = monitor.monitorIdentity != 0 && monitor.deviceName.has_value() &&
-                                      !monitor.deviceName->empty() && monitor.refresh.has_value() &&
-                                      monitor.refresh->numerator != 0 && monitor.refresh->denominator != 0;
-        if (!state.displayContinuityCaptured)
+        const auto monitor          = ReadBenchmarkMonitor(_window.get());
+        machine.monitorDeviceName   = monitor.deviceName;
+        machine.refreshRate         = monitor.refresh;
+        state.displayAuthorityKnown = monitor.monitorIdentity != 0 && monitor.deviceName.has_value() && ! monitor.deviceName->empty() &&
+                                      monitor.refresh.has_value() && monitor.refresh->numerator != 0 && monitor.refresh->denominator != 0;
+        if (! state.displayContinuityCaptured)
         {
-            state.displayContinuity = {};
-            state.initialMonitorIdentity = monitor.monitorIdentity;
+            state.displayContinuity         = {};
+            state.initialMonitorIdentity    = monitor.monitorIdentity;
             state.displayContinuityCaptured = true;
         }
-        std::printf("BENCH MACHINE %s device=%s fixtureChecksum=%016llx\n", FormatBenchmarkMachineInfo(machine).c_str(),
-                    _renderer.IsWarp() ? "WARP" : "hardware", static_cast<unsigned long long>(state.fixtureChecksum));
+        std::printf("BENCH MACHINE %s device=%s fixtureChecksum=%016llx\n",
+                    FormatBenchmarkMachineInfo(machine).c_str(),
+                    _renderer.IsWarp() ? "WARP" : "hardware",
+                    static_cast<unsigned long long>(state.fixtureChecksum));
         if (state.RejectPerformanceForUnknownDisplayAuthority())
         {
             FailUiBenchmark("display-authority-unknown");
@@ -803,14 +818,16 @@ HRESULT Application::InitializeUiBenchmark() noexcept
             std::printf("UI BENCH ROUTE display=%s rows=%s asyncStroke=%d asyncWarp=%d "
                         "finalPublication=size-prepared-benchmark ordinaryActivation=0\n",
                         _committedDisplayInitialized ? "prepared" : "direct",
-                        _preparedLayerRowsEnabled ? "prepared" : "direct", _asyncStrokeSamplesEnabled,
+                        _preparedLayerRowsEnabled ? "prepared" : "direct",
+                        _asyncStrokeSamplesEnabled,
                         _asyncWarpLiveEnabled);
         }
         else
         {
             std::printf("UI BENCH ROUTE display=%s rows=%s asyncStroke=%d asyncWarp=%d ordinaryActivation=0\n",
                         _committedDisplayInitialized ? "prepared" : "direct",
-                        _preparedLayerRowsEnabled ? "prepared" : "direct", _asyncStrokeSamplesEnabled,
+                        _preparedLayerRowsEnabled ? "prepared" : "direct",
+                        _asyncStrokeSamplesEnabled,
                         _asyncWarpLiveEnabled);
         }
         // A single failure deadline for an opt-in harness, never a normal application polling timer.
@@ -831,22 +848,20 @@ HRESULT Application::InitializeUiBenchmark() noexcept
 bool Application::ValidateUiBenchmarkDisplayAuthority() noexcept
 {
     auto& state = *_uiBenchmark;
-    if (!state.displayContinuityCaptured)
+    if (! state.displayContinuityCaptured)
     {
         FailUiBenchmark("display-authority-not-captured");
         return false;
     }
     try
     {
-        const auto endpoint = ReadBenchmarkMonitor(_window.get());
-        const bool endpointAuthorityKnown = endpoint.monitorIdentity != 0 && endpoint.deviceName.has_value() &&
-                                            !endpoint.deviceName->empty() && endpoint.refresh.has_value() &&
-                                            endpoint.refresh->numerator != 0 && endpoint.refresh->denominator != 0;
-        if (!endpointAuthorityKnown)
+        const auto endpoint               = ReadBenchmarkMonitor(_window.get());
+        const bool endpointAuthorityKnown = endpoint.monitorIdentity != 0 && endpoint.deviceName.has_value() && ! endpoint.deviceName->empty() &&
+                                            endpoint.refresh.has_value() && endpoint.refresh->numerator != 0 && endpoint.refresh->denominator != 0;
+        if (! endpointAuthorityKnown)
             state.displayAuthorityKnown = false;
-        else if (endpoint.monitorIdentity != state.initialMonitorIdentity ||
-                 endpoint.deviceName != state.machine.monitorDeviceName ||
-                 !SameRefreshRate(endpoint.refresh, state.machine.refreshRate))
+        else if (endpoint.monitorIdentity != state.initialMonitorIdentity || endpoint.deviceName != state.machine.monitorDeviceName ||
+                 ! SameRefreshRate(endpoint.refresh, state.machine.refreshRate))
             state.displayContinuity.invalidated = true;
     }
     catch (const std::bad_alloc&)
@@ -869,7 +884,7 @@ bool Application::ValidateUiBenchmarkDisplayAuthority() noexcept
 
 void Application::FailUiBenchmark(const char* reason) noexcept
 {
-    if (_uiBenchmark && !_uiBenchmark->failed)
+    if (_uiBenchmark && ! _uiBenchmark->failed)
     {
         if (_uiBenchmark->exportReceipt)
         {
@@ -877,12 +892,14 @@ void Application::FailUiBenchmark(const char* reason) noexcept
             const auto* layer = _session.ActiveLayer();
             std::printf("UI BENCH DETAIL writerOutcome=%u writerError=0x%08x pathSame=%d revisionSame=%d "
                         "modifiedSame=%d imageSame=%d errorId=%u\n",
-                        static_cast<unsigned int>(result.outcome), static_cast<unsigned int>(result.error),
-                        std::wstring_view(_documentPath) == std::wstring_view(_uiBenchmark->previousDocumentPath.data(),
-                                                                              _uiBenchmark->previousDocumentPathUnits),
+                        static_cast<unsigned int>(result.outcome),
+                        static_cast<unsigned int>(result.error),
+                        std::wstring_view(_documentPath) ==
+                            std::wstring_view(_uiBenchmark->previousDocumentPath.data(), _uiBenchmark->previousDocumentPathUnits),
                         _session.history.CurrentRevision() == _uiBenchmark->previousRevision,
                         _session.history.IsModified() == _uiBenchmark->previousModified,
-                        layer && layer->asset && layer->asset->image == _uiBenchmark->previousImage, _lastErrorId);
+                        layer && layer->asset && layer->asset->image == _uiBenchmark->previousImage,
+                        _lastErrorId);
         }
         if (_uiBenchmark->cancellation)
         {
@@ -892,26 +909,49 @@ void Application::FailUiBenchmark(const char* reason) noexcept
                         "commandsPending=%d commandsReady=%d rowsPending=%d rowsReady=%d historyReady=%d "
                         "hostActive=%d hostQueued=%zu historyBusy=%d colorCommit=%d colorPreview=%d colorHistogram=%d "
                         "rowsTicket=%d rowsCacheTicket=%d frameInvalidated=%d opening=%llu original=%d cursor=%zu\n",
-                        static_cast<unsigned int>(trial.phase), _ownerWork.HasPending(), _ownerWork.HasReady(),
-                        _gpuWork.HasPending(), _gpuWork.HasReady(), _committedDisplay.HasPending(),
-                        _committedDisplay.HasReady(), _pendingDisplay.HasPending(), _pendingDisplay.HasReady(),
-                        _recordedCommands.HasPending(), _recordedCommands.HasReady(), _layerRowsSource.HasPending(),
-                        _layerRowsSource.HasReady(), _historyResidencySource.HasReady(), _activeHostRequest.has_value(),
-                        _hostRequests.Size(), _historyWork.Busy(), _colorCommitTicket.has_value(),
-                        _colorPreviewTicket.has_value(), _colorHistogramTicket.has_value(),
-                        _layerRowsTicket.has_value(), _layerRowsCacheTicket.has_value(), _frameInvalidated,
-                        static_cast<unsigned long long>(trial.opening), trial.original.has_value(), trial.cursor);
+                        static_cast<unsigned int>(trial.phase),
+                        _ownerWork.HasPending(),
+                        _ownerWork.HasReady(),
+                        _gpuWork.HasPending(),
+                        _gpuWork.HasReady(),
+                        _committedDisplay.HasPending(),
+                        _committedDisplay.HasReady(),
+                        _pendingDisplay.HasPending(),
+                        _pendingDisplay.HasReady(),
+                        _recordedCommands.HasPending(),
+                        _recordedCommands.HasReady(),
+                        _layerRowsSource.HasPending(),
+                        _layerRowsSource.HasReady(),
+                        _historyResidencySource.HasReady(),
+                        _activeHostRequest.has_value(),
+                        _hostRequests.Size(),
+                        _historyWork.Busy(),
+                        _colorCommitTicket.has_value(),
+                        _colorPreviewTicket.has_value(),
+                        _colorHistogramTicket.has_value(),
+                        _layerRowsTicket.has_value(),
+                        _layerRowsCacheTicket.has_value(),
+                        _frameInvalidated,
+                        static_cast<unsigned long long>(trial.opening),
+                        trial.original.has_value(),
+                        trial.cursor);
         }
         DisarmUiCancellationTimer();
         _uiBenchmark->failed = true;
-        _uiBenchmark->phase = UiBenchmarkState::Phase::Done;
+        _uiBenchmark->phase  = UiBenchmarkState::Phase::Done;
         std::printf("UI BENCH REPORT status=failed reason=%s operation=%zu name=%s trial=%u "
                     "visible=%d displayOn=%d suspended=%d occluded=%d jobsIdle=%d presents=%llu expectedAfter=%llu "
                     "frameFailure=0x%08lx canvasFailure=0x%08lx failedStage=%u\n",
-                    reason, _uiBenchmark->operation,
+                    reason,
+                    _uiBenchmark->operation,
                     _uiBenchmark->cancellation ? UiCancellationOperationName() : CurrentOperation(*_uiBenchmark).name,
-                    _uiBenchmark->trial, _windowVisible, _displayPoweredOn, _renderer.IsSuspended(),
-                    _renderer.IsOccluded(), _jobs.IsIdle(), static_cast<unsigned long long>(_renderer.PresentCount()),
+                    _uiBenchmark->trial,
+                    _windowVisible,
+                    _displayPoweredOn,
+                    _renderer.IsSuspended(),
+                    _renderer.IsOccluded(),
+                    _jobs.IsIdle(),
+                    static_cast<unsigned long long>(_renderer.PresentCount()),
                     static_cast<unsigned long long>(_uiBenchmark->previousPresents),
                     static_cast<unsigned long>(_lastFrameFailure),
                     static_cast<unsigned long>(_renderer.CanvasFailure()),
@@ -1001,10 +1041,10 @@ void Application::PrepareUiBenchmarkStep() noexcept
     {
         // The direct session surface sets only deterministic fixture metadata. The real Application gradient
         // producer creates the deferred edit and its asynchronous preview through Begin/DragGradient below.
-        _session.gradientSettings.shape = GradientShape::Linear;
-        _session.gradientSettings.style = GradientStyle::ForegroundToBackground;
+        _session.gradientSettings.shape    = GradientShape::Linear;
+        _session.gradientSettings.style    = GradientStyle::ForegroundToBackground;
         _session.gradientSettings.reversed = false;
-        _session.gradientSettings.opacity = 1.0;
+        _session.gradientSettings.opacity  = 1.0;
         _session.SetForegroundColor(0xff936427);
         _session.SetBackgroundColor(0xffffffff);
         OnTool(EditorTool::Gradient);
@@ -1015,17 +1055,17 @@ void Application::PrepareUiBenchmarkStep() noexcept
         DragGradient(_viewport.ViewFromDocument(end, DocumentSize()), 0);
         EndGradientDrag();
         const auto* pending = _session.PendingGradient();
-        if (!pending || !pending->deferred || !pending->HasLine())
+        if (! pending || ! pending->deferred || ! pending->HasLine())
         {
             FailUiBenchmark("gradient-fixture-not-ready");
             return;
         }
-        state.gradientOpening = pending->opening;
+        state.gradientOpening  = pending->opening;
         state.gradientSequence = pending->sequence;
     }
     DocumentChanged();
     state.previousPresents = _renderer.PresentCount();
-    state.phase = UiBenchmarkState::Phase::Preparing;
+    state.phase            = UiBenchmarkState::Phase::Preparing;
 }
 
 void Application::ExecuteUiBenchmarkStep() noexcept
@@ -1035,7 +1075,7 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         ExecuteUiCancellationStep();
         return;
     }
-    if (!_uiBenchmark || _uiBenchmark->phase != UiBenchmarkState::Phase::Posted)
+    if (! _uiBenchmark || _uiBenchmark->phase != UiBenchmarkState::Phase::Posted)
     {
         return;
     }
@@ -1046,13 +1086,13 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         // Down/Move/end producers; the posted harness message, admission, readback, publication and final frame
         // remain inside the measured outer application loop. End never samples a release coordinate.
         DxUi::PointerEvent down{};
-        down.action = DxUi::PointerAction::Down;
+        down.action    = DxUi::PointerAction::Down;
         down.modifiers = MK_LBUTTON;
         const Vec2 first{0.5, 0.5};
         PressCanvas(down, WM_LBUTTONDOWN, _viewport.ViewFromDocument(first, DocumentSize()), POINT{});
         const auto* sampling = std::get_if<ColorSampling>(&_drag);
-        const auto* opening = sampling && sampling->opening ? FindSamplerOpening(sampling->opening.value()) : nullptr;
-        if (!opening || sampling->composite || _samplerHostTicket || _samplerHostJob)
+        const auto* opening  = sampling && sampling->opening ? FindSamplerOpening(sampling->opening.value()) : nullptr;
+        if (! opening || sampling->composite || _samplerHostTicket || _samplerHostJob)
         {
             FailUiBenchmark("sampler-scalar-admission");
             return;
@@ -1069,10 +1109,10 @@ void Application::ExecuteUiBenchmarkStep() noexcept
     }
     else if (operation.expected == Expected::GradientPreview)
     {
-        auto& state = *_uiBenchmark;
+        auto& state         = *_uiBenchmark;
         const double startX = 1.5;
-        const double endX = static_cast<double>(state.fixture.width) - 1.5;
-        const double y = static_cast<double>(state.fixture.height / 2) + 0.5;
+        const double endX   = static_cast<double>(state.fixture.width) - 1.5;
+        const double y      = static_cast<double>(state.fixture.height / 2) + 0.5;
         const Vec2 end{endX, y};
         BeginGradientDrag(_viewport.ViewFromDocument(end, DocumentSize()));
         // Offer a burst while the first preview is still active. RefreshGradientJobs keeps only the newest
@@ -1084,7 +1124,7 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         }
         EndGradientDrag();
         const auto* pending = _session.PendingGradient();
-        if (!pending || pending->opening != state.gradientOpening || !pending->HasLine())
+        if (! pending || pending->opening != state.gradientOpening || ! pending->HasLine())
         {
             FailUiBenchmark("gradient-coalescing-admission");
             return;
@@ -1094,7 +1134,7 @@ void Application::ExecuteUiBenchmarkStep() noexcept
     else if (operation.expected == Expected::GradientApplied)
     {
         const auto* pending = _session.PendingGradient();
-        if (!pending || pending->opening != _uiBenchmark->gradientOpening || !pending->HasLine())
+        if (! pending || pending->opening != _uiBenchmark->gradientOpening || ! pending->HasLine())
         {
             FailUiBenchmark("gradient-apply-admission");
             return;
@@ -1104,7 +1144,7 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         _uiBenchmark->captureGradientApplyReceipt = true;
         OnGradientAction(GradientAction::Apply, 0);
         _uiBenchmark->captureGradientApplyReceipt = false;
-        if (!_uiBenchmark->gradientApplyReceipt)
+        if (! _uiBenchmark->gradientApplyReceipt)
         {
             FailUiBenchmark("gradient-apply-receipt-missing");
             return;
@@ -1124,7 +1164,7 @@ void Application::ExecuteUiBenchmarkStep() noexcept
     else if (operation.expected == Expected::PngExported || operation.expected == Expected::JpegExported)
     {
         const auto format = operation.expected == Expected::PngExported ? HostWriteFormat::Png : HostWriteFormat::Jpeg;
-        const auto& path = format == HostWriteFormat::Png ? _uiBenchmark->pngExportPath : _uiBenchmark->jpegExportPath;
+        const auto& path  = format == HostWriteFormat::Png ? _uiBenchmark->pngExportPath : _uiBenchmark->jpegExportPath;
         HostWriteInput input{format, false, path}; // QueueHostInput takes an owned copy for the continuation.
         _uiBenchmark->exportReceipt = QueueHostInput(std::move(input));
         if (operation.expected == Expected::PngExported)
@@ -1135,8 +1175,7 @@ void Application::ExecuteUiBenchmarkStep() noexcept
              operation.expected == Expected::ImportedLayersRefused)
     {
         const std::array<std::wstring_view, 1> paths{_uiBenchmark->pngExportPath};
-        const auto action = operation.expected == Expected::ImportedProject ? HostPathAction::ImagesAsProject
-                                                                            : HostPathAction::ImagesAsLayers;
+        const auto action           = operation.expected == Expected::ImportedProject ? HostPathAction::ImagesAsProject : HostPathAction::ImagesAsLayers;
         _uiBenchmark->importReceipt = QueueHostPaths(paths, action);
         ReportHostAdmission(_uiBenchmark->importReceipt.value());
     }
@@ -1171,7 +1210,7 @@ void Application::AdvanceUiBenchmark() noexcept
         FailUiBenchmark("display-authority-unknown");
         return;
     }
-    if (!_windowVisible || (!_displayPoweredOn && !state.smoke) || _renderer.IsSuspended() || _renderer.IsOccluded())
+    if (! _windowVisible || (! _displayPoweredOn && ! state.smoke) || _renderer.IsSuspended() || _renderer.IsOccluded())
     {
         FailUiBenchmark("presentation-unavailable");
         return;
@@ -1188,37 +1227,35 @@ void Application::AdvanceUiBenchmark() noexcept
     }
     // A completion can arrive after an earlier frame already presented. Wait for the frame invalidated by
     // that completion, so asynchronous work cannot pass readiness while its final image/chrome is still unseen.
-    if (!_jobs.IsIdle() || _frameInvalidated || _renderer.PresentCount() <= state.previousPresents)
+    if (! _jobs.IsIdle() || _frameInvalidated || _renderer.PresentCount() <= state.previousPresents)
     {
         return;
     }
     if (state.preparedDisplay)
     {
-        if (!_committedDisplayInitialized || !_pendingDisplayInitialized || !_preparedLayerRowsEnabled ||
-            FAILED(_committedDisplayFailure) || _layerRowsRetryAvailable)
+        if (! _committedDisplayInitialized || ! _pendingDisplayInitialized || ! _preparedLayerRowsEnabled || FAILED(_committedDisplayFailure) ||
+            _layerRowsRetryAvailable)
         {
             FailUiBenchmark("prepared-display-or-row-route-failed");
             return;
         }
         // Joining the generic scheduler alone does not establish current display/row publication authority.
         // Keep all real owner pumps pending, then require the controller's descriptor-checked frame root.
-        if (_committedDisplay.HasPending() || _committedDisplay.HasReady() || _pendingDisplay.HasPending() ||
-            _pendingDisplay.HasReady() || _recordedCommands.HasPending() || _recordedCommands.HasReady() ||
-            _layerRowsTicket || _layerRowsSource.HasPending() || _layerRowsSource.HasReady())
+        if (_committedDisplay.HasPending() || _committedDisplay.HasReady() || _pendingDisplay.HasPending() || _pendingDisplay.HasReady() ||
+            _recordedCommands.HasPending() || _recordedCommands.HasReady() || _layerRowsTicket || _layerRowsSource.HasPending() || _layerRowsSource.HasReady())
             return;
-        if (_session.Document() && !_committedDisplay.HasCurrentPublicationOwner())
+        if (_session.Document() && ! _committedDisplay.HasCurrentPublicationOwner())
         {
             FailUiBenchmark("prepared-committed-root-not-current");
             return;
         }
         CommittedDisplayDescriptor pending;
-        if (_pendingDisplayClient.DescribeCommittedDisplayOwner(pending) &&
-            !_pendingDisplay.HasCurrentPublicationOwner())
+        if (_pendingDisplayClient.DescribeCommittedDisplayOwner(pending) && ! _pendingDisplay.HasCurrentPublicationOwner())
         {
             FailUiBenchmark("prepared-pending-root-not-current");
             return;
         }
-        if (!_layerRowsPublishedKey || _layerRowsPublishedKey.value() != CurrentLayerRowsKey())
+        if (! _layerRowsPublishedKey || _layerRowsPublishedKey.value() != CurrentLayerRowsKey())
         {
             FailUiBenchmark("prepared-rows-not-current");
             return;
@@ -1229,7 +1266,7 @@ void Application::AdvanceUiBenchmark() noexcept
         const auto operation = CurrentOperation(state);
         if ((operation.expected == Expected::ImportedProject || operation.expected == Expected::ImportedLayers ||
              operation.expected == Expected::ImportedLayersRefused) &&
-            (!state.pngExportReceipt || state.pngExportReceipt->Read().outcome != HostOutcome::Succeeded))
+            (! state.pngExportReceipt || state.pngExportReceipt->Read().outcome != HostOutcome::Succeeded))
         {
             FailUiBenchmark("png-export-not-ready");
             return;
@@ -1237,17 +1274,16 @@ void Application::AdvanceUiBenchmark() noexcept
         if (operation.expected == Expected::GradientPreview || operation.expected == Expected::GradientApplied)
         {
             const auto* pending = _session.PendingGradient();
-            if (!pending || pending->opening != state.gradientOpening || pending->sequence != state.gradientSequence ||
-                !pending->raster || pending->publishedSequence != state.gradientSequence ||
-                pending->publishedGeneration != _session.Generation())
+            if (! pending || pending->opening != state.gradientOpening || pending->sequence != state.gradientSequence || ! pending->raster ||
+                pending->publishedSequence != state.gradientSequence || pending->publishedGeneration != _session.Generation())
             {
                 FailUiBenchmark("gradient-preview-not-ready");
                 return;
             }
         }
         state.previousSizeFinalPublications = state.sizeFinalPublications;
-        state.previousRevision = _session.history.CurrentRevision();
-        state.previousSessionSerial = _session.DocumentSerial();
+        state.previousRevision              = _session.history.CurrentRevision();
+        state.previousSessionSerial         = _session.DocumentSerial();
         if (_documentPath.size() >= state.previousDocumentPath.size())
         {
             FailUiBenchmark("document-path-too-long");
@@ -1255,39 +1291,37 @@ void Application::AdvanceUiBenchmark() noexcept
         }
         std::copy(_documentPath.begin(), _documentPath.end(), state.previousDocumentPath.begin());
         state.previousDocumentPathUnits = _documentPath.size();
-        state.previousModified = _session.history.IsModified();
-        state.previousActiveLayer = _session.ActiveLayerID();
-        state.previousUndoCount = _session.history.UndoCount();
-        state.previousErrorsShown = _errorsShown;
-        state.expectedImageWidth = state.fixture.width;
-        state.expectedImageHeight = state.fixture.height;
+        state.previousModified          = _session.history.IsModified();
+        state.previousActiveLayer       = _session.ActiveLayerID();
+        state.previousUndoCount         = _session.history.UndoCount();
+        state.previousErrorsShown       = _errorsShown;
+        state.expectedImageWidth        = state.fixture.width;
+        state.expectedImageHeight       = state.fixture.height;
         if (operation.expected == Expected::ImportedLayers || operation.expected == Expected::ImportedLayersRefused)
         {
             const auto& document = _session.Document();
             const auto* baseline = _session.ActiveLayer();
-            if (!document || document->layers.size() != 1 || !baseline || !baseline->asset ||
-                baseline->asset->image.Width() != state.expectedImageWidth ||
-                baseline->asset->image.Height() != state.expectedImageHeight || state.previousUndoCount != 0 ||
-                state.previousActiveLayer != state.activeLayer)
+            if (! document || document->layers.size() != 1 || ! baseline || ! baseline->asset || baseline->asset->image.Width() != state.expectedImageWidth ||
+                baseline->asset->image.Height() != state.expectedImageHeight || state.previousUndoCount != 0 || state.previousActiveLayer != state.activeLayer)
             {
                 FailUiBenchmark("image-import-baseline-not-ready");
                 return;
             }
         }
-        state.previousReadback = _gpuWork.Statistics();
+        state.previousReadback            = _gpuWork.Statistics();
         state.previousReservedMemoryBytes = _jobs.ReservedMemoryBytes();
-        const auto* layer = _session.ActiveLayer();
-        if (!layer || !layer->asset.has_value())
+        const auto* layer                 = _session.ActiveLayer();
+        if (! layer || ! layer->asset.has_value())
         {
             FailUiBenchmark("missing-active-image");
             return;
         }
-        state.previousImage = layer->asset->image;
-        const auto& edit = _session.PendingColorEdit();
-        state.previousPreview = edit.has_value() ? edit->previewRaster : Raster{};
+        state.previousImage           = layer->asset->image;
+        const auto& edit              = _session.PendingColorEdit();
+        state.previousPreview         = edit.has_value() ? edit->previewRaster : Raster{};
         state.previousPreviewSequence = edit.has_value() ? edit->previewSequence : 0;
-        state.previousZoom = _viewport.zoom;
-        state.previousPan = _viewport.pan;
+        state.previousZoom            = _viewport.zoom;
+        state.previousPan             = _viewport.pan;
         if ((state.samplerOnly || state.sizeOnly) && state.trial == 0)
         {
             if (state.timing.clockFailures != 0)
@@ -1299,9 +1333,9 @@ void Application::AdvanceUiBenchmark() noexcept
         }
         ResetBenchmarkTiming(state.timing);
         state.previousPresents = _renderer.PresentCount();
-        state.requestedAt = Now();
-        state.phase = UiBenchmarkState::Phase::Posted;
-        if (state.requestedAt < 0 || !PostMessageW(_window.get(), kUiBenchmarkMessage, 0, 0))
+        state.requestedAt      = Now();
+        state.phase            = UiBenchmarkState::Phase::Posted;
+        if (state.requestedAt < 0 || ! PostMessageW(_window.get(), kUiBenchmarkMessage, 0, 0))
         {
             FailUiBenchmark("post-or-clock");
         }
@@ -1311,143 +1345,109 @@ void Application::AdvanceUiBenchmark() noexcept
     {
         return;
     }
-    const auto duration = UiDurationMicroseconds(state.requestedAt, Now(), static_cast<std::int64_t>(_jobQpcFrequency));
-    const auto expected = CurrentOperation(state).expected;
-    const auto& edit = _session.PendingColorEdit();
-    const auto* layer = _session.ActiveLayer();
-    const bool panelReady = edit.has_value() && !edit->previewFailed &&
-                            ((edit->previewLookup && edit->previewSequence > state.previousPreviewSequence) ||
-                             (edit->previewRaster.HasStorage() && edit->previewRaster != state.previousPreview));
-    const bool histogramReady = expected == Expected::Histogram && edit.has_value() &&
-                                edit->kind == FilterKind::Levels && edit->histogramReady &&
+    const auto duration       = UiDurationMicroseconds(state.requestedAt, Now(), static_cast<std::int64_t>(_jobQpcFrequency));
+    const auto expected       = CurrentOperation(state).expected;
+    const auto& edit          = _session.PendingColorEdit();
+    const auto* layer         = _session.ActiveLayer();
+    const bool panelReady     = edit.has_value() && ! edit->previewFailed &&
+                                ((edit->previewLookup && edit->previewSequence > state.previousPreviewSequence) ||
+                                 (edit->previewRaster.HasStorage() && edit->previewRaster != state.previousPreview));
+    const bool histogramReady = expected == Expected::Histogram && edit.has_value() && edit->kind == FilterKind::Levels && edit->histogramReady &&
                                 edit->original == state.previousImage;
-    const bool changedPixels = layer && layer->asset.has_value() && layer->asset->image != state.previousImage &&
-                               _session.history.CurrentRevision() != state.previousRevision && !edit.has_value();
-    const bool viewReady = expected == Expected::View && !edit.has_value() &&
-                           (_viewport.zoom != state.previousZoom || _viewport.pan != state.previousPan);
-    const bool refused = expected == Expected::Refusal && !edit.has_value() && layer && layer->asset.has_value() &&
-                         layer->asset->image == state.previousImage &&
-                         _session.history.CurrentRevision() == state.previousRevision;
+    const bool changedPixels  = layer && layer->asset.has_value() && layer->asset->image != state.previousImage &&
+                                _session.history.CurrentRevision() != state.previousRevision && ! edit.has_value();
+    const bool viewReady = expected == Expected::View && ! edit.has_value() && (_viewport.zoom != state.previousZoom || _viewport.pan != state.previousPan);
+    const bool refused   = expected == Expected::Refusal && ! edit.has_value() && layer && layer->asset.has_value() &&
+                           layer->asset->image == state.previousImage && _session.history.CurrentRevision() == state.previousRevision;
     const auto operation = CurrentOperation(state);
     const auto& document = _session.Document();
     // Successful writer receipts require the captured backend publication fact. Timing validation never reads or
     // decodes output files synchronously; separate codec and continuation tests validate the written bytes.
-    const bool saved = expected == Expected::Saved && state.saveReceipt &&
-                       state.saveReceipt->Read().outcome == HostOutcome::Succeeded && _documentPath == state.savePath &&
-                       !edit && !_session.history.IsModified() &&
-                       _session.history.CurrentRevision() == state.previousRevision && layer && layer->asset &&
-                       layer->asset->image == state.previousImage;
+    const bool saved = expected == Expected::Saved && state.saveReceipt && state.saveReceipt->Read().outcome == HostOutcome::Succeeded &&
+                       _documentPath == state.savePath && ! edit && ! _session.history.IsModified() &&
+                       _session.history.CurrentRevision() == state.previousRevision && layer && layer->asset && layer->asset->image == state.previousImage;
     const bool opened =
-        expected == Expected::Opened && state.savedBaselineReady && state.saveReceipt &&
-        state.saveReceipt->Read().outcome == HostOutcome::Succeeded && state.openReceipt &&
-        state.openReceipt->Read().outcome == HostOutcome::Succeeded &&
-        _session.DocumentSerial() != state.previousSessionSerial && _documentPath == state.savePath && document &&
-        document->width == state.fixture.width && document->height == state.fixture.height &&
-        document->layers.size() == state.fixture.layers.size() && _session.ActiveLayerID() == state.activeLayer &&
-        !_session.history.IsModified() && !_session.history.CanUndo() && !_session.history.CanRedo() &&
-        _session.history.UndoCount() == 0 && _session.history.UndoName().empty();
-    const bool exportUnchanged =
-        state.exportReceipt && state.exportReceipt->Read().outcome == HostOutcome::Succeeded &&
-        std::wstring_view(_documentPath) ==
-            std::wstring_view(state.previousDocumentPath.data(), state.previousDocumentPathUnits) &&
-        _session.history.CurrentRevision() == state.previousRevision &&
-        _session.history.IsModified() == state.previousModified && layer && layer->asset &&
-        layer->asset->image == state.previousImage && !edit;
-    const bool pngExported = expected == Expected::PngExported && exportUnchanged;
-    const bool jpegExported = expected == Expected::JpegExported && exportUnchanged;
-    const auto* importedLayer = _session.ActiveLayer();
-    const bool importedImage = importedLayer && importedLayer->asset.has_value() &&
-                               importedLayer->asset->image.Width() == state.expectedImageWidth &&
-                               importedLayer->asset->image.Height() == state.expectedImageHeight &&
-                               importedLayer->asset->image != state.previousImage;
-    const auto importResult = state.importReceipt ? state.importReceipt->Read() : ContinuationReceipt::Result{};
-    const bool importedProject =
-        expected == Expected::ImportedProject && state.importReceipt &&
-        importResult.outcome == HostOutcome::Succeeded && _session.DocumentSerial() != state.previousSessionSerial &&
-        _documentPath.empty() && document && document->width == state.expectedImageWidth &&
-        document->height == state.expectedImageHeight && document->layers.size() == 1 &&
-        _session.ActiveLayerID().has_value() && _session.ActiveLayerID() != state.previousActiveLayer &&
-        importedImage && !_session.history.IsModified() && !_session.history.CanUndo() && !_session.history.CanRedo() &&
-        _session.history.UndoCount() == 0 && state.previousUndoCount == 0;
-    const bool importedLayers =
-        expected == Expected::ImportedLayers && state.importReceipt && importResult.outcome == HostOutcome::Succeeded &&
-        _session.DocumentSerial() == state.previousSessionSerial && _documentPath.empty() && document &&
-        document->width == state.expectedImageWidth && document->height == state.expectedImageHeight &&
-        document->layers.size() == 2 && _session.ActiveLayerID().has_value() &&
-        _session.ActiveLayerID() != state.previousActiveLayer && importedImage &&
-        _session.history.UndoCount() == state.previousUndoCount + 1 && _session.history.UndoName() == L"Import Image";
+        expected == Expected::Opened && state.savedBaselineReady && state.saveReceipt && state.saveReceipt->Read().outcome == HostOutcome::Succeeded &&
+        state.openReceipt && state.openReceipt->Read().outcome == HostOutcome::Succeeded && _session.DocumentSerial() != state.previousSessionSerial &&
+        _documentPath == state.savePath && document && document->width == state.fixture.width && document->height == state.fixture.height &&
+        document->layers.size() == state.fixture.layers.size() && _session.ActiveLayerID() == state.activeLayer && ! _session.history.IsModified() &&
+        ! _session.history.CanUndo() && ! _session.history.CanRedo() && _session.history.UndoCount() == 0 && _session.history.UndoName().empty();
+    const bool exportUnchanged = state.exportReceipt && state.exportReceipt->Read().outcome == HostOutcome::Succeeded &&
+                                 std::wstring_view(_documentPath) == std::wstring_view(state.previousDocumentPath.data(), state.previousDocumentPathUnits) &&
+                                 _session.history.CurrentRevision() == state.previousRevision && _session.history.IsModified() == state.previousModified &&
+                                 layer && layer->asset && layer->asset->image == state.previousImage && ! edit;
+    const bool pngExported     = expected == Expected::PngExported && exportUnchanged;
+    const bool jpegExported    = expected == Expected::JpegExported && exportUnchanged;
+    const auto* importedLayer  = _session.ActiveLayer();
+    const bool importedImage   = importedLayer && importedLayer->asset.has_value() && importedLayer->asset->image.Width() == state.expectedImageWidth &&
+                                 importedLayer->asset->image.Height() == state.expectedImageHeight && importedLayer->asset->image != state.previousImage;
+    const auto importResult    = state.importReceipt ? state.importReceipt->Read() : ContinuationReceipt::Result{};
+    const bool importedProject = expected == Expected::ImportedProject && state.importReceipt && importResult.outcome == HostOutcome::Succeeded &&
+                                 _session.DocumentSerial() != state.previousSessionSerial && _documentPath.empty() && document &&
+                                 document->width == state.expectedImageWidth && document->height == state.expectedImageHeight && document->layers.size() == 1 &&
+                                 _session.ActiveLayerID().has_value() && _session.ActiveLayerID() != state.previousActiveLayer && importedImage &&
+                                 ! _session.history.IsModified() && ! _session.history.CanUndo() && ! _session.history.CanRedo() &&
+                                 _session.history.UndoCount() == 0 && state.previousUndoCount == 0;
+    const bool importedLayers  = expected == Expected::ImportedLayers && state.importReceipt && importResult.outcome == HostOutcome::Succeeded &&
+                                 _session.DocumentSerial() == state.previousSessionSerial && _documentPath.empty() && document &&
+                                 document->width == state.expectedImageWidth && document->height == state.expectedImageHeight && document->layers.size() == 2 &&
+                                 _session.ActiveLayerID().has_value() && _session.ActiveLayerID() != state.previousActiveLayer && importedImage &&
+                                 _session.history.UndoCount() == state.previousUndoCount + 1 && _session.history.UndoName() == L"Import Image";
     const bool importRefused =
-        expected == Expected::ImportedLayersRefused && state.importReceipt &&
-        importResult.outcome == HostOutcome::Failed &&
-        importResult.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)) &&
-        _session.DocumentSerial() == state.previousSessionSerial && _documentPath.empty() && document &&
-        document->id == state.imageImportBaseline.id && document->width == state.expectedImageWidth &&
-        document->height == state.expectedImageHeight && document->layers.size() == 1 &&
-        _session.ActiveLayerID() == state.previousActiveLayer && layer && layer->asset &&
-        layer->asset->image == state.previousImage && _session.history.CurrentRevision() == state.previousRevision &&
-        _session.history.UndoCount() == state.previousUndoCount && _errorsShown == state.previousErrorsShown + 1 &&
-        _lastErrorId == IDS_ERROR_TOO_LARGE;
+        expected == Expected::ImportedLayersRefused && state.importReceipt && importResult.outcome == HostOutcome::Failed &&
+        importResult.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)) && _session.DocumentSerial() == state.previousSessionSerial &&
+        _documentPath.empty() && document && document->id == state.imageImportBaseline.id && document->width == state.expectedImageWidth &&
+        document->height == state.expectedImageHeight && document->layers.size() == 1 && _session.ActiveLayerID() == state.previousActiveLayer && layer &&
+        layer->asset && layer->asset->image == state.previousImage && _session.history.CurrentRevision() == state.previousRevision &&
+        _session.history.UndoCount() == state.previousUndoCount && _errorsShown == state.previousErrorsShown + 1 && _lastErrorId == IDS_ERROR_TOO_LARGE;
     const bool sizePublicationReady =
-        !state.sizeOnly ||
-        state.sizeFinalPublications == state.previousSizeFinalPublications + (expected == Expected::Size ? 1u : 0u);
+        ! state.sizeOnly || state.sizeFinalPublications == state.previousSizeFinalPublications + (expected == Expected::Size ? 1u : 0u);
     const bool sizeReady =
-        expected == Expected::Size && document && !SizeCardOpen() &&
-        _session.history.CurrentRevision() != state.previousRevision &&
+        expected == Expected::Size && document && ! SizeCardOpen() && _session.history.CurrentRevision() != state.previousRevision &&
         (operation.prepareCommand == ChromeHost::kCommandCanvasSize
-             ? document->width == state.fixture.width + 16 && document->height == state.fixture.height + 16 &&
-                   _session.history.UndoName() == L"Canvas Size"
-         : operation.value != 0
-             ? document->width == state.fixture.width && document->height == state.fixture.height &&
-                   document->resolution == operation.value && _session.history.UndoName() == L"Image Size"
-             : document->width == state.fixture.width / 2 && document->height == state.fixture.height / 2 && layer &&
-                   layer->asset && layer->asset->image != state.previousImage &&
-                   _session.history.UndoName() == L"Image Size");
-    const auto* pendingGradient = _session.PendingGradient();
-    const bool gradientPreviewReady =
-        expected == Expected::GradientPreview && pendingGradient && pendingGradient->opening == state.gradientOpening &&
-        pendingGradient->sequence == state.gradientSequence && pendingGradient->raster &&
-        pendingGradient->publishedSequence == state.gradientSequence &&
-        pendingGradient->publishedGeneration == _session.Generation() && layer && layer->asset &&
-        GradientPreviewEndpointPixelsMatch(*pendingGradient->raster, state.fixture.width, state.fixture.height / 2) &&
-        layer->asset->image == state.previousImage && _session.history.CurrentRevision() == state.previousRevision &&
-        _session.history.UndoCount() == state.previousUndoCount;
-    const auto gradientResult =
-        state.gradientApplyReceipt ? state.gradientApplyReceipt->Read() : ContinuationReceipt::Result{};
-    const bool gradientApplied =
-        expected == Expected::GradientApplied && state.gradientApplyReceipt &&
-        gradientResult.outcome == HostOutcome::Succeeded && pendingGradient == nullptr && layer && layer->asset &&
-        layer->asset->image != state.previousImage && _session.history.CurrentRevision() != state.previousRevision &&
-        _session.history.UndoCount() == state.previousUndoCount + 1 && _session.history.UndoName() == L"Gradient" &&
-        GradientEndpointPixelsMatch(layer->asset->image, state.fixture.height / 2);
-    const auto samplerResult = state.samplerReceipt ? state.samplerReceipt->Read() : ContinuationReceipt::Result{};
+             ? document->width == state.fixture.width + 16 && document->height == state.fixture.height + 16 && _session.history.UndoName() == L"Canvas Size"
+         : operation.value != 0 ? document->width == state.fixture.width && document->height == state.fixture.height &&
+                                      document->resolution == operation.value && _session.history.UndoName() == L"Image Size"
+                                : document->width == state.fixture.width / 2 && document->height == state.fixture.height / 2 && layer && layer->asset &&
+                                      layer->asset->image != state.previousImage && _session.history.UndoName() == L"Image Size");
+    const auto* pendingGradient     = _session.PendingGradient();
+    const bool gradientPreviewReady = expected == Expected::GradientPreview && pendingGradient && pendingGradient->opening == state.gradientOpening &&
+                                      pendingGradient->sequence == state.gradientSequence && pendingGradient->raster &&
+                                      pendingGradient->publishedSequence == state.gradientSequence &&
+                                      pendingGradient->publishedGeneration == _session.Generation() && layer && layer->asset &&
+                                      GradientPreviewEndpointPixelsMatch(*pendingGradient->raster, state.fixture.width, state.fixture.height / 2) &&
+                                      layer->asset->image == state.previousImage && _session.history.CurrentRevision() == state.previousRevision &&
+                                      _session.history.UndoCount() == state.previousUndoCount;
+    const auto gradientResult       = state.gradientApplyReceipt ? state.gradientApplyReceipt->Read() : ContinuationReceipt::Result{};
+    const bool gradientApplied = expected == Expected::GradientApplied && state.gradientApplyReceipt && gradientResult.outcome == HostOutcome::Succeeded &&
+                                 pendingGradient == nullptr && layer && layer->asset && layer->asset->image != state.previousImage &&
+                                 _session.history.CurrentRevision() != state.previousRevision && _session.history.UndoCount() == state.previousUndoCount + 1 &&
+                                 _session.history.UndoName() == L"Gradient" && GradientEndpointPixelsMatch(layer->asset->image, state.fixture.height / 2);
+    const auto samplerResult   = state.samplerReceipt ? state.samplerReceipt->Read() : ContinuationReceipt::Result{};
     const auto samplerReadback = _gpuWork.Statistics();
     // Independent fixture oracle at (0,0): top gray 29 over bottom gray 71 with mask 128 rounds to 50.
     // Exposure +0.25 in linear sRGB rounds that byte to 55. The ceiling fixture has only opaque top gray 29.
     const auto expectedSample = state.fixture.width == 10000 ? 0xFF1D1D1Du : 0xFF373737u;
-    const bool sampledPrefix =
-        expected == Expected::SampledPrefix && state.samplerReceipt &&
-        samplerResult.outcome == HostOutcome::Succeeded && _session.ForegroundColor() == expectedSample &&
-        _session.DocumentSerial() == state.previousSessionSerial &&
-        _session.history.CurrentRevision() == state.previousRevision &&
-        _session.history.UndoCount() == state.previousUndoCount &&
-        _session.history.IsModified() == state.previousModified && layer && layer->asset &&
-        layer->asset->image == state.previousImage && !edit && !std::holds_alternative<ColorSampling>(_drag) &&
-        !_samplerHostTicket && !_samplerHostStamp && !_samplerHostJob && !_activeHostRequest && !_hostRequests.Size() &&
-        !_historyWork.Busy() &&
-        _jobs.ReservedMemoryBytes() == (state.preparedDisplay ? state.previousReservedMemoryBytes : 0) &&
-        _composition.UtilitySurfaceBytes() == 0 && samplerReadback.copies - state.previousReadback.copies == 3 &&
-        samplerReadback.busyFailures == state.previousReadback.busyFailures;
-    if (!duration.has_value() || state.timing.clockFailures != 0 || !sizePublicationReady ||
-        !(viewReady || refused || saved || opened || pngExported || jpegExported || importedProject || importedLayers ||
-          importRefused || sizeReady || histogramReady || gradientPreviewReady || gradientApplied || sampledPrefix ||
-          (expected == Expected::Panel && panelReady) || (expected == Expected::Pixels && changedPixels)))
+    const bool sampledPrefix = expected == Expected::SampledPrefix && state.samplerReceipt && samplerResult.outcome == HostOutcome::Succeeded &&
+                               _session.ForegroundColor() == expectedSample && _session.DocumentSerial() == state.previousSessionSerial &&
+                               _session.history.CurrentRevision() == state.previousRevision && _session.history.UndoCount() == state.previousUndoCount &&
+                               _session.history.IsModified() == state.previousModified && layer && layer->asset && layer->asset->image == state.previousImage &&
+                               ! edit && ! std::holds_alternative<ColorSampling>(_drag) && ! _samplerHostTicket && ! _samplerHostStamp && ! _samplerHostJob &&
+                               ! _activeHostRequest && ! _hostRequests.Size() && ! _historyWork.Busy() &&
+                               _jobs.ReservedMemoryBytes() == (state.preparedDisplay ? state.previousReservedMemoryBytes : 0) &&
+                               _composition.UtilitySurfaceBytes() == 0 && samplerReadback.copies - state.previousReadback.copies == 3 &&
+                               samplerReadback.busyFailures == state.previousReadback.busyFailures;
+    if (! duration.has_value() || state.timing.clockFailures != 0 || ! sizePublicationReady ||
+        ! (viewReady || refused || saved || opened || pngExported || jpegExported || importedProject || importedLayers || importRefused || sizeReady ||
+           histogramReady || gradientPreviewReady || gradientApplied || sampledPrefix || (expected == Expected::Panel && panelReady) ||
+           (expected == Expected::Pixels && changedPixels)))
     {
         FailUiBenchmark("command-result-or-clock");
         return;
     }
     if (state.trial != 0)
     {
-        const auto readback = _gpuWork.Statistics();
+        const auto readback            = _gpuWork.Statistics();
         state.samples[state.trial - 1] = {state.timing,
                                           duration.value(),
                                           _renderer.PresentCount() - state.previousPresents,
@@ -1467,19 +1467,23 @@ void Application::AdvanceUiBenchmark() noexcept
     if (++state.trial > state.runs)
     {
         const bool finalOperation = state.samplerOnly || state.operation + 1 == OperationCount(state);
-        if (finalOperation && !ValidateUiBenchmarkDisplayAuthority())
+        if (finalOperation && ! ValidateUiBenchmarkDisplayAuthority())
             return;
         Report(state);
         state.trial = 0;
         if (state.samplerOnly || ++state.operation == OperationCount(state))
         {
-            state.phase = UiBenchmarkState::Phase::Done;
+            state.phase    = UiBenchmarkState::Phase::Done;
             state.complete = true;
             (void)KillTimer(_window.get(), kUiBenchmarkTimerId);
             std::printf("UI BENCH REPORT status=ok width=%d height=%d operations=%zu smokeCorrectnessOnly=%d "
                         "displayAuthorityKnown=%d displayChanged=%d\n",
-                        state.fixture.width, state.fixture.height, OperationCount(state), state.smoke,
-                        state.displayAuthorityKnown, state.displayContinuity.invalidated);
+                        state.fixture.width,
+                        state.fixture.height,
+                        OperationCount(state),
+                        state.smoke,
+                        state.displayAuthorityKnown,
+                        state.displayContinuity.invalidated);
             std::fflush(stdout);
             PostQuitMessage(0);
             return;

@@ -16,7 +16,7 @@ class PolygonalDrawingJob;
 // dispatcher and is deliberately not described by this drawing-only component.
 class PolygonalDrawingPlan final
 {
-  public:
+public:
     [[nodiscard]] std::uint64_t TotalBytes() const noexcept
     {
         return _total;
@@ -34,7 +34,7 @@ class PolygonalDrawingPlan final
         return _drawing.mode;
     }
 
-  private:
+private:
     friend std::optional<PolygonalDrawingPlan> DescribePolygonalDrawing(const DocumentSession&, SelectionMode) noexcept;
     friend class PolygonalDrawingJob;
     PolygonalDrawingPlan() = default;
@@ -42,12 +42,11 @@ class PolygonalDrawingPlan final
     HistoryRestoreAuthority _editor;
     DocumentHistory::Authority _history;
     LassoFinishGeometry::DrawingPlan _drawing{};
-    std::uint64_t _total = 0;
+    std::uint64_t _total   = 0;
     std::uint64_t _opening = 0;
-    std::uint64_t _final = 0;
+    std::uint64_t _final   = 0;
 };
-[[nodiscard]] std::optional<PolygonalDrawingPlan> DescribePolygonalDrawing(const DocumentSession& session,
-                                                                           SelectionMode mode) noexcept;
+[[nodiscard]] std::optional<PolygonalDrawingPlan> DescribePolygonalDrawing(const DocumentSession& session, SelectionMode mode) noexcept;
 
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
@@ -84,54 +83,61 @@ struct PolygonalDrawingState final
     // Physical Finish can be accepted while its fixed host descriptor still awaits the original job.
     // This scalar preserves event order only; writer/history authority remains the prepared capability.
     const std::uint64_t terminalOrdinalBeforeAdmission;
-    PolygonalDrawingState(JobScheduler& jobs, DocumentSession& document, HostLassoInput& prefix, std::uint64_t identity,
-                          PolygonalDrawingPlan admission, bool capturedAntialias,
+    PolygonalDrawingState(JobScheduler& jobs,
+                          DocumentSession& document,
+                          HostLassoInput& prefix,
+                          std::uint64_t identity,
+                          PolygonalDrawingPlan admission,
+                          bool capturedAntialias,
                           std::uint64_t capturedTerminalOrdinal = 0) noexcept
-        : scheduler(jobs), session(document), input(prefix), opening(identity), plan(admission),
-          antialiasedAtDown(capturedAntialias), terminalOrdinalBeforeAdmission(capturedTerminalOrdinal)
+        : scheduler(jobs),
+          session(document),
+          input(prefix),
+          opening(identity),
+          plan(admission),
+          antialiasedAtDown(capturedAntialias),
+          terminalOrdinalBeforeAdmission(capturedTerminalOrdinal)
     {
     }
     PolygonalDrawingJob* controller = nullptr;
     JobTicket original;
     JobResult outcome;
-    bool opened = false;
-    bool waiting = false;
-    WaitReason waitReason = WaitReason::None;
-    bool completed = false;
-    bool published = false;
-    bool cancelled = false;
-    bool endedByBackspace = false;
-    bool inputAcknowledged = false;
-    bool sameTicket = true;
-    unsigned runs = 0;
-    unsigned captures = 0;
-    unsigned points = 0;
-    unsigned cursors = 0;
-    unsigned backspaces = 0;
-    unsigned maximumSamples = 0;
-    unsigned residencyRefreshes = 0;
+    bool opened                  = false;
+    bool waiting                 = false;
+    WaitReason waitReason        = WaitReason::None;
+    bool completed               = false;
+    bool published               = false;
+    bool cancelled               = false;
+    bool endedByBackspace        = false;
+    bool inputAcknowledged       = false;
+    bool sameTicket              = true;
+    unsigned runs                = 0;
+    unsigned captures            = 0;
+    unsigned points              = 0;
+    unsigned cursors             = 0;
+    unsigned backspaces          = 0;
+    unsigned maximumSamples      = 0;
+    unsigned residencyRefreshes  = 0;
     std::uint64_t closingOrdinal = 0;
     // Opaque host closure identity, preserved for the physical dispatcher; not a model capability.
-    std::uint64_t closingIntent = 0;
-    std::uint64_t firstBudget = 0;
+    std::uint64_t closingIntent     = 0;
+    std::uint64_t firstBudget       = 0;
     std::uint64_t openingAllocation = 0;
-    std::uint64_t finishBudget = 0;
+    std::uint64_t finishBudget      = 0;
     // Worker probes borrow only immutable data and readiness gates, never mutable session/UI state.
-    void* workObserver = nullptr;
+    void* workObserver                            = nullptr;
     void (*checkpoint)(void*, WorkStage) noexcept = nullptr;
     // Owner-only readiness queries. A false answer parks the SAME original job with the next
     // fixed input record unconsumed. The host calls NotifyInput only when a prerequisite changes.
     // Queries grant no model authority and must not mutate the session or reenter this controller.
-    void* hostObserver = nullptr;
-    bool (*mayReplay)(void*, std::uint64_t physicalOrdinal) noexcept = nullptr;
-    bool (*mayFinish)(void*, std::uint64_t physicalOrdinal, std::uint64_t closeIntent,
-                      bool cancelled) noexcept = nullptr;
+    void* hostObserver                                                                                          = nullptr;
+    bool (*mayReplay)(void*, std::uint64_t physicalOrdinal) noexcept                                            = nullptr;
+    bool (*mayFinish)(void*, std::uint64_t physicalOrdinal, std::uint64_t closeIntent, bool cancelled) noexcept = nullptr;
     // Exactly once after older corners/Backspaces decide each opaque provisional close intent.
     // A nonclosing press has already appended its corner; a closing press is never appended.
-    void (*pressResolved)(void*, std::uint64_t physicalOrdinal, std::uint64_t closeIntent,
-                          bool closes) noexcept = nullptr;
-    void* observer = nullptr;
-    void (*notify)(void*, Event) noexcept = nullptr;
+    void (*pressResolved)(void*, std::uint64_t physicalOrdinal, std::uint64_t closeIntent, bool closes) noexcept = nullptr;
+    void* observer                                                                                               = nullptr;
+    void (*notify)(void*, Event) noexcept                                                                        = nullptr;
     void Notify(Event event) const noexcept
     {
         if (notify)
@@ -147,7 +153,7 @@ struct PolygonalDrawingPayload;
 #pragma warning(disable : 4625 4626 5026 5027)
 class PolygonalDrawingJob final : public Job
 {
-  public:
+public:
     // State, session and input remain alive through joined scheduler shutdown. Submission failure
     // clears the controller and fails the entire operation before any geometry/history capture.
     [[nodiscard]] static std::int32_t Submit(PolygonalDrawingState& state) noexcept;
@@ -160,7 +166,7 @@ class PolygonalDrawingJob final : public Job
     [[nodiscard]] bool NotifyInput() noexcept;
     [[nodiscard]] bool Finish(bool antialiased, std::uint64_t ordinal, bool cancelled = false) noexcept;
 
-  private:
+private:
     enum class Phase
     {
         Allocate,
@@ -180,9 +186,9 @@ class PolygonalDrawingJob final : public Job
     std::shared_ptr<SharedPublicationMemory> _opening, _final, _temporary;
     std::shared_ptr<PolygonalDrawingPayload> _payload;
     DocumentHistory::ResidencyPermit _residency;
-    std::int32_t _error = 0;
-    bool _terminal = false;
+    std::int32_t _error                    = 0;
+    bool _terminal                         = false;
     std::uint64_t _explicitTerminalOrdinal = 0;
-    std::uint64_t _lastOrdinal = 0;
+    std::uint64_t _lastOrdinal             = 0;
 };
 #pragma warning(pop)
