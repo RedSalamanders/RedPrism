@@ -37,10 +37,13 @@ is no auto-update: RedPrism never contacts a server ([`Core_CrashHandling.md`](.
 | Dependency DLLs | The executable's import table, walked transitively with `dumpbin /dependents`: a name found next to the executable (vcpkg's app-local copies: `yyjson.dll`, `zip.dll`, `z.dll`) or in the Visual C++ redistributable CRT folder is staged and walked in turn; every other import is Windows' own. Without `dumpbin` every DLL next to the executable and the standard CRT set are staged instead |
 | Visual C++ CRT | App-local from the installed Visual Studio's `VC\Redist\MSVC\<version>\<platform>\Microsoft.VC*.CRT` (`vcruntime140*.dll`, `msvcp140*.dll` as imported). Release links `/MD`; the Debug CRT is not redistributable, so a package is always Release. The Universal CRT ships with Windows 10 and later and is not staged |
 | `ThirdPartyNotices\<port>.txt` | vcpkg's `share/<port>/copyright` for `yyjson`, `libzip`, `zlib`, `clipper2` and `wil` |
+| `ThirdPartyNotices\redmonitor.txt` | `ThirdParty/RedMonitor/LICENSE.txt`, the RedMonitor client's notice at the locked commit |
+| `ThirdPartyNotices\inherited-code.txt` | `ThirdParty/Notices/InheritedCode.txt`, the MIT notice of the code RedPrism was ported from |
 | `ThirdPartyNotices\lucide.txt` | `ThirdParty/Lucide/LICENSE` (ISC, plus the MIT notice for the Feather-derived icons) |
 | `ThirdPartyNotices\dxui.txt` | DxUi's own license (MIT), read from the pinned source `restore-dxui.ps1` leaves at `.build\dependencies\DxUi\source\<first-16-commit-hex>\LICENSE*`; packaging fails if it is missing rather than shipping `DxUi.lib` without its notice |
 | `README.md`, `usage.md` | `docs/README.md` and `docs/usage.md` as shipped |
 | `LICENSE.txt` | The project's MIT license; third-party notices retain their own licenses |
+| `THIRD-PARTY-NOTICES.md` | The list of every component the package compiles in or ships, with its license |
 | `Languages\<tag>\RedPrism.resources.dll` | Not staged in v1 (no translation exists); a release with one adds the folder ([`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md), Strings) |
 
 Nothing else: no settings template (the app writes it), no crash folder, no registry work.
