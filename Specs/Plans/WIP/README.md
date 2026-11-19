@@ -2,9 +2,10 @@
 
 Files in this directory are non-normative execution or decision records; current requirements stay in the owning
 domain spec under `Specs/<Domain>/`. This index is routing only. Every direct plan in this directory is listed
-exactly once, as `- **STATUS**: [Title](File.md) — purpose`. `ACTIVE` is executable work, `HOLD` paused work,
-`DECISION` unresolved product intent, and `RETIRED` a bounded tombstone that names its retirement date, reason,
-current owner, and a `git show` recovery command.
+exactly once, as a bullet that opens with its bold status and a colon (`- **ACTIVE**:`), links its title to its
+file, and ends with an em dash and its purpose. `ACTIVE` is executable work, `HOLD` paused work, `DECISION`
+unresolved product intent, and `RETIRED` a bounded tombstone that names its retirement date, reason, current
+owner, and a `git show` recovery command.
 
 P1 and every child in the HOLD rows are paused since 21 October 2026. Resume only from [`UiNeverBlocks_2026-09-22.md`](UiNeverBlocks_2026-09-22.md). The October checkpoint narrative that used to open this file lives in that plan. `P1MainIntegration_2026-10-21/*.json` is evidence referenced from that plan and from [`P1MainIntegration_2026-10-21.md`](../../TestRuns/P1MainIntegration_2026-10-21.md). It is not a plan.
 
