@@ -1,7 +1,13 @@
+# RedPrism
+
+Windows-native raster editing application in the Red family, built with Win32, Direct3D 11, DirectWrite, WIL, yyjson,
+libzip, Clipper2 and DxUi. See [specifications](Specs/README.md) and the [user guide](docs/README.md).
 
 ## Recording changes
 
 Follow the [Changes workflow](Changes/README.md): each change adds one fragment under `Changes/` and never edits `CHANGELOG.md`; after merges, `Tools/Submit-ChangelogFold.ps1` folds the fragments on `main` through a pull request of its own.
+
+CI behavior and manual actions: [Unified CI contract](Specs/Build/Build_UnifiedCI.md).
 
 ## Testing
 
