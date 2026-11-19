@@ -17,6 +17,9 @@ Build\vcpkg-triplets, copied unchanged, plus the two pins (VCPKG_VISUAL_STUDIO_P
 sanitizer triplets chainload asan-toolchain.cmake, which is copied beside them. A file is rewritten only when its contents
 change. Changing a triplet changes vcpkg's package ABI hash, so the first restore after a change rebuilds the packages.
 
+The managed vcpkg checkout is a complete clone of the repository and commit vcpkg-tool.json pins: vcpkg reads versioned
+ports with Git commands that cannot fetch a missing object, so a partial clone left by an earlier version is completed once.
+
 .PARAMETER Platform
 Target platform: x64, ARM64, or All.
 
@@ -87,8 +90,11 @@ if (-not (Test-Path -LiteralPath (Join-Path $toolRoot '.git') -PathType Containe
     }
 
     Write-Host "Cloning pinned vcpkg tooling into $toolRoot" -ForegroundColor Cyan
+    # A complete clone: vcpkg extracts each versioned port with git read-tree and checkout-index in an environment
+    # that holds only GIT_INDEX_FILE. Without SystemRoot that git resolves no host, so it cannot fetch an object a
+    # partial clone left on the server ("Could not resolve host: github.com" for a promisor object).
     # Set only this managed checkout: a deep checkout root may exceed the traditional Win32 path limit.
-    & git.exe clone -c core.longpaths=true --filter=blob:none $repository $toolRoot
+    & git.exe clone -c core.longpaths=true $repository $toolRoot
     if ($LASTEXITCODE -ne 0) {
         throw "git clone failed with exit code $LASTEXITCODE."
     }
@@ -97,6 +103,24 @@ if (-not (Test-Path -LiteralPath (Join-Path $toolRoot '.git') -PathType Containe
 $origin = & git.exe -C $toolRoot remote get-url origin
 if ($LASTEXITCODE -ne 0 -or $origin.TrimEnd('/') -ne $repository.TrimEnd('/')) {
     throw "The managed vcpkg checkout does not use the pinned repository: $repository"
+}
+
+# Earlier versions of this script made a partial, shallow clone. Complete it in place, keeping its HEAD. The filter
+# setting goes only once every object is local, so an interrupted completion is detected and retried.
+if (& git.exe -C $toolRoot config --get remote.origin.partialclonefilter) {
+    Write-Host "Completing the partial vcpkg clone in $toolRoot" -ForegroundColor Cyan
+    if ((& git.exe -C $toolRoot rev-parse --is-shallow-repository) -eq 'true') {
+        & git.exe -C $toolRoot fetch --unshallow origin
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to unshallow the managed vcpkg checkout (exit code $LASTEXITCODE)."
+        }
+    }
+    & git.exe -C $toolRoot fetch --refetch --no-filter origin
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to complete the managed vcpkg checkout (exit code $LASTEXITCODE)."
+    }
+    & git.exe -C $toolRoot config --unset-all remote.origin.partialclonefilter
+    & git.exe -C $toolRoot config --unset-all remote.origin.promisor
 }
 
 $dirty = & git.exe -C $toolRoot status --porcelain
@@ -110,9 +134,13 @@ if ($dirty) {
 $head = & git.exe -C $toolRoot rev-parse HEAD 2>$null
 if ($LASTEXITCODE -ne 0 -or $head -ne $commit) {
     Write-Host "Selecting pinned vcpkg commit $commit" -ForegroundColor Cyan
-    & git.exe -C $toolRoot fetch --depth 1 origin $commit
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to fetch pinned vcpkg commit $commit."
+    # The default branch normally holds the pinned commit. Fetch it only when it is missing, with its history, so
+    # the checkout stays complete and never becomes shallow.
+    if (-not (& git.exe -C $toolRoot rev-parse --verify --quiet "$commit^{commit}")) {
+        & git.exe -C $toolRoot fetch origin $commit
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to fetch pinned vcpkg commit $commit."
+        }
     }
     & git.exe -C $toolRoot checkout --detach $commit
     if ($LASTEXITCODE -ne 0) {

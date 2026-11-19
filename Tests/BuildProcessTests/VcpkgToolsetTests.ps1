@@ -143,6 +143,17 @@ try {
     $existenceIndex = $installer.IndexOf('MSBuild was not found at', [StringComparison]::Ordinal)
     Assert-True ($existenceIndex -ge 0 -and $existenceIndex -lt $toolsetIndex) 'vcpkg-install.ps1 does not refuse a -MSBuildPath that does not exist before it reads the toolset and clones.'
     Assert-True ($installer -match 'core\.longpaths=true') 'vcpkg-install.ps1 clones the managed vcpkg checkout without Git long paths.'
+    # vcpkg reads versioned ports with git read-tree and checkout-index in an environment that holds only GIT_INDEX_FILE,
+    # where git can reach no host: the checkout must hold every object, so it is a complete clone and never shallow.
+    $clones = @($installer -split "`n" | Where-Object { $_ -match '^\s*&\s*git\.exe\s+clone\s' })
+    Assert-True ($clones.Count -eq 1 -and -not $clones[0].Contains('--filter')) 'vcpkg-install.ps1 makes a partial clone of vcpkg, whose missing blobs vcpkg cannot fetch.'
+    Assert-True ($installer -notmatch '\bfetch\s+--depth\b') 'vcpkg-install.ps1 fetches the pinned vcpkg commit shallow.'
+    Assert-True ($installer.Contains('rev-parse --verify --quiet "$commit^{commit}"')) 'vcpkg-install.ps1 fetches the pinned vcpkg commit even when the clone already holds it.'
+    $partialIndex = $installer.IndexOf('config --get remote.origin.partialclonefilter', [StringComparison]::Ordinal)
+    $refetchIndex = $installer.IndexOf('fetch --refetch --no-filter origin', [StringComparison]::Ordinal)
+    $unsetIndex = $installer.IndexOf('config --unset-all remote.origin.partialclonefilter', [StringComparison]::Ordinal)
+    $dirtyIndex = $installer.IndexOf('status --porcelain', [StringComparison]::Ordinal)
+    Assert-True ($partialIndex -gt $cloneIndex -and $refetchIndex -gt $partialIndex -and $unsetIndex -gt $refetchIndex -and $dirtyIndex -gt $unsetIndex) 'vcpkg-install.ps1 does not complete a partial checkout left by an earlier version, or drops its filter before every object is local.'
     Assert-True ($installer -notmatch '--overlay-triplets=\$overlayTriplets' -and $installer -match '--overlay-triplets=\$overlayDirectory') 'vcpkg-install.ps1 still takes the unpinned triplets as its overlay.'
     foreach ($triplet in 'x64-windows', 'arm64-windows', 'x64-windows-asan', 'arm64-windows-asan') {
         Assert-True ($installer.Contains("'$triplet'")) "vcpkg-install.ps1 does not pin the $triplet triplet."
