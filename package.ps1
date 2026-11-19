@@ -200,6 +200,7 @@ foreach ($port in 'yyjson', 'libzip', 'zlib', 'clipper2', 'wil') {
 }
 Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty\Lucide\LICENSE') -Destination (Join-Path $notices 'lucide.txt')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty/RedMonitor/LICENSE.txt') -Destination (Join-Path $notices 'redmonitor.txt')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty/Notices/InheritedCode.txt') -Destination (Join-Path $notices 'inherited-code.txt')
 
 # DxUi.lib is linked into RedPrism.exe, so its own license ships too. restore-dxui.ps1 (run by build.ps1 above)
 # leaves the pinned source under .build\dependencies\DxUi\source\<commit>, with its license at that root.
@@ -219,6 +220,7 @@ Copy-Item -LiteralPath $dxUiLicense.FullName -Destination (Join-Path $notices 'd
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\README.md') -Destination (Join-Path $stage 'README.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\usage.md') -Destination (Join-Path $stage 'usage.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE.txt') -Destination (Join-Path $stage 'LICENSE.txt')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') -Destination (Join-Path $stage 'THIRD-PARTY-NOTICES.md')
 
 # ── ZIP + checksum ───────────────────────────────────────────────────────────
 $zipPath = Join-Path $OutputDirectory "$packageName.zip"

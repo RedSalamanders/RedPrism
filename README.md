@@ -31,4 +31,4 @@ Repository skill validation and its regression tests run on PowerShell 7 without
 
 CI behavior and manual actions: [Unified CI contract](Specs/Build/Build_UnifiedCI.md).
 
-Project license: [MIT](LICENSE.txt). Third-party notices retain their respective licenses.
+Project license: [MIT](LICENSE.txt). [Third-party notices](THIRD-PARTY-NOTICES.md) retain their respective licenses.
