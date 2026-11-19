@@ -58,3 +58,12 @@ Compare inventories in canonical relative-path and stream-name order without rel
 time or ACL check. Native moves retain the exact intent and observed post-move inventories before comparison; a
 mismatch retains both snapshots and the payload and refuses completion. Independent regression controls keep
 stale provider metadata and reverse enumeration while verifying the actual file and directory metadata exactly.
+
+## Archive
+
+Generated evidence stays under the repository `.build/`, ignored by Git, and normal builds never sweep it.
+Reviewed evidence that a plan, contract or Done record cites is kept under `Measurements/`, one folder per topic
+and date with a `README.md` that names the source commit, profile and scenario, and says what the packet does
+and does not establish. Archived packets are history: they are never rewritten to match later code.
+Run records under `Specs/TestRuns/` predate this rule. They stay where they are, and new records go to
+`Measurements/`.

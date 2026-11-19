@@ -32,7 +32,7 @@
     That file's "no product defect" sentence is too narrow: it means no new Critical C++
     hole in the mechanisms it checked. It does not retire MergeReview or this plan.
     DX-2 stays owned there; WP1 only sequences it.
-  - [`AdversarialReview.md`](AdversarialReview.md) (historical at `97dd25b`; not re-triaged).
+  - [`AdversarialReview_2026-10-21.md`](AdversarialReview_2026-10-21.md) (historical at `97dd25b`; not re-triaged).
   - [`UiNeverBlocks_2026-09-22.md`](UiNeverBlocks_2026-09-22.md) (HOLD). Latent P1 rows
     only block P1 activation.
 
