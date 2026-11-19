@@ -1,14 +1,20 @@
-# Visual Studio state
+# Common block: the same lines in every RedSalamanders repository (RedHome convergence D-03).
+# Generated output, Visual Studio state, the shared CI engine checkout and the changelog fold lease.
+.build/
 .vs/
 *.user
 *.suo
 *.VC.db
+*.VC.opendb
 *.VC.VC.opendb
+/.ci-engine/
+/.changelog-fold.lock
+/.changelog-*.tmp
+# End of the common block.
 
 # Build products
 # Legacy standalone polygonal-input-journal probe; keep generated binaries local.
 /journal-release.exe
-.build/
 Debug/
 Release/
 x64/
@@ -24,10 +30,3 @@ __pycache__/
 # Local tooling
 work/
 outputs/
-
-# Changes workflow fold lease and staged changelog, removed when a fold finishes
-/.changelog-fold.lock
-/.changelog-*.tmp
-
-# Shared CI engine checkout (exact pin lives in .ci/project.json)
-/.ci-engine/
