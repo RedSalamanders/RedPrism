@@ -186,7 +186,7 @@ only a process whose `Win32_Process.ExecutablePath`, after absolute-path normali
 | File | Value |
 | --- | --- |
 | `vcpkg-tool.json` repository | `https://github.com/microsoft/vcpkg` |
-| `vcpkg-tool.json` commit and `vcpkg.json` `builtin-baseline` | `9eec002df1cd109f8f104cd966a763daf9751489` |
+| `vcpkg-tool.json` commit and `vcpkg.json` `builtin-baseline` | `aeb162b71d47950344248a4ebcac733e12f8a992` |
 | WIL | `version>="1.0.260126.7"` |
 | yyjson | `version>="0.13.0"` |
 | libzip | `default-features: false` (zlib is restored as its dependency) |
