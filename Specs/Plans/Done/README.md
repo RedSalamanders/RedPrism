@@ -1,5 +1,8 @@
-# Completed plans
+# Completed work
 
-- [Hosted MSVC setup followup](MsvcHostedSetup_2026-10-27.md) - explicit GUI completion, exact tool checks, diagnostic retention and passing local tooling; hosted delivery limits remain explicit.
+Completed plans are history: they record sequencing, rationale, and evidence, never current behavior. Each is
+listed once, newest first, as `- [Title](File.md) — outcome`.
 
-- [Verified hosted MSBuild selection](MsvcHostedSelection_2026-10-27.md) - tested setup-to-build handoff, older ambient counterfactual and strict missing-tool/read-only controls.
+- [Hosted MSVC setup followup](MsvcHostedSetup_2026-10-27.md) — explicit GUI completion, exact tool checks, diagnostic retention and passing local tooling; hosted delivery limits remain explicit.
+
+- [Verified hosted MSBuild selection](MsvcHostedSelection_2026-10-27.md) — tested setup-to-build handoff, older ambient counterfactual and strict missing-tool/read-only controls.
