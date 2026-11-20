@@ -1,6 +1,6 @@
 ---
 name: consumer-dxui
-description: Add or update the pinned DxUi dependency, MSBuild imports, RedPrism theme or host adapters, and chrome built from DxUi controls. Use for ChromeHost work and pin bumps; not for composition canvas work.
+description: Add or update the pinned DxUi dependency, MSBuild imports, RedPrism theme or host adapters, and chrome built from DxUi controls. Use when working on ChromeHost or bumping the pin. Canvas composition uses hlsl-composition.
 ---
 
 # DxUi consumer integration
