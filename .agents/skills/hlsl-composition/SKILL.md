@@ -1,6 +1,6 @@
 ---
 name: hlsl-composition
-description: Change or extend the RedPrism document-space GPU composition and its build-time HLSL (layer passes, coverage textures, clipping stacks, blend modes, blit, the brush compute kernel). Use for CanvasRenderer and RedPrism/Shaders work; not for swap-chain or window code.
+description: Change or extend the RedPrism document-space GPU composition and its build-time HLSL (layer passes, coverage textures, clipping stacks, blend modes, blit, the brush compute kernel). Use when changing CanvasRenderer or RedPrism/Shaders. Use d3d11-win32-host for swap-chain and window code.
 ---
 
 # HLSL composition

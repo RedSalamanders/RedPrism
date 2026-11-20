@@ -1,0 +1,1 @@
+- Give the DxUi consumer and HLSL composition skills explicit usage triggers for agent discovery.
