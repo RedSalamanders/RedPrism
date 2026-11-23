@@ -8,7 +8,8 @@ New-Item -ItemType Directory -Path (Join-Path $fixture 'Build') -Force | Out-Nul
 
 # Execute the exact build entrypoint with dependency/compiler stand-ins. These controls never compile C++.
 foreach ($relative in @('build.ps1', 'Build/BuildConsole.psm1', 'Build/BuildPresentation.psm1', 'Build/BuildPreflight.psm1', 'Build/VisualStudioDiscovery.psm1')) {
-    $source = Join-Path $repo $relative
+    # Build/BuildConsole.psm1 is an engine module shim; this mocked-engine fixture takes the implementation itself.
+    $source = if ($relative -ceq 'Build/BuildConsole.psm1') { Join-Path $repo '.ci-engine/Tools/Modules/Ci.BuildConsole.psm1' } else { Join-Path $repo $relative }
     $target = Join-Path $fixture $relative
     Copy-Item -LiteralPath $source -Destination $target
     if ((Get-FileHash -LiteralPath $source).Hash -cne (Get-FileHash -LiteralPath $target).Hash) { throw "Fixture differs: $relative" }
