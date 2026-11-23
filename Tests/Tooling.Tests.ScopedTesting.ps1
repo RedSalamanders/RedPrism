@@ -39,7 +39,7 @@ try {
         Assert (-not @($paths | Where-Object { $_ -match '(^|/)Scope\.Tests\.' }).Count) 'Placeholder test scope'
     }
     Case 'product rules preserve source owners and widen on unknown compile inputs' {
-        foreach ($path in 'Build/SkillPackageIntegrity.psm1','Build/SkillValidation.psm1') {
+        foreach ($path in 'validate-skills.ps1','Tools/Test-AgentGuidance.ps1') {
             Assert ((Select-Scopes $path) -join ',' -ceq 'Tooling') "Expected only Tooling for $path"
         }
         foreach ($path in 'Build/ScopedTesting.psm1','Build/Unknown.psm1','Unmapped/New.cpp','res/Welcome.md') {

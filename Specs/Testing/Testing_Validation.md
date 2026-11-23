@@ -31,67 +31,14 @@ remains separate from cross-compilation.
 
 ### Skill package and example integrity
 
-Skill metadata grammar and package usability are separate checks. `Build/SkillPackageIntegrity.psm1` checks
-declared inline local Markdown links in skills and their supporting Markdown files, resolving them from each
-document within this repository and refusing missing/escaping/reparse targets. External URLs and section-only
-links are not fetched; protocol-relative URLs remain external. Local absolute paths and file URIs must pass the
-same existence/containment checks as relative paths. Reparse package files and ancestors fail before reads.
-Balanced destination parentheses are supported. Full/collapsed reference links resolve normalized,
-case-insensitive labels and check their definition destinations; the first definition wins, and undefined explicit
-reference labels fail. Full/collapsed references require adjacent brackets; space, tab or newline separation leaves
-independent shortcut/text spans. Bracket-only shortcuts without definitions remain ordinary text. Links inside fenced
-illustrations or inline code, backtick prose paths and target anchors are outside this check.
-The bounded inline-code scanner stops at blank paragraphs (including whitespace-only blank lines), while
-soft line breaks within a paragraph remain supported. Link titles may use single quotes, double quotes or
-parentheses on one line. A reference destination may continue onto the immediately following line; this does
-not make its declaration a rendered link use. These forms do not claim a general CommonMark parser.
-Backtick fence opening info cannot contain a backtick: line-leading same-line code such as
-`` ```literal``` `` remains inline prose and cannot hide the following paragraph. Tilde-fence info may contain backticks.
-Recognized fence openers and closers have zero to three leading spaces before the optional list marker.
-Four-space or tab indentation does not open or close a fence in this bounded scanner.
-File URI path escapes are decoded once, preserving encoded `#` and literal percent sequences in filenames.
+`validate-skills.ps1` runs the pinned CI engine's guidance validator and the changelog check. The engine's agent
+guidance contract in `Specs/ProjectCommands.md` owns the skill metadata grammar, local package references, literal
+PowerShell example parameters, guidance and pointer files, and the plan indexes. The engine runs the shared fixtures
+on Windows and Linux.
 
-For literal `./...ps1` or `.\\...ps1` command lines in `powershell` fences, the package check parses the named
-repository-root script and checks the spelled named parameters against its AST, without executing either the
-example or target. Literal Alias attributes and the installed runtime's common parameters/aliases are recognized.
-WhatIf and Confirm are available only for omitted/literal-true SupportsShouldProcess on CmdletBinding. Parameter
-values, dynamic commands or attribute expressions, expression evaluation, native executables and
-runtime binding are not validated. A structural pass is not instruction-quality, policy-consistency or runtime
-evidence. Keep exact dependency identities in locks and qualified results in source-bound receipts, not skills.
-
-The public `validate-skills.ps1` runs package/path checks before the independent metadata grammar opens SKILL.md.
-Hidden direct skill directories are part of both inventories; a Hidden attribute cannot skip header or package
-validation. JSON-compatible quoted metadata strings retain their exact text, including ISO dates/timestamps,
-without automatic date conversion. Date/timestamp type detection matches a complete scalar; plain prose such
-as `2026-10-28 migration guidance` remains a string, while complete unquoted dates/timestamps require quotes.
-Only exact `Build/SkillPackageIntegrity.psm1` and `Build/SkillValidation.psm1` changes select Tooling alone before
-generic Build and project-manifest rules. Shared `Build/ScopedTesting.psm1` and unknown Build inputs retain broad
-fallback; the full tooling source identity continues to include the validator closure.
-
-`Tests/BuildProcessTests/SkillPackageIntegrity.Tests.ps1` is discovered by the independent tooling runner. It
-checks the current skill corpus plus missing links/scripts, wrong parameters, supporting-reference resolution,
-entrypoint absence, inline/fenced illustrations, local URI boundaries, declared aliases/ShouldProcess and read-only
-snapshots. Reparse file and ancestor targets are synthetic and remain inside the same owned fixture; hosts without
-symbolic-link privilege report explicit skips for those controls. An example target that throws proves it was
-never invoked. Fixtures remain beneath unique `.build/skill-package-tests` directories; no native build or
-desktop input is required.
-
-Shared changelog behavior fixtures run through `Tests/BuildProcessTests/ChangelogWorkflow.Tests.ps1` in the
-independent tooling runner, with unique `.build/changelog-fixtures` scratch. They remain required after removing
-fixture mutations from the narrow skill checker; read-only fragment validation does not replace these controls.
-
-`ToolDiscoveryTests.ps1` also runs the exact-entrypoint compiler-host controls in `ToolArchitectureTests.ps1`.
-They observe dependency/restore/solution/provenance boundaries, explicit and unset selections, Clean and failure
-cleanup through isolated stand-ins. They preserve MSBuild override/PATH precedence and the caller environment;
-actual compiler/dependency and native runtime qualification still require the selected products and canonical gates.
-Native ARM64 feasibility also records and requires the current default MSVC version before canonical work.
-`NativeArmValidationTests.ps1` exercises that exact host-selection boundary with isolated installation/discovery
-stand-ins. Those controls establish early refusal and environment selection, never ARM64 execution or product identity.
-The six initializer cases include explicitly provisioned native MSBuild selection and an older provisioned
-default-toolset refusal before any environment change. All 60 predecessor controls remain required; 14 added
-controls bring this boundary fixture to 74. The real disposable CI installation, pinned tool bytes, actual
-compiler/dependency inputs and native runtime require their own observed receipts. The canonical gates remain
-unchanged when native CI provisions its pinned side-by-side toolchain.
+RedPrism declares its root guidance in `.agents/guidance.json`. Changes to `validate-skills.ps1` or its
+`Tools/Test-AgentGuidance.ps1` shim select the independent Tooling scope. The product scope fixtures exercise those
+routes and the conservative treatment of unknown Build inputs.
 
 ### Persistent history and raster residency controls
 
