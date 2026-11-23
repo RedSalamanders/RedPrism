@@ -536,7 +536,8 @@ Record these in the owning P1 plans when P1 resumes.
   - The user authorized local validation for these merges. The authorizations are recorded in
     `RedMonitor_Adoption_2026-10-23.md` and `NativeBuildPolicyCoherence_2026-10-28.md`.
   - Until CI runs, AGENTS.md's `CI_PENDING` rule is not enforceable (Q4).
-- [ ] **CI-1** · High (CI reliability) · CONFIRMED — `Tools/Get-CiNativeScope.ps1` fails its own fall-back.
+- [x] **CI-1** · SUPERSEDED by the shared scoped-testing cutover. The unused PR-delegation script was removed.
+  The original fall-back finding is retained here:
   - Its degrade paths (`:34`, `:44`, `:56`) leave `$LASTEXITCODE` at 1 with no final reset, and GitHub's `pwsh`
     wrapper exits with it. One cancelled run with no artifact keeps the PR red on every rerun.
   - Fix: `$global:LASTEXITCODE = 0` at the end, plus a Tooling test with a failing fake `gh`.

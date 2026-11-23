@@ -15,8 +15,9 @@ Use `./Test-Changes.ps1 -Explain` to inspect affected scopes, then `./Test-Chang
 The default advances from its last successful run; unchanged input selects no tests. Explicit partial
 selections and failures do not advance that baseline. Exact successful evidence can be reused.
 
-Use `./Test-Changes.ps1 -Mode PrePush` to account for local and matching PR obligations without
-repeating identical CI tests; pending CI is not a pass. `-Mode Full` remains the explicit full-profile run.
+Use `./Test-Changes.ps1 -Mode PrePush` for the six local build profiles, with runtime testing on x64.
+`-Mode Full` runs the applicable scoped obligations for one profile. IO and Runtime use the session clipboard
+and require a separate, admitted desktop run.
 See the [test guide](Tests/README.md) and [validation contract](Specs/Testing/Testing_Validation.md).
 
 Builds require the default MSVC **14.52.x** tools (v145). Release uses /Gy /GL and final /OPT:REF /LTCG; archive and final-link tools must match exactly. The build contract documents the preserved API pin, explicit archive forwarding and policy-specific output identity.

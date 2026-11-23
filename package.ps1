@@ -99,9 +99,10 @@ if (-not $SkipBuild) {
     }
 }
 Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
-$effectiveBuildNumber = if ($BuildNumber -gt 0) { $BuildNumber } else { Get-ScopedBuildNumber $repoRoot }
+$effectiveBuildNumber = if ($BuildNumber -gt 0) { $BuildNumber } else { Get-ScopedBuildNumber -Root $repoRoot -BaseRef HEAD }
 $attestation = Join-Path $outputRoot 'build-attestation.json'
-if (-not (Test-ScopedReceipt $attestation (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $effectiveBuildNumber -EnableTests $false))) {
+$attestationKey = Get-ScopedBuildAttestationKey -Root $repoRoot -Platform $Platform -Configuration $Configuration -BuildNumber $effectiveBuildNumber -EnableTests $false
+if (-not (Test-ScopedReceipt -Path $attestation -Identity $attestationKey)) {
     throw 'Packaging requires an exact current test-disabled production build receipt.'
 }
 if (-not (Test-Path -LiteralPath $executable)) {

@@ -21,16 +21,14 @@ Write-Host 'PASS tooldiscovery.module-exports'
 
 & (Join-Path $PSScriptRoot 'ToolArchitectureTests.ps1')
 
-# format.ps1 formats with the clang-format the pinned engine names; that pin is part of tooling evidence identity.
-$formatterPin = Join-Path $repo '.ci-engine/Policy/clang-format.json'
-if (Test-Path -LiteralPath $formatterPin -PathType Leaf) {
-    Import-Module (Join-Path $repo 'Build/ScopedTesting.psm1') -Force
-    $fingerprint = 'formatter=ci-engine:' + (Get-FileHash -LiteralPath $formatterPin).Hash
-    if ($fingerprint -cnotin @(Get-ScopedEnvironmentInputs -Tooling)) {
-        throw 'The pinned formatter is missing from tooling evidence identity.'
-    }
+# The product's Format scope reaches the formatter that uses the CI engine pin.
+Import-Module (Join-Path $repo 'Build/ScopedTesting.psm1') -Force
+$formatScope = (Read-ScopedTestManifest -Root $repo -SkipProjectRules).scopes | Where-Object name -ceq 'Format'
+if (@($formatScope.commands).Count -ne 1 -or $formatScope.commands[0].path -cne 'format.ps1' -or
+    ($formatScope.commands[0].arguments -join ',') -cne '-Check') {
+    throw 'The Format scope must run the pinned formatter in check mode.'
 }
-Write-Host 'PASS tooldiscovery.formatter-pin-attested'
+Write-Host 'PASS tooldiscovery.format-scope'
 
 # Every script that used to run its own vswhere lookup now goes through the shared, version-ranged helper.
 $buildScript = Get-Content -LiteralPath (Join-Path $repo 'build.ps1') -Raw

@@ -1,293 +1,160 @@
-# Git/content/process fixtures exercise the public runner without a native build or desktop use.
-[CmdletBinding()]param()
+# Product data and entrypoint contracts. Generic planner, runner, and receipt controls live in the pinned engine.
+[CmdletBinding()]
+param()
 Set-StrictMode -Version Latest
-$ErrorActionPreference='Stop'
-$root=Split-Path $PSScriptRoot
+$ErrorActionPreference = 'Stop'
+
+$root = Split-Path $PSScriptRoot
+$engine = Join-Path $root '.ci-engine'
+$pwsh = (Get-Process -Id $PID).Path
+$fixture = Join-Path $root ('.build/ToolTests/scoped-' + [guid]::NewGuid().ToString('N'))
 Import-Module (Join-Path $root 'Build/ScopedTesting.psm1') -Force
-$manifest=Read-ScopedTestManifest $root
-$fixture=Join-Path $root ('.build/ToolTests/scoped-'+[guid]::NewGuid().ToString('N'))
-$passed=0
-function Assert([bool]$Value,[string]$Message){if(-not $Value){throw $Message}}
-function Case([string]$Name,[scriptblock]$Body){&$Body;$script:passed++;Write-Host "PASS $Name"}
-function Put([string]$Path,[string]$Text){[void](New-Item -ItemType Directory -Path (Split-Path $Path) -Force);[IO.File]::WriteAllText($Path,$Text,[Text.UTF8Encoding]::new($false))}
-function Invoke-FixtureGit([string]$Directory,[string[]]$Arguments){& git -C $Directory @Arguments *> $null;if($LASTEXITCODE){throw "Fixture Git failed: $Arguments"}}
-function New-Repository([string]$Directory){
-    [void](New-Item -ItemType Directory -Path $Directory -Force)
-    Put (Join-Path $Directory '.gitignore') ".build/`n"
-    Invoke-FixtureGit $Directory @('init','-q','-b','main');Invoke-FixtureGit $Directory @('config','user.name','Scope fixture');Invoke-FixtureGit $Directory @('config','user.email','fixture@example.invalid')
+Import-Module (Join-Path $engine 'Tools/Modules/Ci.Policy.psm1')
+$manifest = Read-ScopedTestManifest -Root $root
+$passed = 0
+
+function Assert([bool]$Condition, [string]$Message) {
+    if (-not $Condition) { throw $Message }
 }
-try{
-    Case 'actual ignored engine bytes bind build and tooling evidence without changing iteration maps' {
-        $product=Join-Path $fixture 'engine-input-project'
-        [void][IO.Directory]::CreateDirectory($product)
-        New-Repository $product
-        Put (Join-Path $product '.gitignore') ".build/`n.ci-engine/`n"
-        Put (Join-Path $product '.ci/project.json') ([IO.File]::ReadAllText((Join-Path $root '.ci/project.json')))
-        Put (Join-Path $product 'runtime.cpp') 'synthetic source'
-        $engine=Join-Path $product '.ci-engine'
-        $cloneOutput=& git clone --quiet --no-hardlinks (Join-Path $root '.ci-engine') $engine 2>&1
-        if($LASTEXITCODE){throw "Owned engine fixture clone failed: $cloneOutput"}
-        $mapBefore=Get-ScopedMapIdentity (Get-ScopedSourceMap $product)
-        $toolingBefore=Get-ScopedSourceIdentity $product
-        $buildBefore=Get-ScopedSourceIdentity $product -CompiledOnly
-        if([OperatingSystem]::IsWindows()){
-            Assert ((Get-ScopedSourceIdentity $product.ToUpperInvariant()) -ceq $toolingBefore) 'Windows path casing invalidated tooling evidence'
-            Assert ((Get-ScopedSourceIdentity $product.ToUpperInvariant() -CompiledOnly) -ceq $buildBefore) 'Windows path casing invalidated build evidence'
-        }
-        Put (Join-Path $engine '.build/fixture-output.json') '{"generated":true}'
-        Assert ((Get-ScopedSourceIdentity $product) -ceq $toolingBefore) 'Generated engine output invalidated tooling'
-        Assert ((Get-ScopedSourceIdentity $product -CompiledOnly) -ceq $buildBefore) 'Generated engine output invalidated build evidence'
-        $policy=Join-Path $engine 'Tools/Modules/Ci.Policy.psm1'
-        $original=[IO.File]::ReadAllBytes($policy)
-        try{
-            [IO.File]::AppendAllText($policy,"`n# Synthetic changed engine implementation.`n")
-            foreach($compiled in @($false,$true)){
-                $refusal=''
-                try{$null=Get-ScopedSourceIdentity $product -CompiledOnly:$compiled}catch [System.Management.Automation.RuntimeException]{$refusal=$_.Exception.Message}
-                Assert ($refusal.Contains('Local engine checkout must be clean')) 'Modified ignored engine retained reusable build/tooling evidence'
-            }
-            Assert ((Get-ScopedMapIdentity (Get-ScopedSourceMap $product)) -ceq $mapBefore) 'Engine identity polluted product iteration maps'
-        }finally{[IO.File]::WriteAllBytes($policy,$original)}
-        Assert ((Get-ScopedSourceIdentity $product) -ceq $toolingBefore) 'Restored exact engine did not recover its tooling identity'
-        Assert ((Get-ScopedSourceIdentity $product -CompiledOnly) -ceq $buildBefore) 'Restored exact engine did not recover its build identity'
 
+function Case([string]$Name, [scriptblock]$Body) {
+    & $Body
+    $script:passed++
+    Write-Host "PASS $Name"
+}
+
+function Put([string]$Path, [string]$Content) {
+    [void][IO.Directory]::CreateDirectory((Split-Path $Path))
+    [IO.File]::WriteAllText($Path, $Content)
+}
+
+function Select-Scopes([string]$Path, [string]$Configuration = 'ASan Debug') {
+    return (Get-ScopedTestPlan -Manifest $manifest -ChangedPaths @($Path) -Configuration $Configuration).scopes
+}
+
+try {
+    Case 'native inventory is contextual and complete' {
+        Assert ((Assert-ScopedTestNames -Root $root -Manifest $manifest) -gt 0) 'Empty native source inventory'
+        $paths = Get-Content (Join-Path $root $manifest.nativeInventory.path) -Raw | ConvertFrom-Json
+        Assert (-not @($paths | Where-Object { $_ -match '(^|/)Scope\.Tests\.' }).Count) 'Placeholder test scope'
     }
-    Case 'active native naming and inventory are contextual and complete' {
-        Assert ((Assert-ScopedTestNames $root) -gt 0) 'Empty inventory'
-        $paths=@(Get-Content (Join-Path $root $manifest.nativeInventory) -Raw|ConvertFrom-Json)
-        if($manifest.project -ceq 'RedTilde'){$paths=@($paths[0].files.path)}
-        Assert (@($paths|Where-Object{$_ -match '(^|/)Scope\.Tests\.'}).Count -eq 0) 'Placeholder Scope was retained instead of a context'
-    }
-    Case 'unknown executable inputs widen even though formatting also matches' {
-        foreach($path in @('Unmapped/New.cpp','Unmapped/New.h','Specs/Unmapped.schema.json','NewGenerator.inl')){
-            Assert ((Get-ScopedTestPlan $manifest @($path)).full) "Unmapped input narrowed coverage: $path"
+    Case 'product rules preserve source owners and widen on unknown compile inputs' {
+        foreach ($path in 'Build/SkillPackageIntegrity.psm1','Build/SkillValidation.psm1') {
+            Assert ((Select-Scopes $path) -join ',' -ceq 'Tooling') "Expected only Tooling for $path"
         }
-    }
-    Case 'exact skill validators select tooling while shared and unknown Build inputs remain broad' {
-        foreach($path in @('Build/SkillPackageIntegrity.psm1','Build/SkillValidation.psm1')){
-            $plan=Get-ScopedTestPlan $manifest @($path)
-            Assert ($plan.scopes.Count -eq 1 -and $plan.scopes[0] -eq 'Tooling') "Validator module widened through a generic or live project rule: $path"
+        foreach ($path in 'Build/ScopedTesting.psm1','Build/Unknown.psm1','Unmapped/New.cpp','res/Welcome.md') {
+            Assert ((Get-ScopedTestPlan -Manifest $manifest -ChangedPaths @($path)).full) "Expected conservative full coverage for $path"
         }
-        foreach($path in @('Build/ScopedTesting.psm1','Build/SkillPackageIntegrityExtra.psm1','Build/Unknown.psm1')){
-            Assert ((Get-ScopedTestPlan $manifest @($path)).full) "Shared/unknown Build policy narrowed: $path"
+        Assert ((Select-Scopes 'README.md') -join ',' -ceq 'Tooling,Format') 'Project prose selected native tests'
+        $jobs = Select-Scopes 'Common/Jobs.cpp'
+        foreach ($scope in 'Host','Performance','Captures') {
+            Assert ($scope -in $jobs) "Jobs source lost $scope"
         }
+        $hostHeader = Get-Content (Join-Path $root $manifest.nativeInventory.path) -Raw | ConvertFrom-Json |
+            Where-Object { $_ -like 'Tests/HostTests/*.h' } | Select-Object -First 1
+        Assert ((Select-Scopes $hostHeader) -join ',' -ceq 'Host,Stress,Format') 'Standalone Host helper selected unrelated suites'
+        Assert ((Select-Scopes $hostHeader Release) -join ',' -ceq 'Host,Format') 'Stress ran in Release'
     }
-    Case 'prose omits native tests, embedded Markdown does not, and empty changes select nothing' {
-        $plan=Get-ScopedTestPlan $manifest @('README.md','CHANGELOG.md')
-        Assert (@($manifest.scopes|Where-Object{$_.native -and $_.name -in $plan.scopes}).Count -eq 0) 'Prose selected native tests'
-        Assert ((Get-ScopedTestPlan $manifest @('res/Welcome.md')).full) 'Embedded content mistaken for prose'
-        Assert ((Get-ScopedTestPlan $manifest @()).scopes.Count -eq 0) 'Empty changes selected tests'
-    }
-    Case 'actual consumers and standalone test owners are selected' {
-        if($manifest.project -ceq 'RedPrism'){
-            $plan=Get-ScopedTestPlan $manifest @('Common/Jobs.cpp')
-            foreach($consumer in @('Host','Runtime')){Assert ($consumer -in $plan.scopes) "Job consumer omitted: $consumer"}
-            $test=@(Get-Content (Join-Path $root $manifest.nativeInventory) -Raw|ConvertFrom-Json)|Where-Object{$_ -like 'Tests/HostTests/*.h'}|Select-Object -First 1
-            $plan=Get-ScopedTestPlan $manifest @($test)
-            Assert ('Host' -in $plan.scopes -and 'IO' -notin $plan.scopes) 'A standalone Host helper ran unrelated IO'
-        }else{
-            $plan=Get-ScopedTestPlan $manifest @('Common/Storage.cpp')
-            foreach($consumer in @('Storage','Recovery','RecoveryRestart')){Assert ($consumer -in $plan.scopes) "Storage consumer omitted: $consumer"}
-            Assert ('Captures' -notin $plan.scopes -and 'Editor' -notin $plan.scopes) 'Storage-only edit selected unrelated native render cases'
-            $plan=Get-ScopedTestPlan $manifest @('Tests/Application.Tests.Performance.cpp')
-            Assert ('Editor' -in $plan.scopes -and 'Performance' -in $plan.scopes) 'Native performance helper lost its behavioral consumer'
-            $catalog=Get-Content (Join-Path $root 'Tests/native-case-catalog.json') -Raw|ConvertFrom-Json
-            $declared=@([regex]::Matches([IO.File]::ReadAllText((Join-Path $root 'Tests/Application.Tests.Core.cpp')),'\btest\("([^"]+)"')|ForEach-Object{$_.Groups[1].Value})
-            Assert (-not(Compare-Object $declared @($catalog.cases.name))) 'Reviewed native catalog differs from source'
-            Assert (@($catalog.cases.name|Sort-Object -Unique).Count -eq $declared.Count) 'Duplicate native case'
+    Case 'clipboard suites remain separate in affected and full plans' {
+        Assert (-not @($manifest.scopes | Where-Object { $_.name -in @('IO','Runtime') }).Count) 'Scoped testing admitted a clipboard suite'
+        foreach ($path in 'Tests/IoTests/IO.Tests.Runner.cpp','RedPrism/Application.cpp','NewNativeInput.inl') {
+            $manual = @(Get-ScopedInteractiveObligations -Manifest $manifest -ChangedPaths @($path))
+            Assert ($manual.suite -join ',' -ceq 'IO,Runtime') "Clipboard obligation omitted for $path"
         }
+        Assert ((@(Get-ScopedInteractiveObligations -Manifest $manifest -Full).suite -join ',') -ceq 'IO,Runtime') 'Full omitted the clipboard obligations'
+        $entrypoint = [IO.File]::ReadAllText((Join-Path $root 'test.ps1'))
+        Assert ($entrypoint.Contains("Scope = 'IO'") -and $entrypoint.Contains("-in " + [char]36 + 'Suites') -and
+            $entrypoint.Contains('Invoke-CiInteractiveDesktopOperation -RequiresInteractiveDesktop $true')) 'Direct native test runner lost a desktop gate'
     }
-    Case 'invalid selectors and absolute/traversing paths are rejected' {
-        foreach($action in @({Get-ScopedTestPlan $manifest @() @('Unknown')},{Get-ScopedTestPlan $manifest @('../code.cpp')},{Get-ScopedTestPlan $manifest @('C:/code.cpp')})){
-            $threw=$false;try{&$action|Out-Null}catch [System.Management.Automation.RuntimeException]{$threw=$true}
-            Assert $threw 'Invalid selector/path accepted'
-        }
-    }
-    $gitRoot=Join-Path $fixture 'discovery';New-Repository $gitRoot
-    foreach($name in @('code.cpp','staged.cpp','deleted.cpp','rename 東京.cpp')){Put (Join-Path $gitRoot $name) 'initial'}
-    Invoke-FixtureGit $gitRoot @('add','-A');Invoke-FixtureGit $gitRoot @('commit','-qm','baseline')
-    $base=(& git -C $gitRoot rev-parse HEAD).Trim()
-    Put (Join-Path $gitRoot 'committed.cpp') 'committed';Invoke-FixtureGit $gitRoot @('add','-A');Invoke-FixtureGit $gitRoot @('commit','-qm','candidate')
-    Put (Join-Path $gitRoot 'staged.cpp') 'staged';Invoke-FixtureGit $gitRoot @('add','staged.cpp');Put (Join-Path $gitRoot 'staged.cpp') 'initial'
-    Put (Join-Path $gitRoot 'code.cpp') 'working';Remove-Item -LiteralPath (Join-Path $gitRoot 'deleted.cpp')
-    Move-Item -LiteralPath (Join-Path $gitRoot 'rename 東京.cpp') -Destination (Join-Path $gitRoot 'renamed 東京.cpp')
-    Put (Join-Path $gitRoot 'untracked space.cpp') 'new'
-    Case 'committed/staged/working/deleted/rename sides/Unicode/untracked are independently discovered' {
-        $paths=@(Get-ScopedChangedPaths $gitRoot $base)
-        foreach($name in @('committed.cpp','staged.cpp','code.cpp','deleted.cpp','rename 東京.cpp','renamed 東京.cpp','untracked space.cpp')){Assert ($name -cin $paths) "Missing change: $name"}
-    }
-    Case 'missing comparison refs fail with a full-run remedy' {
-        $message='';try{Get-ScopedChangedPaths $gitRoot missing-ref|Out-Null}catch [System.Management.Automation.RuntimeException]{$message=$_.Exception.Message}
-        Assert ($message -match 'BaseRef|full gate|fetch') 'Missing base silently selected nothing'
-    }
-    $mini=[ordered]@{version=1;project='Fixture';repository='fixture/example';defaultBranch='main';nativeInventory='Tests/native-test-files.json';runtimeFiles=@('input.json');
-        scopes=@(@{name='Example';native=$true;reuse=$true});rules=@();toolingCommands=@();prCoverage=@();prWorkflowDigest='none'}
-    Put (Join-Path $gitRoot 'Tests/test-scopes.json') ($mini|ConvertTo-Json -Depth 6)
-    foreach($testConfiguration in @('Debug','Release')){Put (Join-Path $gitRoot ".build/x64/$testConfiguration/example.exe") 'binary';Put (Join-Path $gitRoot ".build/x64/$testConfiguration/input.json") 'runtime'}
-    Case 'native identity changes with source/binary/runtime/profile/environment' {
-        $before=Get-ScopedRunIdentity $gitRoot x64 Debug Example
-        Put (Join-Path $gitRoot '.build/x64/Debug/example.exe') 'changed binary'
-        Assert ((Get-ScopedRunIdentity $gitRoot x64 Debug Example) -cne $before) 'Binary mutation omitted'
-        Put (Join-Path $gitRoot '.build/x64/Debug/example.exe') 'binary';Put (Join-Path $gitRoot '.build/x64/Debug/input.json') 'changed runtime'
-        Assert ((Get-ScopedRunIdentity $gitRoot x64 Debug Example) -cne $before) 'Runtime mutation omitted'
-        Put (Join-Path $gitRoot '.build/x64/Debug/input.json') 'runtime'
-        Assert ((Get-ScopedRunIdentity $gitRoot x64 Release Example) -cne $before) 'Profile omitted'
-        $old=$env:ASAN_OPTIONS
-        try{$env:ASAN_OPTIONS='scope-fixture=changed';Assert ((Get-ScopedRunIdentity $gitRoot x64 Debug Example) -cne $before) 'Sanitizer environment omitted'}finally{$env:ASAN_OPTIONS=$old}
-        Put (Join-Path $gitRoot 'code.cpp') 'changed source';Assert ((Get-ScopedRunIdentity $gitRoot x64 Debug Example) -cne $before) 'Source omitted'
-    }
-    Case 'missing required runtime inputs and JSON-only profiles fail before identity creation' {
-        Remove-Item -LiteralPath (Join-Path $gitRoot '.build/x64/Debug/input.json')
-        $message='';try{Get-ScopedArtifactIdentity $gitRoot x64 Debug|Out-Null}catch [System.Management.Automation.RuntimeException]{$message=$_.Exception.Message}
-        Assert ($message -like 'Missing deployed runtime input:*') 'Missing initial runtime closure accepted'
-        Put (Join-Path $gitRoot '.build/x64/Debug/input.json') 'runtime';Remove-Item -LiteralPath (Join-Path $gitRoot '.build/x64/Debug/example.exe')
-        $message='';try{Get-ScopedArtifactIdentity $gitRoot x64 Debug|Out-Null}catch [System.Management.Automation.RuntimeException]{$message=$_.Exception.Message}
-        Assert ($message -eq 'No executable build artifacts were found.') 'JSON-only profile accepted'
-        Put (Join-Path $gitRoot '.build/x64/Debug/example.exe') 'binary'
-    }
-    Case 'a production build receipt never delegates test-enabled native work' {
-        $old=$env:RedPrismEnableTests
-        try {
-            $env:RedPrismEnableTests='false'
-            $normal=Get-ScopedBuildAttestationKey $gitRoot x64 Debug 17
-            $explicit=Get-ScopedBuildAttestationKey $gitRoot x64 Debug 17 -EnableTests $true
-            $production=Get-ScopedBuildAttestationKey $gitRoot x64 Debug 17 -EnableTests $false
-            Assert ($normal -ceq $explicit) 'A normal test request inherited a production-only environment flag'
-            Assert ($normal -cne $production) 'Build roles have identical receipt identities'
-            $path=Join-Path $gitRoot '.build/production-role.json'
-            Write-ScopedReceipt $path $production
-            Assert (Test-ScopedReceipt $path $production) 'The identical production role cannot reuse its own success'
-            Assert (-not(Test-ScopedReceipt $path $normal)) 'A production-only receipt qualified native test work'
-        } finally { $env:RedPrismEnableTests=$old }
-    }
-    Case 'only intact identical successful receipts are reusable' {
-        $path=Join-Path $gitRoot '.build/pass.json';$key=Get-ScopedDigest 'identity'
-        Assert (-not(Test-ScopedReceipt $path $key)) 'Missing receipt reused'
-        Write-ScopedReceipt $path $key;Assert (Test-ScopedReceipt $path $key) 'Identical pass not reused'
-        Assert (-not(Test-ScopedReceipt $path (Get-ScopedDigest 'changed'))) 'Wrong identity reused'
-        Put $path '{broken';Assert (-not(Test-ScopedReceipt $path $key)) 'Corrupt receipt reused'
-        Write-ScopedReceipt $path $key;$record=Get-Content $path -Raw|ConvertFrom-Json;$record.outcome='FAILED';Put $path ($record|ConvertTo-Json)
-        Assert (-not(Test-ScopedReceipt $path $key)) 'Failed receipt reused'
-    }
-    Case 'compiled identity excludes prose but includes embedded Markdown and inline generators' {
-        $native=Get-ScopedSourceIdentity $gitRoot -CompiledOnly;$all=Get-ScopedSourceIdentity $gitRoot
-        Put (Join-Path $gitRoot 'README.md') 'prose'
-        Assert ((Get-ScopedSourceIdentity $gitRoot -CompiledOnly) -ceq $native) 'Prose invalidated compilation'
-        Assert ((Get-ScopedSourceIdentity $gitRoot) -cne $all) 'Validator prose omitted'
-        Put (Join-Path $gitRoot 'res/Welcome.md') 'embedded content'
-        Assert ((Get-ScopedSourceIdentity $gitRoot -CompiledOnly) -cne $native) 'Embedded Markdown omitted'
-        $native=Get-ScopedSourceIdentity $gitRoot -CompiledOnly;Put (Join-Path $gitRoot 'generator.inl') 'new generator'
-        Assert ((Get-ScopedSourceIdentity $gitRoot -CompiledOnly) -cne $native) 'New executable input extension omitted'
-    }
-    Case 'iteration state is source/index/profile/environment bound and rejects corruption' {
-        $path=Join-Path $gitRoot '.build/iteration.json';$source=Get-ScopedSourceMap $gitRoot;$index=Get-ScopedIndexMap $gitRoot
-        Write-ScopedIteration $path $gitRoot x64 Debug environment $source $index artifact
-        Assert ($null -ne (Read-ScopedIteration $path $gitRoot x64 Debug environment)) 'Valid iteration rejected'
-        Assert ($null -eq (Read-ScopedIteration $path $gitRoot x64 Release environment)) 'Wrong profile accepted'
-        Assert ($null -eq (Read-ScopedIteration $path $gitRoot x64 Debug changed)) 'Wrong environment accepted'
-        Put $path '{}';Assert ($null -eq (Read-ScopedIteration $path $gitRoot x64 Debug environment)) 'Corrupt state accepted'
-    }
-    Case 'current CI delegates no native PR work and qualifies both architectures after main batching' {
-        Assert ($manifest.prCoverage.Count -eq 0) 'Compiler-dependent execution is incorrectly delegated to PRs'
-        $engine=Join-Path $root '.ci-engine'
-        Import-Module (Join-Path $engine 'Tools/Modules/Ci.Policy.psm1')
+    Case 'PrePush profiles and hosted native gates retain product ownership' {
+        $profiles = @($manifest.prePushProfiles | ForEach-Object { "$($_.platform)/$($_.configuration)/$($_.buildOnly)" })
+        Assert (($profiles -join '|') -ceq 'x64/Debug/False|x64/Release/False|x64/ASan Debug/False|ARM64/Debug/True|ARM64/Release/True|ARM64/ASan Debug/True') 'Local PrePush profile matrix drifted'
         Import-Module (Join-Path $engine 'Tools/Modules/Ci.Project.psm1')
-        $project=Read-CiProject $root
-        Test-CiProjectConfiguration @{root=$root;engineRoot=$engine;project=$project;development=$false}
-        $adapter=[IO.File]::ReadAllText((Join-Path $root 'Tools/Invoke-ProjectCi.ps1'))
-        Assert ($adapter.Contains('Invoke-ToolingTests.ps1') -or $adapter.Contains('Tooling.Tests.ScopedTesting.ps1')) 'Main tooling owner missing'
-        $native=[IO.File]::ReadAllText((Join-Path $engine '.github/workflows/native.yml'))
+        Test-CiProjectConfiguration @{root=$root; engineRoot=$engine; project=(Read-CiProject $root); development=$false}
+        $adapter = [IO.File]::ReadAllText((Join-Path $root 'Tools/Invoke-ProjectCi.ps1'))
+        Assert ($adapter.Contains('Invoke-ToolingTests.ps1')) 'Hosted independent tooling owner missing'
+        Assert ($adapter.Contains('-Full')) 'Hosted regression lost the full native runner'
+        $native = [IO.File]::ReadAllText((Join-Path $engine '.github/workflows/native.yml'))
         Assert ($native.Contains('platform: x64') -and $native.Contains('platform: ARM64')) 'Both native architectures are required'
-        Assert ($native.Contains('needs: [admission, test-gate]')) 'Production must wait for both test branches'
-    }
-    Case 'live project/include consumers follow added dependencies and terminate include cycles' {
-        $graph=Join-Path $fixture 'graph'
-        Put (Join-Path $graph 'host.vcxproj') '<Project><ItemGroup><ClCompile Include="host.cpp"/></ItemGroup></Project>'
-        Put (Join-Path $graph 'document.vcxproj') '<Project><ItemGroup><ClCompile Include="document.cpp"/></ItemGroup></Project>'
-        Put (Join-Path $graph 'host.cpp') 'int host;'
-        Put (Join-Path $graph 'document.cpp') '#include "shared.h"'
-        Put (Join-Path $graph 'shared.h') '#include "cycle.h"'
-        Put (Join-Path $graph 'cycle.h') '#include "shared.h"'
-        New-Repository $graph
-        $bindings=@([pscustomobject]@{path='host.vcxproj';scope='Host'},[pscustomobject]@{path='document.vcxproj';scope='Document'})
-        $before=@(Get-ScopedProjectRules $graph $bindings|Where-Object pattern -ceq 'shared.h')
-        Assert ('Document' -in $before.scopes -and 'Host' -notin $before.scopes) 'Initial include graph is wrong'
-        Put (Join-Path $graph 'host.cpp') '#include "shared.h"'
-        $after=@(Get-ScopedProjectRules $graph $bindings|Where-Object pattern -ceq 'shared.h')
-        Assert ('Document' -in $after.scopes -and 'Host' -in $after.scopes) 'New native caller was omitted after adding an include'
-        Put (Join-Path $graph 'host.cpp') '#include SELECTED_HEADER'
-        Assert (@(Get-ScopedProjectRules $graph $bindings|Where-Object{$_.pattern -ceq '**' -and '*' -in $_.scopes}).Count -eq 1) 'Macro include silently narrowed coverage'
-    }
-    $gate=Join-Path $fixture 'gate';New-Repository $gate
-    $workflow="name: fixture`non:`n  pull_request:`n"
-    Put (Join-Path $gate '.github/workflows/ci.yml') $workflow
-    Put (Join-Path $gate 'code.cpp') 'baseline'
-    Invoke-FixtureGit $gate @('add','-A');Invoke-FixtureGit $gate @('commit','-qm','baseline');Invoke-FixtureGit $gate @('update-ref','refs/remotes/origin/main','HEAD');Invoke-FixtureGit $gate @('switch','-qc','candidate')
-    Put (Join-Path $gate 'code.cpp') 'candidate';Invoke-FixtureGit $gate @('add','code.cpp');Invoke-FixtureGit $gate @('commit','-qm','candidate')
-    $coverage=[pscustomobject]@{repository='fixture/example';defaultBranch='main';toolingCommands=@();prWorkflowDigest=(Get-ScopedDigest $workflow);
-        scopes=@([pscustomobject]@{name='Example';native=$true});prCoverage=@([pscustomobject]@{check='native';platform='x64';configuration='Release';scopes=@('Example')})}
-    $previousGh=Get-Item Function:\global:gh -ErrorAction SilentlyContinue
-    $global:ScopedGateCalls=0;$global:ScopedGateRoot=$gate;$global:ScopedGateMutation='';$global:ScopedGateState='active';$global:ScopedGateError=$false
-    function global:gh {
-        param([Parameter(ValueFromRemainingArguments=$true)][string[]]$FixtureArguments)
-        $global:ScopedGateCalls++;$global:LASTEXITCODE=0
-        if($global:ScopedGateError){$global:LASTEXITCODE=1;return}
-        if($global:ScopedGateMutation -eq 'working'){[IO.File]::WriteAllText((Join-Path $global:ScopedGateRoot 'during-api.cpp'),'changed')}
-        if($global:ScopedGateMutation -eq 'commit'){
-            [IO.File]::WriteAllText((Join-Path $global:ScopedGateRoot 'code.cpp'),'concurrent commit')
-            & git -C $global:ScopedGateRoot -c commit.gpgsign=false add code.cpp *> $null
-            & git -C $global:ScopedGateRoot -c commit.gpgsign=false commit -qm 'concurrent commit' *> $null
-        }
-        '{"state":"'+$global:ScopedGateState+'"}'
-    }
-    try{
-        Case 'only a clean committed candidate can delegate matching enabled CI, always as pending' {
-            Assert ('Example' -in @(Get-ScopedPrCoverage $gate $coverage x64 Release)) 'Clean reviewed candidate not delegated'
-            foreach($state in @('untracked','working','staged')){
-                $path=Join-Path $gate $(if($state -eq 'untracked'){'pending.cpp'}else{'code.cpp'})
-                Put $path 'pending'
-                if($state -eq 'staged'){Invoke-FixtureGit $gate @('add','code.cpp')}
-                $calls=$global:ScopedGateCalls
-                Assert (@(Get-ScopedPrCoverage $gate $coverage x64 Release).Count -eq 0) "Dirty candidate delegated: $state"
-                Assert ($global:ScopedGateCalls -eq $calls) 'Dirty candidate queried GitHub before retaining local work'
-                if($state -eq 'untracked'){Remove-Item -LiteralPath $path}else{Invoke-FixtureGit $gate @('restore','--staged','--worktree','--','code.cpp')}
-            }
-        }
-        Case 'disabled/unavailable CI, stale workflow and mismatched profiles keep obligations local' {
-            $global:ScopedGateState='disabled_manually';Assert (@(Get-ScopedPrCoverage $gate $coverage x64 Release).Count -eq 0) 'Disabled workflow delegated'
-            $global:ScopedGateState='active';$global:ScopedGateError=$true;Assert (@(Get-ScopedPrCoverage $gate $coverage x64 Release).Count -eq 0) 'API failure delegated';$global:ScopedGateError=$false
-            Assert (@(Get-ScopedPrCoverage $gate $coverage ARM64 Release).Count -eq 0) 'Unsupported profile delegated'
-            $digest=$coverage.prWorkflowDigest;$coverage.prWorkflowDigest='stale'
-            Assert (@(Get-ScopedPrCoverage $gate $coverage x64 Release).Count -eq 0) 'Unreviewed workflow delegated';$coverage.prWorkflowDigest=$digest
-        }
-        Case 'working and clean-commit races during coverage lookup refuse delegation' {
-            $global:ScopedGateMutation='working'
-            Assert (@(Get-ScopedPrCoverage $gate $coverage x64 Release).Count -eq 0) 'Concurrent working edit delegated'
-            Remove-Item -LiteralPath (Join-Path $gate 'during-api.cpp')
-            $global:ScopedGateMutation='commit'
-            Assert (@(Get-ScopedPrCoverage $gate $coverage x64 Release).Count -eq 0) 'Concurrent clean commit delegated'
-            $global:ScopedGateMutation=''
-        }
-        Case 'direct default-branch pushes have no forthcoming PR coverage' {
-            Invoke-FixtureGit $gate @('switch','-q','main')
-            Assert (@(Get-ScopedPrCoverage $gate $coverage x64 Release).Count -eq 0) 'Default branch push incorrectly assumed a PR'
-        }
-    }finally{
-        if($previousGh){Set-Item Function:\global:gh -Value $previousGh.ScriptBlock}else{Remove-Item Function:\global:gh}
-        Remove-Variable -Name ScopedGateCalls,ScopedGateRoot,ScopedGateMutation,ScopedGateState,ScopedGateError -Scope Global
+        Assert ($native.Contains('needs: [admission, test-gate]')) 'Production must wait for native regression'
     }
 
-    Case 'retained CI proof requires all six actual successful native executions' {
-        $expected=@(foreach($platform in @('x64','ARM64')){foreach($configuration in @('Debug','Release','ASan Debug')){"native ($platform, $configuration)"}})
-        $jobs=@($expected|ForEach-Object{[pscustomobject]@{name=$_;status='completed';conclusion='success';steps=@([pscustomobject]@{name='Full native qualification';conclusion='success'})}})
-        Assert (Test-ScopedNativeCiProof $expected $jobs) 'Complete native matrix rejected'
-        Assert (-not(Test-ScopedNativeCiProof @($expected[0],$expected[0],$expected[0],$expected[0],$expected[0],$expected[0]) @($jobs[0]))) 'One successful profile counted six times'
-        foreach($outcome in @('failure','cancelled','skipped','timed_out')){
-            $jobs[0].conclusion=$outcome;Assert (-not(Test-ScopedNativeCiProof $expected $jobs)) "Nonpassing native result inherited: $outcome"
+    $product = Join-Path $fixture 'product'
+    Put (Join-Path $product '.gitignore') ".build/`n.ci-engine/`n"
+    & git -C $product init --quiet --initial-branch=main
+    if ($LASTEXITCODE) { throw 'Cannot initialize scoped testing fixture.' }
+    Put (Join-Path $product '.ci/project.json') ([IO.File]::ReadAllText((Join-Path $root '.ci/project.json')))
+    $fixtureManifest = Get-Content (Join-Path $root 'Tests/test-scopes.json') -Raw | ConvertFrom-Json -AsHashtable
+    $fixtureManifest.Remove('projectBindings')
+    Put (Join-Path $product 'Tests/test-scopes.json') ($fixtureManifest | ConvertTo-Json -Depth 12)
+    Put (Join-Path $product 'runtime.cpp') 'synthetic compiled input'
+    $engineCopy = Join-Path $product '.ci-engine'
+    & git clone --quiet --shared $engine $engineCopy
+    if ($LASTEXITCODE) { throw 'Cannot clone the owned local engine fixture.' }
+    & git -C $engineCopy checkout --quiet --detach (Read-CiProject $root).engine.ref
+    if ($LASTEXITCODE) { throw 'Cannot bind fixture to the exact engine pin.' }
+
+    Case 'format and native evidence bind the ignored engine policy bytes' {
+        $source = Get-ScopedSourceIdentity -Root $product
+        $compiled = Get-ScopedSourceIdentity -Root $product -CompiledOnly
+        $map = Get-ScopedMapIdentity (Get-ScopedSourceMap -Root $product)
+        if ($IsWindows) {
+            Assert ((Get-ScopedSourceIdentity -Root $product.ToUpperInvariant()) -ceq $source) 'Windows path casing changed tooling evidence'
+            Assert ((Get-ScopedSourceIdentity -Root $product.ToUpperInvariant() -CompiledOnly) -ceq $compiled) 'Windows path casing changed native evidence'
         }
-        $jobs[0].conclusion='success';$jobs[0].steps[0].conclusion='skipped'
-        Assert (-not(Test-ScopedNativeCiProof $expected $jobs)) 'A skipped/listed/inherited row was treated as actual execution'
-        Assert (-not(Test-ScopedNativeCiProof $expected @($jobs|Select-Object -Skip 1))) 'Incomplete matrix inherited'
+        Put (Join-Path $engineCopy '.build/fixture-output.json') '{"generated":true}'
+        Assert ((Get-ScopedSourceIdentity -Root $product) -ceq $source) 'Generated engine output changed tooling evidence'
+        $policy = Join-Path $engineCopy 'Policy/clang-format.json'
+        $bytes = [IO.File]::ReadAllBytes($policy)
+        try {
+            [IO.File]::AppendAllText($policy, "`n ")
+            foreach ($nativeOnly in $false,$true) {
+                $refused = $false
+                try { [void](Get-ScopedSourceIdentity -Root $product -CompiledOnly:$nativeOnly) }
+                catch { $refused = $_.Exception.Message -match 'must be clean' }
+                Assert $refused 'Modified pinned engine retained reusable evidence'
+            }
+            Assert ((Get-ScopedMapIdentity (Get-ScopedSourceMap -Root $product)) -ceq $map) 'Engine state changed product iteration map'
+        } finally { [IO.File]::WriteAllBytes($policy, $bytes) }
+        Assert ((Get-ScopedSourceIdentity -Root $product) -ceq $source) 'Restored policy failed to recover tooling evidence'
+        Assert ((Get-ScopedSourceIdentity -Root $product -CompiledOnly) -ceq $compiled) 'Restored policy failed to recover native evidence'
+    }
+    Case 'packaging and tests require different roles and deployed DxUi evidence' {
+        $outputs = Join-Path $product '.build/x64/Release'
+        $provenance = Join-Path $outputs 'DxUi.provenance.json'
+        $exe = Join-Path $outputs 'RedPrism.exe'
+        Put $exe 'synthetic executable'
+        $refused = $false
+        try { [void](Get-ScopedArtifactIdentity -Root $product -Platform x64 -Configuration Release) }
+        catch { $refused = $_.Exception.Message -match 'Missing deployed runtime input: DxUi.provenance.json' }
+        Assert $refused 'Artifact identity accepted a missing deployed dependency receipt'
+        Put $provenance '{"source":"exact bytes"}'
+        $build = @{Root=$product; Platform='x64'; Configuration='Release'; BuildNumber=17}
+        $attested = Join-Path $outputs 'build-attestation.json'
+        $normal = Get-ScopedBuildAttestationKey @build
+        $production = Get-ScopedBuildAttestationKey @build -EnableTests $false
+        Write-ScopedReceipt -Path $attested -Identity $production
+        Assert (Test-ScopedReceipt -Path $attested -Identity $production) 'Production build cannot serve its own receipt'
+        Assert (-not (Test-ScopedReceipt -Path $attested -Identity $normal)) 'Production build qualified native tests'
+        Write-ScopedReceipt -Path $attested -Identity $normal
+        Assert (-not (Test-ScopedReceipt -Path $attested -Identity $production)) 'Test-enabled build qualified a package'
+        Put $provenance '{"source":"changed bytes"}'
+        Assert ((Get-ScopedBuildAttestationKey @build) -cne $normal) 'Changed DxUi provenance retained the build identity'
+    }
+    Case 'direct native refusal revokes iteration and selected scoped receipts before any native work' {
+        Put (Join-Path $product 'test.ps1') ([IO.File]::ReadAllText((Join-Path $root 'test.ps1')))
+        Put (Join-Path $product 'Build/ScopedTesting.psm1') ([IO.File]::ReadAllText((Join-Path $root 'Build/ScopedTesting.psm1')))
+        $platform = 'x64'
+        $reports = Get-ScopedReportRoot -Root $product -Platform $platform -Configuration Debug
+        $iteration = Join-Path $reports 'iteration.json'
+        $selected = Join-Path $reports 'Document.json'
+        $other = Join-Path $reports 'Composition.json'
+        foreach ($output in $iteration,$selected,$other) { Put $output '{"fixture":"old successful evidence"}' }
+        $log = Join-Path $fixture 'direct-refusal.log'
+        & $pwsh -NoProfile -NonInteractive -File (Join-Path $product 'test.ps1') -Platform $platform -Suites Document -SelfTestTimeoutSeconds 1201 *> $log
+        Assert ($LASTEXITCODE -ne 0 -and (Get-Content $log -Raw).Contains('An extended self-test failure bound requires native ARM64.')) 'Direct test did not reach the expected refusal'
+        Assert (-not ([IO.File]::Exists($iteration) -or [IO.File]::Exists($selected))) 'Direct failure retained reusable selected evidence'
+        Assert ([IO.File]::Exists($other)) 'Refusal also revoked the unrelated scoped receipt'
     }
     Case 'hidden Win32 fixture keeps its exact canvas without changing display settings' {
         $start=[Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
@@ -303,168 +170,9 @@ try{
             Assert ($record.passed -and $record.hidden -and -not $record.displaySettingsChanged -and $record.dpi -gt 0 -and $record.clientWidth -gt 0 -and $record.clientHeight -gt 0) 'Incomplete hidden-window evidence'
         }finally{$process.Dispose()}
     }
-    $public=Join-Path $fixture 'public';New-Repository $public
-    foreach($name in @('Example','Other')){Put (Join-Path $public "Tests/$name.Tests.Case.cpp") 'initial'}
-    Put (Join-Path $public 'Tests/native-test-files.json') '["Tests/Example.Tests.Case.cpp","Tests/Other.Tests.Case.cpp"]'
-    Copy-Item -LiteralPath (Join-Path $root 'Test-Changes.ps1') -Destination (Join-Path $public 'Test-Changes.ps1')
-    Put (Join-Path $public 'Build/ScopedTesting.psm1') ([IO.File]::ReadAllText((Join-Path $root 'Build/ScopedTesting.psm1')))
-    $mini.runtimeFiles=@();$mini.scopes=@(@{name='Example';native=$true;reuse=$true},@{name='Other';native=$true;reuse=$true},@{name='Tooling';native=$false;reuse=$true;commands=@(@{path='validate.ps1';arguments=@()})})
-    $mini.rules=@(@{pattern='Tests/Example.Tests.Case.cpp';scopes=@('Example');reason='example owner'},@{pattern='Tests/Other.Tests.Case.cpp';scopes=@('Other');reason='other owner'})
-    Put (Join-Path $public 'Tests/test-scopes.json') ($mini|ConvertTo-Json -Depth 8)
-    Put (Join-Path $public 'build.ps1') @'
-param($Platform,$Configuration)
-$output=Join-Path $PSScriptRoot ".build/$Platform/$Configuration"
-[void](New-Item -ItemType Directory -Path $output -Force)
-$bytes=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Tests/Example.Tests.Case.cpp'))+[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Tests/Other.Tests.Case.cpp'))
-[IO.File]::WriteAllText((Join-Path $output 'example.exe'),$bytes)
-exit 0
-'@
-    Put (Join-Path $public 'test.ps1') @'
-param($Platform,$Configuration,[string[]]$Suites,[switch]$SkipBuild,[switch]$SkipTooling)
-[IO.File]::AppendAllText((Join-Path $PSScriptRoot '.build/calls.txt'),($Suites -join ',')+"`n")
-if(Test-Path (Join-Path $PSScriptRoot '.build/fail')){exit 1}
-if(Test-Path (Join-Path $PSScriptRoot '.build/mutate')){[IO.File]::AppendAllText((Join-Path $PSScriptRoot 'Tests/Other.Tests.Case.cpp'),'mutated')}
-exit 0
-'@
-    Put (Join-Path $public 'validate.ps1') "[IO.File]::AppendAllText((Join-Path `$PSScriptRoot '.build/tooling.txt'),`"run``n`")"
-    Invoke-FixtureGit $public @('add','-A');Invoke-FixtureGit $public @('commit','-qm','baseline');Invoke-FixtureGit $public @('update-ref','refs/remotes/origin/main','HEAD');Invoke-FixtureGit $public @('switch','-qc','candidate')
-    $platform=if([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64'){'ARM64'}else{'x64'}
-    $state=Join-Path $public ".build/reports/scoped-tests/$platform-Debug/iteration.json"
-    function Run([string[]]$Arguments=@()){
-        $binary=Join-Path $PSHOME $(if($IsWindows){'pwsh.exe'}else{'pwsh'})
-        $start=[Diagnostics.ProcessStartInfo]::new($binary);$start.UseShellExecute=$false;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
-        foreach($arg in @('-NoProfile','-File',(Join-Path $public 'Test-Changes.ps1'),'-Platform',$platform)+$Arguments){$start.ArgumentList.Add($arg)}
-        $process=[Diagnostics.Process]::Start($start)
-        try{$out=$process.StandardOutput.ReadToEndAsync();$err=$process.StandardError.ReadToEndAsync();if(-not $process.WaitForExit(120000)){$process.Kill($true);throw 'Owned protocol fixture timed out'};[pscustomobject]@{Exit=$process.ExitCode;Text=$out.GetAwaiter().GetResult()+$err.GetAwaiter().GetResult()}}finally{$process.Dispose()}
-    }
-    Case 'public default records a successful affected baseline and then runs nothing unchanged' {
-        Put (Join-Path $public 'Tests/Example.Tests.Case.cpp') 'example changed'
-        $r=Run;Assert ($r.Exit -eq 0 -and (Test-Path $state)) "Initial public run failed: $($r.Text)"
-        $r=Run;Assert ($r.Exit -eq 0 -and $r.Text.Contains('NOTHING_SELECTED')) "Identical default repeated: $($r.Text)"
-        Assert (@(Get-Content (Join-Path $public '.build/calls.txt')).Count -eq 1) 'Identical code executed twice'
-    }
-    Case 'a later edit selects only the newly affected scope, not earlier branch changes' {
-        Put (Join-Path $public 'Tests/Other.Tests.Case.cpp') 'other changed'
-        $r=Run;Assert ($r.Exit -eq 0) "Later affected run failed: $($r.Text)"
-        Assert (@(Get-Content (Join-Path $public '.build/calls.txt'))[-1] -ceq 'Other') 'Earlier Example scope reran after unrelated edit'
-        Invoke-FixtureGit $public @('add','Tests');Invoke-FixtureGit $public @('commit','-qm','same tested bytes')
-        $r=Run;Assert ($r.Exit -eq 0 -and $r.Text.Contains('NOTHING_SELECTED')) "Staging/committing the same bytes repeated tests: $($r.Text)"
-    }
-    Case 'explicit identical success is reused and partial selection never advances the default baseline' {
-        $r=Run @('-Scopes','Example');Assert ($r.Exit -eq 0) "Explicit current-binary proof failed: $($r.Text)"
-        $r=Run @('-Scopes','Example','-SkipBuild');Assert ($r.Exit -eq 0 -and $r.Text.Contains('REUSED Example')) "Exact explicit success repeated: $($r.Text)"
-        $before=(Get-FileHash $state).Hash
-        Put (Join-Path $public 'Tests/Example.Tests.Case.cpp') 'second example';Put (Join-Path $public 'Tests/Other.Tests.Case.cpp') 'second other'
-        $r=Run @('-Scopes','Example');Assert ($r.Exit -eq 0) "Partial run failed: $($r.Text)"
-        Assert ((Get-FileHash $state).Hash -ceq $before) 'Partial selection advanced the aggregate baseline'
-        $r=Run;Assert ($r.Exit -eq 0 -and $r.Text.Contains('scopes: Example, Other')) "Partial selection concealed the other edit: $($r.Text)"
-    }
-    Case 'same-source forced failure revokes the old no-work baseline' {
-        $r=Run;Assert ($r.Exit -eq 0 -and $r.Text.Contains('NOTHING_SELECTED')) 'Expected the earlier successful default baseline'
-        Put (Join-Path $public '.build/fail') 'fail'
-        $r=Run @('-Force');Assert ($r.Exit -ne 0 -and -not(Test-Path $state)) 'Force reused the default baseline or retained older success'
-        Remove-Item -LiteralPath (Join-Path $public '.build/fail')
-        $r=Run;Assert ($r.Exit -eq 0 -and -not $r.Text.Contains('NOTHING_SELECTED')) "Old baseline concealed the latest failure: $($r.Text)"
-    }
-    Case 'iteration lease is nested, process-exclusive and profile-specific' {
-        $lease=Enter-ScopedIterationLease $public $platform Debug
-        try {
-            $nested=Enter-ScopedIterationLease $public $platform Debug
-            try{$nested.ReleaseMutex()}finally{$nested.Dispose()}
-            $before=(Get-FileHash $state).Hash
-            $r=Run;Assert ($r.Exit -ne 0 -and $r.Text.Contains('Another test operation')) 'Competing process entered the same profile'
-            Assert ((Get-FileHash $state).Hash -ceq $before) 'Refused process changed the existing baseline'
-            $r=Run @('-Configuration','Release');Assert ($r.Exit -eq 0) "Disjoint profile was blocked: $($r.Text)"
-        }finally{try{$lease.ReleaseMutex()}finally{$lease.Dispose()}}
-    }
-    Case 'direct test refusal revokes an earlier affected baseline before native work' {
-        $direct=Join-Path $fixture 'direct-refusal'
-        Put (Join-Path $direct 'test.ps1') ([IO.File]::ReadAllText((Join-Path $root 'test.ps1')))
-        Put (Join-Path $direct 'Build/ScopedTesting.psm1') ([IO.File]::ReadAllText((Join-Path $root 'Build/ScopedTesting.psm1')))
-        $old=Join-Path $direct ".build/reports/scoped-tests/$platform-Debug/iteration.json"
-        Put $old '{"prior":"fixture baseline"}'
-        & (Join-Path $PSHOME $(if($IsWindows){'pwsh.exe'}else{'pwsh'})) -NoProfile -File (Join-Path $direct 'test.ps1') -Platform $platform -Suites NotARealSuite *> (Join-Path $direct 'refusal.log')
-        Assert ($LASTEXITCODE -ne 0 -and -not(Test-Path $old)) 'Direct refusal retained the previous no-work baseline'
-        Assert ((Get-Content (Join-Path $direct 'refusal.log') -Raw) -match 'Unknown suite') 'Direct fixture failed before reaching the intended refusal'
-    }
-    Case 'failures and post-run mutations never advance the affected baseline or retain reusable success' {
-        $before=(Get-FileHash $state).Hash;Put (Join-Path $public 'Tests/Example.Tests.Case.cpp') 'failure candidate';Put (Join-Path $public '.build/fail') 'fail'
-        $r=Run;Assert ($r.Exit -ne 0) 'Failure qualified';Assert (-not(Test-Path $state)) 'Failure retained an older baseline'
-        $receipt=Join-Path $public ".build/reports/scoped-tests/$platform-Debug/Example.json"
-        Assert (-not(Test-Path $receipt)) 'Failure retained earlier success'
-        Remove-Item -LiteralPath (Join-Path $public '.build/fail');$r=Run;Assert ($r.Exit -eq 0) "Failed candidate was not rerun: $($r.Text)"
-        $before=(Get-FileHash $state).Hash;Put (Join-Path $public 'Tests/Example.Tests.Case.cpp') 'mutation candidate';Put (Join-Path $public '.build/mutate') 'mutate'
-        $r=Run;Assert ($r.Exit -ne 0) 'Mutation qualified';Assert (-not(Test-Path $state)) 'Mutation retained an older baseline'
-        Remove-Item -LiteralPath (Join-Path $public '.build/mutate')
-        $r=Run @('-SkipBuild');Assert ($r.Exit -ne 0 -and $r.Text.Contains('SkipBuild refused')) 'Stale compiled source accepted'
-        $r=Run;Assert ($r.Exit -eq 0) "Mutated sources did not recover: $($r.Text)"
-    }
-    Case 'independent commands preserve empty arguments and named switches for strict scripts' {
-        Put (Join-Path $public 'validate.ps1') @'
-[CmdletBinding()] param()
-[IO.File]::AppendAllText((Join-Path $PSScriptRoot '.build/strict-commands.txt'),"empty`n")
-'@
-        Put (Join-Path $public 'strict-format.ps1') @'
-[CmdletBinding()] param([switch]$Check)
-if(-not $Check){throw 'The named Check switch was not forwarded'}
-[IO.File]::AppendAllText((Join-Path $PSScriptRoot '.build/strict-commands.txt'),"check`n")
-'@
-        $mini.scopes[2].commands=@(@{path='validate.ps1';arguments=@()},@{path='strict-format.ps1';arguments=@('-Check')})
-        Put (Join-Path $public 'Tests/test-scopes.json') ($mini|ConvertTo-Json -Depth 8)
-        $r=Run @('-Scopes','Tooling','-Force')
-        Assert ($r.Exit -eq 0) "Strict independent commands failed: $($r.Text)"
-        Assert (([IO.File]::ReadAllText((Join-Path $public '.build/strict-commands.txt')) -replace "`r`n","`n") -ceq "empty`ncheck`n") 'Strict command arguments or execution count changed'
-    }
-    # Recording independent command: actual public runner, no compiler/desktop.
-    Put (Join-Path $public 'validate.ps1') @'
-[CmdletBinding()]
-param()
-[IO.File]::AppendAllText((Join-Path $PSScriptRoot '.build/tooling-calls.txt'),"ran`n")
-if(Test-Path (Join-Path $PSScriptRoot '.build/tooling-fail')){exit 21}
-if(Test-Path (Join-Path $PSScriptRoot '.build/tooling-mutate')){[IO.File]::AppendAllText((Join-Path $PSScriptRoot 'Tests/Other.Tests.Case.cpp'),'changed during tooling')}
-'@
-    Case 'independent tooling survives a later native failure and is reused without advancing the batch baseline' {
-        $receipt=Join-Path $public '.build/reports/scoped-tests/independent/Tooling.json'
-        Put (Join-Path $public '.build/fail') 'later native failure'
-        $run=Run @('-Mode','Full','-Force')
-        Assert ($run.Exit -ne 0 -and $run.Text.Contains('Selected runtime tests failed') -and (Test-Path $receipt)) "Completed tooling was lost or failed native work passed: $($run.Text)"
-        Assert (-not(Test-Path $state)) 'A failed batch advanced its iteration baseline'
-        $original=[IO.File]::ReadAllText($receipt)
-        $calls=@(Get-Content (Join-Path $public '.build/tooling-calls.txt')).Count
-        Remove-Item -LiteralPath (Join-Path $public '.build/fail')
-        $run=Run @('-Mode','Full')
-        Assert ($run.Exit -eq 0 -and $run.Text.Contains('REUSED Tooling') -and
-            @(Get-Content (Join-Path $public '.build/tooling-calls.txt')).Count -eq $calls -and
-            [IO.File]::ReadAllText($receipt) -ceq $original) "Retry duplicated or rewrote exact independent evidence: $($run.Text)"
-    }
-    Case 'failed or input-mutating tooling cannot publish reusable success or enter native execution' {
-        $receipt=Join-Path $public '.build/reports/scoped-tests/independent/Tooling.json'
-        foreach($marker in @('tooling-fail','tooling-mutate')){
-            $nativeCalls=@(Get-Content (Join-Path $public '.build/calls.txt')).Count
-            Put (Join-Path $public ('.build/'+$marker)) 'independent refusal control'
-            $run=Run @('-Mode','Full','-Force')
-            Assert ($run.Exit -ne 0 -and -not(Test-Path $receipt) -and
-                @(Get-Content (Join-Path $public '.build/calls.txt')).Count -eq $nativeCalls) "Failed or mutated tooling published success or entered native work: $($run.Text)"
-            Remove-Item -LiteralPath (Join-Path $public ('.build/'+$marker))
-        }
-    }
-    Case 'later native mutation retains original tooling proof but changed inputs cannot reuse it' {
-        $receipt=Join-Path $public '.build/reports/scoped-tests/independent/Tooling.json'
-        Put (Join-Path $public '.build/mutate') 'native changes source after completed tooling'
-        $run=Run @('-Mode','Full','-Force')
-        Assert ($run.Exit -ne 0 -and (Test-Path $receipt)) "Native mutation passed or discarded independently completed tooling: $($run.Text)"
-        $original=[IO.File]::ReadAllText($receipt)
-        $calls=@(Get-Content (Join-Path $public '.build/tooling-calls.txt')).Count
-        Remove-Item -LiteralPath (Join-Path $public '.build/mutate')
-        $run=Run @('-Mode','Full')
-        Assert ($run.Exit -eq 0 -and -not $run.Text.Contains('REUSED Tooling') -and
-            @(Get-Content (Join-Path $public '.build/tooling-calls.txt')).Count -eq ($calls+1) -and
-            [IO.File]::ReadAllText($receipt) -cne $original) "Changed native/source inputs reused earlier tooling: $($run.Text)"
-    }
-    Write-Host "Scoped testing: $passed cases passed."
-}finally{
-    $absolute=[IO.Path]::GetFullPath($fixture);$allowed=[IO.Path]::GetFullPath((Join-Path $root '.build/ToolTests'))+[IO.Path]::DirectorySeparatorChar
-    if(-not $absolute.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase)){throw 'Fixture cleanup escaped its owned root'}
-    if(Test-Path -LiteralPath $absolute){Remove-Item -LiteralPath $absolute -Recurse -Force}
+    Write-Host "Scoped testing: $passed product cases passed."
+} finally {
+    $owned = Assert-CiContainedPath -Root (Join-Path $root '.build/ToolTests') -Path $fixture
+    if (Test-Path -LiteralPath $owned) { Remove-Item -LiteralPath $owned -Recurse -Force }
 }
 exit 0

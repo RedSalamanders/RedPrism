@@ -1,11 +1,36 @@
 {
-  "version": 1,
-  "project": "RedPrism",
-  "repository": "RedSalamanders/RedPrism",
+  "version": 2,
   "defaultBranch": "main",
-  "nativeInventory": "Tests/native-test-files.json",
+  "buildNumber": "mergeBaseCount",
+  "nativeInventory": {
+    "path": "Tests/native-test-files.json",
+    "exclude": [
+      "Specs/**",
+      "Measurements/**",
+      "legacy/**",
+      "ThirdParty/**"
+    ],
+    "testFolders": [
+      "Tests/**"
+    ]
+  },
   "runtimeFiles": [
     "DxUi.provenance.json"
+  ],
+  "prose": [
+    "README.md",
+    "CHANGELOG.md",
+    "**/AGENTS.md",
+    "docs/**/*.md",
+    "Specs/**/*.md",
+    ".agents/**/*.md",
+    "Changes/**/*.md"
+  ],
+  "unscoped": [
+    "legacy/**",
+    "docs/**",
+    "Measurements/**",
+    "Mockups/**"
   ],
   "scopes": [
     {
@@ -19,19 +44,9 @@
       "reuse": true
     },
     {
-      "name": "IO",
-      "native": true,
-      "reuse": false
-    },
-    {
       "name": "Composition",
       "native": true,
       "reuse": true
-    },
-    {
-      "name": "Runtime",
-      "native": true,
-      "reuse": false
     },
     {
       "name": "Stress",
@@ -78,10 +93,25 @@
   ],
   "rules": [
     {
+      "pattern": "Build/SkillPackageIntegrity.psm1",
+      "scopes": [
+        "Tooling"
+      ],
+      "reason": "exact independent skill-validator module",
+      "exclusive": true
+    },
+    {
+      "pattern": "Build/SkillValidation.psm1",
+      "scopes": [
+        "Tooling"
+      ],
+      "reason": "exact independent skill-validator module",
+      "exclusive": true
+    },
+    {
       "pattern": "RedPrism/RedPrism.rc",
       "scopes": [
         "Host",
-        "Runtime",
         "Performance",
         "Captures"
       ],
@@ -106,9 +136,9 @@
     {
       "pattern": "Tests/IoTests/**",
       "scopes": [
-        "IO"
+        "Format"
       ],
-      "reason": "isolated IO suite; external codec/clipboard state is not cached"
+      "reason": "source formatting for the separately admitted IO suite"
     },
     {
       "pattern": "Tests/CompositionTests/**",
@@ -136,14 +166,16 @@
       "scopes": [
         "Format"
       ],
-      "reason": "native source formatting"
+      "reason": "native source formatting",
+      "additive": true
     },
     {
       "pattern": "**/*.h",
       "scopes": [
         "Format"
       ],
-      "reason": "native header formatting"
+      "reason": "native header formatting",
+      "additive": true
     },
     {
       "pattern": ".clang-format",
@@ -252,32 +284,123 @@
       "reason": "shared build, dependency, runner or scope policy"
     }
   ],
-  "toolingCommands": [
-    "validate.ps1",
-    "format.ps1"
+  "projectBindings": {
+    "projects": [
+      {
+        "path": "Tests/HostTests/HostTests.vcxproj",
+        "scopes": [
+          "Host",
+          "Stress"
+        ]
+      },
+      {
+        "path": "Tests/DocumentTests/DocumentTests.vcxproj",
+        "scopes": [
+          "Document",
+          "Stress"
+        ]
+      },
+      {
+        "path": "Tests/IoTests/IoTests.vcxproj",
+        "scopes": [
+          "Format"
+        ]
+      },
+      {
+        "path": "Tests/CompositionTests/CompositionTests.vcxproj",
+        "scopes": [
+          "Composition"
+        ]
+      },
+      {
+        "path": "RedPrism/RedPrism.vcxproj",
+        "scopes": [
+          "Performance",
+          "Captures"
+        ],
+        "overrides": [
+          {
+            "pattern": "**/*.Tests.*.cpp",
+            "scopes": [
+              "Format"
+            ]
+          }
+        ]
+      }
+    ],
+    "includeRoots": [
+      "Common"
+    ],
+    "exclude": [
+      "legacy/**",
+      "ThirdParty/**",
+      "Specs/**",
+      "Measurements/**",
+      ".build/**"
+    ]
+  },
+  "watchedProcesses": [
+    "DxUi.ControlTests.exe",
+    "DxUi.EmbeddedTests.exe",
+    "DxUi.FoundationTests.exe",
+    "DxUi.InteractiveLease.exe",
+    "RedPrism.exe",
+    "HostTests.exe",
+    "DocumentTests.exe",
+    "IoTests.exe",
+    "CompositionTests.exe"
   ],
-  "prCoverage": [],
-  "prWorkflowDigest": "8da40d0350b862c3596a141b674116631321f3439fba8c296dfda7d8e847d05a",
-  "projectBindings": [
+  "prePushProfiles": [
     {
-      "scope": "Host",
-      "path": "Tests/HostTests/HostTests.vcxproj"
+      "platform": "x64",
+      "configuration": "Debug",
+      "buildOnly": false
     },
     {
-      "scope": "Document",
-      "path": "Tests/DocumentTests/DocumentTests.vcxproj"
+      "platform": "x64",
+      "configuration": "Release",
+      "buildOnly": false
     },
     {
-      "scope": "IO",
-      "path": "Tests/IoTests/IoTests.vcxproj"
+      "platform": "x64",
+      "configuration": "ASan Debug",
+      "buildOnly": false
     },
     {
-      "scope": "Composition",
-      "path": "Tests/CompositionTests/CompositionTests.vcxproj"
+      "platform": "ARM64",
+      "configuration": "Debug",
+      "buildOnly": true
     },
     {
-      "scope": "Runtime",
-      "path": "RedPrism/RedPrism.vcxproj"
+      "platform": "ARM64",
+      "configuration": "Release",
+      "buildOnly": true
+    },
+    {
+      "platform": "ARM64",
+      "configuration": "ASan Debug",
+      "buildOnly": true
+    }
+  ],
+  "instrumentationVariables": [
+    "ASAN_OPTIONS"
+  ],
+  "systemFiles": [
+    "d2d1.dll",
+    "d3d10warp.dll",
+    "d3d11.dll",
+    "dwrite.dll",
+    "dxgi.dll",
+    "windowscodecs.dll"
+  ],
+  "interactiveObligations": [
+    {
+      "pattern": "**",
+      "suites": [
+        "IO",
+        "Runtime"
+      ],
+      "reason": "these suites use the session clipboard; run ./test.ps1 -Suites IO,Runtime after desktop admission"
     }
   ]
 }

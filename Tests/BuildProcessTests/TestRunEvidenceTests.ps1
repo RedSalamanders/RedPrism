@@ -172,6 +172,8 @@ Complete-TestRunEvidence $later $true
 Assert-Evidence (Test-Path (Join-Path $interrupted[0].FullName 'payload/partial.log')) 'A later run removed interrupted evidence.'
 
 $nativeRoot = New-Fixture 'native-output'
+[void][IO.Directory]::CreateDirectory((Join-Path $nativeRoot 'Tests'))
+Copy-Item -LiteralPath (Join-Path $repository 'Tests/test-scopes.json') -Destination (Join-Path $nativeRoot 'Tests/test-scopes.json')
 $native = Join-Path $nativeRoot '.build/test-artifacts'
 [void][IO.Directory]::CreateDirectory($native)
 [IO.File]::WriteAllText((Join-Path $native 'old.png'), 'previous unique capture')
@@ -190,6 +192,8 @@ try {
 # FindFirstFile metadata can be stale on a busy NTFS host. Keep the stale provider objects and reverse
 # their enumeration, while the actual files have newer metadata. A safe rename must still verify exactly.
 $cachedRoot = New-Fixture 'cached-native-metadata'
+[void][IO.Directory]::CreateDirectory((Join-Path $cachedRoot 'Tests'))
+Copy-Item -LiteralPath (Join-Path $repository 'Tests/test-scopes.json') -Destination (Join-Path $cachedRoot 'Tests/test-scopes.json')
 $cachedNative = Join-Path $cachedRoot '.build/test-artifacts'
 $nested = Join-Path $cachedNative 'nested'
 [void][IO.Directory]::CreateDirectory($nested)
@@ -213,7 +217,11 @@ $expectedWritten = [IO.File]::GetLastWriteTimeUtc($changed).Ticks
 $expectedDirectoryWritten = [IO.Directory]::GetLastWriteTimeUtc($nested).Ticks
 $stale = @($cache[[IO.Path]::GetFullPath($cachedNative)] | Where-Object Name -eq 'a.txt')[0]
 Assert-Evidence ($stale.LastWriteTimeUtc.Ticks -ne $expectedWritten) 'The cached-metadata negative control was not stale.'
-$evidenceModule = Get-Module | Where-Object Path -eq $ModulePath | Select-Object -First 1
+$implementation = Join-Path $repository '.ci-engine/Tools/Modules/Ci.TestRunEvidence.psm1'
+$evidenceModule = Get-Module -All | Where-Object Path -eq $implementation | Select-Object -First 1
+if (-not $evidenceModule) {
+    $evidenceModule = Get-Module | Where-Object Path -eq $ModulePath | Select-Object -First 1
+}
 & $evidenceModule {
     param($cache)
     $script:EvidenceTestCache = $cache

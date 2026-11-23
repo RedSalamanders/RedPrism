@@ -391,6 +391,18 @@ $copiedPolicy = Join-Path $boundary 'Build/ScopedTesting.psm1'
 [void][IO.Directory]::CreateDirectory((Split-Path -Parent $copiedPolicy))
 [IO.File]::WriteAllBytes($copiedPolicy, [IO.File]::ReadAllBytes($iterationPolicy))
 Assert-Check ((Get-FileHash -LiteralPath $copiedPolicy -Algorithm SHA256).Hash -ceq $sourceHashes[$iterationPolicy]) 'invalid-argument-iteration-policy-bytes-identical'
+foreach ($inputPath in '.ci/project.json','Tests/test-scopes.json') {
+    $copy = Join-Path $boundary $inputPath
+    [void][IO.Directory]::CreateDirectory((Split-Path -Parent $copy))
+    Copy-Item -LiteralPath (Join-Path $RepositoryRoot $inputPath) -Destination $copy
+}
+$engineSource = Join-Path $RepositoryRoot '.ci-engine'
+$engineFixture = Join-Path $boundary '.ci-engine'
+$pin = ([IO.File]::ReadAllText((Join-Path $boundary '.ci/project.json')) | ConvertFrom-Json).engine.ref
+& git clone --quiet --shared --no-checkout $engineSource $engineFixture
+if ($LASTEXITCODE) { throw 'Cannot clone the pinned engine into the argument fixture.' }
+& git -C $engineFixture checkout --quiet --detach $pin
+if ($LASTEXITCODE) { throw 'Cannot check out the exact argument fixture engine pin.' }
 $sentinel = Join-Path $boundary 'build-reached.txt'
 $stub = @'
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'build-reached.txt'), 'BUILD_BOUNDARY_REACHED')
