@@ -4031,31 +4031,55 @@ remain separate from subsequent qualification.
 
 ## Scoped iteration and exact evidence
 
-`Test-Changes.ps1 -Explain` is the read-only planning entrypoint; `Test-Changes.ps1` runs affected scopes. The first run compares committed work since the local merge base with `origin/main` plus independent staged, working, rename-side, deletion and untracked paths. No ref is fetched. Unknown executable/build/shared inputs widen coverage. `-Scopes A,B` selects explicit scopes; unknown or incompatible selectors fail before execution.
+`Test-Changes.ps1` runs the engine pinned in `.ci/project.json`. The engine's
+[scoped testing contract](https://github.com/RedSalamanders/.github/blob/abb9c5ebe60e1acd3b41ce8dcbb3881aa8de9a4e/Specs/ProjectCommands.md#scoped-testing)
+owns the runner and receipt format. `Tests/test-scopes.json` version 2 owns RedPrism scopes, independent commands,
+source mappings, the native inventory and runtime inputs. Live project and transitive include rules follow
+changes to their native consumers. Unknown build and executable inputs select full coverage. A selected native
+scope builds the whole requested profile.
 
-A successful default affected run retains a source-byte and Git-index baseline for that checkout, platform, configuration and environment. The next edit selects only changes since that baseline. Staging or committing identical tested working bytes does not rerun tests. A genuinely different staged blob is retained. Failed, interrupted, corrupt, mismatched, explicit partial or CI-pending runs never advance this baseline. Explicit `-BaseRef` and `-Force` bypass the incremental baseline. Unexplained artifact changes widen coverage. No selection is `NOT_EVALUATED`, never a new repository pass.
+`Test-Changes.ps1 -Explain` reads and prints the plan without running it or updating evidence. Affected mode
+compares the current branch and independent index/worktree changes with a local merge base, by default under
+`origin/main`, without fetching. A missing comparison ref is refused. `-Scopes A,B` selects explicit scopes.
+A successful ordinary affected run can advance the matching source and index baseline for 24 hours. A build
+or test execution revokes the previous baseline first. Only ordinary local affected success without
+instrumentation or capability skips writes a new baseline. A changed profile output widens selection; `-Force`
+bypasses baseline and result reuse.
 
-Selected affected work suspends the old baseline before build/test execution, so failure or interruption cannot
-leave older success able to suppress the next run. An unchanged successful explicit/Full attempt may restore
-the exact old baseline bytes; it does not advance that baseline. A default success publishes its new completed
-state. Direct test.ps1 attempts revoke old affected state before validation or native work. State paths are
-bounded to the checkout's report root and refuse reparse points. A reentrant checkout/profile test lease
-refuses competing processes while keeping other profiles/workspaces independent. These controls preserve
-the existing local evidence boundary and do not grant hosted, foreground or release acceptance.
+`-Mode Full` selects every applicable scoped obligation for its requested profile. `-Mode PrePush` checks the
+committed changelog state and runs x64 Debug, Release and ASan Debug with runtime tests, followed by ARM64
+Debug, Release and ASan Debug cross-builds. Pass neither `-Platform` nor `-Configuration` with PrePush. Native
+runtime validation requires a matching host. Format and Tooling are independent scopes. Stress applies only
+to ASan Debug. The command prints `INTERACTIVE_NOT_RUN` for IO and Runtime since both suites use the session
+clipboard. Affected mode conservatively lists this obligation for any changed path. On a local desktop, run
+those suites through `test.ps1 -Suites IO,Runtime` after the person at that desktop agrees to the timing.
+The direct runner retains its full native selection and existing desktop lease; hosted native regression
+still executes the complete direct suite set on its isolated runners.
 
-Only exact successful reusable scope results may be reused: source/dependency/build policy, binary/DLL/PDB and required deployed inputs, physical checkout, toolchain/environment, profile and normalized scenario arguments must match. Missing runtime inputs, JSON-only profiles, failures and mutation invalidate evidence. Receipts publish atomically only after successful unchanged execution. `-Force` bypasses result reuse; explicit Full/PrePush do not narrow obligations through the incremental baseline. IO/clipboard, stress, resource/benchmark observations, captures and process-fault workflows remain fresh when selected. Omission by an affected plan is not reusable qualification for omitted scopes.
+The checkout/profile lease covers the scoped runner and the direct build and test entrypoints. It refuses a
+competing operation and accepts children of the lease owner. Only exact successful Document and Composition
+native results are reusable. Their receipts bind source, engine, deployed DxUi provenance, toolchain and
+environment, build number, profile and output bytes, and require a fresh suite report with exit code zero
+and no capability skips. A test rerun invalidates the selected scoped receipts before native execution.
+Instrumentation has its own suite reports and disables result reuse and the affected baseline. A changed
+source, index, artifact or environment during scoped execution fails the run. A native report or scoped
+success describes the selected work and leaves repository qualification unevaluated.
 
-`test.ps1 -Full -SkipTooling` runs the complete native obligation for its profile; `validate.ps1` runs independent tooling and scope regressions once. `format.ps1 -Check` is an independently reusable Format scope. `-Mode Full` selects the complete applicable local obligation. `-Mode PrePush` accounts for matching local work and forthcoming enabled CI. Deferral requires clean committed bytes, a matching reviewed workflow digest, matching profile/scenarios and stable HEAD/worktree through the API lookup. Disabled/missing/unreadable CI, changed runner contracts and direct default-branch pushes keep obligations local. Deferral is always `CI_PENDING`, never a pass or merge approval.
+`build.ps1` writes the canonical profile attestation. Direct `test.ps1 -SkipBuild` requires the test-enabled
+identity; `package.ps1` requires the test-disabled production identity and its pinned dependency receipt.
+The local SDK candidate path keeps its separate input attestation and evidence. See
+[generated test-run evidence](Testing_RunEvidence.md) for per-suite reports and archived runs.
 
-The PR workflow runs independent tooling once and full native tests in x64/ARM64 Debug, Release and ASan Debug. ARM64 execution is native on its hosted ARM64 runner; cross-builds alone never qualify runtime behavior. Every named PR check must succeed on the candidate before merge. The current private-repository account cannot enforce protected-branch checks; the merge procedure must verify the checks explicitly. Visibility is unchanged. There is no automatic main-push rerun of an identical validated merge tree. A changed integration tree, source, runner, profile, environment investigation or unresolved failure requires its corresponding new qualification. Manual dispatch remains available.
+Pull requests run compiler-free checks and formatting feedback. The current
+[unified CI contract](../Build/Build_UnifiedCI.md) owns main admission and the separate x64 and ARM64 native
+Release regression and production gates. Independent tooling owns parser, provenance, discovery,
+architecture-wiring and benchmark-runner controls once per validation. Actual UI cancellation, layer-row
+and display benchmark smoke remain native Performance obligations. The independent roster is available
+through `Invoke-ToolingTests.ps1 -ListScripts`.
 
-Independent tooling owns parser, provenance, discovery, architecture-wiring and benchmark-runner controls once per validation. Native profile execution must not repeat those scripts. Actual UI cancellation, layer-row and display benchmark smoke remain native Performance obligations and cannot enter the independent tooling roster. `Invoke-ToolingTests.ps1 -ListScripts` exposes that roster without running it; `ToolingRoutingTests.ps1` checks both ownership and retained native gates.
-
-Physical focus/IME/AT, release/package acceptance, hardware-specific qualification and paired resource/performance studies retain their owning gates. Hidden/scoped/native CI passes never close those gates. Native test basenames use contextual `Scope.Tests.Something.h/.cpp`; inventories cover active files only. Immutable historical receipts, archived source and legacy references are not renamed or rewritten.
-
-RedPrism derives native consumers from declared project translation units and the current transitive local-include graph, including cycles and newly added callers. Ambiguous owned headers retain every possible consumer; macro/wildcard inputs widen to Full. Test-source rules also identify their standalone suite; shared support, build inputs and unknown files remain conservative. Host font/worker, IO/clipboard, application Runtime, stress, benchmark and capture scopes are not reused. Document and standalone WARP Composition evidence may be reused exactly. Existing runtime bodies, negative probes, stress modes and WARP/capture capability accounting are preserved.
-
-CI's native-scope job binds compiled inputs, test/build/workflow code, the version stamp and hosted image descriptor. A documentation-only continuation may retain the original native qualification only from an exact matching producer with all six actual successful Full native steps; skipped, failed, cancelled, incomplete or unavailable evidence cannot authorize it. The original source/profile/binary/environment evidence remains the observation; inherited rows explicitly claim no new execution, resource measurement or clipboard/environment result. Manual dispatch always executes fresh native qualification. Each native checkout verifies the descriptor before building. This also permits a documentation/Done closeout without repeating an identical already-qualified native matrix.
+Physical focus, IME, assistive technology, packaging, hardware and paired performance studies retain their
+own acceptance gates. Native test files use contextual `Scope.Tests.Something.h/.cpp` basenames and the
+inventory covers active files. Historical receipts and archives keep their original source identities.
 
 The hosted native CI fixture runs `Tests/Tooling.Tests.WindowFixture.ps1` before building. This independent Win32 preflight creates and destroys its own hidden HWND, verifies an exact 1280x800 DPI-scaled client, and records desktop dimensions without changing display settings or taking focus. The application harness uses `SWP_NOSENDCHANGING` only for its initial hidden/capture fixture resize, so the fixed canvas is independent of desktop tracking limits. The existing default-client/style/DPI assertions remain exact, also require a hidden window, and report actual dimensions. Ordinary visible-window initialization retains its normal sizing policy. The preflight is not application qualification; the full native suites still run afterward.
 

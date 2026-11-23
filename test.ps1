@@ -1,6 +1,8 @@
 <#!
 .SYNOPSIS
 Builds RedPrism and runs host tests plus the hidden WARP self-test.
+.PARAMETER ParallelSuites
+Maximum suite concurrency. RedPrism runs suites serially to preserve the existing desktop and harness ownership.
 .PARAMETER LocalSdkBuildReceipt
 Original local SDK build record. Requires local native Release, SkipBuild and explicit Runtime/Captures scopes.
 .PARAMETER LocalSdkBuildSha256
@@ -19,6 +21,8 @@ param(
     [switch] $Full,
     [switch] $SkipBuild,
     [switch] $SkipTooling,
+    [ValidateRange(1, 8)]
+    [int] $ParallelSuites = 1,
     [ValidateRange(0, 65535)]
     [int] $BuildNumber = 0,
 
@@ -61,15 +65,30 @@ if ($localSdkMode) {
     }
 }
 Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
-if (-not $localSdkMode) { $iterationLease=Enter-ScopedIterationLease $repoRoot $Platform $Configuration }
+if (-not $localSdkMode) {
+    $iterationLease = Enter-ScopedProfileLease -Root $repoRoot -Platform $Platform -Configuration $Configuration
+}
 try {
-if (-not $localSdkMode) { [void](Suspend-ScopedIteration (Join-Path $repoRoot ".build/reports/scoped-tests/$Platform-$($Configuration -replace ' ','')/iteration.json") $repoRoot) }
+$scopedManifest = $null
+if (-not $localSdkMode) {
+    $scopedReports = Get-ScopedReportRoot -Root $repoRoot -Platform $Platform -Configuration $Configuration
+    Remove-ScopedIteration -Path (Join-Path $scopedReports 'iteration.json') -Root $repoRoot
+    $scopedManifest = Read-ScopedTestManifest -Root $repoRoot
+}
 $available=@('Host','Document','IO','Composition','Runtime','Stress','Performance','Captures','Tooling')
 if($Full){$Suites=$available}
 $Suites=@($Suites|ForEach-Object{$_ -split ','}|ForEach-Object{$_.Trim()}|Where-Object{$_}|Sort-Object -Unique)
 foreach($suite in $Suites){if($suite -notin $available){throw "Unknown suite '$suite'."}}
 if($SkipTooling){$Suites=@($Suites|Where-Object{$_ -ne 'Tooling'})}
 if($Configuration -ne 'ASan Debug'){$Suites=@($Suites|Where-Object{$_ -ne 'Stress'})}
+if (-not $localSdkMode) {
+    Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.Policy.psm1')
+    # Direct runs also invalidate scoped results. The lease covers both the invalidation and the native run.
+    foreach ($scope in $scopedManifest.scopes | Where-Object { $_.native -and $_.name -in $Suites }) {
+        $receipt = Assert-CiContainedPath -Root $repoRoot -Path (Join-Path $scopedReports ($scope.name + '.json'))
+        if ([IO.File]::Exists($receipt)) { [IO.File]::Delete($receipt) }
+    }
+}
 $nativeArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 if ($Platform -eq 'ARM64' -and $nativeArchitecture -ne 'Arm64') {
     throw 'ARM64 runtime qualification requires a native ARM64 host; use build.ps1 for cross-compilation.'
@@ -107,6 +126,10 @@ if ($LASTEXITCODE -ne 0) {
 
 Import-Module (Join-Path $repoRoot 'Build/TestRunEvidence.psm1') -Force
 Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.DesktopLease.psm1')
+if ($ParallelSuites -gt 1) { Write-Verbose 'RedPrism executes native suites serially.' }
+$suiteSkips = @{}
+foreach ($scope in $Suites) { $suiteSkips[$scope] = [Collections.Generic.List[string]]::new() }
+$instrumented = $null -ne $scopedManifest -and @(Get-ScopedInstrumentation -Manifest $scopedManifest).Count -gt 0
 $evidence = Start-TestRunEvidence -Repository $repoRoot -LocalSdkCandidate:$localSdkMode -Context @{ project='RedPrism'; platform=$Platform; configuration=$Configuration; suites=$Suites; selfTestTimeoutSeconds=$SelfTestTimeoutSeconds; localSdkCandidate=$localSdkMode }
 $runPassed = $false
 $runFailure = $null
@@ -122,7 +145,12 @@ if ($info.OriginalFilename -ne 'RedPrism.exe' -or $info.ProductName -ne 'RedPris
 
 Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
 $buildAttestation=Join-Path $outputRoot 'build-attestation.json'
-if(-not $localSdkMode -and -not(Test-ScopedReceipt $buildAttestation (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $info.FileBuildPart))){throw 'Native artifact/source/profile/toolchain attestation is stale or missing. Run build.ps1 before -SkipBuild.'}
+if (-not $localSdkMode) {
+    $attestationKey = Get-ScopedBuildAttestationKey -Root $repoRoot -Platform $Platform -Configuration $Configuration -BuildNumber $info.FileBuildPart
+    if (-not (Test-ScopedReceipt -Path $buildAttestation -Identity $attestationKey)) {
+        throw 'Native artifact/source/profile/toolchain attestation is stale or missing. Run build.ps1 before -SkipBuild.'
+    }
+}
 # First, so that every later run is known to end on a failed runtime check instead of opening a dialog on the desktop.
 if (-not $localSdkMode) {
 # Local app-only scopes contain none of the standalone executables this probe owns.
@@ -142,11 +170,15 @@ foreach ($suite in @(
     if($suite.Scope -notin $Suites){continue}
     Write-Host "Running $($suite.Label) tests..." -ForegroundColor Cyan
     # IO owns real clipboard fixtures; the other console suites use private state.
+    $suiteLog = Join-Path $evidence.Path ($suite.Name + '.log')
     Invoke-CiInteractiveDesktopOperation -RequiresInteractiveDesktop $suite.RequiresInteractiveDesktop -Operation {
-        & $suite.Path 2>&1 | Tee-Object -FilePath (Join-Path $evidence.Path ($suite.Name + '.log'))
+        & $suite.Path 2>&1 | Tee-Object -FilePath $suiteLog
         if ($LASTEXITCODE -ne 0) {
             throw "$($suite.Name).exe failed with exit code $LASTEXITCODE."
         }
+    }
+    foreach ($skip in (Select-String -LiteralPath $suiteLog -Pattern '^SKIP\s+')) {
+        $suiteSkips[$suite.Scope].Add($skip.Line)
     }
 }
 
@@ -480,7 +512,9 @@ foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ 
     if ($shot.ExitCode -eq 8) {
         # WP4: RedPrism returns 8 only when the harness capture path is unsupported on this host. Any other
         # nonzero exit (including the distinct "capture failed" code) is a real failure below, not a skip.
-        Write-Host "SKIP harness screenshot ($shotName): capture unsupported (exit 8)." -ForegroundColor Yellow
+        $skip = "SKIP harness screenshot ($shotName): capture unsupported (exit 8)."
+        $suiteSkips['Captures'].Add($skip)
+        Write-Host $skip -ForegroundColor Yellow
         continue
     }
     if ($shot.ExitCode -ne 0) {
@@ -529,6 +563,24 @@ if ($localSdkMode) {
     $resultReceipt.repositoryQualified=$false
     $resultReceipt.productionQualified=$false
 }
+if (-not $localSdkMode) {
+    $finalKey = Get-ScopedBuildAttestationKey -Root $repoRoot -Platform $Platform -Configuration $Configuration -BuildNumber $info.FileBuildPart
+    if ($finalKey -cne $attestationKey) {
+        throw 'The source, artifacts or toolchain changed during native execution; suite reports were not published.'
+    }
+    $suffix = if ($instrumented) { '.instrumented.json' } else { '.json' }
+    foreach ($scope in $Suites | Where-Object { $_ -ne 'Tooling' }) {
+        $suiteReport = [ordered]@{
+            schemaVersion = 1
+            suite = $scope
+            platform = $Platform
+            configuration = $Configuration
+            exitCode = 0
+            skips = @($suiteSkips[$scope].ToArray())
+        }
+        Publish-TestRunEvidenceReceipt -Run $evidence -Name "$scope-$Platform-$Configuration$suffix" -Receipt $suiteReport
+    }
+}
 Publish-TestRunEvidenceReceipt -Run $evidence -Name $receiptName -Receipt $resultReceipt
 $runPassed = $true
 } catch {
@@ -545,7 +597,9 @@ $runPassed = $true
 Write-Host ('Selected suites passed: '+($Suites -join ', ')+'. Unselected/manual/platform/resource coverage remains NOT_EVALUATED.') -ForegroundColor Green
 if ($localSdkMode) { Write-Host 'LOCAL_UNPINNED_RUNTIME: ordinary local/main, repository and production gates remain NOT_EVALUATED.' }
 exit 0
-}finally{if($null -ne $iterationLease){try{$iterationLease.ReleaseMutex()}finally{$iterationLease.Dispose()}}}
+} finally {
+    if ($null -ne $iterationLease) { Exit-ScopedProfileLease -Lease $iterationLease }
+}
 } catch {
     $runtimeFailure=$_
     throw

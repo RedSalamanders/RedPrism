@@ -73,13 +73,18 @@ function Resolve-BuildNumber {
     return 0
 }
 
+Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
+$profileLease = Enter-ScopedProfileLease -Root $repoRoot -Platform $Platform -Configuration $Configuration
+try {
+$scopedReports = Get-ScopedReportRoot -Root $repoRoot -Platform $Platform -Configuration $Configuration
+Remove-ScopedIteration -Path (Join-Path $scopedReports 'iteration.json') -Root $repoRoot
 Assert-RedPrismBuildOutputProcessNotRunning -ExpectedExecutablePath $executable
 $buildAttestation=Join-Path $repoRoot ".build/$Platform/$Configuration/build-attestation.json"
 if(-not $Clean -and (Test-Path -LiteralPath $buildAttestation)){Remove-Item -LiteralPath $buildAttestation -ErrorAction Stop}
 
-Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
-$scopedSourceBefore=Get-ScopedSourceIdentity $repoRoot -CompiledOnly
-$scopedEnvironmentBefore=Get-ScopedEnvironmentIdentity
+$scopedManifest = Read-ScopedTestManifest -Root $repoRoot
+$scopedSourceBefore = Get-ScopedSourceIdentity -Root $repoRoot -Manifest $scopedManifest -CompiledOnly
+$scopedEnvironmentBefore = Get-ScopedEnvironmentIdentity -Root $repoRoot -Manifest $scopedManifest
 Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.Policy.psm1') -ErrorAction Stop
 $BuildNumber = Resolve-BuildNumber -Requested $BuildNumber
 Write-Host ("Target: {0} | {1} | version 0.1.{2}.0" -f $Platform, $Configuration, $BuildNumber) -ForegroundColor Magenta
@@ -223,10 +228,13 @@ try {
         if($null -ne $sdkInput){Close-CiPinnedSdkInput $sdkInput}
         Write-Host "DxUi provenance: $provenance" -ForegroundColor DarkGray
         Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
-        if ((Get-ScopedSourceIdentity $repoRoot -CompiledOnly) -cne $scopedSourceBefore -or (Get-ScopedEnvironmentIdentity) -cne $scopedEnvironmentBefore) {
+        $scopedManifest = Read-ScopedTestManifest -Root $repoRoot
+        if ((Get-ScopedSourceIdentity -Root $repoRoot -Manifest $scopedManifest -CompiledOnly) -cne $scopedSourceBefore -or
+            (Get-ScopedEnvironmentIdentity -Root $repoRoot -Manifest $scopedManifest) -cne $scopedEnvironmentBefore) {
             throw 'Source/toolchain environment changed during build; no build attestation was published.'
         }
-        Write-ScopedReceipt (Join-Path (Split-Path $executable) 'build-attestation.json') (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $BuildNumber -EnableTests (-not $ProductionOnly))
+        $attestationKey = Get-ScopedBuildAttestationKey -Root $repoRoot -Platform $Platform -Configuration $Configuration -BuildNumber $BuildNumber -EnableTests (-not $ProductionOnly) -Manifest $scopedManifest
+        Write-ScopedReceipt -Path $buildAttestation -Identity $attestationKey
         Write-NativeBuildResult -Project RedPrism -Platform $Platform -Configuration $Configuration -LogPath $logPath -Artifacts @($executable) -Executable $executable -Duration $nativeEntryElapsed.Elapsed
         if ($Run) {
             $native = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
@@ -257,4 +265,7 @@ try {
         [Environment]::SetEnvironmentVariable('PreferredToolArchitecture', $previousToolArchitecture, 'Process')
     }
     }
+}
+} finally {
+    Exit-ScopedProfileLease -Lease $profileLease
 }

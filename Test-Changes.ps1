@@ -1,154 +1,69 @@
 <#
 .SYNOPSIS
-Explains and runs affected tests; unchanged successful evidence is reused exactly.
+Explains and runs the tests that a change affects, reusing identical successful local evidence.
 .DESCRIPTION
-The first affected run uses the branch merge base plus independent staged, working,
-deleted, renamed and untracked discovery. A successful default affected run records
-the worktree/index baseline for the next edit. Partial explicit selections, failures,
-mutations and pending CI never advance that baseline. Full and PrePush remain explicit.
+Affected (the default) compares the checkout with its merge base with -BaseRef, or, in an ordinary local run, with the
+last successful affected run of the profile for 24 hours. Full runs every scope of one profile. PrePush refuses an
+uncommitted changelog, checks it against the base and runs every scope of each PrePush profile this repository lists.
+An unmapped input selects every scope; interactive suites are listed as INTERACTIVE_NOT_RUN and never run.
+Tests/test-scopes.json (version 2) holds this repository's scopes, rules and profiles.
+Engine shim: runs Tools/Test-Changes.ps1 of the shared CI engine that .ci/project.json pins, from .ci-engine, and
+refuses with one message when that checkout is missing, at another commit or changed. The engine's
+Specs/ProjectCommands.md is the contract (Scoped testing).
+.PARAMETER Root
+Repository root; defaults to the repository containing this command.
+.PARAMETER Mode
+Affected, Full or PrePush.
+.PARAMETER BaseRef
+Comparison ref, by default origin/<defaultBranch>. Never fetched. An explicit value turns the iteration baseline off.
+.PARAMETER Scopes
+Explicit scopes of an Affected run, as names or comma-separated strings.
+.PARAMETER Configuration
+Debug, Release or ASan Debug, for Affected and Full.
+.PARAMETER Platform
+x64 or ARM64, for Affected and Full. Runtime tests need a host of the same architecture.
+.PARAMETER Explain
+Prints the plan, its reasons and the interactive obligations, then stops: no changelog gate, lease, build, test or write.
+.PARAMETER Force
+Runs every selected scope even when identical successful evidence exists, and ignores the iteration baseline.
+.PARAMETER SkipBuild
+Uses only build outputs whose attestation still matches.
+.PARAMETER ParallelSuites
+Suites test.ps1 may run at once (1 to 8).
+.OUTPUTS
+The plan with its reasons, REUSED/PASSED lines and one token: NOTHING_SELECTED, PROSE_CHECKS_PASSED, SELECTED_PASSED or
+FULL_PASSED, followed by "; repository NOT_EVALUATED". Any failure is a terminating error.
+.NOTES
+Requires PowerShell 7, Git and the pinned engine at .ci-engine. Runs Tools/Test-Changelog.ps1, build.ps1, test.ps1 and
+the scopes' commands; writes evidence under .build/reports/scoped-tests. No fetch, network or desktop focus.
+.EXAMPLE
+./Test-Changes.ps1 -Explain
+.EXAMPLE
+./Test-Changes.ps1 -Mode PrePush
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('Affected','Full','PrePush')][string]$Mode='Affected',
-    [string]$BaseRef='', [string[]]$Scopes=@(),
-    [ValidateSet('x64','ARM64')][string]$Platform='x64',
-    [ValidateSet('Debug','Release','ASan Debug')][string]$Configuration='Debug',
-    [switch]$Explain,[switch]$Force,[switch]$SkipBuild
+    [string]$Root = $PSScriptRoot,
+    [ValidateSet('Affected', 'Full', 'PrePush')][string]$Mode = 'Affected',
+    [string]$BaseRef = '',
+    [string[]]$Scopes = @(),
+    [ValidateSet('Debug', 'Release', 'ASan Debug')][string]$Configuration = 'Debug',
+    [ValidateSet('x64', 'ARM64')][string]$Platform = 'x64',
+    [switch]$Explain,
+    [switch]$Force,
+    [switch]$SkipBuild,
+    [ValidateRange(1, 8)][int]$ParallelSuites = 1
 )
 Set-StrictMode -Version Latest
-$ErrorActionPreference='Stop'
-# Pending fragments are expected: they are folded on the default branch after merge. CHANGELOG.md may change only by such a fold.
-if (-not $Explain -and $Mode -eq 'PrePush') { & (Join-Path $PSScriptRoot 'Tools/Test-Changelog.ps1') -Base $(if ($BaseRef) { $BaseRef } else { 'origin/main' }) }
-$root=$PSScriptRoot;$module=Join-Path $root 'Build/ScopedTesting.psm1'
-Import-Module $module -Force
-$iterationLease=if(-not $Explain){Enter-ScopedIterationLease $root $Platform $Configuration}else{$null}
-try {
-$manifest=Read-ScopedTestManifest $root
-$Scopes=@($Scopes|ForEach-Object{$_ -split ','}|ForEach-Object{$_.Trim()}|Where-Object{$_})
-if($Scopes.Count -and $Mode -ne 'Affected'){throw '-Scopes is only valid for explicit Affected iteration.'}
-if(-not $BaseRef){$BaseRef='origin/'+$manifest.defaultBranch}
-$reports=Join-Path $root ".build/reports/scoped-tests/$Platform-$($Configuration -replace ' ','')"
-$iterationPath=Join-Path $reports 'iteration.json'
-$source=Get-ScopedSourceMap $root;$index=Get-ScopedIndexMap $root
-$environment=Get-ScopedEnvironmentIdentity
-$artifact='absent'
-if(Test-Path -LiteralPath (Join-Path $root ".build/$Platform/$Configuration") -PathType Container){
-    try{$artifact=Get-ScopedArtifactIdentity $root $Platform $Configuration}
-    catch [System.Management.Automation.RuntimeException]{$artifact='incomplete'}
+$ErrorActionPreference = 'Stop'
+# Engine shim (Specs/ProjectCommands.md in the engine); the same lines in every shim.
+# A root shim's product root is its own folder, so a copy in a nested fixture never binds to the product around it.
+$project = $PSScriptRoot
+$binding = Join-Path $project '.ci-engine/Tools/Modules/Ci.EngineBinding.psm1'
+if (-not [IO.File]::Exists($binding)) {
+    throw "$($MyInvocation.MyCommand.Name) runs the shared CI engine that .ci/project.json pins from .ci-engine, and $project/.ci-engine is missing or predates engine shims. Check out the pinned commit (engine.ref in .ci/project.json): git -C .ci-engine fetch origin <engine.ref>; git -C .ci-engine checkout --detach <engine.ref> (first time: git clone https://github.com/RedSalamanders/.github.git .ci-engine)."
 }
-$changed=@();$basis='explicit scope/full obligation';$baseline=$null;$forceFull=$false
-if($Mode -eq 'Affected' -and -not $Scopes.Count){
-    # Always prove that the requested branch comparison still resolves; a rebase or explicit
-    # base override must not silently use an unrelated saved baseline.
-    $branchPaths=@(Get-ScopedChangedPaths $root $BaseRef)
-    $baseline=Read-ScopedIteration $iterationPath $root $Platform $Configuration $environment
-    if($baseline -and -not $Force -and -not $PSBoundParameters.ContainsKey('BaseRef')){
-        $changed=@(@(Get-ScopedMapDelta $baseline.source $source)+@(Get-ScopedPendingIndexDelta $root $baseline.index $index)|Sort-Object -Unique)
-        $basis='last successful default affected run (working bytes and index)'
-        if(-not $changed.Count -and $artifact -cne $baseline.artifact){$forceFull=$true;$basis='unexplained artifact change since the last successful iteration'}
-    }else{$changed=$branchPaths;$basis="branch merge base with $BaseRef (no matching iteration baseline)"}
-}
-Write-Host "Native test naming: $(Assert-ScopedTestNames $root) files checked."
-$plan=Get-ScopedTestPlan -Manifest $manifest -ChangedPaths $changed -Scopes $Scopes -Full:($Mode -ne 'Affected' -or $forceFull)
-$applicable=@($manifest.scopes|Where-Object{-not $_.PSObject.Properties['configurations'] -or $Configuration -in $_.configurations})
-foreach($scope in $Scopes){if($scope -notin $applicable.name){throw "Scope '$scope' does not run in $Configuration."}}
-$names=@($plan.scopes|Where-Object{$_ -in $applicable.name})
-Write-Host "Test plan: $Mode ($Platform $Configuration); baseline: $basis; scopes: $($names -join ', ')"
-foreach($reason in $plan.reasons){Write-Host "  $($reason.path): $($reason.reason) => $($reason.scopes -join ', ')"}
-$refusal='';$deferred=@(if($Mode -eq 'PrePush'){Get-ScopedPrCoverage $root $manifest $Platform $Configuration -Refusal ([ref]$refusal)})
-if($deferred.Count){Write-Host "CI_PENDING (not merge approval): $($deferred -join ', ')"}
-if($refusal){Write-Host "CI policy: $refusal" -ForegroundColor Yellow}
-if($Explain){exit 0}
-$selected=@($applicable|Where-Object{$_.name -in $names -and $_.name -notin $deferred})
-if(-not $selected.Count){
-    if($deferred.Count){Write-Host 'LOCAL_OBLIGATIONS_NONE; CI_PENDING'}else{Write-Host 'NOTHING_SELECTED; repository NOT_EVALUATED'}
-    exit 0
-}
-$native=@($selected|Where-Object native)
-$previousIteration=Suspend-ScopedIteration $iterationPath $root
-$buildOptions=''
-if($native.Count){
-    Assert-ScopedRuntimePlatform $Platform
-    $compiledBefore=Get-ScopedSourceIdentity $root -CompiledOnly
-    $buildArguments=@{Platform=$Platform;Configuration=$Configuration}
-    if($manifest.project -ceq 'RedPrism'){
-        $number=Get-ScopedBuildNumber $root $BaseRef
-        $buildArguments.BuildNumber=$number;$buildOptions="build-number=$number"
-    }
-    $buildKey=Get-ScopedDigest ($compiledBefore+"`n"+$artifact+"`n"+$buildOptions+"`n"+$environment)
-    $attestation=Join-Path $reports 'build.json'
-    if($SkipBuild){
-        if(-not(Test-ScopedReceipt $attestation $buildKey)){throw 'SkipBuild refused: source, artifacts, toolchain/environment or build options changed. Run without -SkipBuild.'}
-    }else{
-        $global:LASTEXITCODE=0
-        & (Join-Path $root 'build.ps1') @buildArguments
-        if(-not $? -or $LASTEXITCODE -ne 0){throw "Build failed: $LASTEXITCODE"}
-        Import-Module $module -Force
-        if((Get-ScopedSourceIdentity $root -CompiledOnly) -cne $compiledBefore){throw 'Source changed during build; no attestation was published.'}
-        $artifact=Get-ScopedArtifactIdentity $root $Platform $Configuration
-        Write-ScopedReceipt $attestation (Get-ScopedDigest ($compiledBefore+"`n"+$artifact+"`n"+$buildOptions+"`n"+$environment))
-    }
-}
-$pending=[Collections.Generic.List[object]]::new();$identities=@{}
-$nativeKey=if($native.Count){Get-ScopedRunIdentity $root $Platform $Configuration '(common)' $buildOptions}else{''}
-$formatKey=Get-ScopedDigest ((Get-ScopedSourceIdentity $root -CompiledOnly)+"`n"+(Get-ScopedEnvironmentIdentity -Tooling))
-$toolingKey=Get-ScopedDigest ((Get-ScopedSourceIdentity $root)+"`n"+(Get-ScopedEnvironmentIdentity -Tooling))
-function Get-ReceiptPath($Scope){
-    if($Scope.native){Join-Path $reports ($Scope.name+'.json')}
-    else{Join-Path $root ('.build/reports/scoped-tests/independent/'+$Scope.name+'.json')}
-}
-foreach($scope in $selected){
-    $key=Get-ScopedDigest ($(if($scope.native){$nativeKey}elseif($scope.name -ceq 'Format'){$formatKey}else{$toolingKey})+"`n"+$scope.name)
-    $identities[$scope.name]=$key;$receipt=Get-ReceiptPath $scope
-    if(-not $Force -and $scope.reuse -and (Test-ScopedReceipt $receipt $key)){Write-Host "REUSED $($scope.name) (identical successful evidence)"}
-    else{if(Test-Path -LiteralPath $receipt){Remove-Item -LiteralPath $receipt};$pending.Add($scope)}
-}
-if($pending.Count){
-    if(@($pending|Where-Object{-not $_.native}).Count){
-        foreach($scope in @($pending|Where-Object{-not $_.native})){
-            foreach($command in $scope.commands){
-                $commandArguments=@($command.arguments)
-                $engine=Join-Path $PSHOME $(if($IsWindows){'pwsh.exe'}else{'pwsh'})
-                $invocationArguments=@('-NoProfile','-File',(Join-Path $root $command.path))+$commandArguments
-                $global:LASTEXITCODE=0;& $engine @invocationArguments
-                if(-not $? -or $LASTEXITCODE -ne 0){throw "Independent scope failed: $($scope.name) ($LASTEXITCODE)"}
-            }
-            # Retain this completed obligation before a later native failure or
-            # interruption. Its original full input/tool closure still applies.
-            Import-Module $module -Force
-            $afterIndependent=Get-ScopedDigest ($(if($scope.name -ceq 'Format'){
-                Get-ScopedSourceIdentity $root -CompiledOnly
-            }else{Get-ScopedSourceIdentity $root})+"`n"+(Get-ScopedEnvironmentIdentity -Tooling))
-            $after=Get-ScopedDigest ($afterIndependent+"`n"+$scope.name)
-            if($after -cne $identities[$scope.name]){throw "Inputs changed during $($scope.name); no reusable success was published."}
-            if($scope.reuse){Write-ScopedReceipt (Get-ReceiptPath $scope) $identities[$scope.name]}
-            Write-Host "PASSED $($scope.name) (independent obligation; native coverage remains separate)"
-        }
-    }
-    $runtime=@($pending|Where-Object native|ForEach-Object name)
-    if($runtime.Count){
-        $global:LASTEXITCODE=0
-        & (Join-Path $root 'test.ps1') -Platform $Platform -Configuration $Configuration -Suites $runtime -SkipBuild -SkipTooling
-        if(-not $? -or $LASTEXITCODE -ne 0){throw "Selected runtime tests failed: $LASTEXITCODE"}
-    }
-    Import-Module $module -Force
-    $afterNative=if($runtime.Count){Get-ScopedRunIdentity $root $Platform $Configuration '(common)' $buildOptions}else{$nativeKey}
-    foreach($scope in @($pending|Where-Object native)){
-        $after=Get-ScopedDigest ($afterNative+"`n"+$scope.name)
-        if($after -cne $identities[$scope.name]){throw "Inputs changed during $($scope.name); no reusable success was published."}
-    }
-    foreach($scope in @($pending|Where-Object native)){if($scope.reuse){Write-ScopedReceipt (Get-ReceiptPath $scope) $identities[$scope.name]}}
-}
-if((Get-ScopedMapIdentity (Get-ScopedSourceMap $root)) -cne (Get-ScopedMapIdentity $source) -or
-    (Get-ScopedMapIdentity (Get-ScopedIndexMap $root)) -cne (Get-ScopedMapIdentity $index) -or
-    (Get-ScopedEnvironmentIdentity) -cne $environment){throw 'Inputs/index/environment changed during the run; the iteration baseline was not advanced.'}
-if($Mode -eq 'Affected' -and -not $Scopes.Count -and -not $deferred.Count){
-    Write-ScopedIteration $iterationPath $root $Platform $Configuration $environment $source $index $artifact
-}elseif(-not $deferred.Count){
-    Restore-ScopedIteration $iterationPath $root $previousIteration
-}
-if($deferred.Count){Write-Host 'LOCAL_OBLIGATIONS_PASSED; CI_PENDING'}
-elseif($names.Count -eq $applicable.Count){Write-Host 'FULL_NONINTERACTIVE_PASSED; manual/platform/resource qualification remains separate'}
-else{Write-Host 'SELECTED_PASSED; repository NOT_EVALUATED'}
-exit 0
-}finally{if($iterationLease){try{$iterationLease.ReleaseMutex()}finally{$iterationLease.Dispose()}}}
+Import-Module $binding -Force
+$command = Resolve-CiPinnedEngineCommand -ProjectRoot $project -Name $MyInvocation.MyCommand.Name
+$PSBoundParameters['Root'] = $Root
+& $command @PSBoundParameters

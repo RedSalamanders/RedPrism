@@ -70,11 +70,25 @@ function Write-RedPrismDxUiProvenance([string] $RepoRoot, [string] $Platform, [s
 Export-ModuleMember -Function Write-RedPrismDxUiProvenance
 '@
 Write-Fixture 'Build/ScopedTesting.psm1' @'
-function Get-ScopedSourceIdentity([string]$Root,[switch]$CompiledOnly) { 'fixture-source' }
-function Get-ScopedEnvironmentIdentity { 'fixture-environment' }
-function Get-ScopedBuildAttestationKey([string]$Root,[string]$Platform,[string]$Configuration,[int]$BuildNumber) { 'fixture-attestation' }
-function Write-ScopedReceipt([string]$Path,[string]$Key) { [IO.File]::WriteAllText($Path,$Key) }
-Export-ModuleMember -Function Get-ScopedSourceIdentity,Get-ScopedEnvironmentIdentity,Get-ScopedBuildAttestationKey,Write-ScopedReceipt
+function Enter-ScopedProfileLease([string]$Root,[string]$Platform,[string]$Configuration) {
+    @{root=$Root;platform=$Platform;configuration=$Configuration}
+}
+function Exit-ScopedProfileLease($Lease) {
+    if (-not $Lease.root -or $Lease.platform -cne 'ARM64' -or $Lease.configuration -cne 'Release') { throw 'Build used the wrong lease.' }
+}
+function Get-ScopedReportRoot([string]$Root,[string]$Platform,[string]$Configuration) {
+    Join-Path $Root ".build/reports/scoped-tests/$Platform-$Configuration"
+}
+function Remove-ScopedIteration([string]$Path,[string]$Root) {
+    if ($Path -cne (Join-Path $Root '.build/reports/scoped-tests/ARM64-Release/iteration.json')) { throw 'Build revoked the wrong profile.' }
+}
+function Read-ScopedTestManifest([string]$Root) { @{ root=$Root } }
+function Get-ScopedSourceIdentity([string]$Root,$Manifest,[switch]$CompiledOnly) { 'fixture-source' }
+function Get-ScopedEnvironmentIdentity([string]$Root,$Manifest) { 'fixture-environment' }
+function Get-ScopedBuildAttestationKey([string]$Root,[string]$Platform,[string]$Configuration,[int]$BuildNumber,[bool]$EnableTests,$Manifest) { 'fixture-attestation' }
+function Write-ScopedReceipt([string]$Path,[string]$Identity) { [IO.File]::WriteAllText($Path,$Identity) }
+Export-ModuleMember -Function Enter-ScopedProfileLease,Exit-ScopedProfileLease,Get-ScopedReportRoot,Remove-ScopedIteration,Read-ScopedTestManifest,
+    Get-ScopedSourceIdentity,Get-ScopedEnvironmentIdentity,Get-ScopedBuildAttestationKey,Write-ScopedReceipt
 '@
 
 [void][IO.Directory]::CreateDirectory((Join-Path $fixture '.ci-engine/Tools/Modules'))

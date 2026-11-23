@@ -137,7 +137,9 @@ try {
     function py { throw 'Validation must not invoke the Python launcher' }
     & (Join-Path $repository 'validate-skills.ps1')
 }
-$scopedModule = Import-Module (Join-Path $repository 'Build/ScopedTesting.psm1') -Force -PassThru
+Import-Module (Join-Path $repository 'Build/ScopedTesting.psm1') -Force
+$scopedModule = Get-Module -All -Name 'Ci.ScopedTesting' |
+    Where-Object Path -eq (Join-Path $repository '.ci-engine/Tools/Modules/Ci.ScopedTesting.psm1') | Select-Object -First 1
 $inputs = @(& $scopedModule {
     function Get-Command {
         [CmdletBinding()]param([string]$Name, [string]$CommandType)

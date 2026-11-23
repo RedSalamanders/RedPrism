@@ -9,6 +9,14 @@ actually completed selected Runtime/Captures scopes count. The original runtime
 input must pass close verification before a successful receipt is published.
 Ordinary `test-runs`, `normal-suites.json` and iteration evidence remain separate.
 
+A successful ordinary native run also records each executed suite's report in its payload and
+publishes the compatibility view `.build/reports/<suite>-<platform>-<configuration>.json`.
+Each report carries `exitCode` and `skips`, including native console capability skips and unsupported
+harness captures. Runs with caller-supplied sanitizer instrumentation use `.instrumented.json`.
+The shared scoped runner archives the prior views for the suites it invokes and requires fresh
+reports and a successful runner exit. Capability skips prevent exact result reuse. The local SDK
+runner publishes only its separate SDK receipt.
+
 Status: normative current tooling contract
 Last reviewed: 2026-11-09
 
