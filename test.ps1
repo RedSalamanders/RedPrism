@@ -73,7 +73,7 @@ $scopedManifest = $null
 if (-not $localSdkMode) {
     $scopedReports = Get-ScopedReportRoot -Root $repoRoot -Platform $Platform -Configuration $Configuration
     Remove-ScopedIteration -Path (Join-Path $scopedReports 'iteration.json') -Root $repoRoot
-    $scopedManifest = Read-ScopedTestManifest -Root $repoRoot
+    $scopedManifest = Read-ScopedTestManifest -Root $repoRoot -SkipProjectRules
 }
 $available=@('Host','Document','IO','Composition','Runtime','Stress','Performance','Captures','Tooling')
 if($Full){$Suites=$available}
