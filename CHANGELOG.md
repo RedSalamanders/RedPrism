@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- RedPrism now uses the pinned shared scoped-testing runner, planner and evidence modules. PrePush covers the
+  six supported local build profiles, with interactive clipboard suites listed separately. Native tests publish
+  fresh per-suite reports alongside their retained logs and preserve separate test and production attestations.
 - Import the build console from the pinned shared CI engine (convergence CV-5-03). `Build/BuildConsole.psm1` is now the
   engine's module shim (`Templates/Project/Build/BuildConsole.psm1`): `build.ps1` and the tooling tests keep importing
   the same path and get the same four functions from `.ci-engine/Tools/Modules/Ci.BuildConsole.psm1`. The zero-warning
