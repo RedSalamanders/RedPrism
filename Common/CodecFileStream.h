@@ -29,6 +29,8 @@ public:
     [[nodiscard]] static HRESULT CreateRead(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation, CodecFileStream** result) noexcept;
     CodecFileStream(ConstructionKey, wil::unique_hfile file, std::uint64_t maximumBytes, CancelToken cancellation, bool readOnly) noexcept;
     [[nodiscard]] HRESULT CloseChecked() noexcept;
+    [[nodiscard]] HRESULT RenameTemporary(FILE_INFO_BY_HANDLE_CLASS kind, FILE_RENAME_INFO& info, DWORD size) noexcept;
+    void DiscardTemporary() noexcept;
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** result) noexcept override;
     ULONG STDMETHODCALLTYPE AddRef() noexcept override;
     ULONG STDMETHODCALLTYPE Release() noexcept override;

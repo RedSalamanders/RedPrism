@@ -2611,7 +2611,10 @@ int wmain(int argc, wchar_t** argv)
     }
     if (argc > 1)
     {
-        const int result = std::wcscmp(argv[1], L"--bench-file") == 0 ? RunFileIoBench(argc, argv) : 2;
+        const std::wstring_view option(argv[1]);
+        const int result = option == L"--bench-file"                          ? RunFileIoBench(argc, argv)
+                           : argc == 2 && option == L"--guarded-image-output" ? RunGuardedImageOutputTests()
+                                                                              : 2;
         if (SUCCEEDED(com))
             CoUninitialize();
         return result;

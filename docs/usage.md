@@ -47,6 +47,8 @@ Import Images… always adds layers. A drop of several images asks once. Close P
 (opaque, quality 0.8) from the File menu. Save, Save As and Export apply anything still open first — a typed
 value, a live stroke, a pending gradient or transform, an adjustment panel — so the saved or exported file always
 matches what the canvas shows.
+If the export destination changes after you select it, RedPrism preserves the newer file and asks you to
+choose a destination again. Your project stays open with its current edits.
 
 Windows may wait briefly for a project save or image export that is already writing before signing out. If an export
 is still preparing the canvas, Windows cancels that work.

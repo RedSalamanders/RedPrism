@@ -2,11 +2,13 @@
 
 #include "CodecFileStream.h"
 #include "CodecMemoryStream.h"
+#include "OutputPathLimits.h"
 #include "RasterWork.h"
 #include "Utf8.h"
 #include "Win32FilePath.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <cwctype>
 #include <span>
@@ -610,28 +612,144 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     bytes = std::move(encoded);
     return ImageCodecStatus::Ok;
 }
-[[nodiscard]] ImageCodecStatus EncodeToFile(
-    const Raster& image, const GUID& container, double quality, double resolution, const wchar_t* path, CancelToken cancellation)
+[[nodiscard]] HRESULT ReadImageOutputVersion(HANDLE handle, ImageOutputVersion& version) noexcept
+{
+    FILE_ID_INFO file{};
+    FILE_BASIC_INFO times{};
+    FILE_STANDARD_INFO standard{};
+    if (! GetFileInformationByHandleEx(handle, FileIdInfo, &file, sizeof(file)) ||
+        ! GetFileInformationByHandleEx(handle, FileBasicInfo, &times, sizeof(times)) ||
+        ! GetFileInformationByHandleEx(handle, FileStandardInfo, &standard, sizeof(standard)))
+        return HRESULT_FROM_WIN32(GetLastError());
+    constexpr FILE_ID_128 kEmptyId{};
+    if ((times.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0 ||
+        std::memcmp(file.FileId.Identifier, kEmptyId.Identifier, sizeof(kEmptyId.Identifier)) == 0 || standard.DeletePending || standard.EndOfFile.QuadPart < 0)
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    version = {
+        .size          = static_cast<std::uint64_t>(standard.EndOfFile.QuadPart),
+        .lastWriteTime = times.LastWriteTime.QuadPart,
+        .changeTime    = times.ChangeTime.QuadPart,
+        .volume        = file.VolumeSerialNumber,
+    };
+    std::memcpy(version.fileId.data(), file.FileId.Identifier, version.fileId.size());
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ObserveImageOutputVersion(const std::wstring& path, std::optional<ImageOutputVersion>& version) noexcept
+{
+    version.reset();
+    const wil::unique_hfile file{CreateFileW(path.c_str(),
+                                             FILE_READ_ATTRIBUTES,
+                                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                             nullptr,
+                                             OPEN_EXISTING,
+                                             FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                             nullptr)};
+    if (! file)
+    {
+        const DWORD error = GetLastError();
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? S_OK : HRESULT_FROM_WIN32(error);
+    }
+    ImageOutputVersion observed{};
+    const HRESULT result = ReadImageOutputVersion(file.get(), observed);
+    if (SUCCEEDED(result))
+        version = observed;
+    return result;
+}
+
+[[nodiscard]] ImageCodecStatus PublishImageOutput(CodecFileStream& file,
+                                                  const ImageOutputTarget& target,
+                                                  CancelToken cancellation,
+                                                  ImageOutputPublishPolicy policy)
+{
+    constexpr std::size_t kHeaderBytes = offsetof(FILE_RENAME_INFO, FileName);
+    const std::size_t nameBytes        = target.path.size() * sizeof(wchar_t);
+    const std::size_t bytes            = kHeaderBytes + nameBytes + sizeof(wchar_t);
+    std::vector<std::uint64_t> storage((bytes + sizeof(std::uint64_t) - 1) / sizeof(std::uint64_t));
+    auto* const rename     = reinterpret_cast<FILE_RENAME_INFO*>(storage.data());
+    rename->FileNameLength = static_cast<DWORD>(nameBytes);
+    std::memcpy(rename->FileName, target.path.data(), nameBytes);
+    const auto stillAccepted = [&target]() noexcept
+    {
+        std::optional<ImageOutputVersion> current;
+        return SUCCEEDED(ObserveImageOutputVersion(target.path, current)) && current == target.acceptedVersion;
+    };
+    const auto checkpoint = [&policy](ImageOutputPublishStage stage) noexcept
+    {
+        if (policy.checkpoint)
+            policy.checkpoint(policy.context, stage);
+    };
+    const auto resultStatus = [&stillAccepted](HRESULT result) noexcept
+    {
+        if (SUCCEEDED(result))
+            return ImageCodecStatus::Ok;
+        if (result == E_ABORT)
+            return ImageCodecStatus::Cancelled;
+        if (result == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS) || result == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) ||
+            result == HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) || ! stillAccepted())
+            return ImageCodecStatus::Conflict;
+        return ImageCodecStatus::Encode;
+    };
+
+    if (! target.acceptedVersion)
+    {
+        checkpoint(ImageOutputPublishStage::BeforeFinalCheck);
+        rename->ReplaceIfExists = FALSE;
+        return resultStatus(file.RenameTemporary(FileRenameInfo, *rename, static_cast<DWORD>(bytes)));
+    }
+
+    wil::unique_hfile guard{CreateFileW(target.path.c_str(),
+                                        FILE_READ_ATTRIBUTES | DELETE,
+                                        FILE_SHARE_READ | FILE_SHARE_DELETE,
+                                        nullptr,
+                                        OPEN_EXISTING,
+                                        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                        nullptr)};
+    ImageOutputVersion held{};
+    if (! guard || FAILED(ReadImageOutputVersion(guard.get(), held)) || held != target.acceptedVersion.value())
+        return ImageCodecStatus::Conflict;
+
+    checkpoint(ImageOutputPublishStage::BeforeFinalCheck);
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (! stillAccepted())
+        return ImageCodecStatus::Conflict;
+    rename->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+    const HRESULT result =
+        policy.forceClassic ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) : file.RenameTemporary(FileRenameInfoEx, *rename, static_cast<DWORD>(bytes));
+    if (result != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && result != HRESULT_FROM_WIN32(ERROR_INVALID_FUNCTION) &&
+        result != HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER) && result != HRESULT_FROM_WIN32(ERROR_CALL_NOT_IMPLEMENTED) && result != E_ACCESSDENIED)
+        return resultStatus(result);
+
+    // A classic replacement needs the target guard closed. Recheck the name after releasing it.
+    guard.reset();
+    checkpoint(ImageOutputPublishStage::BeforeClassicCheck);
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (! stillAccepted())
+        return ImageCodecStatus::Conflict;
+    rename->ReplaceIfExists = TRUE;
+    return resultStatus(file.RenameTemporary(FileRenameInfo, *rename, static_cast<DWORD>(bytes)));
+}
+
+[[nodiscard]] ImageCodecStatus EncodeToFile(const Raster& image,
+                                            const GUID& container,
+                                            double quality,
+                                            double resolution,
+                                            const ImageOutputTarget& target,
+                                            CancelToken cancellation,
+                                            ImageOutputPublishPolicy policy)
 {
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    if (path == nullptr || ! image.HasStorage())
+    if (target.path.empty() || target.path.size() > kMaxImageOutputPathUnits || ! image.HasStorage())
     {
         return ImageCodecStatus::Encode;
     }
-    // A temp file beside the destination, flushed and then swapped in atomically, so a crash or a failed write
-    // never leaves a truncated PNG/JPEG at `path` and a concurrent reader never sees a partial file.
-    if (cancellation.IsCancelled())
-        return ImageCodecStatus::Cancelled;
+    // The destination becomes visible only after the exclusive sibling has been written and flushed.
     const std::wstring suffix = L".~" + Guid::Generate().ToString();
-    std::wstring apiTarget;
-    const bool resolveTarget = std::wstring_view{path}.size() < MAX_PATH && std::wstring_view{path}.size() + suffix.size() >= MAX_PATH;
-    const HRESULT targetResult =
-        resolveTarget ? Win32FilePath::Resolve(path, Win32FilePath::Use::File, apiTarget) : Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiTarget);
-    if (FAILED(targetResult))
-        return ImageCodecStatus::Encode;
     std::wstring temp;
-    if (FAILED(Win32FilePath::SiblingWithSuffix(apiTarget, suffix, temp)))
+    if (FAILED(Win32FilePath::SiblingWithSuffix(target.path, suffix, temp)))
         return ImageCodecStatus::Encode;
     std::wstring apiTemp;
     const HRESULT tempResult = Win32FilePath::PrefixResolvedPath(temp.c_str(), Win32FilePath::Use::File, apiTemp);
@@ -641,39 +759,37 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     const HRESULT created = CodecFileStream::Create(apiTemp.c_str(), kMaxEncodedBytes, cancellation, file.put());
     if (FAILED(created))
         return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Encode;
-    auto cleanup = wil::scope_exit([&]
-    {
-        file.reset();
-        (void)DeleteFileW(apiTemp.c_str());
-    });
+    auto cleanup = wil::scope_exit([&] { file->DiscardTemporary(); });
     std::vector<std::uint8_t> unused;
     const auto encoded = EncodeToFormat(image, container, quality, resolution, unused, cancellation, file.get());
     if (encoded != ImageCodecStatus::Ok)
         return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : encoded;
     STATSTG stats{};
-    if (FAILED(file->Stat(&stats, STATFLAG_NONAME)) || stats.cbSize.QuadPart == 0 || stats.cbSize.QuadPart > kMaxEncodedBytes || FAILED(file->CloseChecked()))
+    if (FAILED(file->Stat(&stats, STATFLAG_NONAME)) || stats.cbSize.QuadPart == 0 || stats.cbSize.QuadPart > kMaxEncodedBytes ||
+        FAILED(file->Commit(STGC_DEFAULT)))
         return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Encode;
-    file.reset();
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    const DWORD existing = GetFileAttributesW(apiTarget.c_str());
-    bool replaced        = false;
-    if (existing != INVALID_FILE_ATTRIBUTES && (existing & FILE_ATTRIBUTE_DIRECTORY) == 0)
-    {
-        replaced = ReplaceFileW(apiTarget.c_str(), apiTemp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr) != 0;
-    }
-    if (! replaced)
-    {
-        replaced = MoveFileExW(apiTemp.c_str(), apiTarget.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
-    }
-    if (! replaced)
-    {
-        return ImageCodecStatus::Encode;
-    }
-    cleanup.release();
-    return ImageCodecStatus::Ok;
+    const auto published = PublishImageOutput(*file, target, cancellation, policy);
+    if (published == ImageCodecStatus::Ok)
+        cleanup.release();
+    return published;
 }
 } // namespace
+
+std::int32_t ObserveImageOutputTarget(const wchar_t* path, ImageOutputTarget& target) noexcept
+{
+    ImageOutputTarget observed;
+    const HRESULT resolved = Win32FilePath::Resolve(path, Win32FilePath::Use::File, observed.path);
+    if (FAILED(resolved))
+        return resolved;
+    if (observed.path.size() > kMaxImageOutputPathUnits)
+        return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+    const HRESULT result = ObserveImageOutputVersion(observed.path, observed.acceptedVersion);
+    if (SUCCEEDED(result))
+        target = std::move(observed);
+    return result;
+}
 
 bool WriteFileBytesToDisk(const wchar_t* path, const std::uint8_t* bytes, std::size_t size) noexcept
 {
@@ -957,7 +1073,16 @@ ImageCodecStatus EncodePng(
 
 ImageCodecStatus EncodePngFile(const Raster& image, double resolution, const wchar_t* path, CancelToken cancellation)
 {
-    return EncodeToFile(image, GUID_ContainerFormatPng, 1.0, resolution, path, cancellation);
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    ImageOutputTarget target;
+    return SUCCEEDED(ObserveImageOutputTarget(path, target)) ? EncodePngFile(image, resolution, target, cancellation) : ImageCodecStatus::Encode;
+}
+
+ImageCodecStatus EncodePngFile(
+    const Raster& image, double resolution, const ImageOutputTarget& target, CancelToken cancellation, ImageOutputPublishPolicy policy)
+{
+    return EncodeToFile(image, GUID_ContainerFormatPng, 1.0, resolution, target, cancellation, policy);
 }
 
 ImageCodecStatus EncodeJpeg(
@@ -969,5 +1094,14 @@ ImageCodecStatus EncodeJpeg(
 
 ImageCodecStatus EncodeJpegFile(const Raster& image, const JpegExportOptions& options, const wchar_t* path, CancelToken cancellation)
 {
-    return EncodeToFile(image, GUID_ContainerFormatJpeg, options.quality, options.resolution, path, cancellation);
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    ImageOutputTarget target;
+    return SUCCEEDED(ObserveImageOutputTarget(path, target)) ? EncodeJpegFile(image, options, target, cancellation) : ImageCodecStatus::Encode;
+}
+
+ImageCodecStatus EncodeJpegFile(
+    const Raster& image, const JpegExportOptions& options, const ImageOutputTarget& target, CancelToken cancellation, ImageOutputPublishPolicy policy)
+{
+    return EncodeToFile(image, GUID_ContainerFormatJpeg, options.quality, options.resolution, target, cancellation, policy);
 }

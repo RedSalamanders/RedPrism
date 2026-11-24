@@ -533,7 +533,7 @@ void LockedDestinationFailurePreservesFiles()
         status = EncodePngFile(replacement, 72, destination.c_str());
     }
 
-    Expect(status == ImageCodecStatus::Encode, "overwrite.locked-destination-encode-status");
+    Expect(status == ImageCodecStatus::Conflict, "overwrite.locked-destination-conflict");
     std::vector<std::uint8_t> after;
     Expect(ReadBytes(destination, after) && after == previousBytes, "overwrite.failed-replacement-preserves-original-bytes");
     DecodedImage decoded;
@@ -543,6 +543,141 @@ void LockedDestinationFailurePreservesFiles()
     Expect(ReadBytes(sentinel, sentinelAfter) && std::equal(sentinelAfter.begin(), sentinelAfter.end(), sentinelBytes.begin(), sentinelBytes.end()) &&
                HasOnlySentinelTemp(scratch, L"locked.png", L"locked.png.~00000000-0000-4000-8000-000000000003"),
            "overwrite.failure-cleans-owned-temp-preserves-unrelated-temp");
+}
+
+void GuardedImageOutputPublication()
+{
+    enum class Race
+    {
+        Edit,
+        Writer,
+        Rename,
+        Delete,
+        Create,
+        ClassicReplace,
+        ClassicCommit,
+        Cancel
+    };
+    struct Scenario final
+    {
+        Race race;
+        bool creates;
+        bool classic;
+        ImageCodecStatus expected;
+        const char* name;
+    };
+    constexpr Scenario scenarios[]{
+        {Race::Edit, false, false, ImageCodecStatus::Conflict, "guard.refuses-completed-in-place-edit"},
+        {Race::Writer, false, false, ImageCodecStatus::Ok, "guard.writer-refused-primary-commit"},
+        {Race::Rename, false, false, ImageCodecStatus::Conflict, "guard.final-check-refuses-moved-version"},
+        {Race::Delete, false, false, ImageCodecStatus::Conflict, "guard.final-check-refuses-deletion"},
+        {Race::Create, true, false, ImageCodecStatus::Conflict, "guard.new-file-rename-refuses-competing-create"},
+        {Race::ClassicReplace, false, true, ImageCodecStatus::Conflict, "guard.classic-rechecks-after-release"},
+        {Race::ClassicCommit, false, true, ImageCodecStatus::Ok, "guard.classic-replaces-confirmed-file"},
+        {Race::Cancel, false, true, ImageCodecStatus::Cancelled, "guard.cancellation-before-classic-publish"},
+    };
+    static constexpr std::array<std::uint8_t, 5> prior{0x50, 0x52, 0x49, 0x4F, 0x52};
+    static constexpr std::array<std::uint8_t, 6> newer{0x4E, 0x45, 0x57, 0x45, 0x52, 0x21};
+    constexpr std::array<std::uint8_t, 4> exportPixel{17, 63, 117, 255};
+    const Raster image = Raster::Make(1, 1, RasterFormat::Bgra8888, exportPixel.data(), exportPixel.size());
+    ScratchDirectory scratch;
+    Expect(scratch.IsCreated(), "guard.scratch-created");
+    if (! scratch.IsCreated())
+        return;
+
+    struct State final
+    {
+        const Scenario* scenario;
+        const std::wstring* path;
+        const std::wstring* sibling;
+        CancelSource* cancellation;
+        bool exercised = false;
+    };
+    const auto publish = [](void* context, ImageOutputPublishStage stage) noexcept
+    {
+        auto& state              = *static_cast<State*>(context);
+        const auto& path         = *state.path;
+        const auto& sibling      = *state.sibling;
+        const auto expectedStage = state.scenario->classic ? ImageOutputPublishStage::BeforeClassicCheck : ImageOutputPublishStage::BeforeFinalCheck;
+        if (stage != expectedStage)
+            return;
+        switch (state.scenario->race)
+        {
+            case Race::Edit: break; // This edit completes before the worker opens its guard.
+            case Race::Writer:
+            {
+                const wil::unique_hfile writer{CreateFileW(path.c_str(),
+                                                           GENERIC_WRITE,
+                                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                           nullptr,
+                                                           OPEN_EXISTING,
+                                                           FILE_ATTRIBUTE_NORMAL,
+                                                           nullptr)};
+                state.exercised = ! writer && GetLastError() == ERROR_SHARING_VIOLATION;
+                break;
+            }
+            case Race::Rename: state.exercised = MoveFileExW(path.c_str(), sibling.c_str(), 0) && WriteBytes(path, newer); break;
+            case Race::Delete: state.exercised = DeleteFileW(path.c_str()) != FALSE; break;
+            case Race::Create: state.exercised = WriteBytes(path, newer); break;
+            case Race::ClassicReplace:
+                state.exercised = WriteBytes(sibling, newer) && MoveFileExW(sibling.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING);
+                break;
+            case Race::ClassicCommit: state.exercised = true; break;
+            case Race::Cancel:
+                (void)state.cancellation->Cancel();
+                state.exercised = true;
+                break;
+        }
+    };
+    const auto hasBytes = [](const std::wstring& path, std::span<const std::uint8_t> expected)
+    {
+        std::vector<std::uint8_t> actual;
+        return ReadBytes(path, actual) && std::equal(actual.begin(), actual.end(), expected.begin(), expected.end());
+    };
+    for (const Scenario& scenario : scenarios)
+    {
+        const auto name         = std::to_wstring(static_cast<unsigned int>(scenario.race)) + L".png";
+        const auto path         = scratch.Child(name);
+        const auto sibling      = scratch.Child(name + L".other");
+        const auto sentinelName = name + L".~00000000-0000-4000-8000-000000000001";
+        const auto sentinel     = scratch.Child(sentinelName);
+        ImageOutputTarget target;
+        const bool ready = (scenario.creates || WriteBytes(path, prior)) && WriteBytes(sentinel, prior) &&
+                           SUCCEEDED(ObserveImageOutputTarget(path.c_str(), target)) && target.acceptedVersion.has_value() == ! scenario.creates;
+        Expect(ready, "guard.accepted-version-fixture");
+        if (! ready)
+            continue;
+
+        CancelSource cancellation;
+        State state{&scenario, &path, &sibling, &cancellation};
+        if (scenario.race == Race::Edit)
+            state.exercised = WriteFileBytesToDisk(path.c_str(), newer.data(), newer.size());
+        const auto actual = EncodePngFile(image, 72, target, cancellation.Token(), {&state, publish, scenario.classic});
+        bool correct      = state.exercised && actual == scenario.expected && hasBytes(sentinel, prior) && HasOnlySentinelTemp(scratch, name, sentinelName);
+        if (scenario.expected == ImageCodecStatus::Ok)
+        {
+            DecodedImage decoded;
+            correct = correct && DecodeProjectPngFile(path.c_str(), false, 1, decoded) == ImageCodecStatus::Ok && PixelEquals(decoded.image, 0, 0, exportPixel);
+        }
+        else if (scenario.race == Race::Delete)
+            correct = correct && GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES;
+        else if (scenario.race == Race::Cancel)
+            correct = correct && hasBytes(path, prior);
+        else
+            correct = correct && hasBytes(path, newer);
+        if (scenario.race == Race::Rename)
+            correct = correct && hasBytes(sibling, prior);
+        Expect(correct, scenario.name);
+
+        if (scenario.race == Race::ClassicReplace)
+        {
+            DecodedImage decoded;
+            Expect(SUCCEEDED(ObserveImageOutputTarget(path.c_str(), target)) &&
+                       EncodePngFile(image, 72, target, {}, {nullptr, nullptr, true}) == ImageCodecStatus::Ok &&
+                       DecodeProjectPngFile(path.c_str(), false, 1, decoded) == ImageCodecStatus::Ok && PixelEquals(decoded.image, 0, 0, exportPixel),
+                   "guard.retry-observes-new-version-before-replacing");
+        }
+    }
 }
 
 constexpr std::array<std::uint8_t, 58> kUnsupportedBmp{
@@ -884,8 +1019,16 @@ int RunImageCodecWorkTests()
     PreCancelledCalls();
     PreCancelledFileEncodesPreserveFiles();
     LockedDestinationFailurePreservesFiles();
+    GuardedImageOutputPublication();
     ImageImportCodecProbeAndBudgetGuards();
     ImportTiffUsesFirstFrame();
     ClipboardPngMetadataProbe();
+    return gFailures;
+}
+
+int RunGuardedImageOutputTests()
+{
+    gFailures = 0;
+    GuardedImageOutputPublication();
     return gFailures;
 }

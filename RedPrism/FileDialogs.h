@@ -36,6 +36,7 @@ struct FilterStrings
                                            const COMDLG_FILTERSPEC* filters,
                                            UINT filterCount,
                                            HostRequest& request,
-                                           HostInputBudget& budget) noexcept;
+                                           HostInputBudget& budget,
+                                           bool guardImageExport) noexcept;
 // The message for a failed project load.
 [[nodiscard]] UINT LoadErrorStringId(ProjectIoStatus status) noexcept;

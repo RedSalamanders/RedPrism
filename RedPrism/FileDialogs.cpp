@@ -1,5 +1,6 @@
 #include "FileDialogs.h"
 
+#include "ImageCodecs.h"
 #include "Resources.h"
 #include "resource.h"
 
@@ -260,7 +261,8 @@ HRESULT PickOutputForRequest(HWND owner,
                              const COMDLG_FILTERSPEC* filters,
                              UINT filterCount,
                              HostRequest& request,
-                             HostInputBudget& budget) noexcept
+                             HostInputBudget& budget,
+                             bool guardImageExport) noexcept
 {
     try
     {
@@ -304,33 +306,53 @@ HRESULT PickOutputForRequest(HWND owner,
         {
             return result;
         }
-        result = dialog->SetOptions(options | FOS_OVERWRITEPROMPT | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+        options |= FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST;
+        if (guardImageExport)
+        {
+            options &= ~static_cast<FILEOPENDIALOGOPTIONS>(FOS_OVERWRITEPROMPT);
+            options |= FOS_NOTESTFILECREATE;
+        }
+        else
+        {
+            options |= FOS_OVERWRITEPROMPT;
+        }
+        result = dialog->SetOptions(options);
         if (FAILED(result))
         {
             return result;
         }
-        result = dialog->Show(owner);
-        if (result == kDialogCancelled)
+        for (;;)
         {
-            return kDialogCancelled;
-        }
-        if (FAILED(result))
-        {
-            return result;
-        }
+            result = dialog->Show(owner);
+            if (FAILED(result))
+                return result;
 
-        wil::unique_cotaskmem_string shellPath;
-        result = ReadDialogShellPath(dialog.get(), shellPath);
-        if (FAILED(result))
-        {
-            return result;
+            wil::unique_cotaskmem_string shellPath;
+            result = ReadDialogShellPath(dialog.get(), shellPath);
+            if (FAILED(result))
+                return result;
+            const auto path = HostBoundedPathView(shellPath.get());
+            if (! path || path->empty())
+                return kInvalidDialogInput;
+            if (! guardImageExport)
+                return request.TrySelectOutput(path.value(), budget) ? S_OK : kInvalidDialogInput;
+
+            ImageOutputTarget target;
+            result = ObserveImageOutputTarget(path->data(), target);
+            if (FAILED(result))
+                return result;
+            if (target.acceptedVersion)
+            {
+                const auto prompt  = FormatStringResource(nullptr, IDS_CONFIRM_EXPORT_OVERWRITE, target.path);
+                const auto caption = LoadStringResource(nullptr, IDS_APP_TITLE);
+                const int answer   = MessageBoxW(owner, prompt.c_str(), caption.c_str(), MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+                if (answer == IDNO)
+                    continue;
+                if (answer != IDYES)
+                    return kDialogCancelled;
+            }
+            return request.TrySelectOutput(target.path, budget, false, target.acceptedVersion) ? S_OK : kInvalidDialogInput;
         }
-        const auto path = HostBoundedPathView(shellPath.get());
-        if (! path || path->empty())
-        {
-            return kInvalidDialogInput;
-        }
-        return request.TrySelectOutput(path.value(), budget) ? S_OK : kInvalidDialogInput;
     }
     catch (const std::bad_alloc&)
     {

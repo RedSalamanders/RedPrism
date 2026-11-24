@@ -1000,11 +1000,13 @@ publication updates the document path and marks that captured revision saved. Ca
 preserves the previous destination. If cancellation arrives after publication, the file and captured path/revision
 are recorded while a dependent close or replacement is suppressed. A failure leaves the prior path/revision state
 and destination intact and reports a localized notice. The selected input ordinal blocks younger mutations until
-the worker acknowledges and the owner applies or drops its result. PNG/JPEG export captures its destination,
+the worker acknowledges and the owner applies or drops its result. PNG/JPEG export captures its selected path and
+destination version before overwrite confirmation and retains both through queued work. It also captures
 quality and resolution, reads the committed whole document asynchronously and releases the last mapped tile
 and utility GPU targets before worker encoding. Later device changes cannot repeat encoding/publication.
 Export never changes the project path or saved revision. Cancellation before publication preserves the destination;
-after publication the receipt can be cancelled while the written file remains. Failure posts one localized notice.
+after publication the receipt can be cancelled while the written file remains. A conflicting destination posts
+one localized notice and leaves the current document available to retry. See the [image output contract](../IO/IO_ImageCodecs.md#export).
 Project opening probes metadata and decodes on workers under the same selected input. A failed file leaves the
 current document intact and the batch continues; the final receipt retains its first failure. Cancellation keeps
 ownership through acknowledgement and suppresses later files. A current successful replacement alone may bind

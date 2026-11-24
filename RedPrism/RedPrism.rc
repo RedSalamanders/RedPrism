@@ -148,6 +148,8 @@ BEGIN
     IDS_ERROR_READBACK              "RedPrism could not read the flattened image."
     IDS_ERROR_EXPORT_JPEG           "RedPrism could not export JPEG."
     IDS_ERROR_EXPORT_PNG            "RedPrism could not export PNG."
+    IDS_ERROR_EXPORT_CONFLICT       "The export destination changed or could not be verified. Choose the destination again to retry."
+    IDS_CONFIRM_EXPORT_OVERWRITE    "Replace the existing file?\n\n{0}"
     IDS_ERROR_START_GENERIC         "RedPrism could not start. See the debugger output."
     IDS_ERROR_START_WINDOW          "RedPrism could not create its window. See the debugger output."
     IDS_ERROR_START_GRAPHICS        "RedPrism could not complete graphics initialization or rendering. See the debugger output."
