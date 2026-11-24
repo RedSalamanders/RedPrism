@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Recover the renderer and redraw the editor when a frame reports a hung Direct3D device.
 - Preserve concurrent edits to RedPrism settings during normal saves and startup recovery.
 - Preserve competing edits, renames and creations during RedPrism archive saves.
 - Bind PNG and JPEG overwrite confirmation to the selected file version, refuse competing creations and changed targets at publication, and preserve the current project for retry.
