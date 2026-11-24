@@ -38,9 +38,8 @@ struct FreeDeleter
     }
 };
 
-constexpr std::size_t kMaxFileBytes = 16u * 1024u * 1024u;
-// Editors save UTF-8 with a byte order mark; the document is the same.
-constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
+constexpr std::size_t kMaxFileBytes   = 16u * 1024u * 1024u;
+constexpr yyjson_read_flag kReadFlags = YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM;
 
 [[nodiscard]] std::optional<int> SchemaOf(yyjson_val* root) noexcept
 {
@@ -319,6 +318,11 @@ std::optional<AppSettings> Parse(std::string_view json)
 
 std::string Serialize(const AppSettings& settings, std::string_view existingJson)
 {
+    if (! std::isfinite(settings.layersPanelWidth) || ! std::isfinite(settings.jpegQuality))
+    {
+        return {};
+    }
+
     unique_yyjson_mut_doc doc;
     unique_yyjson_doc existing;
     yyjson_val* existingShortcuts = nullptr;
@@ -442,7 +446,8 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
         return {};
     }
     std::size_t length = 0;
-    const std::unique_ptr<char, FreeDeleter> text{yyjson_mut_write(doc.get(), YYJSON_WRITE_PRETTY, &length)};
+    // Retain non-finite JSON5 values in unknown members copied from the authored document.
+    const std::unique_ptr<char, FreeDeleter> text{yyjson_mut_write(doc.get(), YYJSON_WRITE_PRETTY | YYJSON_WRITE_ALLOW_INF_AND_NAN, &length)};
     if (! text)
     {
         return {};

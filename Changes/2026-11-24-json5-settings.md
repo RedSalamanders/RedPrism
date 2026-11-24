@@ -1,0 +1,1 @@
+- Read RedPrism settings as JSON5 and preserve unknown values when saving.
