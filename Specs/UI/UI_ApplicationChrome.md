@@ -22,12 +22,12 @@ default layer names (`Layer 1`, `Folder 1`) stays in the document model because 
 legacy tests; it is not chrome. `HostTests` loads `RedPrism.exe` as a data file and proves every catalogued id
 resolves with positional placeholders only.
 
-Languages (C14): a translated table ships as a resource-only module `<exe dir>\Languages\<tag>\RedPrism.resources.dll`
+Languages (C14) use resource-only modules at `<exe dir>\Lang\RedPrism-<tag>.dll`
 built from the same `.rc` with the same ids (`Common/Localization.*`). An ordinary start tries the `language`
-setting's tag then its primary subtag, then each Windows display language and its primary subtag
-(`SatelliteCandidates`), loads the first that exists as a data file and hands it to `SetStringResourceSatellite`;
-`LoadStringResource(nullptr, id)` reads the satellite first and falls back to the embedded English for an id it
-lacks. The embedded table is English, so an English tag ends the candidates after its own family: `language: "en"`
+setting's tag and primary subtag, then each Windows display language and its primary subtag. Each candidate
+prefers the shared layout and can still load from the previous satellite directory. The first module to load
+as data supplies the localized strings. `LoadStringResource(nullptr, id)` falls back to the embedded English
+table for missing IDs. The embedded helper variants read their module's table directly. The embedded table is English, so an English tag ends the candidates after its own family: `language: "en"`
 keeps English over a satellite for the Windows display language, and an English display language ahead of another
 one keeps it too (a regional English table such as `en-GB` may still load). No translation ships in v1; the harness
 switches stay English. `HostTests` `locale.*` proves the candidate order, the English stop and the override.

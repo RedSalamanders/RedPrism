@@ -1667,25 +1667,36 @@ void TestLocalization()
 {
     const std::vector<std::wstring> system{L"fr-FR", L"fr-FR", L"it-IT"};
     const std::vector<std::wstring> candidates = Localization::SatelliteCandidates(L"C:\\App\\", L"de-AT", system);
-    const std::vector<std::wstring> expected{L"C:\\App\\Languages\\de-AT\\RedPrism.resources.dll",
+    const std::vector<std::wstring> expected{L"C:\\App\\Lang\\RedPrism-de-AT.dll",
+                                             L"C:\\App\\Languages\\de-AT\\RedPrism.resources.dll",
+                                             L"C:\\App\\Lang\\RedPrism-de.dll",
                                              L"C:\\App\\Languages\\de\\RedPrism.resources.dll",
+                                             L"C:\\App\\Lang\\RedPrism-fr-FR.dll",
                                              L"C:\\App\\Languages\\fr-FR\\RedPrism.resources.dll",
+                                             L"C:\\App\\Lang\\RedPrism-fr.dll",
                                              L"C:\\App\\Languages\\fr\\RedPrism.resources.dll",
+                                             L"C:\\App\\Lang\\RedPrism-it-IT.dll",
                                              L"C:\\App\\Languages\\it-IT\\RedPrism.resources.dll",
+                                             L"C:\\App\\Lang\\RedPrism-it.dll",
                                              L"C:\\App\\Languages\\it\\RedPrism.resources.dll"};
     Expect(candidates == expected, "locale.candidates-in-order");
-    Expect(Localization::SatelliteCandidates(L"C:\\App", L"", {}).empty() && Localization::SatelliteCandidates(L"C:\\App", L"fr", {L"fr"}).size() == 1,
+    const std::vector<std::wstring> french{L"C:\\App\\Lang\\RedPrism-fr.dll", L"C:\\App\\Languages\\fr\\RedPrism.resources.dll"};
+    Expect(Localization::SatelliteCandidates(L"C:\\App", L"", {}).empty() && Localization::SatelliteCandidates(L"C:\\App", L"fr", {L"fr"}) == french,
            "locale.candidates-dedupe");
-    // The embedded table is English: `language: "en"` keeps English over a satellite for the display language, and
-    // an English display language ahead of another one keeps it too (a regional English table may still load).
-    const std::vector<std::wstring> english{L"C:\\App\\Languages\\en\\RedPrism.resources.dll"};
-    const std::vector<std::wstring> britishFirst{L"C:\\App\\Languages\\en-GB\\RedPrism.resources.dll", L"C:\\App\\Languages\\en\\RedPrism.resources.dll"};
+    Expect(Localization::SatelliteCandidates(L"", L"fr", {}).empty() && Localization::SatelliteCandidates(L"C:\\App", L"fr/extra", {L"fr"}) == french,
+           "locale.only-module-relative-culture-names");
+    // English ends the preference list after the English-specific candidates.
+    const std::vector<std::wstring> english{L"C:\\App\\Lang\\RedPrism-en.dll", L"C:\\App\\Languages\\en\\RedPrism.resources.dll"};
+    const std::vector<std::wstring> britishFirst{L"C:\\App\\Lang\\RedPrism-en-GB.dll",
+                                                 L"C:\\App\\Languages\\en-GB\\RedPrism.resources.dll",
+                                                 L"C:\\App\\Lang\\RedPrism-en.dll",
+                                                 L"C:\\App\\Languages\\en\\RedPrism.resources.dll"};
     Expect(Localization::SatelliteCandidates(L"C:\\App", L"en", {L"fr-FR"}) == english &&
-               Localization::SatelliteCandidates(L"C:\\App", L"EN", {L"fr-FR"}).size() == 1 &&
+               Localization::SatelliteCandidates(L"C:\\App", L"EN", {L"fr-FR"}).size() == 2 &&
                Localization::SatelliteCandidates(L"C:\\App", L"", {L"en-GB", L"fr-FR"}) == britishFirst &&
-               Localization::SatelliteCandidates(L"C:\\App", L"de", {L"en-US", L"fr-FR"}).size() == 3,
+               Localization::SatelliteCandidates(L"C:\\App", L"de", {L"en-US", L"fr-FR"}).size() == 6,
            "locale.english-ends-the-candidates");
-    Expect(Localization::LoadSatelliteModule({L"C:\\App\\Languages\\zz\\RedPrism.resources.dll"}) == nullptr, "locale.missing-satellite");
+    Expect(Localization::LoadSatelliteModule({L"C:\\App\\Lang\\RedPrism-zz.dll"}) == nullptr, "locale.missing-satellite");
     Expect(! Localization::SystemUiLanguages().empty() && ! Localization::ExecutableDirectory().empty(), "locale.system-languages");
     std::wstring path(MAX_PATH, L'\0');
     path.resize(GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size())));

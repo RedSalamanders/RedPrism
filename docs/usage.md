@@ -132,9 +132,10 @@ offers to open the folder. Nothing is sent anywhere; the newest ten reports are 
 (`--self-test`, `--screenshot`, `--demo`, `--bench`) never touch that folder: their crash dumps go to
 `%TEMP%\RedPrism.Harness` instead, and `--crash-probe <dir>` writes its one dump to the directory you give it.
 
-A translated string table goes to `<RedPrism folder>\Languages\<tag>\RedPrism.resources.dll` (a resource-only
-DLL built from `RedPrism/RedPrism.rc` with the same ids); the `language` setting or Windows' display language
-picks it, and any missing string falls back to English.
+Place a translated resource-only DLL at `<RedPrism folder>\Lang\RedPrism-<tag>.dll`. Build it from
+`RedPrism/RedPrism.rc` with the same IDs. RedPrism selects it using the `language` setting or Windows display
+languages and falls back to English for missing strings. Existing satellite installations in
+`Languages\<tag>\RedPrism.resources.dll` still load.
 
 Project manifests use the format marker `com.redprism.project`. Packages written with a different marker require
 explicit conversion before this version can open them. The supported manifest versions and package layout are unchanged.

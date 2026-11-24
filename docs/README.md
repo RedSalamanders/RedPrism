@@ -121,7 +121,7 @@ as unsaved work.
 - **Settings, reports, access**: a JSON settings file under `%LocalAppData%\RedPrism` applies live as you edit
   it (theme, sample ring, panel width, JPEG quality, keyboard shortcuts) and remembers the window; a crash leaves a
   local minidump and the next start says where (nothing is uploaded); the chrome follows Windows high contrast and
-  exposes every control to UI Automation with a name; a `Languages\<tag>` satellite table translates the chrome.
+  exposes every control to UI Automation with a name; a `Lang\RedPrism-<tag>.dll` satellite table translates the chrome.
 
 Empty-document harness captures:
 

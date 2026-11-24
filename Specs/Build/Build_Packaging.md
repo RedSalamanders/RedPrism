@@ -45,7 +45,7 @@ is no auto-update: RedPrism never contacts a server ([`Core_CrashHandling.md`](.
 | `README.md`, `usage.md` | `docs/README.md` and `docs/usage.md` as shipped |
 | `LICENSE.txt` | The project's MIT license; third-party notices retain their own licenses |
 | `THIRD-PARTY-NOTICES.md` | The list of every component the package compiles in or ships, with its license |
-| `Languages\<tag>\RedPrism.resources.dll` | Not staged in v1 (no translation exists); a release with one adds the folder ([`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md), Strings) |
+| `Lang\RedPrism-<tag>.dll` | Releases with translated resource modules stage them in this shared layout. v1 contains the embedded English table. [Chrome strings](../UI/UI_ApplicationChrome.md#strings) |
 
 Nothing else: no settings template (the app writes it), no crash folder, no registry work.
 
