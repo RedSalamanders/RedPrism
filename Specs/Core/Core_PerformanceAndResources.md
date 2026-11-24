@@ -63,7 +63,7 @@ admission cache does not replace incremental unique retained-storage accounting 
 History trim includes the retained shape-source raster as well as images, masks and thumbnails, deduplicated
 against those same owners in the live document.
 
-- Idle, hidden, minimized, suspended, display-off, and occluded execution MUST block on events. Busy polling is
+- Idle, hidden, minimized, cloaked, suspended and display-off execution MUST block on events. Busy polling is
   prohibited. The shell MUST NOT arm a periodic timer to keep the window alive.
 - Steady-state Present of an already-created swap chain MUST NOT heap-allocate. C1's clear-color frame uses the
   existing device, context, RTV, and waitable handle only.
@@ -75,8 +75,10 @@ against those same owners in the live document.
   Accepted utility jobs may retain their separate bounded off-screen targets and shared raster residents until
   completion; they never call Present. The last utility owner releases those targets. No utility allocation
   is kept merely to keep a hidden window active.
-- After `Present` reports `DXGI_STATUS_OCCLUDED`, stop content presents, wait for the DXGI factory occlusion-status
-  window message, and recover with `DXGI_PRESENT_TEST` only. Occlusion polling is prohibited.
+- The application schedules Present from show, minimize, cloak, display power and system suspend events. Its
+  UI thread reads `DWMWA_CLOAKED` on startup and when a cloak event reaches its window. The flip-model renderer
+  uses `DXGI_STATUS_OCCLUDED` only to classify the completed attempt. Occlusion polling and test presents
+  are prohibited.
 - The swap chain MUST be created with `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` and maximum frame latency 1.
   `ResizeBuffers` keeps that flag. Before building a frame the UI thread waits on the waitable together with the
   message queue, job event and settings watch so `Present` does not block the UI thread. Settled idle waits on

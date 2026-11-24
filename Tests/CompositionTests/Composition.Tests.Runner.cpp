@@ -408,27 +408,11 @@ void TestFrameLoop()
                MarchingAntsPhase(960) == 0.0f,
            "ants.step-cadence");
     Expect(MillisecondsToNextAntStep(0) == 120 && MillisecondsToNextAntStep(119) == 1 && MillisecondsToNextAntStep(125) == 115, "ants.wait-until-next-step");
-    // Occluded without the DXGI occlusion message: probe on each wake instead of waiting for it forever.
-    HostFrameState occluded;
-    occluded.windowVisible     = true;
-    occluded.displayPoweredOn  = true;
-    occluded.rendererSuspended = false;
-    occluded.rendererOccluded  = true;
-    occluded.frameInvalidated  = false;
-    Expect(SelectHostFrameAction(occluded) == HostFrameAction::WaitForMessage, "frame.occluded-waits-for-message");
-    occluded.occlusionMessages = false;
-    Expect(SelectHostFrameAction(occluded) == HostFrameAction::ProbeOcclusion, "frame.occluded-unregistered-probes");
-    // A screenshot capture draws whatever the display's power, the window's visibility or its occlusion say.
-    HostFrameState capture;
-    capture.windowVisible     = false;
-    capture.displayPoweredOn  = false;
-    capture.rendererSuspended = false;
-    capture.rendererOccluded  = true;
-    capture.frameInvalidated  = true;
-    capture.capturing         = true;
+    // A screenshot capture has its own frame demand while the desktop cannot present.
+    HostFrameState capture{.windowCloaked = true, .rendererSuspended = false, .capturing = true};
     Expect(SelectHostFrameAction(capture) == HostFrameAction::Render, "frame.capture-draws-with-display-off");
     capture.capturing = false;
-    Expect(SelectHostFrameAction(capture) == HostFrameAction::WaitForMessage, "frame.display-off-waits");
+    Expect(SelectHostFrameAction(capture) == HostFrameAction::WaitForMessage, "frame.hidden-cloaked-display-off-waits");
 }
 
 void TestBlendModes(Harness& h)

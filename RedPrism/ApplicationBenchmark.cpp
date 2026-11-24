@@ -7,6 +7,7 @@
 #include "BenchmarkMachine.h"
 #include "BrushStroke.h"
 #include "ChromeHost.h"
+#include "FrameScheduler.h"
 #include "Kernels.h"
 #include "UiBenchmark.h"
 #include "VersionInfo.h"
@@ -1210,7 +1211,7 @@ void Application::AdvanceUiBenchmark() noexcept
         FailUiBenchmark("display-authority-unknown");
         return;
     }
-    if (! _windowVisible || (! _displayPoweredOn && ! state.smoke) || _renderer.IsSuspended() || _renderer.IsOccluded())
+    if (! CanRenderHostFrame(ReadHostFrameState()) || _renderer.IsOccluded())
     {
         FailUiBenchmark("presentation-unavailable");
         return;

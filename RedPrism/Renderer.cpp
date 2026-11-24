@@ -366,31 +366,7 @@ HRESULT Renderer::CreateSwapChain() noexcept
         return result;
     }
 
-    _factory                   = std::move(factory);
-    _occlusionStatusCookie     = 0;
-    _occlusionStatusRegistered = false;
-    RegisterOcclusionStatus();
     return S_OK;
-}
-
-void Renderer::RegisterOcclusionStatus() noexcept
-{
-    if (! _factory || ! _window || _occlusionStatusRegistered)
-    {
-        return;
-    }
-    DWORD occlusionStatusCookie = 0;
-    const HRESULT result        = _factory->RegisterOcclusionStatusWindow(_window, kOcclusionStatusMessage, &occlusionStatusCookie);
-    if (FAILED(result))
-    {
-        // A second registration on the same HWND (device recovery) can return E_ACCESSDENIED while the swap chain
-        // is already usable. Present still runs; an occluded window then probes on each wake (OcclusionMessages)
-        // and tries registering again, instead of waiting for a message that never comes (RF-410).
-        OutputDebugStringW(L"Occlusion status was not registered; an occluded window probes on each wake.\n");
-        return;
-    }
-    _occlusionStatusCookie     = occlusionStatusCookie;
-    _occlusionStatusRegistered = true;
 }
 
 HRESULT Renderer::CreateRenderTarget(UINT width, UINT height) noexcept
@@ -716,34 +692,6 @@ HRESULT Renderer::RecoverDeviceForTest() noexcept
     return RecoverDevice();
 }
 
-HRESULT Renderer::ProbeOcclusion() noexcept
-{
-    if (! _swapChain || ! _occluded)
-    {
-        return E_UNEXPECTED;
-    }
-    // A registration that failed is retried here, so the next occlusion can wait for its message again.
-    RegisterOcclusionStatus();
-
-    const HRESULT result = _swapChain->Present(0, DXGI_PRESENT_TEST);
-    if (FAILED(result) && DeviceLostAfter(result))
-    {
-        // The rebuilt swap chain is not occluded: the next frame draws.
-        return RecoverDevice();
-    }
-    if (result == DXGI_STATUS_OCCLUDED)
-    {
-        return S_FALSE;
-    }
-    if (FAILED(result))
-    {
-        return result;
-    }
-
-    _occluded = false;
-    return S_OK;
-}
-
 bool Renderer::IsSuspended() const noexcept
 {
     return _suspended;
@@ -751,7 +699,7 @@ bool Renderer::IsSuspended() const noexcept
 
 bool Renderer::IsOccluded() const noexcept
 {
-    return _occludedForTest.value_or(_occluded);
+    return _occluded;
 }
 
 bool Renderer::IsWarp() const noexcept
@@ -773,12 +721,6 @@ void Renderer::ReleaseDeviceResources() noexcept
     {
         (void)WaitForSingleObject(_frameLatencyWaitable.get(), 1000);
     }
-    if (_factory && _occlusionStatusRegistered)
-    {
-        _factory->UnregisterOcclusionStatus(_occlusionStatusCookie);
-        _occlusionStatusCookie     = 0;
-        _occlusionStatusRegistered = false;
-    }
     if (_context)
     {
         _context->ClearState();
@@ -794,7 +736,6 @@ void Renderer::ReleaseDeviceResources() noexcept
     {
         _context->Flush();
     }
-    _factory.reset();
     _context1.reset();
     _context.reset();
     _device.reset();

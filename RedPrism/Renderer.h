@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <d3d11_1.h>
 #include <dxgi1_3.h>
-#include <optional>
 #include <windows.h>
 
 #pragma warning(push)
@@ -24,8 +23,6 @@ struct CanvasDocument;
 class Renderer final
 {
 public:
-    static constexpr UINT kOcclusionStatusMessage = WM_APP + 1;
-
     // The stages of a frame, in order (Rendering_Composition.md "Present order").
     enum class Stage : std::uint8_t
     {
@@ -167,11 +164,6 @@ public:
     {
         return _deviceGeneration;
     }
-    // Whether DXGI's occlusion-status message is registered; without it an occluded window probes on each wake.
-    [[nodiscard]] bool OcclusionMessages() const noexcept
-    {
-        return _occlusionStatusRegistered;
-    }
     // The color behind the canvas (Specs/UI/UI_ApplicationChrome.md, Theme): dark, light or the system window
     // color under high contrast.
     void SetClearColor(const std::array<float, 4>& color) noexcept
@@ -190,7 +182,6 @@ public:
     [[nodiscard]] ID3D11DeviceContext* Context() const noexcept;
     [[nodiscard]] UINT Width() const noexcept;
     [[nodiscard]] UINT Height() const noexcept;
-    HRESULT ProbeOcclusion() noexcept;
     HRESULT EnsureDeviceForWindowMonitor() noexcept;
     [[nodiscard]] HANDLE FrameLatencyWaitableObject() const noexcept;
     [[nodiscard]] bool IsSuspended() const noexcept;
@@ -208,13 +199,6 @@ public:
         _injectedStage  = stage;
         _injectedResult = result;
         _injecting      = true;
-    }
-    // Self-test seam: IsOccluded() reports `occluded` (the state a Present that reported DXGI_STATUS_OCCLUDED
-    // leaves, or not) until cleared with nullopt, whatever the real Present of the hidden harness window returns
-    // meanwhile (DWM may report it occluded while the displays sleep).
-    void SetOccludedForTest(std::optional<bool> occluded) noexcept
-    {
-        _occludedForTest = occluded;
     }
 
 private:
@@ -234,18 +218,16 @@ private:
     // Rebuilds after a stage found the device gone: S_FALSE when rebuilt, the rebuild's failure otherwise.
     HRESULT RecoverFromStage() noexcept;
     [[nodiscard]] HRESULT StageResult(Stage stage, HRESULT result) noexcept;
-    void RegisterOcclusionStatus() noexcept;
 
-    std::uint64_t _selectionOutlineDraws = 0;
-    std::uint64_t _lassoDraftDraws       = 0;
-    HRESULT _lassoDraftFailure           = S_OK;
-    HRESULT _selectionOutlineFailure     = S_OK;
-    HWND _window                         = nullptr;
-    ChromeHost* _chrome                  = nullptr;
-    bool _forceWarp                      = false;
-    bool _suspended                      = true;
-    bool _occluded                       = false;
-    std::optional<bool> _occludedForTest;
+    std::uint64_t _selectionOutlineDraws       = 0;
+    std::uint64_t _lassoDraftDraws             = 0;
+    HRESULT _lassoDraftFailure                 = S_OK;
+    HRESULT _selectionOutlineFailure           = S_OK;
+    HWND _window                               = nullptr;
+    ChromeHost* _chrome                        = nullptr;
+    bool _forceWarp                            = false;
+    bool _suspended                            = true;
+    bool _occluded                             = false;
     FrameReadbackForTest _frameReadbackForTest = nullptr;
     void* _frameReadbackContextForTest         = nullptr;
     bool _suppressSelectionOutlineForTest      = false;
@@ -256,14 +238,11 @@ private:
     wil::com_ptr_nothrow<ID3D11Device> _device;
     wil::com_ptr_nothrow<ID3D11DeviceContext> _context;
     wil::com_ptr_nothrow<ID3D11DeviceContext1> _context1;
-    wil::com_ptr_nothrow<IDXGIFactory2> _factory;
     wil::com_ptr_nothrow<IDXGISwapChain1> _swapChain;
     wil::com_ptr_nothrow<ID3D11RenderTargetView> _renderTarget;
     wil::unique_handle _frameLatencyWaitable;
     DeviceIdentity _deviceInfo{};
     HMONITOR _deviceMonitor            = nullptr;
-    DWORD _occlusionStatusCookie       = 0;
-    bool _occlusionStatusRegistered    = false;
     HRESULT _canvasFailure             = S_OK;
     bool _canvasDrawn                  = false;
     std::uint64_t _presentCount        = 0;

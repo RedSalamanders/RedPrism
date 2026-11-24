@@ -419,18 +419,17 @@ frame action (`RedPrism/FrameScheduler.h`). The first matching row wins:
 | State | Action |
 | --- | --- |
 | Completions or UI actions pending | Return to the outer completion/action pump, before visibility checks |
-| Hidden, display-off, or swap chain suspended (zero client size) | Block on messages, job wake and settings watch |
-| Occluded, no occlusion-status message | Block on messages, job wake and settings watch |
-| Occluded, occlusion-status message received | `Present(0, DXGI_PRESENT_TEST)` then re-evaluate |
-| Visible, powered, not occluded, not suspended, frame invalidated | Wait on frame latency, messages, job wake and settings watch; only frame latency proceeds to `Renderer::Render` |
-| Visible and settled (not invalidated) | Block on messages, job wake and settings watch |
+| Hidden, minimized, cloaked, display-off, system suspended, or swap chain suspended | Block on messages, job wake and settings watch |
+| Presentation available, frame invalidated or chrome animating | Wait on frame latency, messages, job wake and settings watch. Only frame latency proceeds to `Renderer::Render`. |
+| Presentation available and settled | Block on messages, job wake and settings watch |
 
 `Renderer::Render` is the only Present path. `WM_PAINT` MAY set the invalidation bit and MUST `ValidateRect`; it MUST
 NOT call `Present`, `BeginPaint` text, or GDI fill.
 
 The bounded `--bench ui-smoke` correctness harness treats display power as on for frame selection and surface
-retention, while preserving the observed power state in diagnostics. It still honors visibility, suspension and
-occlusion. Full benchmark modes use the ordinary frame policy and refuse unavailable-presentation measurements.
+retention, while preserving the observed power state in diagnostics. It also observes visibility, minimize,
+cloak and suspension. Full benchmark modes use the ordinary frame policy and require a successful presentation
+before accepting a frame.
 
 Frame construction and the shared message/completion/action primitives expose optional allocation-free timing
 scopes (`Common/UiTiming.*`). The owner may install a scoped fixed-histogram sink; ETW may independently enable

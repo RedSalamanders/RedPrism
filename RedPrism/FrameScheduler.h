@@ -5,28 +5,30 @@
 enum class HostFrameAction
 {
     WaitForMessage,
-    ProbeOcclusion,
     Render,
     DrainCompletions,
 };
 
 struct HostFrameState final
 {
-    bool windowVisible          = false;
-    bool displayPoweredOn       = false;
-    bool rendererSuspended      = true;
-    bool rendererOccluded       = false;
-    bool occlusionStatusChanged = false;
-    bool frameInvalidated       = true;
-    bool chromeAnimating        = false;
-    // The DXGI occlusion-status message is registered. Without it no message ever says the window is visible
-    // again, so an occluded window probes (Present TEST) on each wake instead of waiting for one (RF-410).
-    bool occlusionMessages = true;
-    // `--screenshot`: the capture needs presented frames whatever the window's visibility, the display's power or
-    // the occlusion state says (RF-409).
+    bool windowVisible     = false;
+    bool windowMinimized   = false;
+    bool windowCloaked     = false;
+    bool displayPoweredOn  = false;
+    bool systemSuspended   = false;
+    bool rendererSuspended = true;
+    bool frameInvalidated  = true;
+    bool chromeAnimating   = false;
+    // `--screenshot` uses its owned capture window and requests frames even when desktop presentation is unavailable (RF-409).
     bool capturing          = false;
     bool completionsPending = false;
 };
+
+[[nodiscard]] constexpr bool CanRenderHostFrame(const HostFrameState& state) noexcept
+{
+    return state.capturing || (state.windowVisible && ! state.windowMinimized && ! state.windowCloaked && state.displayPoweredOn && ! state.systemSuspended &&
+                               ! state.rendererSuspended);
+}
 
 [[nodiscard]] constexpr HostFrameAction SelectHostFrameAction(const HostFrameState& state) noexcept
 {
@@ -35,19 +37,7 @@ struct HostFrameState final
         return HostFrameAction::DrainCompletions;
     }
 
-    const bool visible   = state.windowVisible || state.capturing;
-    const bool displayOn = state.displayPoweredOn || state.capturing;
-    const bool suspended = state.rendererSuspended && ! state.capturing;
-    const bool occluded  = state.rendererOccluded && ! state.capturing;
-    if (! visible || ! displayOn || suspended)
-    {
-        return HostFrameAction::WaitForMessage;
-    }
-    if (occluded)
-    {
-        return state.occlusionStatusChanged || ! state.occlusionMessages ? HostFrameAction::ProbeOcclusion : HostFrameAction::WaitForMessage;
-    }
-    if (! state.frameInvalidated && ! state.chromeAnimating)
+    if (! CanRenderHostFrame(state) || (! state.frameInvalidated && ! state.chromeAnimating))
     {
         return HostFrameAction::WaitForMessage;
     }
