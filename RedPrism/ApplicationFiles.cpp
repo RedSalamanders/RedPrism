@@ -117,7 +117,7 @@ public:
         {
             return;
         }
-        MessageBoxW(window, LoadStringResource(nullptr, stringId).c_str(), LoadStringResource(nullptr, IDS_APP_TITLE).c_str(), MB_OK | MB_ICONERROR);
+        (void)MessageBoxResource(window, nullptr, stringId, IDS_APP_TITLE, MB_OK | MB_ICONERROR);
     }
 
     void ShowFormattedError(HWND window, const std::wstring& text) const noexcept override
