@@ -1,1 +1,0 @@
-- Use the pinned engine for application vcpkg checkouts, overlay generation and manifest arguments.
