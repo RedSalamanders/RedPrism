@@ -213,9 +213,12 @@ if ($Configuration -eq 'ASan Debug' -and 'Stress' -in $Suites) {
 }
 
 if('Runtime' -in $Suites){
+Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.Policy.psm1')
+$probeFolder = Assert-CiContainedPath -Root $repoRoot -Path (Join-Path $repoRoot '.build/crash-probe-artifacts')
 foreach ($probeKind in @('main', 'worker')) {
     Write-Host "Running $probeKind crash probe..." -ForegroundColor Cyan
-    $crashRoot = Join-Path $evidence.Path ("crash-probe-$probeKind-$Platform-$($Configuration -replace '\s','')-" + [guid]::NewGuid().ToString('N'))
+    $crashRoot = Assert-CiContainedPath -Root $repoRoot -Path (Join-Path $probeFolder ($probeKind + '-' + [guid]::NewGuid().ToString('N')))
+    [void][IO.Directory]::CreateDirectory($crashRoot)
     $crashErr = Join-Path $evidence.Path "RedPrism.crash-probe-$probeKind.err.log"
     $probeArguments = @('--crash-probe', ('"' + $crashRoot + '"'))
     if ($probeKind -eq 'worker') { $probeArguments += '--crash-probe-worker' }
@@ -228,12 +231,16 @@ foreach ($probeKind in @('main', 'worker')) {
         throw "The $probeKind crash probe timed out (PID $($probe.Id)); it was not terminated."
     }
     $probe.WaitForExit()
-    $dumps = @(Get-ChildItem -LiteralPath $crashRoot -Filter 'RedPrism-*.dmp' -ErrorAction SilentlyContinue)
+    $dumps = @(Get-ChildItem -LiteralPath $crashRoot -Filter 'RedPrism-report-*.dmp' -File -ErrorAction SilentlyContinue)
     $pendingMarker = Join-Path $crashRoot 'pending.txt'
     $pendingText = if (Test-Path -LiteralPath $pendingMarker) { (Get-Content -LiteralPath $pendingMarker -Raw).Trim() } else { '' }
-    if ($null -eq $probe.ExitCode -or $probe.ExitCode -eq 0 -or $dumps.Count -ne 1 -or $dumps[0].Length -le 0 -or $pendingText -ne $dumps[0].FullName) {
+    if ($null -eq $probe.ExitCode -or $probe.ExitCode -eq 0 -or $dumps.Count -ne 1 -or $dumps[0].Length -lt 4 -or $pendingText -ne $dumps[0].FullName) {
         throw "The $probeKind crash probe did not leave one dump and marker in $crashRoot (exit $($probe.ExitCode), $($dumps.Count) dumps, marker '$pendingText')."
     }
+    $reader = [IO.BinaryReader]::new([IO.File]::OpenRead($dumps[0].FullName))
+    try {
+        if ($reader.ReadUInt32() -ne 0x504D444D) { throw "The $probeKind crash probe did not write an MDMP header." }
+    } finally { $reader.Dispose() }
     Write-Host "PASS $probeKind crash probe: $($dumps[0].Name) ($([math]::Round($dumps[0].Length / 1KB)) KB)"
 
 }

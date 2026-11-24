@@ -1616,30 +1616,45 @@ void TestCrashDumps()
 {
     Expect(CrashDumps::DefaultDirectory().ends_with(L"\\RedPrism\\Crashes"), "crash.default-directory");
     std::error_code error;
-    const std::filesystem::path root = std::filesystem::temp_directory_path(error) / (L"RedPrism.HostTests.crash-" + std::to_wstring(GetCurrentProcessId()));
-    std::filesystem::remove_all(root, error);
-    std::filesystem::create_directories(root, error);
-    bool created = true;
-    for (int index = 10; index < 22; ++index)
+    const std::filesystem::path root{CrashDumps::HarnessDirectory()};
+    const bool ready =
+        ! root.empty() && std::filesystem::create_directories(root, error) && ! error && CrashDumps::HarnessDirectory(root.c_str()) == root.wstring();
+    Expect(ready, "crash.owned-fixture");
+    if (! ready)
     {
-        const std::wstring name = L"RedPrism-20260101-0000" + std::to_wstring(index) + L"-1.dmp";
-        created                 = SettingsStore::WriteFileAtomic((root / name).wstring(), "x") && created;
+        return;
     }
-    Expect(created && CrashDumps::PruneDumps(root.wstring(), 10) == 2 && ! std::filesystem::exists(root / L"RedPrism-20260101-000010-1.dmp", error) &&
-               ! std::filesystem::exists(root / L"RedPrism-20260101-000011-1.dmp", error) &&
-               std::filesystem::exists(root / L"RedPrism-20260101-000012-1.dmp", error) &&
-               std::filesystem::exists(root / L"RedPrism-20260101-000021-1.dmp", error) && CrashDumps::PruneDumps(root.wstring(), 10) == 0,
-           "crash.prune-keeps-newest");
+    const auto legacy    = root / L"RedPrism-20260101-000001-1.dmp";
+    const auto unrelated = root / L"RedPrism-report-unowned.dmp";
+    Expect(SettingsStore::WriteFileAtomic(legacy.wstring(), "legacy") && SettingsStore::WriteFileAtomic(unrelated.wstring(), "unrelated") &&
+               CrashDumps::PruneDumps(root.wstring(), CrashDumps::kKeepNewest) == 0,
+           "crash.empty-owned-collection-preserves-legacy-and-unrelated");
+    const auto report = [&](int index) { return root / (L"RedPrism-report-" + std::wstring(18, L'0') + std::to_wstring(index) + L"-0000000001.dmp"); };
+    bool created      = true;
+    for (int index = 10; index < 20; ++index)
+    {
+        created = SettingsStore::WriteFileAtomic(report(index).wstring(), "x") && created;
+    }
+    Expect(created && CrashDumps::PruneDumps(root.wstring(), CrashDumps::kKeepNewest) == 0, "crash.ten-owned-reports-are-kept");
+    Expect(SettingsStore::WriteFileAtomic(report(20).wstring(), "x") && CrashDumps::PruneDumps(root.wstring(), CrashDumps::kKeepNewest) == 1 &&
+               ! std::filesystem::exists(report(10), error) && std::filesystem::exists(report(11), error) && std::filesystem::exists(report(20), error) &&
+               std::filesystem::exists(legacy, error) && std::filesystem::exists(unrelated, error),
+           "crash.prune-keeps-newest-ten-owned-reports");
     wchar_t path[CrashDumps::kPathCapacity] = {};
     const bool written                      = CrashDumps::WriteMiniDump(root.c_str(), nullptr, path, CrashDumps::kPathCapacity);
     const std::wstring dump                 = path;
-    Expect(written && dump.starts_with(root.wstring() + L"\\RedPrism-") && dump.ends_with(L".dmp") && std::filesystem::file_size(dump, error) > 0,
+    Expect(written && dump.starts_with(root.wstring() + L"\\RedPrism-report-") && dump.ends_with(L".dmp") && std::filesystem::file_size(dump, error) > 0,
            "crash.dump-written");
     Expect(CrashDumps::RecordPending(root.c_str(), path) && CrashDumps::TakePending(root.wstring()) == dump &&
                ! CrashDumps::TakePending(root.wstring()).has_value(),
            "crash.pending-round-trip");
+    Expect(CrashDumps::RecordPending(root.c_str(), legacy.c_str()) && CrashDumps::TakePending(root.wstring()) == legacy.wstring(),
+           "crash.legacy-pending-report-can-be-claimed");
+    const auto outside = root.parent_path() / L"RedPrism-outside.dmp";
+    Expect(CrashDumps::RecordPending(root.c_str(), outside.c_str()) && ! CrashDumps::TakePending(root.wstring()).has_value() &&
+               ! std::filesystem::exists(root / L"pending.txt", error),
+           "crash.pending-path-stays-in-owned-directory");
     Expect(! CrashDumps::WriteMiniDump(L"", nullptr, path, CrashDumps::kPathCapacity) && path[0] == 0, "crash.dump-needs-a-directory");
-    std::filesystem::remove_all(root, error);
 }
 
 // ── Localization (C14) ────────────────────────────────────────

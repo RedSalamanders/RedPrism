@@ -34,21 +34,6 @@ constexpr bool kDebugBuild = true;
 constexpr bool kDebugBuild = false;
 #endif
 
-// A per-run folder under the system temp directory for harness-mode crash dumps (--self-test, --screenshot, a
-// --demo, --bench): never the user's real %LocalAppData%\RedPrism\Crashes, so a crashing harness run cannot leave
-// a pending.txt that trips the "crashed last time" prompt on the next ordinary launch (RF-708,
-// Specs/Core/Core_CrashHandling.md). Falls back to the ordinary default directory if the temp path is unavailable.
-[[nodiscard]] std::wstring HarnessCrashDirectory()
-{
-    wchar_t tempPath[MAX_PATH]{};
-    const DWORD tempLength = GetTempPathW(static_cast<DWORD>(MAX_PATH), tempPath);
-    if (tempLength == 0 || tempLength >= MAX_PATH)
-    {
-        return CrashDumps::DefaultDirectory();
-    }
-    return std::wstring{tempPath, tempLength} + L"RedPrism.Harness\\" + std::to_wstring(GetCurrentProcessId());
-}
-
 #if defined(_DEBUG)
 // Installed only for harness runs. A Debug assertion or debug-heap error report has no one to click a dialog, and
 // the CRT's own default handling does not always abort by itself on a report (RF-702,
@@ -219,9 +204,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
 
     // Crash handling comes first so every later failure leaves a dump (Specs/Core/Core_CrashHandling.md); the
     // probe raises a fault through it and never reaches the window.
-    const std::wstring crashDirectory = parsed.crashProbeDirectory != nullptr ? std::wstring{parsed.crashProbeDirectory}
-                                        : harness                             ? HarnessCrashDirectory()
-                                                                              : CrashDumps::DefaultDirectory();
+    const std::wstring crashDirectory =
+        harness || parsed.crashProbeDirectory ? CrashDumps::HarnessDirectory(parsed.crashProbeDirectory) : CrashDumps::DefaultDirectory();
+    if (parsed.crashProbeDirectory && crashDirectory.empty())
+    {
+        return 2;
+    }
     if (FAILED(CrashDumps::InstallCrashHandler(crashDirectory.c_str(), parsed.crashProbeWorker)))
     {
         return 1;
@@ -501,6 +489,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         satellite.reset(Localization::LoadSatelliteModule(
             Localization::SatelliteCandidates(Localization::ExecutableDirectory(), settings.language, Localization::SystemUiLanguages())));
         SetStringResourceSatellite(satellite.get());
+    }
+    application->UseSettings(std::move(settingsPath), settings);
+
+    const HRESULT processing = application->InitializeProcessing();
+    if (! harness && SUCCEEDED(processing))
+    {
         // A crash last time: say where the report went (nothing is uploaded) and offer its folder.
         if (const std::optional<std::wstring> pending = CrashDumps::TakePending(crashDirectory); pending.has_value())
         {
@@ -514,10 +508,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         }
         (void)CrashDumps::PruneDumps(crashDirectory, CrashDumps::kKeepNewest);
     }
-    application->UseSettings(std::move(settingsPath), settings);
-
-    const HRESULT processing = application->InitializeProcessing();
-    int exitCode             = 1;
+    int exitCode = 1;
     if (SUCCEEDED(processing))
     {
         const std::span<const std::wstring_view> inputPaths{parsed.inputPaths.data(), parsed.inputPathCount};
