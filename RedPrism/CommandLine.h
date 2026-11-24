@@ -78,19 +78,19 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
                               L"and exit 0 when the host works.",
                               L"Diagnostics"},
     RedPrismCommandLineSwitch{RedPrismSwitch::Screenshot,
+                              L"--capture",
                               L"--screenshot",
-                              nullptr,
                               RedPrismSwitchValue::Separate,
                               L"<png>",
                               L"Show the window without activating it, present chrome, capture it through "
-                              L"Windows.Graphics.Capture, and exit: 0 written, 8 failed.",
+                              L"Windows.Graphics.Capture. Exit 0 when written, 8 when unavailable, or 9 when capture fails.",
                               L"Diagnostics"},
     RedPrismCommandLineSwitch{RedPrismSwitch::Dpi,
                               L"--dpi",
                               nullptr,
                               RedPrismSwitchValue::Separate,
                               L"<96|144>",
-                              L"Override layout DPI for --screenshot (empty-document shell at 96 or 144).",
+                              L"Override capture layout DPI (empty-document shell at 96 or 144).",
                               L"Diagnostics"},
     RedPrismCommandLineSwitch{RedPrismSwitch::Demo,
                               L"--demo",
@@ -209,7 +209,7 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
     }
     for (const RedPrismCommandLineSwitch& entry : kRedPrismCommandLineSwitches)
     {
-        if (argument == entry.name)
+        if (argument == entry.name || (entry.id != RedPrismSwitch::Help && entry.aliases && argument == entry.aliases))
         {
             return &entry;
         }
@@ -544,7 +544,7 @@ struct RedPrismCommandLineScan final
     text += L"RedPrism — Windows raster composition\n\n";
     text += L"Usage: RedPrism.exe [--warp]\n";
     text += L"       RedPrism.exe --self-test [--warp]\n";
-    text += L"       RedPrism.exe --screenshot <png> [--warp] [--dpi 96|144]\n";
+    text += L"       RedPrism.exe --capture <png> [--warp] [--dpi 96|144]\n";
     text += L"       RedPrism.exe [--isa scalar|sse2|avx2|avx512|neon]\n";
     text += L"       RedPrism.exe --crash-probe <directory>\n";
     text += L"       RedPrism.exe --crash-probe <directory> --crash-probe-worker\n";

@@ -224,7 +224,9 @@ void TestCommandLine() noexcept
     Expect(RedPrismIsHelpArgument(L"--help") && RedPrismIsHelpArgument(L"/?"), "cli.help-aliases");
     Expect(RedPrismFindSwitch(L"--warp") != nullptr, "cli.warp");
     Expect(RedPrismFindSwitch(L"--self-test") != nullptr, "cli.self-test");
-    Expect(RedPrismFindSwitch(L"--screenshot") != nullptr, "cli.screenshot");
+    Expect(RedPrismFindSwitch(L"--capture") == &RedPrismSwitchInfo(RedPrismSwitch::Screenshot) &&
+               RedPrismFindSwitch(L"--screenshot") == &RedPrismSwitchInfo(RedPrismSwitch::Screenshot),
+           "cli.capture-aliases");
     Expect(RedPrismFindSwitch(L"--dpi") != nullptr, "cli.dpi");
     Expect(RedPrismFindSwitch(L"--demo") != nullptr, "cli.demo");
     Expect(RedPrismFindSwitch(L"--crash-probe-worker") != nullptr, "cli.crash-probe-worker");
