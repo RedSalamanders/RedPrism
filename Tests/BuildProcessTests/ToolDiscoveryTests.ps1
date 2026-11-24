@@ -48,6 +48,11 @@ if ($packageScript -notmatch 'Find-RedPrismVisualStudioInstallationPath' -or $pa
 if ($formatScript -notmatch 'Install-CiFormatter' -or $formatScript -match 'vswhere|Llvm|Get-Command') {
     throw 'format.ps1 no longer takes clang-format from the pinned engine formatter alone.'
 }
+$packageBuild = $packageScript.IndexOf('& (Join-Path $repoRoot ''build.ps1'')', [StringComparison]::Ordinal)
+$packageDiscovery = $packageScript.IndexOf('Import-Module (Join-Path $repoRoot ''Build/VisualStudioDiscovery.psm1'')', [StringComparison]::Ordinal)
+if ($packageBuild -lt 0 -or $packageDiscovery -le $packageBuild) {
+    throw 'package.ps1 must bind Visual Studio discovery after the nested build reloads the module.'
+}
 Write-Host 'PASS tooldiscovery.scripts-use-shared-helper'
 
 # package.ps1 uses Start-Process -Environment, a PowerShell 7.4+ parameter: it must declare that requirement so an

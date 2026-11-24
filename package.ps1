@@ -49,7 +49,6 @@ if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path $repoRoot '.build\packages'
 }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
-Import-Module (Join-Path $repoRoot 'Build\VisualStudioDiscovery.psm1') -Force
 
 function Find-Dumpbin([string] $VisualStudio) {
     if (-not $VisualStudio) {
@@ -98,6 +97,8 @@ if (-not $SkipBuild) {
         throw "build.ps1 failed with exit code $LASTEXITCODE."
     }
 }
+# The nested build reloads discovery in its own scope. Bind the package caller after it returns.
+Import-Module (Join-Path $repoRoot 'Build/VisualStudioDiscovery.psm1') -Scope Local -Force
 Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
 $effectiveBuildNumber = if ($BuildNumber -gt 0) { $BuildNumber } else { Get-ScopedBuildNumber -Root $repoRoot -BaseRef HEAD }
 $attestation = Join-Path $outputRoot 'build-attestation.json'
