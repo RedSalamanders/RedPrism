@@ -144,10 +144,18 @@ if ($volume.FileSystem -eq 'NTFS') {
         $shared = Join-Path $outside 'shared.bin'
         [IO.File]::WriteAllText($shared, 'shared payload')
         $alias = Join-Path $run.Path 'shared.bin'
-        [void](New-Item -ItemType HardLink -Path $alias -Target $shared)
+        [void](New-Item -ItemType HardLink -Path ('\\?\'+[IO.Path]::GetFullPath($alias)) -Target ('\\?\'+[IO.Path]::GetFullPath($shared)))
         [IO.File]::SetAttributes($shared, [IO.FileAttributes]::ReadOnly)
-        $handle = [TestRunEvidenceV2.Native]::Pin($shared, $false)
-        try { $identity = [TestRunEvidenceV2.Native]::Identity($handle) } finally { $handle.Dispose() }
+        # A second public run observes another name for the same NTFS file.
+        $control = Start-TestRunEvidence (New-Fixture 'i') @{scenario='shared-payload-identity-control'}
+        try {
+            $controlAlias = Join-Path $control.Path 'shared.bin'
+            [void](New-Item -ItemType HardLink -Path ('\\?\'+[IO.Path]::GetFullPath($controlAlias)) -Target ('\\?\'+[IO.Path]::GetFullPath($shared)))
+            Complete-TestRunEvidence $control $true
+            $controlManifest = Get-Content (Join-Path $control.Directory 'completed.json') -Raw | ConvertFrom-Json
+            $identity = $controlManifest.payload[0].identity
+            Assert-Evidence (-not [string]::IsNullOrWhiteSpace($identity)) 'The hard-link control lacked a file identity.'
+        } finally { if (-not $control.Closed) { Complete-TestRunEvidence $control $false } }
         Complete-TestRunEvidence $run $true
         $sharedManifest = Get-Content (Join-Path $run.Directory 'completed.json') -Raw | ConvertFrom-Json
         Assert-Evidence ($sharedManifest.payload[0].identity -ceq $identity -and
