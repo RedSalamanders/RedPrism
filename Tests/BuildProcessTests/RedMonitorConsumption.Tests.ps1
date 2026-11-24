@@ -24,7 +24,7 @@ $lockPath=Join-Path $fixture 'Dependencies/RedMonitor.lock.json'
 $baseline=[IO.File]::ReadAllText((Join-Path $RepositoryRoot 'Dependencies/RedMonitor.lock.json'))
 [IO.File]::WriteAllText($lockPath,$baseline)
 $results=[Collections.Generic.List[object]]::new()
-function Invoke-Control([bool]$Pass,[string]$Name){
+function Invoke-Control([bool]$Pass,[string]$Name,[string]$ExpectedError){
  $start=[Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
  foreach($arg in @('-NoProfile','-File',$verify,'-RepositoryRoot',$fixture)){$start.ArgumentList.Add($arg)}
  $start.Environment['PATH']=Join-Path $env:SystemRoot 'System32'
@@ -35,7 +35,9 @@ function Invoke-Control([bool]$Pass,[string]$Name){
   if(-not $process.Start()){throw 'Cannot start verification control.'}
   $stdout=$process.StandardOutput.ReadToEndAsync();$stderr=$process.StandardError.ReadToEndAsync()
   if(-not $process.WaitForExit(30000)){$process.Kill($true);$process.WaitForExit();throw 'Owned verification control timed out.'}
-  [IO.File]::WriteAllText((Join-Path $fixture ($Name+'.log')),$stdout.GetAwaiter().GetResult()+$stderr.GetAwaiter().GetResult())
+  $output = $stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult()
+  [IO.File]::WriteAllText((Join-Path $fixture ($Name+'.log')), $output)
+  if($ExpectedError -and -not $output.Contains($ExpectedError)){throw "Client control $Name omitted '$ExpectedError':`n$output"}
   $results.Add([pscustomobject]@{name=$Name;expectedSuccess=$Pass;exitCode=$process.ExitCode})
   if(($process.ExitCode -eq 0) -ne $Pass){throw "Client control failed: $Name"}
   if(Test-Path -LiteralPath (Join-Path $fixture '.build')){throw 'Verification created build/cache output.'}
@@ -43,6 +45,24 @@ function Invoke-Control([bool]$Pass,[string]$Name){
  }finally{$process.Dispose()}
 }
 Invoke-Control $true 'offline-exact-bytes'
+# Use a self-contained command checkout for the tool integrity controls.
+$bundle = Join-Path $fixture 'Dependencies/RedMonitorClientTools'
+$build = Join-Path $fixture 'Build'
+[IO.Directory]::CreateDirectory($build) | Out-Null
+Copy-Item -LiteralPath (Join-Path $RepositoryRoot 'Dependencies/RedMonitorClientTools') -Destination $bundle -Recurse
+Copy-Item -LiteralPath (Join-Path $RepositoryRoot 'Build/RedMonitorClientTools.psm1') -Destination $build
+Copy-Item -LiteralPath $verify -Destination $fixture
+$checkoutVerifier = $verify
+$verify = Join-Path $fixture 'Verify-RedMonitorClient.ps1'
+Invoke-Control $true 'offline-exact-tool-bundle'
+foreach ($name in @('Verify-RedMonitorClient.ps1', 'Update-RedMonitorClient.ps1')) {
+ $tool = Join-Path $bundle $name
+ $toolBytes = [IO.File]::ReadAllBytes($tool)
+ [IO.File]::AppendAllText($tool, [Environment]::NewLine + '# fixture alteration')
+ Invoke-Control $false ('refuses-altered-tool-' + $name) -ExpectedError "RedMonitor client tooling hash mismatch: $name"
+ [IO.File]::WriteAllBytes($tool, $toolBytes)
+}
+$verify = $checkoutVerifier
 foreach($relative in @('include/RedMonitor/Client.h','LICENSE.txt')){
  $path=Join-Path $fixture ('ThirdParty/RedMonitor/'+$relative)
  $bytes=[IO.File]::ReadAllBytes($path)
