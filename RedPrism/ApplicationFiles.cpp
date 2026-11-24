@@ -1070,9 +1070,9 @@ int Application::RunFilesSelfTest() noexcept
         }
         return receipt.Read();
     };
-    const auto queueWrite = [&](HostWriteFormat format) noexcept
+    const auto queueWrite = [&](HostWriteFormat format, std::optional<std::wstring> path = std::nullopt) noexcept
     {
-        const ContinuationReceipt receipt = QueueHostWrite(format, false);
+        const ContinuationReceipt receipt = QueueHostInput(HostWriteInput{format, false, std::move(path)});
         if (! settle())
         {
             return std::optional<ContinuationReceipt::Result>{};
@@ -1364,16 +1364,31 @@ int Application::RunFilesSelfTest() noexcept
     {
         const std::wstring saved = scratch + L"save.prism";
         (void)DeleteFileW(saved.c_str());
-        _forcedDiscard = true;
+        const auto restoreDiscard = wil::scope_exit([&, previous = _forcedDiscard]() noexcept { _forcedDiscard = previous; });
+        const auto removeArchive  = wil::scope_exit([&]() noexcept
+        {
+            (void)DeleteFileW(saved.c_str());
+            _documentPath.clear();
+            _documentIsArchive = false;
+            _documentArchiveVersion.reset();
+            _documentFolderVersion.reset();
+        });
+        _forcedDiscard            = true;
         if (! command(ChromeHost::kCommandNew))
             return 5;
-        _forcedDiscard.reset();
         (void)insertRed(40, 30);
+        // Reopen a real archive so the ordinary Save command holds the accepted identity.
+        if (! _session.Document() || SaveProject(saved.c_str(), _session.Document().value(), _session.ActiveLayerID(), true) != ProjectIoStatus::Ok ||
+            ! openPath(saved.c_str()) || _documentPath != saved || ! _documentIsArchive || ! _documentArchiveVersion)
+        {
+            SelfTestFailure(L"The adjustment save fixture could not open its original project archive.\n");
+            return 5;
+        }
+        _forcedDiscard.reset();
         if (! command(ChromeHost::kCommandNewLevelsAdjustment))
             return 5;
         const std::optional<Guid> adjustment = _session.AdjustmentEditingID();
         OnAdjustAction(AdjustAction::SetInputWhite, 128.0);
-        _documentPath = saved;
         if (! command(ChromeHost::kCommandSave))
             return 5;
         const bool applied = ! _session.HasColorEdit() && ! _session.history.IsModified() && _session.history.UndoName() == L"Edit Levels Adjustment";
@@ -1393,8 +1408,6 @@ int Application::RunFilesSelfTest() noexcept
         const ProjectLoadResult loaded = LoadProject(saved.c_str());
         const double fileWhite         = loaded.status == ProjectIoStatus::Ok ? whiteOf(loaded.document) : -1.0;
         const double documentWhite     = _session.Document().has_value() ? whiteOf(_session.Document().value()) : -1.0;
-        (void)DeleteFileW(saved.c_str());
-        _documentPath.clear();
         if (! adjustment.has_value() || ! applied || fileWhite != 128.0 || documentWhite != 128.0 || _session.history.IsModified())
         {
             SelfTestFailure(std::format(L"Save during an adjustment layer's panel did not apply it first "
@@ -1454,7 +1467,6 @@ int Application::RunFilesSelfTest() noexcept
     // Content-Aware Fill has no donors when the selection covers every opaque pixel. Failed settling must leave the
     // panel and document/history intact and must not create the exact scratch project path.
     {
-        const std::wstring pathBefore                 = _documentPath;
         const std::wstring fillPath                   = scratch + L"fill-no-donors.prism";
         const std::optional<bool> forcedDiscardBefore = _forcedDiscard;
         (void)DeleteFileW(fillPath.c_str());
@@ -1473,8 +1485,7 @@ int Application::RunFilesSelfTest() noexcept
             return 5;
         const bool failedPreview = settle() && _session.PendingColorEdit().has_value() && _session.PendingColorEdit()->kind == FilterKind::ContentAwareFill &&
                                    _session.PendingColorEdit()->previewFailed;
-        _documentPath            = fillPath;
-        const std::optional<ContinuationReceipt::Result> saved = queueWrite(HostWriteFormat::Project);
+        const std::optional<ContinuationReceipt::Result> saved = queueWrite(HostWriteFormat::Project, fillPath);
         const DWORD attributes                                 = GetFileAttributesW(fillPath.c_str());
         const DWORD attributesError                            = attributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
         const bool noFile       = attributes == INVALID_FILE_ATTRIBUTES && (attributesError == ERROR_FILE_NOT_FOUND || attributesError == ERROR_PATH_NOT_FOUND);
@@ -1485,7 +1496,6 @@ int Application::RunFilesSelfTest() noexcept
             ! _session.history.IsModified() && _session.history.CurrentRevision() == revisionBefore && _session.history.UndoCount() == undoCountBefore;
         CancelColorEditForTest();
         (void)DeleteFileW(fillPath.c_str());
-        _documentPath  = pathBefore;
         _forcedDiscard = forcedDiscardBefore;
         if (! cleanBefore || ! failedPreview || ! saved.has_value() || saved.value().outcome != HostOutcome::Failed || ! noFile || ! panelKept ||
             ! documentKept || ! historyKept)
