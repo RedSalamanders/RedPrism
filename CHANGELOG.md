@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Print RedPrism's executable version with `--version` and verify the command from the clean package and the installed WinGet alias on each native architecture.
 - Add RedPrism's root specification validator for active plan and domain links and run it through the local and Static validators.
 - Route RedPrism's Static CI phase through the same root compiler-free validation command available to developers.
 - Accept the shared `--capture <png>` command and keep `--screenshot` as a compatible alias.

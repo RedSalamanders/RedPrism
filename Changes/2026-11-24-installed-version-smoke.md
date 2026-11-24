@@ -1,1 +1,0 @@
-- Print RedPrism's executable version with `--version` and verify the command from the clean package and the installed WinGet alias on each native architecture.
