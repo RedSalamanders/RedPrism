@@ -4,6 +4,11 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Preserve concurrent edits to RedPrism settings during normal saves and startup recovery.
+- Preserve competing edits, renames and creations during RedPrism archive saves.
+- Bind PNG and JPEG overwrite confirmation to the selected file version, refuse competing creations and changed targets at publication, and preserve the current project for retry.
+- Bind exploded project saves to the folder and member versions opened by the editor, and preserve competing edits and the recovery tree when the version changes.
+  - Verify the recovery folder again before post-save cleanup so an edit made during publication remains recoverable.
 - Print RedPrism's executable version with `--version` and verify the command from the clean package and the installed WinGet alias on each native architecture.
 - Add RedPrism's root specification validator for active plan and domain links and run it through the local and Static validators.
 - Route RedPrism's Static CI phase through the same root compiler-free validation command available to developers.

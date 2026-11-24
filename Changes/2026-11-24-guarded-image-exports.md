@@ -1,1 +1,0 @@
-- Bind PNG and JPEG overwrite confirmation to the selected file version, refuse competing creations and changed targets at publication, and preserve the current project for retry.
