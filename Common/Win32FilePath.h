@@ -25,33 +25,45 @@ enum class Use
     return path.size() >= 3 && ((path[0] >= L'A' && path[0] <= L'Z') || (path[0] >= L'a' && path[0] <= L'z')) && path[1] == L':' && path[2] == L'\\';
 }
 
+// Keep shared path validation on the scalar x64 baseline. The CRT's dispatched wmemchr can otherwise
+// be emitted as an intrinsic body inside any translation unit that uses these helpers.
+[[nodiscard]] inline std::size_t FindSeparator(std::wstring_view path, wchar_t separator, std::size_t start = 0) noexcept
+{
+    for (; start < path.size(); ++start)
+    {
+        if (path[start] == separator)
+            return start;
+    }
+    return std::wstring_view::npos;
+}
+
 [[nodiscard]] inline bool IsUncAbsolute(std::wstring_view path) noexcept
 {
     if (! path.starts_with(L"\\\\"))
         return false;
-    const std::size_t serverEnd = path.find(L'\\', 2);
+    const std::size_t serverEnd = FindSeparator(path, L'\\', 2);
     if (serverEnd == std::wstring_view::npos || serverEnd == 2)
         return false;
     const std::size_t shareStart = serverEnd + 1;
-    const std::size_t shareEnd   = path.find(L'\\', shareStart);
+    const std::size_t shareEnd   = FindSeparator(path, L'\\', shareStart);
     const std::size_t shareLimit = shareEnd == std::wstring_view::npos ? path.size() : shareEnd;
     return shareLimit > shareStart;
 }
 
 [[nodiscard]] inline bool HasOrdinaryParsingComponents(std::wstring_view path) noexcept
 {
-    if (path.find(L'/') != std::wstring_view::npos)
+    if (FindSeparator(path, L'/') != std::wstring_view::npos)
         return true;
     std::size_t start = IsDosAbsolute(path) ? std::size_t{3} : path.starts_with(L"\\\\") ? std::size_t{2} : std::size_t{0};
     if (path.starts_with(L"\\\\") && IsUncAbsolute(path))
     {
-        const std::size_t serverEnd = path.find(L'\\', 2);
-        const std::size_t shareEnd  = path.find(L'\\', serverEnd + 1);
+        const std::size_t serverEnd = FindSeparator(path, L'\\', 2);
+        const std::size_t shareEnd  = FindSeparator(path, L'\\', serverEnd + 1);
         start                       = shareEnd == std::wstring_view::npos ? path.size() : shareEnd + 1;
     }
     while (start < path.size())
     {
-        const std::size_t end             = path.find(L'\\', start);
+        const std::size_t end             = FindSeparator(path, L'\\', start);
         const std::size_t limit           = end == std::wstring_view::npos ? path.size() : end;
         const std::wstring_view component = path.substr(start, limit - start);
         if (component == L"." || component == L".." || (! component.empty() && (component.back() == L'.' || component.back() == L' ')))

@@ -1,7 +1,9 @@
 #include "SettingsStore.h"
 
+#include "GuardedFileCommit.h"
 #include "JsonRead.h"
 #include "Utf8.h"
+#include "Win32FilePath.h"
 
 #include <algorithm>
 #include <climits>
@@ -9,13 +11,17 @@
 #include <cstdlib>
 #include <cstring>
 #include <format>
+#include <iterator>
 #include <memory>
+#include <utility>
 
+#include <objbase.h>
 #include <shlobj.h>
 #include <windows.h>
 #include <yyjson.h>
 
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "ole32.lib")
 
 namespace SettingsStore
 {
@@ -446,91 +452,30 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
     return result;
 }
 
-SettingsLoadResult LoadCold(const std::wstring& path)
+namespace
 {
-    SettingsLoadResult result;
-    std::string bytes;
-    unsigned long error = 0;
-    if (! ReadFileBytes(path, bytes, &error))
-    {
-        if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
-        {
-            result.status          = SettingsLoadStatus::Missing;
-            result.templateWritten = WriteFileAtomic(path, Serialize(result.settings));
-        }
-        else
-        {
-            result.status = SettingsLoadStatus::Unreadable;
-        }
-        return result;
-    }
-    if (const std::optional<AppSettings> parsed = Parse(bytes); parsed.has_value())
-    {
-        result.settings = parsed.value();
-        return result;
-    }
-    result.status             = SettingsLoadStatus::Invalid;
-    const std::wstring backup = BackupPathFor(path);
-    if (MoveFileExW(path.c_str(), backup.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-    {
-        result.backupPath      = backup;
-        result.templateWritten = WriteFileAtomic(path, Serialize(result.settings));
-    }
-    return result;
-}
-
-std::optional<AppSettings> LoadLive(const std::wstring& path)
+[[nodiscard]] bool ReadBytes(const std::wstring& path, std::string& bytes, unsigned long* lastError, FileOutputVersion* version)
 {
-    std::string bytes;
-    if (! ReadFileBytes(path, bytes))
-    {
-        return std::nullopt;
-    }
-    return Parse(bytes);
-}
-
-bool Save(const std::wstring& path, const AppSettings& settings, std::wstring* backupPath)
-{
-    std::string existing;
-    std::string_view merge;
-    if (ReadFileBytes(path, existing))
-    {
-        if (Parse(existing).has_value())
-        {
-            merge = existing;
-        }
-        else
-        {
-            const std::wstring backup = BackupPathFor(path);
-            if (MoveFileExW(path.c_str(), backup.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) && backupPath != nullptr)
-            {
-                *backupPath = backup;
-            }
-        }
-    }
-    const std::string text = Serialize(settings, merge);
-    return ! text.empty() && WriteFileAtomic(path, text);
-}
-
-bool ReadFileBytes(const std::wstring& path, std::string& bytes, unsigned long* lastError)
-{
-    const wil::unique_hfile file{CreateFileW(
-        path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+    const DWORD share = version ? FILE_SHARE_READ : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    const DWORD flags = version ? FILE_FLAG_OPEN_REPARSE_POINT : FILE_ATTRIBUTE_NORMAL;
+    const wil::unique_hfile file{CreateFileW(path.c_str(), GENERIC_READ, share, nullptr, OPEN_EXISTING, flags, nullptr)};
     if (! file)
     {
-        if (lastError != nullptr)
-        {
+        if (lastError)
             *lastError = GetLastError();
-        }
+        return false;
+    }
+    if (version && FAILED(ReadFileOutputVersion(file.get(), *version)))
+    {
+        if (lastError)
+            *lastError = ERROR_INVALID_DATA;
         return false;
     }
     LARGE_INTEGER size{};
     if (! GetFileSizeEx(file.get(), &size) || size.QuadPart < 0 || static_cast<std::uint64_t>(size.QuadPart) > kMaxFileBytes)
     {
-        if (lastError != nullptr)
-        {
+        if (lastError)
             *lastError = ERROR_FILE_TOO_LARGE;
-        }
         return false;
     }
     bytes.resize(static_cast<std::size_t>(size.QuadPart));
@@ -541,67 +486,171 @@ bool ReadFileBytes(const std::wstring& path, std::string& bytes, unsigned long* 
         const DWORD chunk = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - offset, 1u << 20));
         if (! ReadFile(file.get(), bytes.data() + offset, chunk, &read, nullptr))
         {
-            if (lastError != nullptr)
-            {
+            if (lastError)
                 *lastError = GetLastError();
-            }
             return false;
         }
         if (read == 0)
         {
+            if (version)
+                return false;
             bytes.resize(offset);
             break;
         }
         offset += read;
     }
-    if (lastError != nullptr)
-    {
+    if (lastError)
         *lastError = ERROR_SUCCESS;
-    }
     return true;
+}
+
+[[nodiscard]] bool ReadAcceptedBytes(const FileOutputTarget& target, std::string& bytes)
+{
+    FileOutputVersion loaded{};
+    return target.acceptedVersion && ReadBytes(target.path, bytes, nullptr, &loaded) && loaded == *target.acceptedVersion;
+}
+
+[[nodiscard]] HRESULT WriteAcceptedBytes(const FileOutputTarget& target, std::string_view bytes, std::optional<FileOutputTarget>* published = nullptr)
+{
+    if (bytes.size() > kMaxFileBytes || target.path.empty() || ! EnsureDirectoryFor(target.path))
+        return E_FAIL;
+    GUID identifier{};
+    wchar_t identifierText[39]{};
+    if (FAILED(CoCreateGuid(&identifier)) || ! StringFromGUID2(identifier, identifierText, static_cast<int>(std::size(identifierText))))
+        return E_FAIL;
+    const auto suffix = std::wstring{L".~"} + identifierText;
+    std::wstring sibling;
+    std::wstring temporary;
+    if (FAILED(Win32FilePath::SiblingWithSuffix(target.path, suffix, sibling)) ||
+        FAILED(Win32FilePath::PrefixResolvedPath(sibling.c_str(), Win32FilePath::Use::File, temporary)))
+        return E_INVALIDARG;
+    const wil::unique_hfile file{
+        CreateFileW(temporary.c_str(), GENERIC_WRITE | DELETE | FILE_READ_ATTRIBUTES, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr)};
+    if (! file)
+        return HRESULT_FROM_WIN32(GetLastError());
+    auto discard  = wil::scope_exit([&]
+    {
+        FILE_DISPOSITION_INFO disposition{TRUE};
+        (void)SetFileInformationByHandle(file.get(), FileDispositionInfo, &disposition, sizeof(disposition));
+    });
+    DWORD written = 0;
+    if ((! bytes.empty() && (! WriteFile(file.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) || written != bytes.size())) ||
+        ! FlushFileBuffers(file.get()))
+        return E_FAIL;
+    std::optional<FileOutputTarget> snapshot;
+    if (published)
+        snapshot = FileOutputTarget{target.path, std::nullopt};
+    const HRESULT result = PublishFileOutput(file.get(), target);
+    if (FAILED(result))
+        return result;
+    discard.release();
+    if (published)
+    {
+        FileOutputVersion version{};
+        if (SUCCEEDED(ReadFileOutputVersion(file.get(), version)))
+            snapshot->acceptedVersion = version;
+        else
+            snapshot.reset();
+        *published = std::move(snapshot);
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT BackUpAcceptedBytes(const FileOutputTarget& target, std::string_view bytes, std::wstring* backupPath)
+{
+    FileOutputTarget backup{BackupPathFor(target.path), std::nullopt};
+    const HRESULT result = WriteAcceptedBytes(backup, bytes);
+    if (SUCCEEDED(result) && backupPath)
+        *backupPath = std::move(backup.path);
+    return result;
+}
+} // namespace
+
+SettingsLoadResult LoadCold(const std::wstring& path)
+{
+    SettingsLoadResult result;
+    FileOutputTarget target;
+    if (FAILED(ObserveFileOutputTarget(path.c_str(), target)))
+    {
+        result.status = SettingsLoadStatus::Unreadable;
+        return result;
+    }
+    if (! target.acceptedVersion)
+    {
+        result.status          = SettingsLoadStatus::Missing;
+        result.templateWritten = SUCCEEDED(WriteAcceptedBytes(target, Serialize(result.settings), &result.acceptedTarget));
+        return result;
+    }
+
+    std::string bytes;
+    if (! ReadAcceptedBytes(target, bytes))
+    {
+        result.status = SettingsLoadStatus::Unreadable;
+        return result;
+    }
+    if (auto parsed = Parse(bytes))
+    {
+        result.settings       = std::move(*parsed);
+        result.acceptedTarget = std::move(target);
+        return result;
+    }
+
+    result.status = SettingsLoadStatus::Invalid;
+    if (SUCCEEDED(BackUpAcceptedBytes(target, bytes, &result.backupPath)))
+        result.templateWritten = SUCCEEDED(WriteAcceptedBytes(target, Serialize(result.settings), &result.acceptedTarget));
+    return result;
+}
+
+std::optional<AppSettings> LoadLive(const std::wstring& path, std::optional<FileOutputTarget>* acceptedTarget)
+{
+    FileOutputTarget target;
+    if (FAILED(ObserveFileOutputTarget(path.c_str(), target)))
+        return std::nullopt;
+    std::string bytes;
+    if (! ReadAcceptedBytes(target, bytes))
+        return std::nullopt;
+    auto parsed = Parse(bytes);
+    if (parsed && acceptedTarget)
+        *acceptedTarget = std::move(target);
+    return parsed;
+}
+
+HRESULT SaveAccepted(const FileOutputTarget& target, const AppSettings& settings, std::optional<FileOutputTarget>* published, std::wstring* backupPath)
+{
+    std::string existing;
+    std::string_view merge;
+    if (target.acceptedVersion)
+    {
+        if (! ReadAcceptedBytes(target, existing))
+            return kOutputVersionConflict;
+        if (Parse(existing))
+            merge = existing;
+        else
+        {
+            const HRESULT backup = BackUpAcceptedBytes(target, existing, backupPath);
+            if (FAILED(backup))
+                return backup;
+        }
+    }
+    const std::string text = Serialize(settings, merge);
+    return text.empty() ? E_FAIL : WriteAcceptedBytes(target, text, published);
+}
+
+bool Save(const std::wstring& path, const AppSettings& settings, std::wstring* backupPath)
+{
+    FileOutputTarget target;
+    return SUCCEEDED(ObserveFileOutputTarget(path.c_str(), target)) && SUCCEEDED(SaveAccepted(target, settings, nullptr, backupPath));
+}
+
+bool ReadFileBytes(const std::wstring& path, std::string& bytes, unsigned long* lastError)
+{
+    return ReadBytes(path, bytes, lastError, nullptr);
 }
 
 bool WriteFileAtomic(const std::wstring& path, std::string_view bytes)
 {
-    if (path.empty() || ! EnsureDirectoryFor(path))
-    {
-        return false;
-    }
-    const std::wstring temporary = path + L".tmp-" + std::to_wstring(GetCurrentProcessId());
-    {
-        wil::unique_hfile file{CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)};
-        if (! file)
-        {
-            return false;
-        }
-        bool complete      = true;
-        std::size_t offset = 0;
-        while (offset < bytes.size())
-        {
-            DWORD written     = 0;
-            const DWORD chunk = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - offset, 1u << 20));
-            if (! WriteFile(file.get(), bytes.data() + offset, chunk, &written, nullptr) || written == 0)
-            {
-                complete = false;
-                break;
-            }
-            offset += written;
-        }
-        complete = complete && FlushFileBuffers(file.get()) != FALSE;
-        // Closed before any delete: the temporary was opened without sharing, so DeleteFileW on the open file
-        // fails and would leave it behind.
-        file.reset();
-        if (! complete)
-        {
-            (void)DeleteFileW(temporary.c_str());
-            return false;
-        }
-    }
-    if (! MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-    {
-        (void)DeleteFileW(temporary.c_str());
-        return false;
-    }
-    return true;
+    FileOutputTarget target;
+    return SUCCEEDED(ObserveFileOutputTarget(path.c_str(), target)) && SUCCEEDED(WriteAcceptedBytes(target, bytes));
 }
+
 } // namespace SettingsStore

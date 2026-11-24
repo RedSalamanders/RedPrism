@@ -2,6 +2,8 @@
 
 #include "Document.h"
 #include "Executor.h"
+#include "GuardedFileCommit.h"
+#include "ImageOutputTarget.h"
 
 #include <optional>
 #include <string>
@@ -17,6 +19,7 @@ enum class ImageCodecStatus
     HeifUnavailable,
     Encode,
     Cancelled,
+    Conflict,
 };
 
 struct DecodedImage
@@ -41,6 +44,12 @@ struct JpegExportOptions
     double quality    = 0.8;
     double resolution = 72;
 };
+
+using ImageOutputPublishStage  = FileOutputPublishStage;
+using ImageOutputPublishPolicy = FileOutputPublishPolicy;
+
+// Resolve the path and observe the file version before confirming an overwrite or queuing an export.
+[[nodiscard]] std::int32_t ObserveImageOutputTarget(const wchar_t* path, ImageOutputTarget& target) noexcept;
 
 [[nodiscard]] ImageCodecStatus DecodeProjectPng(
     const std::uint8_t* bytes, std::size_t byteCount, bool mask, int remainingPixels, DecodedImage& decoded, CancelToken cancellation = {});
@@ -69,12 +78,19 @@ struct JpegExportOptions
                                          CancelToken cancellation          = {},
                                          std::uint64_t maximumEncodedBytes = kMaxImageEncodedBytes);
 [[nodiscard]] ImageCodecStatus EncodePngFile(const Raster& image, double resolution, const wchar_t* path, CancelToken cancellation = {});
+[[nodiscard]] ImageCodecStatus EncodePngFile(
+    const Raster& image, double resolution, const ImageOutputTarget& target, CancelToken cancellation = {}, ImageOutputPublishPolicy policy = {});
 [[nodiscard]] ImageCodecStatus EncodeJpeg(const Raster& image,
                                           const JpegExportOptions& options,
                                           std::vector<std::uint8_t>& bytes,
                                           CancelToken cancellation          = {},
                                           std::uint64_t maximumEncodedBytes = kMaxImageEncodedBytes);
 [[nodiscard]] ImageCodecStatus EncodeJpegFile(const Raster& image, const JpegExportOptions& options, const wchar_t* path, CancelToken cancellation = {});
+[[nodiscard]] ImageCodecStatus EncodeJpegFile(const Raster& image,
+                                              const JpegExportOptions& options,
+                                              const ImageOutputTarget& target,
+                                              CancelToken cancellation        = {},
+                                              ImageOutputPublishPolicy policy = {});
 [[nodiscard]] bool IsHeifContainer(std::wstring_view path) noexcept;
 // Writes `bytes` to `path` (replacing any existing file) and flushes it to disk before returning, so the caller's
 // own rename or replace of `path` never races an unflushed write. Callers that need the write itself to be atomic

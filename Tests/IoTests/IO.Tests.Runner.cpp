@@ -1571,7 +1571,7 @@ void TestProjectSaveDurability()
         blockedSave = SaveProject(zipPath.c_str(), document, std::nullopt, true);
     }
     locked.reset();
-    Expect(blockedSave == ProjectIoStatus::Encode, "save-durability.replace-failure-reported");
+    Expect(blockedSave == ProjectIoStatus::Conflict, "save-durability.locked-destination-reports-conflict");
     const ProjectLoadResult preserved = LoadProject(zipPath.c_str());
     Expect(preserved.status == ProjectIoStatus::Ok && preserved.document.id == document.id && preserved.document.resolution != document.resolution &&
                ReadText(zipPath) == savedArchive,
@@ -2594,6 +2594,262 @@ void TestSettingsStore()
     std::filesystem::remove_all(root, error);
 }
 
+void TestGuardedProjectArchive()
+{
+    DocumentFixture fixture;
+    fixture.id          = Guid::Generate();
+    fixture.width       = 2;
+    fixture.height      = 2;
+    ImageLayer layer    = ImageLayer::Blank(L"Guarded archive", Vec2{2, 2});
+    const Raster pixels = SolidBgra(2, 2, 7, 19, 31, 255);
+    layer.asset         = RasterAsset{pixels, Raster::MakeThumbnail(pixels), layer.name};
+    fixture.layers.push_back(std::move(layer));
+    CanvasDocument document = std::move(fixture).Seal();
+
+    const auto root =
+        std::filesystem::path(ScratchRoot()) / (L"guarded-archive-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64()));
+    std::error_code error;
+    std::filesystem::create_directories(root, error);
+    const auto cleanup                               = wil::scope_exit([&] { std::filesystem::remove_all(root, error); });
+    const std::wstring file                          = (root / L"edited.prism").wstring();
+    const std::wstring fresh                         = (root / L"created.prism").wstring();
+    const std::wstring moved                         = (root / L"moved.prism").wstring();
+    static constexpr std::string_view competingBytes = "an external editor owns these bytes";
+    struct CompetingEdit
+    {
+        const wchar_t* path     = nullptr;
+        const wchar_t* renameTo = nullptr;
+        bool succeeded          = false;
+    };
+    CompetingEdit edit;
+    const ProjectIoObserver observer{[](void* context, ProjectIoStage stage, unsigned int) noexcept
+    {
+        if (stage != ProjectIoStage::Staged)
+            return;
+        auto& pending = *static_cast<CompetingEdit*>(context);
+        if (pending.renameTo)
+        {
+            pending.succeeded = MoveFileExW(pending.path, pending.renameTo, MOVEFILE_WRITE_THROUGH) != FALSE;
+            return;
+        }
+        const wil::unique_hfile handle{CreateFileW(pending.path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)};
+        DWORD written     = 0;
+        pending.succeeded = handle && WriteFile(handle.get(), competingBytes.data(), static_cast<DWORD>(competingBytes.size()), &written, nullptr) &&
+                            written == competingBytes.size();
+    },
+                                     &edit};
+
+    Expect(! error && SaveProject(file.c_str(), document, std::nullopt, true) == ProjectIoStatus::Ok, "project.guard.creates-archive");
+    const auto loaded = LoadProject(file.c_str());
+    FileOutputTarget accepted;
+    Expect(loaded.status == ProjectIoStatus::Ok && loaded.archive && loaded.archiveVersion && SUCCEEDED(ObserveFileOutputTarget(file.c_str(), accepted)) &&
+               accepted.acceptedVersion == loaded.archiveVersion,
+           "project.guard.open-binds-decoded-version");
+
+    edit.path = file.c_str();
+    Expect(SaveProject(file.c_str(), document, std::nullopt, true, {}, observer, {}, &accepted) == ProjectIoStatus::Conflict && edit.succeeded &&
+               ReadText(file) == competingBytes,
+           "project.guard.preserves-edit-during-staging");
+    Expect(SaveProject(file.c_str(), document, std::nullopt, true, {}, {}, {}, &accepted) == ProjectIoStatus::Conflict && ReadText(file) == competingBytes,
+           "project.guard.refuses-stale-preconfirmed-version");
+
+    FileOutputTarget retry;
+    std::optional<FileOutputVersion> published;
+    Expect(SUCCEEDED(ObserveFileOutputTarget(file.c_str(), retry)) &&
+               SaveProject(file.c_str(), document, std::nullopt, true, {}, {}, {}, &retry, &published) == ProjectIoStatus::Ok && published &&
+               LoadProject(file.c_str()).archiveVersion == published,
+           "project.guard.retry-binds-the-published-archive");
+
+    retry.acceptedVersion = published;
+    edit                  = CompetingEdit{file.c_str(), moved.c_str()};
+    Expect(SaveProject(file.c_str(), document, std::nullopt, true, {}, observer, {}, &retry) == ProjectIoStatus::Conflict && edit.succeeded &&
+               GetFileAttributesW(file.c_str()) == INVALID_FILE_ATTRIBUTES && LoadProject(moved.c_str()).status == ProjectIoStatus::Ok,
+           "project.guard.preserves-renamed-archive-and-empty-name");
+
+    FileOutputTarget absent;
+    edit = CompetingEdit{fresh.c_str()};
+    Expect(SUCCEEDED(ObserveFileOutputTarget(fresh.c_str(), absent)) && ! absent.acceptedVersion &&
+               SaveProject(fresh.c_str(), document, std::nullopt, true, {}, observer, {}, &absent) == ProjectIoStatus::Conflict && edit.succeeded &&
+               ReadText(fresh) == competingBytes,
+           "project.guard.refuses-competing-creation");
+}
+
+void TestGuardedExplodedProject()
+{
+    DocumentFixture fixture;
+    fixture.id     = Guid::Generate();
+    fixture.width  = 2;
+    fixture.height = 2;
+    fixture.layers.push_back(ImageLayer::Blank(L"Guarded folder", Vec2{2, 2}));
+    CanvasDocument document = std::move(fixture).Seal();
+    const auto root         = std::filesystem::path(ScratchRoot()) / (L"guarded-folder-" + std::to_wstring(GetCurrentProcessId()));
+    std::error_code error;
+    if (! std::filesystem::create_directory(root, error))
+    {
+        Expect(false, "project.folder-guard.owns-fixture-parent");
+        return;
+    }
+    const auto cleanup  = wil::scope_exit([&] { std::filesystem::remove_all(root, error); });
+    const auto path     = (root / L"current").wstring();
+    const auto manifest = (root / L"current" / L"manifest.json").wstring();
+    const auto moved    = (root / L"renamed").wstring();
+    const auto fresh    = (root / L"fresh").wstring();
+    const auto owner    = (root / L"fresh" / L"other.txt").wstring();
+    const auto extra    = (root / L"current" / L"images" / L"other.txt").wstring();
+    std::optional<ProjectFolderVersion> published;
+    Expect(SaveProject(path.c_str(), document, std::nullopt, false, {}, {}, {}, nullptr, nullptr, nullptr, &published) == ProjectIoStatus::Ok,
+           "project.folder-guard.creates-owned-folder");
+    const auto opened = LoadProject(path.c_str());
+    Expect(opened.status == ProjectIoStatus::Ok && ! opened.archive && opened.folderVersion && opened.folderVersion == published,
+           "project.folder-guard.open-binds-folder-and-members");
+    if (! opened.folderVersion)
+        return;
+
+    static constexpr std::string_view other = "external folder edit";
+    struct ExternalChange
+    {
+        const wchar_t* member = nullptr;
+        const wchar_t* dir    = nullptr;
+        const wchar_t* moved  = nullptr;
+        bool remove           = false;
+        bool exercised        = false;
+    } change;
+    const ProjectIoObserver observer{[](void* state, ProjectIoStage stage, unsigned int) noexcept
+    {
+        if (stage != ProjectIoStage::Staged)
+            return;
+        auto& edit = *static_cast<ExternalChange*>(state);
+        if (edit.moved)
+        {
+            edit.exercised = MoveFileW(edit.dir, edit.moved) != FALSE;
+            return;
+        }
+        if (edit.remove)
+        {
+            edit.exercised = DeleteFileW(edit.member) != FALSE;
+            return;
+        }
+        if (edit.dir && ! CreateDirectoryW(edit.dir, nullptr))
+            return;
+        const wil::unique_hfile file{CreateFileW(edit.member, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)};
+        DWORD written  = 0;
+        edit.exercised = file && WriteFile(file.get(), other.data(), static_cast<DWORD>(other.size()), &written, nullptr) && written == other.size();
+    },
+                                     &change};
+    const auto originalManifest = ReadText(manifest);
+    change.member               = manifest.c_str();
+    Expect(SaveProject(path.c_str(), document, std::nullopt, false, {}, observer, {}, nullptr, nullptr, &opened.folderVersion) == ProjectIoStatus::Conflict &&
+               change.exercised && ReadText(manifest) == other,
+           "project.folder-guard.preserves-edit-during-staging");
+    Expect(SaveProject(path.c_str(), document, std::nullopt, false, {}, {}, {}, nullptr, nullptr, &opened.folderVersion) == ProjectIoStatus::Conflict &&
+               ReadText(manifest) == other,
+           "project.folder-guard.refuses-stale-accepted-members");
+    WriteText(manifest, originalManifest);
+    Expect(ReadText(manifest) == originalManifest, "project.folder-guard.fixture-reopens");
+    const auto retry = LoadProject(path.c_str());
+    Expect(retry.folderVersion &&
+               SaveProject(path.c_str(), document, std::nullopt, false, {}, {}, {}, nullptr, nullptr, &retry.folderVersion, &published) ==
+                   ProjectIoStatus::Ok &&
+               published && LoadProject(path.c_str()).folderVersion == published,
+           "project.folder-guard.retry-binds-published-folder");
+
+    WriteText(extra, "external member to remove");
+    const auto hadExtra = LoadProject(path.c_str());
+    change              = {.member = extra.c_str(), .remove = true};
+    Expect(hadExtra.folderVersion &&
+               SaveProject(path.c_str(), document, std::nullopt, false, {}, observer, {}, nullptr, nullptr, &hadExtra.folderVersion) ==
+                   ProjectIoStatus::Conflict &&
+               change.exercised && GetFileAttributesW(extra.c_str()) == INVALID_FILE_ATTRIBUTES && ReadText(manifest) == originalManifest,
+           "project.folder-guard.preserves-nested-member-deletion");
+    published = LoadProject(path.c_str()).folderVersion;
+    change    = {.dir = path.c_str(), .moved = moved.c_str()};
+    Expect(SaveProject(path.c_str(), document, std::nullopt, false, {}, observer, {}, nullptr, nullptr, &published) == ProjectIoStatus::Conflict &&
+               change.exercised && GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES && LoadProject(moved.c_str()).status == ProjectIoStatus::Ok,
+           "project.folder-guard.preserves-renamed-folder-and-vacant-name");
+    change = {.member = owner.c_str(), .dir = fresh.c_str()};
+    Expect(SaveProject(fresh.c_str(), document, std::nullopt, false, {}, observer) == ProjectIoStatus::Conflict && change.exercised && ReadText(owner) == other,
+           "project.folder-guard.refuses-competing-creation");
+
+    const auto cleanupProject = (root / L"cleanup").wstring();
+    const auto backupEditFile = (root / L"cleanup.old" / L"external.txt").wstring();
+    struct BackupEdit
+    {
+        const wchar_t* path;
+        unsigned int cleanups = 0;
+        bool written          = false;
+    } backupEdit{backupEditFile.c_str()};
+    const ProjectSaveFaultPolicy editBeforeCleanup{[](void* state, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
+    {
+        auto& edit = *static_cast<BackupEdit*>(state);
+        if (stage == ProjectSaveFaultStage::BackupCleanup && ++edit.cleanups == 2)
+        {
+            const wil::unique_hfile file{CreateFileW(edit.path, GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr)};
+            DWORD written = 0;
+            edit.written  = file && WriteFile(file.get(), other.data(), static_cast<DWORD>(other.size()), &written, nullptr) && written == other.size();
+        }
+        return ERROR_SUCCESS;
+    },
+                                                   &backupEdit};
+    Expect(SaveProject(cleanupProject.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok, "project.folder-guard.backup-cleanup-fixture");
+    const auto cleanupVersion = LoadProject(cleanupProject.c_str()).folderVersion;
+    Expect(cleanupVersion &&
+               SaveProject(cleanupProject.c_str(), document, std::nullopt, false, {}, {}, editBeforeCleanup, nullptr, nullptr, &cleanupVersion) ==
+                   ProjectIoStatus::Ok &&
+               backupEdit.written && ReadText(backupEditFile) == other && LoadProject(cleanupProject.c_str()).status == ProjectIoStatus::Ok,
+           "project.folder-guard.preserves-competing-edit-at-backup-cleanup");
+}
+
+void TestGuardedSettingsStore()
+{
+    const auto root =
+        std::filesystem::path(ScratchRoot()) / (L"guarded-settings-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64()));
+    const std::wstring path  = (root / L"settings.json").wstring();
+    const std::wstring moved = (root / L"moved.json").wstring();
+    std::error_code error;
+    const auto cleanup         = wil::scope_exit([&] { std::filesystem::remove_all(root, error); });
+    const std::string original = R"({"schema":1,"theme":"dark","vendor":17})";
+    const std::string newer    = R"({"schema":1,"theme":"light","vendor":41})";
+    AppSettings pending;
+    pending.sampleRing = false;
+
+    FileOutputTarget vacant;
+    Expect(SUCCEEDED(ObserveFileOutputTarget(path.c_str(), vacant)) && ! vacant.acceptedVersion, "settings.guard.accepts-missing-name");
+    Expect(SettingsStore::WriteFileAtomic(path, original), "settings.guard.creates-fixture");
+    Expect(SettingsStore::SaveAccepted(vacant, pending) == kOutputVersionConflict && FileText(path) == original, "settings.guard.refuses-competing-create");
+
+    std::optional<FileOutputTarget> accepted;
+    Expect(SettingsStore::LoadLive(path, &accepted).has_value() && accepted.has_value(), "settings.guard.binds-read-version");
+    Expect(SettingsStore::WriteFileAtomic(path, newer), "settings.guard.writes-competing-edit");
+    Expect(accepted && SettingsStore::SaveAccepted(*accepted, pending) == kOutputVersionConflict && FileText(path) == newer,
+           "settings.guard.preserves-newer-replacement");
+
+    Expect(SettingsStore::LoadLive(path, &accepted).has_value() && accepted.has_value(), "settings.guard.accepts-retry-version");
+    wil::unique_hfile writer{
+        CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr)};
+    Expect(writer && accepted && SettingsStore::SaveAccepted(*accepted, pending) == kOutputVersionConflict, "settings.guard.refuses-live-writer");
+    writer.reset();
+
+    std::optional<FileOutputTarget> published;
+    Expect(accepted && SUCCEEDED(SettingsStore::SaveAccepted(*accepted, pending, &published)) && published &&
+               FileText(path).find("\"vendor\": 41") != std::string::npos && SettingsStore::LoadLive(path) == pending,
+           "settings.guard.retry-preserves-unknown-data");
+    const std::string committed = FileText(path);
+    Expect(MoveFileExW(path.c_str(), moved.c_str(), MOVEFILE_WRITE_THROUGH) && published &&
+               SettingsStore::SaveAccepted(*published, pending) == kOutputVersionConflict && GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES &&
+               FileText(moved) == committed,
+           "settings.guard.does-not-recreate-renamed-file");
+
+    Expect(SettingsStore::WriteFileAtomic(path, original) && SettingsStore::LoadLive(path, &accepted).has_value() &&
+               SettingsStore::WriteFileAtomic(path, "{ invalid edit") && ! SettingsStore::LoadLive(path, &accepted) && accepted &&
+               SettingsStore::SaveAccepted(*accepted, pending) == kOutputVersionConflict && FileText(path) == "{ invalid edit",
+           "settings.guard.live-invalid-edit-keeps-original-bytes");
+
+    bool temporaryLeft = false;
+    for (const auto& entry : std::filesystem::directory_iterator(root, error))
+        temporaryLeft = temporaryLeft || entry.path().filename().wstring().find(L".~") != std::wstring::npos;
+    Expect(! error && ! temporaryLeft, "settings.guard.removes-owned-temporaries");
+}
+
 int wmain(int argc, wchar_t** argv)
 {
     // Before anything can fail a check: a CRT report ends the run with exit code 3 and no dialog (RF-702,
@@ -2611,7 +2867,31 @@ int wmain(int argc, wchar_t** argv)
     }
     if (argc > 1)
     {
-        const int result = std::wcscmp(argv[1], L"--bench-file") == 0 ? RunFileIoBench(argc, argv) : 2;
+        const std::wstring_view option(argv[1]);
+        int result = 2;
+        if (option == L"--bench-file")
+            result = RunFileIoBench(argc, argv);
+        else if (argc == 2 && option == L"--guarded-image-output")
+            result = RunGuardedImageOutputTests();
+        else if (argc == 2 && option == L"--guarded-settings-output")
+        {
+            TestSettingsStore();
+            TestGuardedSettingsStore();
+            result = gFailures ? 1 : 0;
+        }
+        else if (argc == 2 && option == L"--guarded-project-output")
+        {
+            TestGuardedProjectArchive();
+            TestGuardedExplodedProject();
+            TestProjectSaveDurability();
+            TestNativeDestinationRotation();
+            TestProjectRotationFaultRecovery();
+            gFailures += RunProjectPublicationRetryTests();
+            gFailures += RunIoProjectDurabilityFaultTests();
+            gFailures += RunProjectLoadWorkTests();
+            gFailures += RunLongPathSaveTests();
+            result = gFailures ? 1 : 0;
+        }
         if (SUCCEEDED(com))
             CoUninitialize();
         return result;
@@ -2636,6 +2916,8 @@ int wmain(int argc, wchar_t** argv)
     TestImportOntoDocument();
     TestSaveRejectsInvalidDocument();
     TestProjectSaveDurability();
+    TestGuardedProjectArchive();
+    TestGuardedExplodedProject();
     TestNativeDestinationRotation();
     TestProjectRotationFaultRecovery();
     gFailures += RunProjectPublicationRetryTests();
@@ -2656,6 +2938,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunProjectLoadWorkTests();
     gFailures += RunLongPathSaveTests();
     TestSettingsStore();
+    TestGuardedSettingsStore();
     if (gFailures != 0)
     {
         std::printf("%d test(s) failed.\n", gFailures);

@@ -895,7 +895,7 @@ void RunR6ImageRoute(const R6Route& route, std::size_t leafLength, std::wstring_
         if (lockAcquired)
             failed = R6WriteDestination(route, destination, attempted);
     }
-    const bool failedAsExpected = lockAcquired && failed == ImageCodecStatus::Encode;
+    const bool failedAsExpected = lockAcquired && failed == ImageCodecStatus::Conflict;
     Expect(rewriteSaved && R6ImageRoundTrip(route, destination, rewritePixel) && baselineCaptured && failedAsExpected,
            (std::string{route.name} + "-" + std::to_string(leafLength) + "-fault-status").c_str());
 

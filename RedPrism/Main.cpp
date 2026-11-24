@@ -480,6 +480,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
 
     AppSettings settings;
     std::wstring settingsPath;
+    std::optional<FileOutputTarget> settingsTarget;
     wil::unique_hmodule satellite;
     const auto shutdown = wil::scope_exit([&]() noexcept
     {
@@ -495,18 +496,20 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         settingsPath = SettingsStore::DefaultPath(kDebugBuild);
         if (! settingsPath.empty())
         {
-            const SettingsLoadResult loaded = SettingsStore::LoadCold(settingsPath);
-            settings                        = loaded.settings;
+            SettingsLoadResult loaded = SettingsStore::LoadCold(settingsPath);
+            settings                  = std::move(loaded.settings);
+            settingsTarget            = std::move(loaded.acceptedTarget);
             if (loaded.status == SettingsLoadStatus::Invalid)
             {
-                OutputDebugStringW(L"The settings file was not a settings document: backed up and replaced by the template.\n");
+                OutputDebugStringW(loaded.templateWritten ? L"The invalid settings were backed up and the template was saved.\n"
+                                                          : L"Settings recovery could not publish the template. The current file was preserved.\n");
             }
         }
         satellite.reset(Localization::LoadSatelliteModule(
             Localization::SatelliteCandidates(Localization::ExecutableDirectory(), settings.language, Localization::SystemUiLanguages())));
         SetStringResourceSatellite(satellite.get());
     }
-    application->UseSettings(std::move(settingsPath), settings);
+    application->UseSettings(std::move(settingsPath), settings, std::move(settingsTarget));
 
     const HRESULT processing = application->InitializeProcessing();
     if (! harness && SUCCEEDED(processing))

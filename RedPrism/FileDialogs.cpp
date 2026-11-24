@@ -1,5 +1,6 @@
 #include "FileDialogs.h"
 
+#include "ImageCodecs.h"
 #include "Resources.h"
 #include "resource.h"
 
@@ -260,7 +261,8 @@ HRESULT PickOutputForRequest(HWND owner,
                              const COMDLG_FILTERSPEC* filters,
                              UINT filterCount,
                              HostRequest& request,
-                             HostInputBudget& budget) noexcept
+                             HostInputBudget& budget,
+                             bool project) noexcept
 {
     try
     {
@@ -304,33 +306,51 @@ HRESULT PickOutputForRequest(HWND owner,
         {
             return result;
         }
-        result = dialog->SetOptions(options | FOS_OVERWRITEPROMPT | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+        options |= FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_NOTESTFILECREATE;
+        options &= ~static_cast<FILEOPENDIALOGOPTIONS>(FOS_OVERWRITEPROMPT);
+        result = dialog->SetOptions(options);
         if (FAILED(result))
         {
             return result;
         }
-        result = dialog->Show(owner);
-        if (result == kDialogCancelled)
+        for (;;)
         {
-            return kDialogCancelled;
-        }
-        if (FAILED(result))
-        {
-            return result;
-        }
+            result = dialog->Show(owner);
+            if (FAILED(result))
+                return result;
 
-        wil::unique_cotaskmem_string shellPath;
-        result = ReadDialogShellPath(dialog.get(), shellPath);
-        if (FAILED(result))
-        {
-            return result;
+            wil::unique_cotaskmem_string shellPath;
+            result = ReadDialogShellPath(dialog.get(), shellPath);
+            if (FAILED(result))
+                return result;
+            const auto path = HostBoundedPathView(shellPath.get());
+            if (! path || path->empty())
+                return kInvalidDialogInput;
+            const DWORD attributes    = project ? GetFileAttributesW(path->data()) : INVALID_FILE_ATTRIBUTES;
+            const bool existingFolder = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+            const bool guardFile      = ! project || (! existingFolder && PathLooksLikeZipProject(path->data()));
+            FileOutputTarget target;
+            if (guardFile)
+            {
+                result = ObserveFileOutputTarget(path->data(), target);
+                if (FAILED(result))
+                    return result;
+            }
+            if (guardFile ? target.acceptedVersion.has_value() : attributes != INVALID_FILE_ATTRIBUTES)
+            {
+                const auto file    = guardFile ? std::wstring_view{target.path} : path.value();
+                const auto prompt  = FormatStringResource(nullptr, project ? IDS_CONFIRM_PROJECT_OVERWRITE : IDS_CONFIRM_EXPORT_OVERWRITE, file);
+                const auto caption = LoadStringResource(nullptr, IDS_APP_TITLE);
+                const int answer   = MessageBoxW(owner, prompt.c_str(), caption.c_str(), MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+                if (answer == IDNO)
+                    continue;
+                if (answer != IDYES)
+                    return kDialogCancelled;
+            }
+            return request.TrySelectOutput(guardFile ? std::wstring_view{target.path} : path.value(), budget, false, target.acceptedVersion, guardFile)
+                       ? S_OK
+                       : kInvalidDialogInput;
         }
-        const auto path = HostBoundedPathView(shellPath.get());
-        if (! path || path->empty())
-        {
-            return kInvalidDialogInput;
-        }
-        return request.TrySelectOutput(path.value(), budget) ? S_OK : kInvalidDialogInput;
     }
     catch (const std::bad_alloc&)
     {
@@ -348,6 +368,7 @@ UINT LoadErrorStringId(ProjectIoStatus status) noexcept
         case ProjectIoStatus::Ok:
         case ProjectIoStatus::Invalid:
         case ProjectIoStatus::Encode:
+        case ProjectIoStatus::Conflict:
         case ::ProjectIoStatus::Cancelled:
         default: return IDS_ERROR_OPEN_PROJECT;
     }

@@ -10,6 +10,7 @@
 #include "WorkerWriteCompletion.h"
 #include "resource.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -60,7 +61,7 @@ public:
                       GpuResidencyReservation reservation,
                       HostWriteFormat format,
                       JpegExportOptions options,
-                      std::wstring path,
+                      ImageOutputTarget target,
                       std::shared_ptr<WorkerWriteCompletion> write)
         : RecordedDocumentReadbackJob(owner._jobs,
                                       owner._gpuWork,
@@ -77,7 +78,7 @@ public:
           _cpuAdmission(envelope.cpuBytes),
           _format(format),
           _options(options),
-          _path(std::move(path)),
+          _target(std::move(target)),
           _write(std::move(write)),
           _gate(owner._exportWorkTestGate),
           _ownerThread(GetCurrentThreadId())
@@ -138,8 +139,8 @@ private:
             return {JobStatus::Cancelled};
         if (_gate)
             _gate->encodeAttempts.fetch_add(1);
-        _status    = _format == HostWriteFormat::Jpeg ? EncodeJpegFile(image, _options, _path.c_str(), context.cancellation)
-                                                      : EncodePngFile(image, _options.resolution, _path.c_str(), context.cancellation);
+        _status    = _format == HostWriteFormat::Jpeg ? EncodeJpegFile(image, _options, _target, context.cancellation)
+                                                      : EncodePngFile(image, _options.resolution, _target, context.cancellation);
         _published = _status == ImageCodecStatus::Ok;
         if (_gate)
         {
@@ -182,13 +183,17 @@ private:
         else if (outcome == HostOutcome::Succeeded)
         {
             outcome = _status == ImageCodecStatus::Cancelled ? HostOutcome::Cancelled : HostOutcome::Failed;
-            error   = _status == ImageCodecStatus::TooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) : outcome == HostOutcome::Cancelled ? E_ABORT : E_FAIL;
+            error   = _status == ImageCodecStatus::TooLarge   ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                      : _status == ImageCodecStatus::Conflict ? HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)
+                      : outcome == HostOutcome::Cancelled     ? E_ABORT
+                                                              : E_FAIL;
         }
         if (outcome == HostOutcome::Failed)
         {
-            const auto stringId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)) ? IDS_ERROR_TOO_LARGE
-                                  : _format == HostWriteFormat::Jpeg                                           ? IDS_ERROR_EXPORT_JPEG
-                                                                                                               : IDS_ERROR_EXPORT_PNG;
+            const auto stringId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))      ? IDS_ERROR_TOO_LARGE
+                                  : error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)) ? IDS_ERROR_EXPORT_CONFLICT
+                                  : _format == HostWriteFormat::Jpeg                                                ? IDS_ERROR_EXPORT_JPEG
+                                                                                                                    : IDS_ERROR_EXPORT_PNG;
             ++_owner._errorsShown;
             _owner._lastErrorId = static_cast<UINT>(stringId);
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, static_cast<UINT>(stringId));
@@ -221,7 +226,7 @@ private:
     const std::uint64_t _cpuAdmission;
     const HostWriteFormat _format;
     const JpegExportOptions _options;
-    const std::wstring _path;
+    const ImageOutputTarget _target;
     const std::shared_ptr<WorkerWriteCompletion> _write;
     const std::shared_ptr<ExportWorkTestGate> _gate;
     const DWORD _ownerThread;
@@ -239,21 +244,7 @@ HRESULT Application::StartExportReadback(HostWriteFormat format) noexcept
     const auto path = _activeHostRequest->input.SelectedOutputPath();
     if (! path)
         return E_UNEXPECTED;
-    std::unique_ptr<std::array<wchar_t, 32768>> resolvedStorage;
-    try
-    {
-        resolvedStorage = std::make_unique<std::array<wchar_t, 32768>>();
-    }
-    catch (const std::bad_alloc&)
-    {
-        return E_OUTOFMEMORY; // Complete lexical-path admission refusal before history or worker acceptance.
-    }
-    auto& resolved    = *resolvedStorage;
-    const DWORD units = GetFullPathNameW(path->data(), static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
-    if (units == 0)
-        return HRESULT_FROM_WIN32(GetLastError());
-    if (units >= resolved.size() || units > kMaxImageOutputPathUnits)
-        return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+    const auto units   = path->size();
     const auto ordinal = _activeHostRequest->ordinal;
     _exportStamp       = _historyWork.Begin(_session.DocumentSerial(), ordinal, HistoryWorkKind::Commit);
     if (! _exportStamp && _hostFinishedStamp && _hostFinishedStamp->ordinal == ordinal)
@@ -287,15 +278,16 @@ HRESULT Application::StartExportReadback(HostWriteFormat format) noexcept
                     _exportStamp.reset();
                     return result;
                 }
-                std::unique_ptr<Job> job = std::make_unique<ExportReadbackJob>(*this,
-                                                                               _exportStamp.value(),
-                                                                               authority.value(),
-                                                                               envelope,
-                                                                               std::move(reservation),
-                                                                               format,
-                                                                               JpegExportOptions{_settings.jpegQuality, _session.Document()->resolution},
-                                                                               std::wstring(resolved.data(), units),
-                                                                               write);
+                std::unique_ptr<Job> job =
+                    std::make_unique<ExportReadbackJob>(*this,
+                                                        _exportStamp.value(),
+                                                        authority.value(),
+                                                        envelope,
+                                                        std::move(reservation),
+                                                        format,
+                                                        JpegExportOptions{_settings.jpegQuality, _session.Document()->resolution},
+                                                        ImageOutputTarget{std::wstring(path.value()), _activeHostRequest->input.SelectedOutputVersion()},
+                                                        write);
                 JobTicket ticket;
                 result = static_cast<HRESULT>(_jobs.Submit(job,
                                                            {.kind                  = JobClass::Io,
@@ -347,7 +339,8 @@ int Application::RunExportReadbackSelfTest() noexcept
         Admission,
         PixelBudget,
         PathBudget,
-        LaterTileBusy
+        LaterTileBusy,
+        Conflict
     };
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
@@ -365,6 +358,7 @@ int Application::RunExportReadbackSelfTest() noexcept
         HRESULT rebound = E_PENDING;
     };
 #pragma warning(pop)
+    static constexpr std::array<std::uint8_t, 4> competingBytes{0x52, 0x65, 0x64, 0x21};
 
     const auto dispatch = [](void* context, void* native) noexcept
     {
@@ -402,6 +396,8 @@ int Application::RunExportReadbackSelfTest() noexcept
             state.held = state.held && owner._exportWorkTestGate->quality.load() == state.quality && owner._exportWorkTestGate->resolution.load() == 72;
             owner._settings.jpegQuality = 0.05; // queued writer must retain the already captured options
         }
+        else if (state.mode == Mode::Conflict)
+            state.held = state.held && WriteFileBytesToDisk(state.output.c_str(), competingBytes.data(), competingBytes.size());
         owner._composition.ReleaseDocumentSurfaces();
         state.held = state.held && owner._composition.CanvasSurfaceBytes() == 0;
         (void)SetEvent(owner._exportWorkTestGate->release.get());
@@ -447,7 +443,8 @@ int Application::RunExportReadbackSelfTest() noexcept
                             Mode::Admission,
                             Mode::PixelBudget,
                             Mode::PathBudget,
-                            Mode::LaterTileBusy})
+                            Mode::LaterTileBusy,
+                            Mode::Conflict})
     {
         _session.CreateDocument(mode == Mode::PixelBudget ? 10001 : mode == Mode::LaterTileBusy ? 17 : 2, mode == Mode::PixelBudget ? 10000 : 1);
         _composition.SetTextureLimitForTest(mode == Mode::LaterTileBusy ? 16 : previousTextureLimit);
@@ -486,7 +483,7 @@ int Application::RunExportReadbackSelfTest() noexcept
         const auto actual    = receipt.Read();
         const bool cancelled = mode == Mode::CancelBefore || mode == Mode::CancelPublished;
         const bool admission = mode == Mode::Admission || mode == Mode::PixelBudget || mode == Mode::PathBudget;
-        const bool failed    = mode == Mode::Failure || mode == Mode::Allocation || admission || mode == Mode::LaterTileBusy;
+        const bool failed    = mode == Mode::Failure || mode == Mode::Allocation || admission || mode == Mode::LaterTileBusy || mode == Mode::Conflict;
         const auto expected  = mode == Mode::Stale ? HostOutcome::Stale
                                : cancelled         ? HostOutcome::Cancelled
                                : failed            ? HostOutcome::Failed
@@ -518,6 +515,14 @@ int Application::RunExportReadbackSelfTest() noexcept
                 }
             }
         }
+        else if (mode == Mode::Conflict)
+        {
+            const wil::unique_hfile file{CreateFileW(output.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+            std::array<std::uint8_t, competingBytes.size() + 1> actualBytes{};
+            DWORD read = 0;
+            correct    = correct && file && ReadFile(file.get(), actualBytes.data(), static_cast<DWORD>(actualBytes.size()), &read, nullptr) &&
+                         read == competingBytes.size() && std::equal(competingBytes.begin(), competingBytes.end(), actualBytes.begin());
+        }
         else
             correct = correct && GetFileAttributesW(output.c_str()) == INVALID_FILE_ATTRIBUTES;
         if (mode == Mode::Ordered)
@@ -530,11 +535,14 @@ int Application::RunExportReadbackSelfTest() noexcept
                 correct && _session.history.CurrentRevision() == revision && _session.history.IsModified() && _session.history.UndoCount() == historyCount;
         if (failed)
             correct = correct && _errorsShown == errors + 1 &&
-                      _lastErrorId == static_cast<UINT>(mode == Mode::PixelBudget ? IDS_ERROR_TOO_LARGE : IDS_ERROR_EXPORT_PNG) &&
+                      _lastErrorId == static_cast<UINT>(mode == Mode::PixelBudget ? IDS_ERROR_TOO_LARGE
+                                                        : mode == Mode::Conflict  ? IDS_ERROR_EXPORT_CONFLICT
+                                                                                  : IDS_ERROR_EXPORT_PNG) &&
                       actual.error == static_cast<std::int32_t>(mode == Mode::Failure         ? E_ACCESSDENIED
                                                                 : mode == Mode::PixelBudget   ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
                                                                 : mode == Mode::PathBudget    ? HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE)
                                                                 : mode == Mode::LaterTileBusy ? DXGI_ERROR_WAS_STILL_DRAWING
+                                                                : mode == Mode::Conflict      ? HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)
                                                                                               : E_OUTOFMEMORY);
         else
             correct = correct && _errorsShown == errors;

@@ -530,8 +530,8 @@ void TestProbeMemoryEstimators()
     invalid.manifestBytes = 0;
     Expect(rejected(invalid, pathUnits), "project-load-work.rejects-empty-manifest-plan");
     const ProjectLoadLimits empty{0, 0, 0, 128, 0};
-    Expect(ProjectLoadMemoryBytes(empty, pathUnits) == ProjectLoadMetadataMemoryBytes(empty, pathUnits),
-           "project-load-work.empty-project-needs-no-asset-reservation");
+    Expect(ProjectLoadMemoryBytes(empty, pathUnits) == ProjectLoadMetadataMemoryBytes(empty, pathUnits) + kProjectFolderScanBytes,
+           "project-load-work.empty-project-reserves-folder-version-scan-without-assets");
     const ProjectLoadLimits maximum{};
     Expect(ProjectLoadMemoryBytes(maximum, 32767) != 0 && ProjectLoadMemoryBytes(maximum, 32767) > ProjectLoadMetadataMemoryBytes(maximum, 32767),
            "project-load-work.hard-maxima-have-a-bounded-complete-reservation");

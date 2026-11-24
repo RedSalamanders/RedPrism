@@ -81,9 +81,12 @@
     <ClInclude Include="..\..\Common\TransformEdit.h" />
     <ClInclude Include="..\..\Common\ImageCodecs.h" />
     <ClInclude Include="..\..\Common\CodecFileStream.h" />
+    <ClInclude Include="..\..\Common\FileOutputTarget.h" />
+    <ClInclude Include="..\..\Common\GuardedFileCommit.h" />
     <ClInclude Include="..\..\Common\CodecMemoryStream.h" />
     <ClInclude Include="..\..\Common\ProjectStore.h" />
     <ClInclude Include="..\..\Common\Win32FilePath.h" />
+    <ClInclude Include="..\..\Common\ImageOutputTarget.h" />
     <ClInclude Include="..\..\Common\ProjectLoadWork.h" />
     <ClInclude Include="..\..\Common\ImageImportWork.h" />
     <ClInclude Include="IO.Tests.ImageImportWork.h" />
@@ -215,6 +218,7 @@
     <ClCompile Include="Io.Tests.ProjectDurabilityFaults.cpp" />
     <ClCompile Include="Io.Tests.LongPathSave.cpp" />
     <ClCompile Include="IO.Tests.FileIoBench.cpp" />
+    <ClCompile Include="..\..\Common\GuardedFileCommit.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
   </ItemGroup>
 

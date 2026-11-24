@@ -20,6 +20,7 @@
 
 // Probe values become enforced ceilings for the reopened decode graph. Changed input cannot grow its manifest,
 // layer count, aggregate pixel outputs or retained encoded ZIP buffer beyond this reservation.
+// Only the full load reads the folder identity. Its scan has a fixed reservation independent of asset counts.
 // Opaque WIC/libzip internals remain in global headroom; this is a declared peak, not a measured exact footprint.
 [[nodiscard]] inline std::uint64_t ProjectLoadMemoryBytes(const ProjectLoadLimits& limits, std::size_t pathUnits) noexcept
 {
@@ -31,5 +32,5 @@
     const auto maskThumbnails = (std::min)(masks, limits.layerCount * 96ull * 96);
     // Large PixelBuffers round by <16 MiB and have at least 16 MiB of useful pixels, so 2x logical bytes
     // bounds all output size classes. Small buffers add one 64-byte record each; thumbnails may briefly copy.
-    return metadata + 2 * (color + masks) + 2 * maskThumbnails + limits.layerCount * 4ull * 64 + limits.encodedAssetBytes;
+    return metadata + kProjectFolderScanBytes + 2 * (color + masks) + 2 * maskThumbnails + limits.layerCount * 4ull * 64 + limits.encodedAssetBytes;
 }

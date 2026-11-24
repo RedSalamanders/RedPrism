@@ -5,6 +5,7 @@
 #include "ContinuationQueue.h"
 #include "ContinuationReceipt.h"
 #include "EditorTool.h"
+#include "ImageOutputTarget.h"
 #include "OpacityInputOrder.h"
 #include "WandLayerSelectionWork.h"
 
@@ -538,6 +539,8 @@ public:
         if (this != &other)
         {
             _path        = std::move(other._path);
+            _version     = other._version;
+            _guardedFile = other._guardedFile;
             _reservation = std::move(other._reservation);
         }
         return *this;
@@ -546,10 +549,19 @@ public:
     {
         return _path;
     }
+    [[nodiscard]] std::optional<ImageOutputVersion> Version() const noexcept
+    {
+        return _version;
+    }
+    [[nodiscard]] bool GuardedFile() const noexcept
+    {
+        return _guardedFile;
+    }
 
 private:
     friend class HostRequest;
-    [[nodiscard]] static std::optional<HostSelectedOutput> TryCreate(std::wstring_view value, HostInputBudget& budget, bool failCopyAllocationForTest)
+    [[nodiscard]] static std::optional<HostSelectedOutput> TryCreate(
+        std::wstring_view value, HostInputBudget& budget, bool failCopyAllocationForTest, std::optional<ImageOutputVersion> version, bool guardedFile)
     {
         std::size_t bytes = sizeof(HostSelectedOutput) + 64;
         if (value.size() > HostInputBudget::kMaxPathUnits || ! HostAddCopiedTextBytes(bytes, value))
@@ -572,13 +584,19 @@ private:
         {
             return std::nullopt;
         }
-        return HostSelectedOutput(std::move(path), std::move(reservation.value()));
+        return HostSelectedOutput(std::move(path), std::move(reservation.value()), version, guardedFile);
     }
-    HostSelectedOutput(std::wstring path, HostInputBudget::Reservation reservation) noexcept : _reservation(std::move(reservation)), _path(std::move(path))
+    HostSelectedOutput(std::wstring path, HostInputBudget::Reservation reservation, std::optional<ImageOutputVersion> version, bool guardedFile) noexcept
+        : _reservation(std::move(reservation)),
+          _path(std::move(path)),
+          _version(version),
+          _guardedFile(guardedFile)
     {
     }
     HostInputBudget::Reservation _reservation;
     std::wstring _path;
+    std::optional<ImageOutputVersion> _version;
+    bool _guardedFile = false;
 };
 
 // UI-owned input only: no pixel/session snapshot, worker state, HWND, host pointer or captured callable.
@@ -769,13 +787,17 @@ public:
     }
     // Selection is an active-stage operation. On refusal or allocation failure preserve the old output; the
     // replacement's reservation must coexist with it. The returned view is borrowed only while this owner lives.
-    [[nodiscard]] bool TrySelectOutput(std::wstring_view path, HostInputBudget& budget, bool failCopyAllocationForTest = false)
+    [[nodiscard]] bool TrySelectOutput(std::wstring_view path,
+                                       HostInputBudget& budget,
+                                       bool failCopyAllocationForTest            = false,
+                                       std::optional<ImageOutputVersion> version = {},
+                                       bool guardedFile                          = false)
     {
         if (_reservation._owner != &budget || Receipt().Read().outcome != ContinuationOutcome::Pending)
         {
             return false;
         }
-        auto output = HostSelectedOutput::TryCreate(path, budget, failCopyAllocationForTest);
+        auto output = HostSelectedOutput::TryCreate(path, budget, failCopyAllocationForTest, version, guardedFile);
         if (! output)
         {
             return false;
@@ -786,6 +808,14 @@ public:
     [[nodiscard]] std::optional<std::wstring_view> SelectedOutputPath() const noexcept
     {
         return _selectedOutput ? std::optional<std::wstring_view>(_selectedOutput.value().Path()) : std::nullopt;
+    }
+    [[nodiscard]] std::optional<ImageOutputVersion> SelectedOutputVersion() const noexcept
+    {
+        return _selectedOutput ? _selectedOutput->Version() : std::nullopt;
+    }
+    [[nodiscard]] bool SelectedOutputIsGuardedFile() const noexcept
+    {
+        return _selectedOutput && _selectedOutput->GuardedFile();
     }
     [[nodiscard]] bool Finish(ContinuationOutcome outcome, std::int32_t error = 0) noexcept
     {

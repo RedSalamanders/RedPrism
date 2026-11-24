@@ -53,7 +53,7 @@ before the object is allowed: the document is the same.
 | --- | --- |
 | a settings document | its settings (`Loaded`) |
 | missing | the defaults; the template (the defaults, serialized) is written (`Missing`) |
-| not a settings document | the bytes move to `<path>.invalid-<yyyyMMdd-HHmmss-fff>`, the template is written, the defaults are used (`Invalid`) |
+| not a settings document | preserve the bytes in `<path>.invalid-<yyyyMMdd-HHmmss-fff>` before replacing the same accepted version with the template. Use defaults (`Invalid`) |
 | unreadable (I/O error, larger than 16 MiB) | the defaults; nothing is written (`Unreadable`) |
 
 ## Live reload
@@ -75,8 +75,11 @@ busy-poll watcher.
 
 ## Save
 
-`SettingsStore::Save(path, settings)` writes `<path>.tmp-<pid>` (flushed, and closed before a failed write deletes it)
-and replaces the file with `MoveFileExW` (`REPLACE_EXISTING | WRITE_THROUGH`), creating the directory tree. A valid
+`SettingsStore::SaveAccepted` writes to an exclusively owned sibling and flushes it before publication. The
+running application carries the version from its last accepted startup load, valid live reload, or successful
+save. The save checks that identity, size and timestamps still match. A newer edit or an unverified destination
+preserves the current disk file and leaves the pending settings in memory. A new filename uses a non-replacing rename
+after creating the directory tree. A valid
 existing document is merged: unknown fields and a newer `schema` survive, and so do the `shortcuts` entries this
 version cannot read and the unknown fields inside the entries it keeps (when the entries already say the settings'
 bindings the array is left exactly as the file has it; otherwise the unread entries stay first, then one entry per

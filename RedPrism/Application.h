@@ -224,7 +224,7 @@ public:
     [[nodiscard]] bool OpenCommandLinePaths(std::span<const std::wstring_view> paths) noexcept;
     void Shutdown() noexcept;
     // Settings (Specs/Core/Core_Settings.md): the file to read, watch and write; empty for a run without one.
-    void UseSettings(std::wstring path, const AppSettings& settings) noexcept;
+    void UseSettings(std::wstring path, const AppSettings& settings, std::optional<FileOutputTarget> acceptedTarget) noexcept;
 
 private:
     [[nodiscard]] bool EnableSelectionOutlineForTest(bool allowHidden = true) noexcept;
@@ -1684,6 +1684,9 @@ private:
     CanvasRenderer _composition;
     std::wstring _screenshotPath;
     std::wstring _documentPath;
+    std::optional<FileOutputVersion> _documentArchiveVersion;
+    std::optional<ProjectFolderVersion> _documentFolderVersion;
+    bool _documentIsArchive = false;
     uint32_t _screenshotDpi = 0;
     EditorTool _tool        = EditorTool::Move;
     // The Move tool's and the selection tools' header choices: host state, never the document session's (RF-810).
@@ -1895,6 +1898,7 @@ private:
     SizeDialog _sizeDialog;
     bool _forceWarp = false;
     std::wstring _settingsPath;
+    std::optional<FileOutputTarget> _settingsFileTarget;
     AppSettings _settings;
     wil::unique_hfind_change _settingsWatch;
     FILETIME _settingsSeenWrite{};

@@ -33,14 +33,18 @@ public:
                    CanvasDocument document,
                    std::optional<Guid> active,
                    Guid revision,
-                   std::wstring path,
+                   FileOutputTarget target,
+                   std::optional<bool> acceptedArchiveShape,
+                   std::optional<ProjectFolderVersion> acceptedFolder,
                    std::shared_ptr<WorkerWriteCompletion> write)
         : _owner(owner),
           _stamp(stamp),
           _document(std::move(document)),
           _active(active),
           _revision(revision),
-          _path(std::move(path)),
+          _target(std::move(target)),
+          _acceptedArchiveShape(acceptedArchiveShape),
+          _acceptedFolder(acceptedFolder),
           _write(std::move(write)),
           _gate(owner._projectSaveTestGate),
           _ownerThread(GetCurrentThreadId())
@@ -64,9 +68,10 @@ public:
             throw std::bad_alloc{};
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
-        const auto attributes = GetFileAttributesW(_path.c_str());
-        const bool folder     = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        const bool zip        = ! folder && PathLooksLikeZipProject(_path.c_str());
+        if (_acceptedArchiveShape)
+            _archive = *_acceptedArchiveShape;
+        else
+            _archive = PathLooksLikeZipProject(_target.path.c_str());
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
 #pragma warning(push)
@@ -197,7 +202,17 @@ public:
             },
                            &progress};
         }
-        _status = SaveProject(_path.c_str(), _document, _active, zip, context.cancellation, observer, faultPolicy);
+        _status = SaveProject(_target.path.c_str(),
+                              _document,
+                              _active,
+                              _archive,
+                              context.cancellation,
+                              observer,
+                              faultPolicy,
+                              _acceptedArchiveShape == true ? &_target : nullptr,
+                              &_publishedArchiveVersion,
+                              _acceptedArchiveShape == false ? &_acceptedFolder : nullptr,
+                              &_publishedFolderVersion);
         if (_gate && _gate->holdRecoveryReaderForTest)
         {
             progress.recoveryReader.reset(); // Retire the actual reader before the original acknowledgement.
@@ -224,7 +239,10 @@ public:
         std::int32_t error  = result.error;
         if (_published && current)
         {
-            _owner._documentPath = std::move(_path);
+            _owner._documentPath           = std::move(_target.path);
+            _owner._documentIsArchive      = _archive;
+            _owner._documentArchiveVersion = _publishedArchiveVersion;
+            _owner._documentFolderVersion  = _publishedFolderVersion;
             _owner._session.history.MarkSaved(_revision);
             outcome = result.status == JobStatus::Cancelled || _owner._historyWork.CancelRequested(_stamp) ? HostOutcome::Cancelled : HostOutcome::Succeeded;
             error   = outcome == HostOutcome::Cancelled ? E_ABORT : S_OK;
@@ -244,11 +262,16 @@ public:
         else if (outcome == HostOutcome::Succeeded && (_status != ProjectIoStatus::Ok || ! _published))
         {
             outcome = _status == ProjectIoStatus::Cancelled ? HostOutcome::Cancelled : HostOutcome::Failed;
-            error   = _status == ProjectIoStatus::TooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) : outcome == HostOutcome::Cancelled ? E_ABORT : E_FAIL;
+            error   = _status == ProjectIoStatus::TooLarge   ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                      : _status == ProjectIoStatus::Conflict ? kOutputVersionConflict
+                      : outcome == HostOutcome::Cancelled    ? E_ABORT
+                                                             : E_FAIL;
         }
         if (outcome == HostOutcome::Failed)
         {
-            const auto stringId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_SAVE_PROJECT;
+            const auto stringId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)) ? IDS_ERROR_TOO_LARGE
+                                  : error == static_cast<std::int32_t>(kOutputVersionConflict)                 ? IDS_ERROR_PROJECT_SAVE_CONFLICT
+                                                                                                               : IDS_ERROR_SAVE_PROJECT;
             ++_owner._errorsShown;
             _owner._lastErrorId = static_cast<UINT>(stringId);
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, static_cast<UINT>(stringId));
@@ -278,13 +301,18 @@ private:
     const CanvasDocument _document;
     const std::optional<Guid> _active;
     const Guid _revision;
-    std::wstring _path;
+    FileOutputTarget _target;
+    const std::optional<bool> _acceptedArchiveShape;
+    const std::optional<ProjectFolderVersion> _acceptedFolder;
     const std::shared_ptr<WorkerWriteCompletion> _write;
     const std::shared_ptr<ProjectSaveTestGate> _gate;
     const DWORD _ownerThread;
     unsigned int _assets    = 0;
     ProjectIoStatus _status = ProjectIoStatus::Encode;
     bool _published         = false; // worker-only writes, owner reads only after final acknowledged completion
+    bool _archive           = false;
+    std::optional<FileOutputVersion> _publishedArchiveVersion;
+    std::optional<ProjectFolderVersion> _publishedFolderVersion;
 };
 #pragma warning(pop)
 
@@ -321,8 +349,9 @@ HRESULT Application::StartProjectSave() noexcept
     HRESULT result = E_INVALIDARG;
     try
     {
-        const auto memory          = ProjectSaveMemoryBytes(_session.Document().value(), units);
-        constexpr auto bookkeeping = sizeof(ProjectSaveJob) + WorkerWriteCompletion::kReservationBytes;
+        const auto memory      = ProjectSaveMemoryBytes(_session.Document().value(), units);
+        const bool guardedFile = _activeHostRequest->input.SelectedOutputIsGuardedFile();
+        const auto bookkeeping = sizeof(ProjectSaveJob) + WorkerWriteCompletion::kReservationBytes + (guardedFile ? 0 : kProjectFolderScanBytes);
         if (memory != 0 && memory <= (std::numeric_limits<std::uint64_t>::max)() - bookkeeping)
         {
             if (_projectSaveTestGate && _projectSaveTestGate->throwAdmissionFailure)
@@ -333,13 +362,21 @@ HRESULT Application::StartProjectSave() noexcept
             {
                 CanvasDocument snapshot = _session.Document().value();
                 snapshot.selection.reset(); // selection is not a project manifest field
-                std::unique_ptr<Job> job = std::make_unique<ProjectSaveJob>(*this,
-                                                                            _projectSaveStamp.value(),
-                                                                            std::move(snapshot),
-                                                                            _session.ActiveLayerID(),
-                                                                            _session.history.CurrentRevision(),
-                                                                            std::wstring(resolved.data(), units),
-                                                                            write);
+                const bool currentFolder = ! _documentIsArchive && ! _documentPath.empty() &&
+                                           CompareStringOrdinal(_documentPath.c_str(), -1, path->data(), static_cast<int>(path->size()), TRUE) == CSTR_EQUAL;
+                std::optional<bool> acceptedArchiveShape;
+                if (guardedFile || currentFolder)
+                    acceptedArchiveShape = guardedFile;
+                std::unique_ptr<Job> job =
+                    std::make_unique<ProjectSaveJob>(*this,
+                                                     _projectSaveStamp.value(),
+                                                     std::move(snapshot),
+                                                     _session.ActiveLayerID(),
+                                                     _session.history.CurrentRevision(),
+                                                     FileOutputTarget{std::wstring(resolved.data(), units), _activeHostRequest->input.SelectedOutputVersion()},
+                                                     acceptedArchiveShape,
+                                                     currentFolder ? _documentFolderVersion : std::nullopt,
+                                                     write);
                 JobTicket ticket;
                 result = static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Io, _session.DocumentSerial(), memory + bookkeeping}, ticket));
                 if (SUCCEEDED(result))
@@ -382,7 +419,8 @@ int Application::RunProjectSaveSelfTest() noexcept
         PendingTransform,
         PendingOpacity,
         Admission,
-        PathBudget
+        PathBudget,
+        GuardedFolderConflict
     };
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
@@ -421,7 +459,8 @@ int Application::RunProjectSaveSelfTest() noexcept
                                   : owner._session.history.CurrentRevision() == state.revision) &&
                      owner._session.history.IsModified();
         const bool afterPublication = owner._projectSaveTestGate->afterPublication;
-        state.held                  = state.held && ((GetFileAttributesW(state.output.c_str()) != INVALID_FILE_ATTRIBUTES) == afterPublication);
+        const bool existingOutput   = state.mode == Mode::CancelClosePublished || state.mode == Mode::GuardedFolderConflict;
+        state.held = state.held && ((GetFileAttributesW(state.output.c_str()) != INVALID_FILE_ATTRIBUTES) == (existingOutput || afterPublication));
         owner.OnCommand(ChromeHost::kCommandZoomActual);
         state.held = state.held && owner._session.history.CurrentRevision() == state.settledRevision.value_or(state.revision);
         if (state.mode == Mode::CancelBefore || state.mode == Mode::CancelPublished || state.mode == Mode::CancelClosePublished)
@@ -478,7 +517,8 @@ int Application::RunProjectSaveSelfTest() noexcept
                             Mode::PendingTransform,
                             Mode::PendingOpacity,
                             Mode::Admission,
-                            Mode::PathBudget})
+                            Mode::PathBudget,
+                            Mode::GuardedFolderConflict})
     {
         // CreateDocument records the previous document in Undo. Explicitly close this independent fixture
         // first: its metadata output remains correctly charged while document/history/display readers exist.
@@ -504,6 +544,34 @@ int Application::RunProjectSaveSelfTest() noexcept
         }
         _session.CreateDocument(2, 1);
         const auto id = InsertPaintedLayer(_session, L"Save snapshot", 2, 1, {}, 0, 0xFF404040);
+        const std::wstring output =
+            mode == Mode::PathBudget ? L"C:\\" + std::wstring(32635, L'a') : (root / (std::to_wstring(static_cast<unsigned int>(mode)) + L".prism")).wstring();
+        const bool close           = mode == Mode::CancelClosePublished;
+        const bool guardedConflict = mode == Mode::GuardedFolderConflict;
+        std::optional<ProjectFolderVersion> externalVersion;
+        _documentPath      = close || guardedConflict ? output : L"before-save.prism";
+        _documentIsArchive = close;
+        _documentArchiveVersion.reset();
+        _documentFolderVersion.reset();
+        if (close || guardedConflict)
+        {
+            const auto& baseline = _session.Document().value();
+            if (SaveProject(output.c_str(), baseline, id, close) != ProjectIoStatus::Ok)
+                return 5;
+            const auto opened = LoadProject(output.c_str());
+            if (opened.status != ProjectIoStatus::Ok || (close ? ! opened.archiveVersion : ! opened.folderVersion))
+                return 5;
+            _documentArchiveVersion = opened.archiveVersion;
+            _documentFolderVersion  = opened.folderVersion;
+            if (guardedConflict)
+            {
+                if (SaveProject(output.c_str(), baseline, id, false) != ProjectIoStatus::Ok)
+                    return 5;
+                externalVersion = LoadProject(output.c_str()).folderVersion;
+                if (! externalVersion || externalVersion == _documentFolderVersion)
+                    return 5;
+            }
+        }
         _session.history.MarkSaved();
         _session.InvertPixels(); // independent captured literal is 191/255 in every color channel
         const auto revision     = _session.history.CurrentRevision();
@@ -532,14 +600,12 @@ int Application::RunProjectSaveSelfTest() noexcept
             _projectSaveTestGate->result = {JobStatus::Failed, E_ACCESSDENIED};
         _projectSaveTestGate->throwAllocationFailure = mode == Mode::Allocation;
         _projectSaveTestGate->throwAdmissionFailure  = mode == Mode::Admission;
-        const std::wstring output =
-            mode == Mode::PathBudget ? L"C:\\" + std::wstring(32635, L'a') : (root / (std::to_wstring(static_cast<unsigned int>(mode)) + L".prism")).wstring();
-        const bool close     = mode == Mode::CancelClosePublished;
-        _documentPath        = close ? output : L"before-save.prism";
-        _forcedDiscardAnswer = Prompts::Answer::First;
+        _forcedDiscardAnswer                         = Prompts::Answer::First;
         DocumentChanged();
         std::wstring callerPath = output;
-        const auto receipt      = close ? QueueHostInput(HostCloseProjectInput{}) : QueueHostInput(HostWriteInput{HostWriteFormat::Project, true, callerPath});
+        const auto receipt      = close             ? QueueHostInput(HostCloseProjectInput{})
+                                  : guardedConflict ? QueueHostInput(HostWriteInput{HostWriteFormat::Project})
+                                                    : QueueHostInput(HostWriteInput{HostWriteFormat::Project, true, callerPath});
         callerPath              = L"changed-after-admission.prism";
         std::optional<ContinuationReceipt> younger;
         if (mode == Mode::Ordered)
@@ -550,7 +616,7 @@ int Application::RunProjectSaveSelfTest() noexcept
         const bool cancelled = mode == Mode::CancelBefore || mode == Mode::CancelPublished || close;
         const auto expected  = mode == Mode::Stale ? HostOutcome::Stale
                                : cancelled         ? HostOutcome::Cancelled
-                               : mode == Mode::Failure || mode == Mode::Allocation || mode == Mode::Admission || mode == Mode::PathBudget
+                               : mode == Mode::Failure || mode == Mode::Allocation || mode == Mode::Admission || mode == Mode::PathBudget || guardedConflict
                                    ? HostOutcome::Failed
                                    : HostOutcome::Succeeded;
         const bool accountingSettled =
@@ -564,8 +630,8 @@ int Application::RunProjectSaveSelfTest() noexcept
             ! _historyWork.Busy() && accountingSettled && _hostInputBudget.Used() == 0 && _session.Document().has_value();
         if (cancelled)
             correct = correct && state.cancelPending;
-        const bool published =
-            mode != Mode::CancelBefore && mode != Mode::Failure && mode != Mode::Allocation && mode != Mode::Admission && mode != Mode::PathBudget;
+        const bool published = mode != Mode::CancelBefore && mode != Mode::Failure && mode != Mode::Allocation && mode != Mode::Admission &&
+                               mode != Mode::PathBudget && ! guardedConflict;
         if (published)
         {
             const auto loaded = LoadProject(output.c_str());
@@ -573,6 +639,12 @@ int Application::RunProjectSaveSelfTest() noexcept
                                 loaded.document.layers.size() == 1 && loaded.activeLayerID == id && loaded.document.layers.front().asset &&
                                 loaded.document.layers.front().asset->image.Data()[0] == 191 && loaded.document.layers.front().asset->image.Data()[1] == 191 &&
                                 loaded.document.layers.front().asset->image.Data()[2] == 191 && loaded.document.layers.front().asset->image.Data()[3] == 255;
+        }
+        else if (guardedConflict)
+        {
+            const auto current = LoadProject(output.c_str());
+            correct            = correct && current.status == ProjectIoStatus::Ok && current.folderVersion == externalVersion && _documentPath == output &&
+                                 _session.history.CurrentRevision() == revision && _session.history.IsModified();
         }
         else
             correct = correct && GetFileAttributesW(output.c_str()) == INVALID_FILE_ATTRIBUTES && _documentPath == L"before-save.prism" &&
@@ -601,6 +673,9 @@ int Application::RunProjectSaveSelfTest() noexcept
                       actual.error == static_cast<std::int32_t>(mode == Mode::Failure      ? E_ACCESSDENIED
                                                                 : mode == Mode::PathBudget ? HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE)
                                                                                            : E_OUTOFMEMORY);
+        else if (guardedConflict)
+            correct = correct && _errorsShown == errors + 1 && _lastErrorId == IDS_ERROR_PROJECT_SAVE_CONFLICT &&
+                      actual.error == static_cast<std::int32_t>(kOutputVersionConflict);
         else
             correct = correct && _errorsShown == errors;
         if (! correct)

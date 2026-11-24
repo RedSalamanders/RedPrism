@@ -2090,11 +2090,12 @@ not synchronous file reads. Full configuration and performance qualification are
 
 `export-readback-memory.*` adds nineteen checks for 4K/45 MP/100 MP admission, monotonic/path/metadata charges,
 invalid side/count/curve/path limits, rounded full-canvas readback and shared sparse identity without materialization.
-The fifteen `export-host.case=*` WARP scenarios cover PNG/JPEG literal output, younger mutation ordering, pre/post
+The sixteen `export-host.case=*` WARP scenarios cover PNG/JPEG literal output, younger mutation ordering, pre/post
 publication cancellation, returned failure, worker/admission allocation failure, stale document, device changes
 before encoding and after publication, captured quality/resolution, oversized output refusal before allocation,
-path suffix-space refusal before Run, and a persistent second-tile Map failure after the first tile copied.
-The latter requires no encode visit and no output file, exactly one failure receipt/notice and unchanged history.
+path suffix-space refusal before Run, a persistent second-tile Map failure after the first tile copied, and
+a competing creation before encoding. The Map case requires no encode visit and no output file. The competing
+creation case checks that its bytes survive and the dirty revision stays available. Both require one failure receipt and notice.
 Worker gates prove the request/barrier/reservation remain held with zero lent mappings/utility bytes; hidden
 completion makes no Present. Device-change cases require one encode attempt. Failure notices occur exactly once;
 terminal paths leave no barrier, reserved bytes, slot or utility target. PNG is exact opaque 191; JPEG RGB is within

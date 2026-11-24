@@ -98,16 +98,22 @@ admitted production graphs described below.
 - JPEG: 24 bpp BGR, quality in (0, 1], default 0.8, document resolution. A transparent pixel is flattened onto an
   opaque white matte (legacy `ImageExporter.jpeg`'s default `JPEGOptions()`), not dropped to black. Live JPEG
   preview may use the GPU later; CPU WIC is sufficient for C5/C7 export.
-- Both write a uniquely named, exclusively created temp file beside the destination, check exact writes,
-  flush and close it, then replace the destination atomically (`ReplaceFileW`,
-  falling back to `MoveFileExW`), so a crash mid-export never leaves a truncated file at the destination path.
+- Both write a uniquely named, exclusively created temporary file beside the destination. They check exact writes,
+  flush the completed file, and publish by renaming the owned handle. A new destination uses a rename that refuses
+  an existing name, including a competing creation while the export was queued.
+- Replacing a file requires the volume, 128-bit file identity, size and write and change timestamps observed before accepting the
+  overwrite. Publication verifies the guard's stamp, denies ordinary competing writers, and rechecks that the
+  name still identifies the accepted version. A POSIX handle rename keeps the guard open. A classic rename
+  releases the guard and checks the name again immediately before the rename. Windows leaves an interval
+  between checking the name and renaming the temporary. An unverified or changed version reports a conflict
+  and preserves the existing bytes. Leaf reparse points and destinations without a verifiable identity are refused.
 
 Export selects an exact sibling using the [project staging naming rule](IO_ProjectFormat.md#win32-staging-names):
 retain the destination leaf when its generated suffix fits 255 UTF-16 units; otherwise use the short GUID leaf
 in that same parent. Exclusive creation and exact owned-path cleanup preserve unrelated siblings. The destination
 and generated temporary each receive the appropriate Win32 API spelling; resolving an ordinary path precedes
 adding an extended prefix. Already extended/device spellings remain intact. Codec caps, pixels, quality,
-metadata, cancellation checkpoints and the publication boundary are unchanged.
+metadata and cancellation checkpoints retain the encoded output contract.
 
 ## Detached clipboard byte preparation (P1.7 F5a)
 
@@ -193,7 +199,7 @@ UI/digest/G1 costs.
 
 ## Status
 
-`Ok`, `Unreadable`, `Unsupported`, `TooLarge`, `HeifUnavailable`, `Encode`, `Cancelled`.
+`Ok`, `Unreadable`, `Unsupported`, `TooLarge`, `HeifUnavailable`, `Encode`, `Cancelled`, `Conflict`.
 
 ## Worker preparation and cancellation
 
@@ -220,7 +226,8 @@ File PNG/JPEG encodes use the private `CodecFileStream` destination directly. It
 512 MiB cap: Write/Seek/SetSize reject exceeding the cap before changing the file or cursor. No whole encoded
 HGLOBAL or output vector is retained by file encoding. Memory encoding keeps its existing output API. The
 single calling worker owns stream cursor operations; only COM reference counts may be accessed concurrently.
-Commit checks flush; checked close transfers and checks the handle close before publication. WIC internal
+Commit checks flush. Export retains the handle through publication and cleans up a failed attempt through
+that same owned handle. WIC internal
 codec allocations remain part of whole-graph admission/headroom. This reduces encoded-buffer retention at the
 cost of disk staging; it is not a claim of faster encoding.
 
@@ -234,6 +241,9 @@ Debug. `ImageCodecWorkTests` adds independent
 literal premultiplied PNG pixels, sparse Gray/BGRA multi-band round trips, sparse JPEG bands crossing an alpha
 stripe (quality 1, 12/255 RGB tolerance away from color edges), unchanged sparse source storage, precancelled
 output clearing, distinct existing export preservation and owned-temp cleanup after replacement failure.
+The guarded export controls exercise denied writers, replacement and deletion before the final check, new-name
+contention, forced classic commit and its second check, cancellation, and successful retry against a newly
+observed version. They compare the exact prior and competing bytes.
 `CodecFileStreamTests` proves hard-cap refusal without partial output, literal write/overwrite/read and retained
 prefix after resize, EOF/count semantics, cursor preservation, checked/closed state, cancellation, shared COM
 identity/lifetime and CREATE_NEW collision preservation. Extended bytes are not assumed to be zero.

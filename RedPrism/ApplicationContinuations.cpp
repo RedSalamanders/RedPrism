@@ -997,6 +997,17 @@ void Application::RunHostContinuation() noexcept
                 const auto result = SelectHostOutput(_hostWriteFormat, write && write->saveAs);
                 if (FAILED(result))
                 {
+                    if (result != HRESULT_FROM_WIN32(ERROR_CANCELLED) && _hostWriteFormat != HostWriteFormat::Project)
+                    {
+                        const auto stringId = result == HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) || result == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ||
+                                                      result == E_ACCESSDENIED
+                                                  ? IDS_ERROR_EXPORT_CONFLICT
+                                              : _hostWriteFormat == HostWriteFormat::Jpeg ? IDS_ERROR_EXPORT_JPEG
+                                                                                          : IDS_ERROR_EXPORT_PNG;
+                        ++_errorsShown;
+                        _lastErrorId = static_cast<UINT>(stringId);
+                        _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                    }
                     FinishHostContinuation({result == HRESULT_FROM_WIN32(ERROR_CANCELLED) ? HostOutcome::Cancelled : HostOutcome::Failed, result});
                     return;
                 }

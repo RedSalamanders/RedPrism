@@ -1,4 +1,4 @@
-﻿#include "CodecFileStream.h"
+#include "CodecFileStream.h"
 #include "Win32FilePath.h"
 
 #include <algorithm>
@@ -39,7 +39,7 @@ HRESULT CodecFileStream::Open(const wchar_t* path, std::uint64_t maximumBytes, C
     if (FAILED(pathResult))
         return pathResult;
     wil::unique_hfile file{CreateFileW(apiPath.c_str(),
-                                       readOnly ? GENERIC_READ : GENERIC_READ | GENERIC_WRITE,
+                                       readOnly ? GENERIC_READ : GENERIC_READ | GENERIC_WRITE | DELETE,
                                        readOnly ? FILE_SHARE_READ : 0,
                                        nullptr,
                                        readOnly ? OPEN_EXISTING : CREATE_NEW,
@@ -64,9 +64,11 @@ HRESULT CodecFileStream::Open(const wchar_t* path, std::uint64_t maximumBytes, C
     catch (const std::bad_alloc&)
     {
         // Explicit noexcept admission boundary: no owner is published and the entire operation fails.
-        file.reset();
         if (! readOnly)
-            (void)DeleteFileW(apiPath.c_str());
+        {
+            FILE_DISPOSITION_INFO disposition{TRUE};
+            (void)SetFileInformationByHandle(file.get(), FileDispositionInfo, &disposition, sizeof(disposition));
+        }
         return E_OUTOFMEMORY;
     }
 }
@@ -251,6 +253,23 @@ HRESULT CodecFileStream::CloseChecked() noexcept
         return flushed;
     const HANDLE handle = _file.release();
     return CloseHandle(handle) ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+}
+
+HRESULT CodecFileStream::PublishTemporary(const FileOutputTarget& target, FileOutputPublishPolicy policy)
+{
+    if (! _file || _readOnly || _dirty)
+        return STG_E_INVALIDFUNCTION;
+    return PublishFileOutput(_file.get(), target, _cancellation, policy);
+}
+
+void CodecFileStream::DiscardTemporary() noexcept
+{
+    if (_file && ! _readOnly)
+    {
+        FILE_DISPOSITION_INFO disposition{TRUE};
+        (void)SetFileInformationByHandle(_file.get(), FileDispositionInfo, &disposition, sizeof(disposition));
+        _file.reset();
+    }
 }
 
 HRESULT CodecFileStream::Revert() noexcept

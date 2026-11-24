@@ -320,6 +320,13 @@ alone is insufficient. Undecoded prefixes in inline data are counted separately,
 not accepted as decoded instructions. The scan is a VEX/EVEX boundary gate; it does not prove safety of arbitrary
 third-party DLL dispatch or replace execution on baseline hardware. Those libraries need their own qualification.
 
+With MSVC 14.52 Release LTCG, the intrinsic also appears inside the exact `std::_WChar_traits<wchar_t>::find`
+procedures in `IO.Tests.Runner.obj` and `Host.Tests.Runner.obj`. The [IO evidence](../TestRuns/Msvc1452ReleaseOptimization_2026-10-23.md)
+binds its PDB range and runtime guard. In the guarded-save Host test link at `83044fcb`, the matching PDB attributes
+all eight vector instructions to the 380-byte procedure beginning at `0x1400230f0`. The branch to the
+SSE2 path tests `_Avx2WmemEnabled` at `0x1401f1200` (PDB data section offset 12800), then checks the element
+count before entering the AVX2 path. The allowlist binds each wrapper to its exact object and PDB range.
+
 MSVC can put a switch table inside an executable contribution, and its DWORD RVAs or byte indices can decode as VEX
 or EVEX instructions. Whether they do depends only on the address at which the linker places the procedure, so any relink
 can turn an accepted table into a violation. MSVC emits each such table after all of its procedure's code and marks it

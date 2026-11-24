@@ -228,6 +228,7 @@
     <ClInclude Include="Host.Tests.WarpFactoryLifetime.h" />
     <ClCompile Include="Host.Tests.WarpPreviewLifetime.cpp" />
     <ClInclude Include="Host.Tests.WarpPreviewLifetime.h" />
+    <ClCompile Include="..\..\Common\GuardedFileCommit.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\..\Common\WorkerPool.cpp" />

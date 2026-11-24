@@ -609,7 +609,10 @@ int Application::RunFileEndSessionSelfTest() noexcept
                    "actual-deadline-cancels-original-receipt-and-preserves-selected-publication-truth");
         const bool fault         = (scenario.fault != ProjectSaveFaultStage::Count && ! scenario.publishedCleanup) || nativeRecovery || scenario.lockedOutput ||
                                    scenario.nativeAssetError;
-        const auto failureNotice = static_cast<unsigned int>(project ? IDS_ERROR_SAVE_PROJECT : jpeg ? IDS_ERROR_EXPORT_JPEG : IDS_ERROR_EXPORT_PNG);
+        const auto failureNotice = static_cast<unsigned int>(project                 ? IDS_ERROR_SAVE_PROJECT
+                                                             : scenario.lockedOutput ? IDS_ERROR_EXPORT_CONFLICT
+                                                             : jpeg                  ? IDS_ERROR_EXPORT_JPEG
+                                                                                     : IDS_ERROR_EXPORT_PNG);
         expect(state.visited && state.heldBefore, "original-writer-graph-is-held-at-actual-phase");
         expect(state.earlierQueryHeld && state.reason && state.critical && state.queryDidNotCancel, "queries-obey-stage-policy-with-localized-reason");
         expect(state.helperJoined && state.waitAcknowledged, "confirmed-end-waits-only-for-worker-event-or-timeout");
@@ -943,10 +946,10 @@ int Application::RunFileEndSessionSelfTest() noexcept
         if (scenario.lockedOutput)
         {
             const auto& trace = *_exportWorkTestGate;
-            expect(outputReader && trace.encodeAttempts.load() == 1 && trace.encodedStatusForTest == ImageCodecStatus::Encode && ! trace.publishedForTest,
+            expect(outputReader && trace.encodeAttempts.load() == 1 && trace.encodedStatusForTest == ImageCodecStatus::Conflict && ! trace.publishedForTest,
                    "real-destination-reader-refuses-original-encoder-publication-once");
-            expect(state.receipt.Read().outcome == HostOutcome::Failed && state.receipt.Read().error == E_FAIL && _errorsShown == notices + 1 &&
-                       _lastErrorId == failureNotice,
+            expect(state.receipt.Read().outcome == HostOutcome::Failed && state.receipt.Read().error == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) &&
+                       _errorsShown == notices + 1 && _lastErrorId == failureNotice,
                    "actual-native-encode-failure-applies-one-original-receipt-and-format-notice");
             std::vector<std::uint8_t> retained;
             expect(ReadLiteralFile(output, retained) && retained == oldBytes && HasNoOwnedSaveSiblings(output),

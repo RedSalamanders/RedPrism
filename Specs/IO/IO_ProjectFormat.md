@@ -47,10 +47,11 @@ fails, the save fails without a `Published` report; the old complete tree remain
 new staging tree is cleaned up when possible, and the failure observer receives both rename errors. When a save
 is retried while `dest` is absent, retain the surviving `dest.old` through the new publication attempt; a failed
 attempt must restore or preserve that same recovery tree. Remove that backup only after successful publication.
-Once staging → `dest` succeeds, publication is irreversible: report `Published` and return `Ok` even if later backup cleanup
-fails; retain `dest.old` as recovery and report its exact cleanup error. Cleanup reports never claim publication or
-replace the initiating failure status. Cleanup touches only the exact reserved backup or uniquely created staging
-path, never sibling names selected by a wildcard.
+After staging → `dest` succeeds, report `Published` and return `Ok`. Before removing the recovery backup, verify its accepted
+version on an open directory handle and move it through that handle into the save's vacant staging name. Verify its
+members after the move, then remove the owned tree. If the backup changes before the move, preserve it and report
+the conflict. If cleanup fails after the move, return the surviving tree to `dest.old` when that name is vacant.
+The cleanup observer reports the exact failure and both recovery names remain available for inspection.
 
 Before the first successful rotation rename, a **native** destination-to-backup rename error
 `ERROR_ACCESS_DENIED` or `ERROR_SHARING_VIOLATION` permits at most two additional attempts after one-shot worker
@@ -98,10 +99,23 @@ traversing their targets. Paths are bounded to 32,767 UTF-16 units and ordinary 
 exceeding either reports ERROR_FILENAME_EXCED_RANGE. Real cleanup errors may leave a partly cleaned owned tree.
 Read-only files are not forcibly changed. Capture and report the initiating Win32 error before later cleanup.
 
+Opening an exploded project records the root identity and a bounded digest of member names, identities, sizes,
+timestamps and types. The scan observes reparse entries without following them. The save worker checks the
+accepted version before staging and again on the handle used to move the root to `dest.old`. It checks the moved
+tree before publication and only retires a verified recovery tree. A conflicting edit leaves the current complete
+tree recoverable and keeps the document's pending edits. A competing creation at a vacant destination is preserved.
+If a filesystem or the scan bounds prevent verification, the project can still be read and saved to a new archive.
+
 ZIP projects write into a unique file in the exact destination parent using the sibling naming rule below,
-opened with `ZIP_CREATE | ZIP_EXCL`, then
-`ReplaceFileW` (with the existing `MoveFileExW` fallback). Each staged manifest/asset file is flushed and closed
-successfully before publication; ZIP close, flush, and handle close must all succeed before replacement. A failed
+opened with `ZIP_CREATE | ZIP_EXCL`. Each staged manifest and asset is flushed and closed
+successfully before publication. ZIP close, flush and handle close must also succeed. The reopened archive
+must match the flushed temporary's identity before a guarded rename can publish it.
+
+Opening an archive records the accepted file ID, size and timestamps for subsequent saves. The Save As
+confirmation carries the version observed before the prompt. The writer compares it before staging and at
+publication. A competing edit, rename or creation leaves the competing bytes in place and keeps the
+document's pending edits. A destination that cannot be guarded, including a file held open without delete sharing,
+reports a conflict. A new archive name uses a non-replacing rename. A failed
 pre-publication staging or durability step leaves the previous destination intact and removes only the temporary
 file or directory owned by that save. Existing ZIP readers accept both stored and deflated entries. Writers store
 already encoded PNG assets and deflate the manifest.

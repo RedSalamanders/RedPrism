@@ -2,11 +2,13 @@
 
 #include "CodecFileStream.h"
 #include "CodecMemoryStream.h"
+#include "OutputPathLimits.h"
 #include "RasterWork.h"
 #include "Utf8.h"
 #include "Win32FilePath.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <cwctype>
 #include <span>
@@ -610,28 +612,24 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     bytes = std::move(encoded);
     return ImageCodecStatus::Ok;
 }
-[[nodiscard]] ImageCodecStatus EncodeToFile(
-    const Raster& image, const GUID& container, double quality, double resolution, const wchar_t* path, CancelToken cancellation)
+[[nodiscard]] ImageCodecStatus EncodeToFile(const Raster& image,
+                                            const GUID& container,
+                                            double quality,
+                                            double resolution,
+                                            const ImageOutputTarget& target,
+                                            CancelToken cancellation,
+                                            ImageOutputPublishPolicy policy)
 {
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    if (path == nullptr || ! image.HasStorage())
+    if (target.path.empty() || target.path.size() > kMaxImageOutputPathUnits || ! image.HasStorage())
     {
         return ImageCodecStatus::Encode;
     }
-    // A temp file beside the destination, flushed and then swapped in atomically, so a crash or a failed write
-    // never leaves a truncated PNG/JPEG at `path` and a concurrent reader never sees a partial file.
-    if (cancellation.IsCancelled())
-        return ImageCodecStatus::Cancelled;
+    // The destination becomes visible only after the exclusive sibling has been written and flushed.
     const std::wstring suffix = L".~" + Guid::Generate().ToString();
-    std::wstring apiTarget;
-    const bool resolveTarget = std::wstring_view{path}.size() < MAX_PATH && std::wstring_view{path}.size() + suffix.size() >= MAX_PATH;
-    const HRESULT targetResult =
-        resolveTarget ? Win32FilePath::Resolve(path, Win32FilePath::Use::File, apiTarget) : Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiTarget);
-    if (FAILED(targetResult))
-        return ImageCodecStatus::Encode;
     std::wstring temp;
-    if (FAILED(Win32FilePath::SiblingWithSuffix(apiTarget, suffix, temp)))
+    if (FAILED(Win32FilePath::SiblingWithSuffix(target.path, suffix, temp)))
         return ImageCodecStatus::Encode;
     std::wstring apiTemp;
     const HRESULT tempResult = Win32FilePath::PrefixResolvedPath(temp.c_str(), Win32FilePath::Use::File, apiTemp);
@@ -641,39 +639,33 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     const HRESULT created = CodecFileStream::Create(apiTemp.c_str(), kMaxEncodedBytes, cancellation, file.put());
     if (FAILED(created))
         return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Encode;
-    auto cleanup = wil::scope_exit([&]
-    {
-        file.reset();
-        (void)DeleteFileW(apiTemp.c_str());
-    });
+    auto cleanup = wil::scope_exit([&] { file->DiscardTemporary(); });
     std::vector<std::uint8_t> unused;
     const auto encoded = EncodeToFormat(image, container, quality, resolution, unused, cancellation, file.get());
     if (encoded != ImageCodecStatus::Ok)
         return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : encoded;
     STATSTG stats{};
-    if (FAILED(file->Stat(&stats, STATFLAG_NONAME)) || stats.cbSize.QuadPart == 0 || stats.cbSize.QuadPart > kMaxEncodedBytes || FAILED(file->CloseChecked()))
+    if (FAILED(file->Stat(&stats, STATFLAG_NONAME)) || stats.cbSize.QuadPart == 0 || stats.cbSize.QuadPart > kMaxEncodedBytes ||
+        FAILED(file->Commit(STGC_DEFAULT)))
         return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Encode;
-    file.reset();
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    const DWORD existing = GetFileAttributesW(apiTarget.c_str());
-    bool replaced        = false;
-    if (existing != INVALID_FILE_ATTRIBUTES && (existing & FILE_ATTRIBUTE_DIRECTORY) == 0)
+    const HRESULT publish = file->PublishTemporary(target, policy);
+    if (SUCCEEDED(publish))
     {
-        replaced = ReplaceFileW(apiTarget.c_str(), apiTemp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr) != 0;
+        cleanup.release();
+        return ImageCodecStatus::Ok;
     }
-    if (! replaced)
-    {
-        replaced = MoveFileExW(apiTemp.c_str(), apiTarget.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
-    }
-    if (! replaced)
-    {
-        return ImageCodecStatus::Encode;
-    }
-    cleanup.release();
-    return ImageCodecStatus::Ok;
+    if (publish == E_ABORT)
+        return ImageCodecStatus::Cancelled;
+    return publish == kOutputVersionConflict ? ImageCodecStatus::Conflict : ImageCodecStatus::Encode;
 }
 } // namespace
+
+std::int32_t ObserveImageOutputTarget(const wchar_t* path, ImageOutputTarget& target) noexcept
+{
+    return ObserveFileOutputTarget(path, target);
+}
 
 bool WriteFileBytesToDisk(const wchar_t* path, const std::uint8_t* bytes, std::size_t size) noexcept
 {
@@ -957,7 +949,16 @@ ImageCodecStatus EncodePng(
 
 ImageCodecStatus EncodePngFile(const Raster& image, double resolution, const wchar_t* path, CancelToken cancellation)
 {
-    return EncodeToFile(image, GUID_ContainerFormatPng, 1.0, resolution, path, cancellation);
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    ImageOutputTarget target;
+    return SUCCEEDED(ObserveImageOutputTarget(path, target)) ? EncodePngFile(image, resolution, target, cancellation) : ImageCodecStatus::Encode;
+}
+
+ImageCodecStatus EncodePngFile(
+    const Raster& image, double resolution, const ImageOutputTarget& target, CancelToken cancellation, ImageOutputPublishPolicy policy)
+{
+    return EncodeToFile(image, GUID_ContainerFormatPng, 1.0, resolution, target, cancellation, policy);
 }
 
 ImageCodecStatus EncodeJpeg(
@@ -969,5 +970,14 @@ ImageCodecStatus EncodeJpeg(
 
 ImageCodecStatus EncodeJpegFile(const Raster& image, const JpegExportOptions& options, const wchar_t* path, CancelToken cancellation)
 {
-    return EncodeToFile(image, GUID_ContainerFormatJpeg, options.quality, options.resolution, path, cancellation);
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    ImageOutputTarget target;
+    return SUCCEEDED(ObserveImageOutputTarget(path, target)) ? EncodeJpegFile(image, options, target, cancellation) : ImageCodecStatus::Encode;
+}
+
+ImageCodecStatus EncodeJpegFile(
+    const Raster& image, const JpegExportOptions& options, const ImageOutputTarget& target, CancelToken cancellation, ImageOutputPublishPolicy policy)
+{
+    return EncodeToFile(image, GUID_ContainerFormatJpeg, options.quality, options.resolution, target, cancellation, policy);
 }

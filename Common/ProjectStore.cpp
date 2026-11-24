@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bcrypt.h>
 #include <climits>
 #include <cmath>
 #include <cstddef>
@@ -70,6 +71,157 @@ struct Manifest
     // long generated member can be compared safely by ExplodedMemberPathAllowed across namespace spellings.
     std::wstring apiPath;
     return FAILED(Win32FilePath::Resolve(path, use, apiPath)) ? std::wstring{} : std::move(apiPath);
+}
+
+[[nodiscard]] wil::unique_hfile OpenProjectEntry(const std::wstring& path, DWORD additionalAccess = 0) noexcept
+{
+    return wil::unique_hfile{CreateFileW(path.c_str(),
+                                         FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | additionalAccess,
+                                         FILE_SHARE_READ,
+                                         nullptr,
+                                         OPEN_EXISTING,
+                                         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                                         nullptr)};
+}
+
+[[nodiscard]] bool ReadProjectFolderRoot(HANDLE folder, ProjectFolderVersion& version) noexcept
+{
+    FILE_ID_INFO identity{};
+    FILE_BASIC_INFO basic{};
+    if (! GetFileInformationByHandleEx(folder, FileIdInfo, &identity, sizeof(identity)) ||
+        ! GetFileInformationByHandleEx(folder, FileBasicInfo, &basic, sizeof(basic)) ||
+        (basic.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != FILE_ATTRIBUTE_DIRECTORY)
+        return false;
+    constexpr FILE_ID_128 noIdentity{};
+    if (std::memcmp(identity.FileId.Identifier, noIdentity.Identifier, sizeof(noIdentity.Identifier)) == 0)
+        return false;
+    std::memcpy(version.fileId.data(), identity.FileId.Identifier, version.fileId.size());
+    version.volume        = identity.VolumeSerialNumber;
+    version.lastWriteTime = basic.LastWriteTime.QuadPart;
+    version.changeTime    = basic.ChangeTime.QuadPart;
+    return true;
+}
+
+[[nodiscard]] bool SameMovedProjectFolder(const ProjectFolderVersion& observed, const ProjectFolderVersion& prior) noexcept
+{
+    // A same-volume root rename changes the root timestamps. Member identities and stamps must still match.
+    return observed.volume == prior.volume && observed.fileId == prior.fileId && observed.members == prior.members;
+}
+
+using FolderMemberDigest = std::array<std::uint8_t, 32>;
+
+[[nodiscard]] bool AppendFolderDigest(BCRYPT_HASH_HANDLE hash, const void* bytes, std::size_t size) noexcept
+{
+    return BCryptHashData(hash, static_cast<PUCHAR>(const_cast<void*>(bytes)), static_cast<ULONG>(size), 0) >= 0;
+}
+
+[[nodiscard]] bool FinishFolderDigest(BCRYPT_HASH_HANDLE hash, FolderMemberDigest& output) noexcept
+{
+    return BCryptFinishHash(hash, output.data(), static_cast<ULONG>(output.size()), 0) >= 0;
+}
+
+struct ProjectFolderScan final
+{
+    CancelToken cancellation;
+    std::size_t count = 0;
+
+    [[nodiscard]] bool ReadMembers(const std::wstring& root, HANDLE folder, unsigned int depth, FolderMemberDigest& output)
+    {
+        constexpr std::size_t maxMembers = 3u * kMaxLayerCount + 4096u;
+        if (depth >= 128 || cancellation.IsCancelled())
+            return false;
+        ProjectFolderVersion before{};
+        if (! ReadProjectFolderRoot(folder, before))
+            return false;
+        WIN32_FIND_DATAW data{};
+        wil::unique_hfind search;
+        {
+            std::wstring pattern;
+            if (FAILED(Win32FilePath::PrefixResolvedPath((root + L"\\*").c_str(), Win32FilePath::Use::Directory, pattern)))
+                return false;
+            search.reset(FindFirstFileW(pattern.c_str(), &data));
+            if (! search && GetLastError() != ERROR_FILE_NOT_FOUND)
+                return false;
+        }
+        // Each fixed-size digest binds a name and its identity. Sorting those digests makes the result
+        // independent of enumeration order with no retained copies of the potentially long names.
+        std::vector<FolderMemberDigest> members;
+        if (search)
+        {
+            do
+            {
+                const std::wstring_view name{data.cFileName};
+                if (name == L"." || name == L"..")
+                    continue;
+                if (count == maxMembers || cancellation.IsCancelled())
+                    return false;
+                ++count;
+                std::wstring member;
+                if (FAILED(Win32FilePath::PrefixResolvedPath((root + L"\\" + data.cFileName).c_str(), Win32FilePath::Use::File, member)))
+                    return false;
+                const auto handle = OpenProjectEntry(member);
+                FILE_ID_INFO identity{};
+                FILE_BASIC_INFO basic{};
+                FILE_STANDARD_INFO standard{};
+                if (! handle || ! GetFileInformationByHandleEx(handle.get(), FileIdInfo, &identity, sizeof(identity)) ||
+                    ! GetFileInformationByHandleEx(handle.get(), FileBasicInfo, &basic, sizeof(basic)) ||
+                    ! GetFileInformationByHandleEx(handle.get(), FileStandardInfo, &standard, sizeof(standard)) || standard.DeletePending)
+                    return false;
+                constexpr FILE_ID_128 noIdentity{};
+                if (std::memcmp(identity.FileId.Identifier, noIdentity.Identifier, sizeof(noIdentity.Identifier)) == 0)
+                    return false;
+                FolderMemberDigest descendants{};
+                const bool directory = (basic.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == FILE_ATTRIBUTE_DIRECTORY;
+                if (directory && ! ReadMembers(member, handle.get(), depth + 1, descendants))
+                    return false;
+                const auto nameBytes = static_cast<std::uint32_t>(name.size() * sizeof(wchar_t));
+                const std::array identityFields{identity.VolumeSerialNumber,
+                                                static_cast<std::uint64_t>(standard.EndOfFile.QuadPart),
+                                                static_cast<std::uint64_t>(basic.LastWriteTime.QuadPart),
+                                                static_cast<std::uint64_t>(basic.ChangeTime.QuadPart),
+                                                static_cast<std::uint64_t>(basic.FileAttributes)};
+                wil::unique_bcrypt_hash hash;
+                if (BCryptCreateHash(BCRYPT_SHA256_ALG_HANDLE, hash.put(), nullptr, 0, nullptr, 0, 0) < 0 ||
+                    ! AppendFolderDigest(hash.get(), &nameBytes, sizeof(nameBytes)) || ! AppendFolderDigest(hash.get(), name.data(), nameBytes) ||
+                    ! AppendFolderDigest(hash.get(), &identity.FileId, sizeof(identity.FileId)) ||
+                    ! AppendFolderDigest(hash.get(), identityFields.data(), sizeof(identityFields)) ||
+                    ! AppendFolderDigest(hash.get(), descendants.data(), descendants.size()) || ! FinishFolderDigest(hash.get(), members.emplace_back()))
+                    return false;
+            } while (FindNextFileW(search.get(), &data));
+            if (GetLastError() != ERROR_NO_MORE_FILES)
+                return false;
+        }
+        ProjectFolderVersion after{};
+        if (! ReadProjectFolderRoot(folder, after) || before != after || cancellation.IsCancelled())
+            return false;
+        std::sort(members.begin(), members.end());
+        wil::unique_bcrypt_hash hash;
+        return BCryptCreateHash(BCRYPT_SHA256_ALG_HANDLE, hash.put(), nullptr, 0, nullptr, 0, 0) >= 0 &&
+               (members.empty() || AppendFolderDigest(hash.get(), members.data(), members.size() * sizeof(FolderMemberDigest))) &&
+               FinishFolderDigest(hash.get(), output);
+    }
+};
+
+[[nodiscard]] std::optional<ProjectFolderVersion> ObserveProjectFolderVersion(const std::wstring& path,
+                                                                              CancelToken cancellation,
+                                                                              HANDLE heldRoot = INVALID_HANDLE_VALUE)
+{
+    wil::unique_hfile root;
+    if (heldRoot == INVALID_HANDLE_VALUE)
+    {
+        root     = OpenProjectEntry(path);
+        heldRoot = root.get();
+    }
+    ProjectFolderVersion version{};
+    if (heldRoot == INVALID_HANDLE_VALUE || ! ReadProjectFolderRoot(heldRoot, version))
+        return std::nullopt;
+    ProjectFolderScan scan{cancellation};
+    ProjectFolderVersion after{};
+    FolderMemberDigest digest{};
+    if (! scan.ReadMembers(path, heldRoot, 0, digest) || ! ReadProjectFolderRoot(heldRoot, after) || version != after)
+        return std::nullopt;
+    version.members = digest;
+    return version;
 }
 
 [[nodiscard]] bool HasReparse(const wchar_t* path) noexcept
@@ -231,18 +383,25 @@ struct Manifest
 
 // libzip closes its own handle internally; reopen the completed archive and require both flush and close to succeed
 // before the caller can publish it over the current destination.
-[[nodiscard]] bool FlushFileToDisk(const wchar_t* path, ProjectIoObserver observer, ProjectSaveFaultPolicy faultPolicy) noexcept
+[[nodiscard]] bool FlushFileToDisk(const wchar_t* path,
+                                   ProjectIoObserver observer,
+                                   ProjectSaveFaultPolicy faultPolicy,
+                                   std::optional<FileOutputVersion>& stagedVersion) noexcept
 {
     std::wstring apiPath;
     if (FAILED(Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiPath)))
         return false;
     wil::unique_hfile file{
-        CreateFileW(apiPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+        CreateFileW(apiPath.c_str(), GENERIC_WRITE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr)};
     if (! file)
     {
         Report(observer, ProjectIoStage::CreateFailed, GetLastError());
         return false;
     }
+    FileOutputVersion version{};
+    if (FAILED(ReadFileOutputVersion(file.get(), version)))
+        return false;
+    stagedVersion           = version;
     const auto flushFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveFlush);
     if (flushFailure != 0 || ! FlushFileBuffers(file.get()))
     {
@@ -250,6 +409,9 @@ struct Manifest
         Report(observer, ProjectIoStage::FlushFailed, error);
         return false;
     }
+    if (FAILED(ReadFileOutputVersion(file.get(), version)))
+        return false;
+    stagedVersion           = version;
     const auto closeFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveClose);
     if (closeFailure != 0)
     {
@@ -1724,25 +1886,63 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     }
 }
 
+[[nodiscard]] std::vector<std::uint64_t> PrepareFolderRename(const std::wstring& destination)
+{
+    const auto nameBytes = destination.size() * sizeof(wchar_t);
+    const auto size      = offsetof(FILE_RENAME_INFO, FileName) + nameBytes + sizeof(wchar_t);
+    std::vector<std::uint64_t> storage((size + sizeof(std::uint64_t) - 1) / sizeof(std::uint64_t));
+    auto* const rename     = reinterpret_cast<FILE_RENAME_INFO*>(storage.data());
+    rename->FileNameLength = static_cast<DWORD>(nameBytes);
+    std::memcpy(rename->FileName, destination.data(), nameBytes);
+    return storage;
+}
+
+[[nodiscard]] DWORD RenameFolder(HANDLE folder, std::vector<std::uint64_t>& request) noexcept
+{
+    // Zero-initialized flags require a vacant destination name.
+    const auto size = static_cast<DWORD>(request.size() * sizeof(std::uint64_t));
+    return SetFileInformationByHandle(folder, FileRenameInfo, request.data(), size) ? ERROR_SUCCESS : GetLastError();
+}
+
 [[nodiscard]] ProjectIoStatus RotateDestination(const std::wstring& dest,
                                                 const std::wstring& backup,
+                                                const ProjectFolderVersion& accepted,
                                                 std::uint32_t& failure,
                                                 CancelToken cancellation,
                                                 ProjectSaveFaultPolicy faultPolicy,
-                                                ProjectIoObserver observer) noexcept
+                                                ProjectIoObserver observer)
 {
     failure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::DestinationToBackupRename);
     if (failure != 0)
         return ProjectIoStatus::Encode; // injected errors are final; never hide deterministic faults with retries
+    auto rename = PrepareFolderRename(backup);
     constexpr std::array<LONGLONG, 2> retryDelays100ns{-25 * 10000ll, -100 * 10000ll};
     wil::unique_handle retryTimer;
     for (std::size_t attempt = 0;; ++attempt)
     {
         if (cancellation.IsCancelled())
             return ProjectIoStatus::Cancelled; // no first rename has succeeded; current destination is intact
-        if (MoveFileW(dest.c_str(), backup.c_str()))
-            return ProjectIoStatus::Ok;
-        failure = GetLastError();
+        {
+            const auto held = OpenProjectEntry(dest, DELETE);
+            if (held)
+            {
+                const auto version = ObserveProjectFolderVersion(dest, cancellation, held.get());
+                if (cancellation.IsCancelled())
+                    return ProjectIoStatus::Cancelled;
+                if (! version || *version != accepted)
+                {
+                    failure = ERROR_REVISION_MISMATCH;
+                    return ProjectIoStatus::Conflict;
+                }
+                failure = RenameFolder(held.get(), rename);
+                if (failure == ERROR_SUCCESS)
+                    return ProjectIoStatus::Ok;
+            }
+            else
+                failure = GetLastError();
+        }
+        if (failure == ERROR_FILE_NOT_FOUND || failure == ERROR_PATH_NOT_FOUND || failure == ERROR_ALREADY_EXISTS || failure == ERROR_FILE_EXISTS)
+            return ProjectIoStatus::Conflict;
         if ((failure != ERROR_ACCESS_DENIED && failure != ERROR_SHARING_VIOLATION) || attempt == retryDelays100ns.size())
             return ProjectIoStatus::Encode;
         if (! retryTimer)
@@ -1764,12 +1964,66 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     }
 }
 
+void CleanupPublishedBackup(const std::wstring& backup,
+                            const std::wstring& staging,
+                            const ProjectFolderVersion& accepted,
+                            ProjectSaveFaultPolicy faultPolicy,
+                            ProjectIoObserver observer,
+                            TreeCleanupBuffer& scratch)
+{
+    const auto report = [&](DWORD error) noexcept { Report(observer, ProjectIoStage::BackupCleanupFailed, error); };
+    if (const DWORD error = RequestedFailure(faultPolicy, ProjectSaveFaultStage::BackupCleanup); error != ERROR_SUCCESS)
+    {
+        report(error);
+        return;
+    }
+    auto retireName  = PrepareFolderRename(staging);
+    auto restoreName = PrepareFolderRename(backup);
+    auto held        = OpenProjectEntry(backup, DELETE);
+    if (! held)
+    {
+        report(GetLastError());
+        return;
+    }
+    if (ObserveProjectFolderVersion(backup, {}, held.get()) != accepted)
+    {
+        report(ERROR_REVISION_MISMATCH);
+        return;
+    }
+    if (const DWORD error = RenameFolder(held.get(), retireName); error != ERROR_SUCCESS)
+    {
+        report(error);
+        return;
+    }
+    held.reset();
+    auto restore       = wil::scope_exit([&]() noexcept
+    {
+        const auto folder = OpenProjectEntry(staging, DELETE);
+        ProjectFolderVersion root{};
+        if (folder && ReadProjectFolderRoot(folder.get(), root) && root.volume == accepted.volume && root.fileId == accepted.fileId)
+        {
+            if (const DWORD error = RenameFolder(folder.get(), restoreName); error != ERROR_SUCCESS)
+                report(error);
+        }
+    });
+    const auto retired = ObserveProjectFolderVersion(staging, {});
+    if (! retired || ! SameMovedProjectFolder(*retired, accepted))
+    {
+        report(ERROR_REVISION_MISMATCH);
+        return;
+    }
+    if (DeleteTree(staging, ProjectSaveFaultStage::BackupCleanup, ProjectIoStage::BackupCleanupFailed, {}, observer, scratch))
+        restore.release();
+}
+
 [[nodiscard]] ProjectIoStatus SaveExploded(const std::wstring& dest,
                                            const std::wstring& staging,
+                                           const std::optional<ProjectFolderVersion>& accepted,
                                            CancelToken cancellation,
                                            ProjectIoObserver observer,
                                            ProjectSaveFaultPolicy faultPolicy,
-                                           TreeCleanupBuffer& cleanupScratch)
+                                           TreeCleanupBuffer& cleanupScratch,
+                                           std::optional<ProjectFolderVersion>* published)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
@@ -1777,7 +2031,32 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     std::wstring backup;
     if (FAILED(Win32FilePath::PrefixResolvedPath(backupCandidate.c_str(), Win32FilePath::Use::Directory, backup)))
         return ProjectIoStatus::Encode;
-    bool rotated = false;
+    const auto staged = published ? ObserveProjectFolderVersion(staging, cancellation) : std::nullopt;
+    if (published && ! staged)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::Conflict;
+    const auto previousBackup = accepted ? std::nullopt : ObserveProjectFolderVersion(backup, cancellation);
+    bool rotated              = false;
+    bool restore              = false;
+    auto recover              = wil::scope_exit([&]() noexcept
+    {
+        if (! restore)
+            return;
+        {
+            const auto& expected = rotated ? accepted : previousBackup;
+            const auto recovery  = OpenProjectEntry(backup);
+            ProjectFolderVersion root{};
+            if (! expected || ! recovery || ! ReadProjectFolderRoot(recovery.get(), root) || root.volume != expected->volume || root.fileId != expected->fileId)
+            {
+                Report(observer, ProjectIoStage::RollbackFailed, ERROR_REVISION_MISMATCH);
+                return;
+            }
+        }
+        {
+            std::uint32_t failure = 0;
+            if (! RestoreDirectory(backup, dest, failure, faultPolicy, observer))
+                Report(observer, ProjectIoStage::RollbackFailed, failure);
+        }
+    });
     Report(observer, ProjectIoStage::Staged);
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
@@ -1785,19 +2064,31 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     // as a rollback. The caller receives Ok only when the new external destination was actually published.
     // Remove an older backup only while the current destination still exists. When a previous rollback failed,
     // .old can be the only surviving project; keep it until new publication or restore it on another failure.
-    if (IsDirectory(dest.c_str()))
+    if (accepted)
     {
+        const auto observed = ObserveProjectFolderVersion(dest, cancellation);
+        if (cancellation.IsCancelled())
+            return ProjectIoStatus::Cancelled;
+        if (observed != accepted)
+            return ProjectIoStatus::Conflict;
         if (! DeleteTree(backup, ProjectSaveFaultStage::BackupCleanup, ProjectIoStage::BackupCleanupFailed, faultPolicy, observer, cleanupScratch))
             return ProjectIoStatus::Encode;
         std::uint32_t failure = 0;
-        const auto rotation   = RotateDestination(dest, backup, failure, cancellation, faultPolicy, observer);
+        const auto rotation   = RotateDestination(dest, backup, *accepted, failure, cancellation, faultPolicy, observer);
         if (rotation != ProjectIoStatus::Ok)
         {
             if (rotation != ProjectIoStatus::Cancelled)
                 Report(observer, ProjectIoStage::DestinationToBackupFailed, failure);
             return rotation;
         }
-        rotated = true;
+        rotated          = true;
+        restore          = true;
+        const auto moved = ObserveProjectFolderVersion(backup, {});
+        if (! moved || ! SameMovedProjectFolder(*moved, *accepted))
+        {
+            Report(observer, ProjectIoStage::DestinationToBackupFailed, ERROR_REVISION_MISMATCH);
+            return ProjectIoStatus::Conflict;
+        }
     }
     std::uint32_t publishFailure = 0;
     const auto publication       = PublishDirectory(staging, dest, publishFailure, rotated, cancellation, faultPolicy, observer);
@@ -1806,42 +2097,74 @@ constexpr unsigned int kMaxCleanupDepth = 128;
         if (publication == ProjectIoStatus::Cancelled)
             return publication; // Only reachable before rotation; leave any earlier recovery backup intact.
         Report(observer, ProjectIoStage::StagingToDestinationFailed, publishFailure);
-        if (IsDirectory(backup.c_str()))
-        {
-            std::uint32_t rollbackFailure = 0;
-            if (! RestoreDirectory(backup, dest, rollbackFailure, faultPolicy, observer))
-                Report(observer, ProjectIoStage::RollbackFailed, rollbackFailure);
-        }
+        restore = rotated || (previousBackup && ObserveProjectFolderVersion(backup, {}) == previousBackup);
+        if (publishFailure == ERROR_ALREADY_EXISTS || publishFailure == ERROR_FILE_EXISTS || GetFileAttributesW(dest.c_str()) != INVALID_FILE_ATTRIBUTES)
+            return ProjectIoStatus::Conflict;
         return ProjectIoStatus::Encode;
     }
     // This is the irreversible publication fact. Cleanup faults may retain the old backup but cannot turn a
     // published document into a failed or cancelled save.
+    restore = false;
     Report(observer, ProjectIoStage::Published);
-    (void)DeleteTree(backup, ProjectSaveFaultStage::BackupCleanup, ProjectIoStage::BackupCleanupFailed, faultPolicy, observer, cleanupScratch);
+    try
+    {
+        if (published)
+        {
+            const auto current = ObserveProjectFolderVersion(dest, {});
+            *published         = staged && current && SameMovedProjectFolder(*current, *staged) ? current : std::nullopt;
+        }
+        const auto verifiedBackup = ObserveProjectFolderVersion(backup, {});
+        if ((accepted && verifiedBackup && SameMovedProjectFolder(*verifiedBackup, *accepted)) ||
+            (! accepted && previousBackup && verifiedBackup == previousBackup))
+            CleanupPublishedBackup(backup, staging, *verifiedBackup, faultPolicy, observer, cleanupScratch);
+        else if (GetFileAttributesW(backup.c_str()) != INVALID_FILE_ATTRIBUTES)
+            Report(observer, ProjectIoStage::BackupCleanupFailed, ERROR_REVISION_MISMATCH);
+    }
+    catch (const std::bad_alloc&)
+    {
+        // The destination has already been published. Keep the backup when its identity could not be checked.
+        Report(observer, ProjectIoStage::BackupCleanupFailed, ERROR_NOT_ENOUGH_MEMORY);
+    }
     return ProjectIoStatus::Ok;
 }
 
-[[nodiscard]] ProjectIoStatus SaveZip(const std::wstring& dest,
+[[nodiscard]] wil::unique_hfile OpenOwnedArchiveStage(const std::wstring& path, const FileOutputVersion& expected) noexcept
+{
+    wil::unique_hfile file{
+        CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES | DELETE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr)};
+    FileOutputVersion version{};
+    if (! file || FAILED(ReadFileOutputVersion(file.get(), version)) || version != expected)
+        return {};
+    return file;
+}
+
+[[nodiscard]] ProjectIoStatus SaveZip(const FileOutputTarget& destination,
                                       const std::string& json,
                                       const std::wstring& images,
                                       const std::vector<std::string>& files,
                                       CancelToken cancellation,
                                       ProjectIoObserver observer,
-                                      ProjectSaveFaultPolicy faultPolicy)
+                                      ProjectSaveFaultPolicy faultPolicy,
+                                      std::optional<FileOutputVersion>* publishedVersion)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
-    if (dest.empty())
+    if (destination.path.empty())
         return ProjectIoStatus::Encode;
-    const std::wstring tempCandidate = UniqueSiblingPath(dest);
+    const std::wstring tempCandidate = UniqueSiblingPath(destination.path);
     std::wstring temp;
     if (FAILED(Win32FilePath::PrefixResolvedPath(tempCandidate.c_str(), Win32FilePath::Use::File, temp)))
         return ProjectIoStatus::Encode;
-    bool ownsTemp    = false;
+    std::optional<FileOutputVersion> stagedVersion;
     auto cleanupTemp = wil::scope_exit([&]() noexcept
     {
-        if (ownsTemp)
-            (void)DeleteFileW(temp.c_str());
+        if (! stagedVersion)
+            return;
+        if (const auto file = OpenOwnedArchiveStage(temp, *stagedVersion))
+        {
+            FILE_DISPOSITION_INFO disposition{TRUE};
+            (void)SetFileInformationByHandle(file.get(), FileDispositionInfo, &disposition, sizeof(disposition));
+        }
     });
     // Declared before archive ownership: callbacks keep their borrowed state even on early discard.
     ProjectIoObserver progressObserver = observer;
@@ -1850,7 +2173,6 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     {
         return ProjectIoStatus::Encode;
     }
-    ownsTemp = true; // archive ownership is destroyed before the cleanup guard on every early return
     // libzip borrows this stack token through zip_close/discard. The callback reads only stop state, never UI.
     if (zip_register_cancel_callback_with_state(
             zip.get(), [](zip_t*, void* state) noexcept { return static_cast<CancelToken*>(state)->IsCancelled() ? 1 : 0; }, nullptr, &cancellation) != 0)
@@ -1919,7 +2241,7 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     }
     // libzip has already closed its own handle to `temp`; flush it to disk before it is renamed or replaces
     // another file. Publication is refused when that flush or its transferred handle close fails.
-    if (! FlushFileToDisk(temp.c_str(), observer, faultPolicy))
+    if (! FlushFileToDisk(temp.c_str(), observer, faultPolicy, stagedVersion))
     {
         return ProjectIoStatus::Encode;
     }
@@ -1933,22 +2255,25 @@ constexpr unsigned int kMaxCleanupDepth = 128;
         Report(observer, ProjectIoStage::StagingToDestinationFailed, replaceFailure);
         return ProjectIoStatus::Encode;
     }
-    if (IsFile(dest.c_str()))
+    const auto stage = OpenOwnedArchiveStage(temp, *stagedVersion);
+    if (! stage)
+        return ProjectIoStatus::Encode;
+    const HRESULT publication = PublishFileOutput(stage.get(), destination, cancellation);
+    if (FAILED(publication))
     {
-        if (! ReplaceFileW(dest.c_str(), temp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr) &&
-            ! MoveFileExW(temp.c_str(), dest.c_str(), MOVEFILE_REPLACE_EXISTING))
-        {
-            return ProjectIoStatus::Encode;
-        }
-        cleanupTemp.release();
-        Report(observer, ProjectIoStage::Published);
-        return ProjectIoStatus::Ok;
-    }
-    if (! MoveFileW(temp.c_str(), dest.c_str()))
-    {
+        Report(observer, ProjectIoStage::StagingToDestinationFailed, static_cast<std::uint32_t>(HRESULT_CODE(publication)));
+        if (publication == E_ABORT)
+            return ProjectIoStatus::Cancelled;
+        if (publication == kOutputVersionConflict)
+            return ProjectIoStatus::Conflict;
         return ProjectIoStatus::Encode;
     }
     cleanupTemp.release();
+    if (publishedVersion)
+    {
+        FileOutputVersion version{};
+        *publishedVersion = SUCCEEDED(ReadFileOutputVersion(stage.get(), version)) ? std::optional<FileOutputVersion>{version} : std::nullopt;
+    }
     Report(observer, ProjectIoStage::Published);
     return ProjectIoStatus::Ok;
 }
@@ -2025,10 +2350,25 @@ ProjectLoadResult LoadProject(const wchar_t* path, CancelToken cancellation, Pro
     pixelLimits.layerCount        = (std::min)(pixelLimits.layerCount, static_cast<std::size_t>(kMaxLayerCount));
     pixelLimits.manifestBytes     = (std::min)(pixelLimits.manifestBytes, kMaxProjectManifestBytes);
     pixelLimits.encodedAssetBytes = (std::min)(pixelLimits.encodedAssetBytes, kMaxProjectEncodedAssetBytes);
+    result.archive                = ! IsDirectory(path);
+    const std::wstring folderPath = result.archive ? std::wstring{} : FullPath(path, Win32FilePath::Use::Directory);
+    const auto expectedFolder     = result.archive ? std::nullopt : ObserveProjectFolderVersion(folderPath, cancellation);
+    FileOutputTarget expectedArchive;
+    wil::unique_hfile archiveGuard;
+    if (result.archive && SUCCEEDED(ObserveFileOutputTarget(path, expectedArchive)) && expectedArchive.acceptedVersion)
+    {
+        archiveGuard.reset(
+            CreateFileW(expectedArchive.path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+        FileOutputVersion held{};
+        if (! archiveGuard || FAILED(ReadFileOutputVersion(archiveGuard.get(), held)) || held != *expectedArchive.acceptedVersion)
+        {
+            result.status = ProjectIoStatus::Conflict;
+            return result;
+        }
+    }
     Manifest manifest{};
-    const ProjectIoStatus status = IsDirectory(path)
-                                       ? LoadExploded(FullPath(path, Win32FilePath::Use::Directory), manifest, cancellation, observer, pixelLimits)
-                                       : LoadZip(path, manifest, cancellation, observer, pixelLimits);
+    const ProjectIoStatus status = ! result.archive ? LoadExploded(folderPath, manifest, cancellation, observer, pixelLimits)
+                                                    : LoadZip(path, manifest, cancellation, observer, pixelLimits);
     result.status                = status;
     if (cancellation.IsCancelled())
     {
@@ -2039,6 +2379,26 @@ ProjectLoadResult LoadProject(const wchar_t* path, CancelToken cancellation, Pro
         result.formatVersion = manifest.version;
     if (status == ProjectIoStatus::Ok)
     {
+        if (expectedFolder)
+        {
+            const auto current = ObserveProjectFolderVersion(folderPath, cancellation);
+            if (cancellation.IsCancelled() || current != expectedFolder)
+            {
+                result.status = cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::Conflict;
+                return result;
+            }
+            result.folderVersion = expectedFolder;
+        }
+        if (archiveGuard)
+        {
+            FileOutputTarget current;
+            if (FAILED(ObserveFileOutputTarget(path, current)) || current.acceptedVersion != expectedArchive.acceptedVersion)
+            {
+                result.status = ProjectIoStatus::Conflict;
+                return result;
+            }
+            result.archiveVersion = expectedArchive.acceptedVersion;
+        }
         result.document      = std::move(manifest.document);
         result.activeLayerID = manifest.activeLayerID;
         result.formatVersion = manifest.version;
@@ -2218,13 +2578,55 @@ ProjectIoStatus SaveProject(const wchar_t* path,
                             bool zipArchive,
                             CancelToken cancellation,
                             ProjectIoObserver observer,
-                            ProjectSaveFaultPolicy faultPolicy)
+                            ProjectSaveFaultPolicy faultPolicy,
+                            const FileOutputTarget* acceptedArchive,
+                            std::optional<FileOutputVersion>* publishedArchive,
+                            const std::optional<ProjectFolderVersion>* acceptedFolder,
+                            std::optional<ProjectFolderVersion>* publishedFolder)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
     if (path == nullptr || ValidateDocument(document) != DocumentStatus::Ok)
     {
         return ProjectIoStatus::Invalid;
+    }
+    const std::wstring destination = FullPath(path, zipArchive ? Win32FilePath::Use::File : Win32FilePath::Use::Directory);
+    if (destination.empty() || ! std::filesystem::path(destination).has_filename())
+        return ProjectIoStatus::Invalid;
+    FileOutputTarget archiveTarget;
+    std::optional<ProjectFolderVersion> folderTarget;
+    if (zipArchive)
+    {
+        if (FAILED(ObserveFileOutputTarget(destination.c_str(), archiveTarget)))
+            return ProjectIoStatus::Conflict;
+        if (acceptedArchive)
+        {
+            std::wstring acceptedPath;
+            if (FAILED(Win32FilePath::Resolve(acceptedArchive->path.c_str(), Win32FilePath::Use::File, acceptedPath)) ||
+                CompareStringOrdinal(archiveTarget.path.c_str(), -1, acceptedPath.c_str(), -1, TRUE) != CSTR_EQUAL ||
+                archiveTarget.acceptedVersion != acceptedArchive->acceptedVersion)
+                return ProjectIoStatus::Conflict;
+        }
+    }
+    else
+    {
+        const DWORD attributes = GetFileAttributesW(destination.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES)
+        {
+            const DWORD error = GetLastError();
+            if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND)
+                return ProjectIoStatus::Conflict;
+        }
+        else
+        {
+            folderTarget = ObserveProjectFolderVersion(destination, cancellation);
+            if (cancellation.IsCancelled())
+                return ProjectIoStatus::Cancelled;
+            if (! folderTarget)
+                return ProjectIoStatus::Conflict;
+        }
+        if (acceptedFolder && (! *acceptedFolder || folderTarget != *acceptedFolder))
+            return ProjectIoStatus::Conflict;
     }
     std::string json;
     if (! WriteManifest(document, activeLayerID, json, cancellation))
@@ -2233,9 +2635,6 @@ ProjectIoStatus SaveProject(const wchar_t* path,
             return ProjectIoStatus::Cancelled;
         return json.size() > kMaxManifestBytes ? ProjectIoStatus::TooLarge : ProjectIoStatus::Encode;
     }
-    const std::wstring destination = FullPath(path, zipArchive ? Win32FilePath::Use::File : Win32FilePath::Use::Directory);
-    if (destination.empty() || ! std::filesystem::path(destination).has_filename())
-        return ProjectIoStatus::Invalid;
     const std::wstring stagingCandidate = UniqueSiblingPath(destination);
     std::wstring staging;
     if (FAILED(Win32FilePath::PrefixResolvedPath(stagingCandidate.c_str(), Win32FilePath::Use::Directory, staging)))
@@ -2270,8 +2669,8 @@ ProjectIoStatus SaveProject(const wchar_t* path,
     {
         return encoded;
     }
-    const auto status = zipArchive ? SaveZip(destination, json, images, files, cancellation, observer, faultPolicy)
-                                   : SaveExploded(destination, staging, cancellation, observer, faultPolicy, *cleanupScratch);
+    const auto status = zipArchive ? SaveZip(archiveTarget, json, images, files, cancellation, observer, faultPolicy, publishedArchive)
+                                   : SaveExploded(destination, staging, folderTarget, cancellation, observer, faultPolicy, *cleanupScratch, publishedFolder);
     if (status == ProjectIoStatus::Ok && ! zipArchive)
         cleanup.release(); // rotation transferred the directory; this name no longer denotes our staging.
     return status;
