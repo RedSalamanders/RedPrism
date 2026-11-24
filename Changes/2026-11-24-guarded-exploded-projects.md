@@ -1,0 +1,1 @@
+- Bind exploded project saves to the folder and member versions opened by the editor, and preserve competing edits and the recovery tree when the version changes.

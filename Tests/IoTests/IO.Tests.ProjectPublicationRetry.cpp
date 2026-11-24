@@ -238,14 +238,15 @@ void RunCase(const std::filesystem::path& root, bool replacement, Mode mode)
     const bool cancelled = mode == Mode::CancelAtStaged || (! replacement && (mode == Mode::CancelAtRetry || mode == Mode::CancelPersistent));
     const bool published = mode == Mode::Healthy || mode == Mode::ReleaseChild || mode == Mode::ReleaseDirectory || mode == Mode::CancelAtPublished ||
                            (replacement && mode == Mode::CancelAtRetry);
+    const bool foreign   = mode == Mode::UnexpectedDestination;
     Expect(status == (published   ? ProjectIoStatus::Ok
                       : cancelled ? ProjectIoStatus::Cancelled
+                      : foreign   ? ProjectIoStatus::Conflict
                                   : ProjectIoStatus::Encode),
            "exact-terminal-status",
            replacement,
            modeNumber);
     Expect(control.publications == (published ? 1u : 0u), "truthful-publication-count", replacement, modeNumber);
-    const bool foreign = mode == Mode::UnexpectedDestination;
     Expect(control.rollbackFailures == (foreign && replacement ? 1u : 0u), "exact-rollback-failure-count", replacement, modeNumber);
     if (LocksSource(mode))
         Expect(control.opened && control.openError == ERROR_SUCCESS, "real-source-reader-opened", replacement, modeNumber);

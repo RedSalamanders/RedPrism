@@ -740,6 +740,7 @@ void Application::ReplaceDocument(CanvasDocument document, const std::optional<G
     _documentPath      = std::move(path);
     _documentIsArchive = false;
     _documentArchiveVersion.reset();
+    _documentFolderVersion.reset();
     _viewport.followsFit = true;
     DocumentChanged();
 }

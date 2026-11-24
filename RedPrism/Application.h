@@ -1685,6 +1685,7 @@ private:
     std::wstring _screenshotPath;
     std::wstring _documentPath;
     std::optional<FileOutputVersion> _documentArchiveVersion;
+    std::optional<ProjectFolderVersion> _documentFolderVersion;
     bool _documentIsArchive = false;
     uint32_t _screenshotDpi = 0;
     EditorTool _tool        = EditorTool::Move;

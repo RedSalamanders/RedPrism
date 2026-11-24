@@ -3,6 +3,7 @@
 #include "Document.h"
 #include "ImageCodecs.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -24,6 +25,8 @@ enum class ProjectIoStatus
 
 inline constexpr std::size_t kMaxProjectManifestBytes     = 4u * 1024u * 1024u;
 inline constexpr std::size_t kMaxProjectEncodedAssetBytes = 512u * 1024u * 1024u;
+// Up to 128 live path buffers and the bounded, fixed-size member digests.
+inline constexpr std::uint64_t kProjectFolderScanBytes = 12u * 1024u * 1024u;
 
 // Caller ceilings are checked before corresponding input/output allocations. Clamp to hard format limits;
 // adaptive worker probes can lower them but cannot authorize larger inputs or outputs.
@@ -44,6 +47,17 @@ struct ProjectLoadProbeResult
     int formatVersion = 0;
 };
 
+struct ProjectFolderVersion final
+{
+    std::array<std::uint8_t, 16> fileId{};
+    std::array<std::uint8_t, 32> members{};
+    std::uint64_t volume       = 0;
+    std::int64_t lastWriteTime = 0;
+    std::int64_t changeTime    = 0;
+
+    bool operator==(const ProjectFolderVersion&) const noexcept = default;
+};
+
 struct ProjectLoadResult
 {
     ProjectIoStatus status = ProjectIoStatus::Invalid;
@@ -52,6 +66,7 @@ struct ProjectLoadResult
     int formatVersion = 0;
     bool archive      = false;
     std::optional<FileOutputVersion> archiveVersion;
+    std::optional<ProjectFolderVersion> folderVersion;
 };
 
 enum class ProjectIoStage
@@ -218,11 +233,13 @@ template <typename AttributeFn> [[nodiscard]] bool ExplodedMemberPathAllowed(con
                                           const CanvasDocument& document,
                                           const std::optional<Guid>& activeLayerID,
                                           bool zipArchive,
-                                          CancelToken cancellation                           = {},
-                                          ProjectIoObserver observer                         = {},
-                                          ProjectSaveFaultPolicy faultPolicy                 = {},
-                                          const FileOutputTarget* acceptedArchive            = nullptr,
-                                          std::optional<FileOutputVersion>* publishedArchive = nullptr);
+                                          CancelToken cancellation                                  = {},
+                                          ProjectIoObserver observer                                = {},
+                                          ProjectSaveFaultPolicy faultPolicy                        = {},
+                                          const FileOutputTarget* acceptedArchive                   = nullptr,
+                                          std::optional<FileOutputVersion>* publishedArchive        = nullptr,
+                                          const std::optional<ProjectFolderVersion>* acceptedFolder = nullptr,
+                                          std::optional<ProjectFolderVersion>* publishedFolder      = nullptr);
 // The image becomes a layer above the active one (legacy EditorSession.insert), centered on `center` (a drop point,
 // in document pixels) or else on the canvas; into an empty document it becomes the canvas and `center` is ignored.
 [[nodiscard]] ProjectIoStatus ImportImageOnto(CanvasDocument& document,

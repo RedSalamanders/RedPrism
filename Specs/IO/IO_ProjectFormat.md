@@ -98,6 +98,13 @@ traversing their targets. Paths are bounded to 32,767 UTF-16 units and ordinary 
 exceeding either reports ERROR_FILENAME_EXCED_RANGE. Real cleanup errors may leave a partly cleaned owned tree.
 Read-only files are not forcibly changed. Capture and report the initiating Win32 error before later cleanup.
 
+Opening an exploded project records the root identity and a bounded digest of member names, identities, sizes,
+timestamps and types. The scan observes reparse entries without following them. The save worker checks the
+accepted version before staging and again on the handle used to move the root to `dest.old`. It checks the moved
+tree before publication and only retires a verified recovery tree. A conflicting edit leaves the current complete
+tree recoverable and keeps the document's pending edits. A competing creation at a vacant destination is preserved.
+If a filesystem or the scan bounds prevent verification, the project can still be read and saved to a new archive.
+
 ZIP projects write into a unique file in the exact destination parent using the sibling naming rule below,
 opened with `ZIP_CREATE | ZIP_EXCL`. Each staged manifest and asset is flushed and closed
 successfully before publication. ZIP close, flush and handle close must also succeed. The reopened archive

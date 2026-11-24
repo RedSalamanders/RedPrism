@@ -2674,6 +2674,103 @@ void TestGuardedProjectArchive()
            "project.guard.refuses-competing-creation");
 }
 
+void TestGuardedExplodedProject()
+{
+    DocumentFixture fixture;
+    fixture.id     = Guid::Generate();
+    fixture.width  = 2;
+    fixture.height = 2;
+    fixture.layers.push_back(ImageLayer::Blank(L"Guarded folder", Vec2{2, 2}));
+    CanvasDocument document = std::move(fixture).Seal();
+    const auto root         = std::filesystem::path(ScratchRoot()) / (L"guarded-folder-" + std::to_wstring(GetCurrentProcessId()));
+    std::error_code error;
+    if (! std::filesystem::create_directory(root, error))
+    {
+        Expect(false, "project.folder-guard.owns-fixture-parent");
+        return;
+    }
+    const auto cleanup  = wil::scope_exit([&] { std::filesystem::remove_all(root, error); });
+    const auto path     = (root / L"current").wstring();
+    const auto manifest = (root / L"current" / L"manifest.json").wstring();
+    const auto moved    = (root / L"renamed").wstring();
+    const auto fresh    = (root / L"fresh").wstring();
+    const auto owner    = (root / L"fresh" / L"other.txt").wstring();
+    const auto extra    = (root / L"current" / L"images" / L"other.txt").wstring();
+    std::optional<ProjectFolderVersion> published;
+    Expect(SaveProject(path.c_str(), document, std::nullopt, false, {}, {}, {}, nullptr, nullptr, nullptr, &published) == ProjectIoStatus::Ok,
+           "project.folder-guard.creates-owned-folder");
+    const auto opened = LoadProject(path.c_str());
+    Expect(opened.status == ProjectIoStatus::Ok && ! opened.archive && opened.folderVersion && opened.folderVersion == published,
+           "project.folder-guard.open-binds-folder-and-members");
+    if (! opened.folderVersion)
+        return;
+
+    static constexpr std::string_view other = "external folder edit";
+    struct ExternalChange
+    {
+        const wchar_t* member = nullptr;
+        const wchar_t* dir    = nullptr;
+        const wchar_t* moved  = nullptr;
+        bool remove           = false;
+        bool exercised        = false;
+    } change;
+    const ProjectIoObserver observer{[](void* state, ProjectIoStage stage, unsigned int) noexcept
+    {
+        if (stage != ProjectIoStage::Staged)
+            return;
+        auto& edit = *static_cast<ExternalChange*>(state);
+        if (edit.moved)
+        {
+            edit.exercised = MoveFileW(edit.dir, edit.moved) != FALSE;
+            return;
+        }
+        if (edit.remove)
+        {
+            edit.exercised = DeleteFileW(edit.member) != FALSE;
+            return;
+        }
+        if (edit.dir && ! CreateDirectoryW(edit.dir, nullptr))
+            return;
+        const wil::unique_hfile file{CreateFileW(edit.member, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)};
+        DWORD written  = 0;
+        edit.exercised = file && WriteFile(file.get(), other.data(), static_cast<DWORD>(other.size()), &written, nullptr) && written == other.size();
+    },
+                                     &change};
+    const auto originalManifest = ReadText(manifest);
+    change.member               = manifest.c_str();
+    Expect(SaveProject(path.c_str(), document, std::nullopt, false, {}, observer, {}, nullptr, nullptr, &opened.folderVersion) == ProjectIoStatus::Conflict &&
+               change.exercised && ReadText(manifest) == other,
+           "project.folder-guard.preserves-edit-during-staging");
+    Expect(SaveProject(path.c_str(), document, std::nullopt, false, {}, {}, {}, nullptr, nullptr, &opened.folderVersion) == ProjectIoStatus::Conflict &&
+               ReadText(manifest) == other,
+           "project.folder-guard.refuses-stale-accepted-members");
+    WriteText(manifest, originalManifest);
+    Expect(ReadText(manifest) == originalManifest, "project.folder-guard.fixture-reopens");
+    const auto retry = LoadProject(path.c_str());
+    Expect(retry.folderVersion &&
+               SaveProject(path.c_str(), document, std::nullopt, false, {}, {}, {}, nullptr, nullptr, &retry.folderVersion, &published) ==
+                   ProjectIoStatus::Ok &&
+               published && LoadProject(path.c_str()).folderVersion == published,
+           "project.folder-guard.retry-binds-published-folder");
+
+    WriteText(extra, "external member to remove");
+    const auto hadExtra = LoadProject(path.c_str());
+    change              = {.member = extra.c_str(), .remove = true};
+    Expect(hadExtra.folderVersion &&
+               SaveProject(path.c_str(), document, std::nullopt, false, {}, observer, {}, nullptr, nullptr, &hadExtra.folderVersion) ==
+                   ProjectIoStatus::Conflict &&
+               change.exercised && GetFileAttributesW(extra.c_str()) == INVALID_FILE_ATTRIBUTES && ReadText(manifest) == originalManifest,
+           "project.folder-guard.preserves-nested-member-deletion");
+    published = LoadProject(path.c_str()).folderVersion;
+    change    = {.dir = path.c_str(), .moved = moved.c_str()};
+    Expect(SaveProject(path.c_str(), document, std::nullopt, false, {}, observer, {}, nullptr, nullptr, &published) == ProjectIoStatus::Conflict &&
+               change.exercised && GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES && LoadProject(moved.c_str()).status == ProjectIoStatus::Ok,
+           "project.folder-guard.preserves-renamed-folder-and-vacant-name");
+    change = {.member = owner.c_str(), .dir = fresh.c_str()};
+    Expect(SaveProject(fresh.c_str(), document, std::nullopt, false, {}, observer) == ProjectIoStatus::Conflict && change.exercised && ReadText(owner) == other,
+           "project.folder-guard.refuses-competing-creation");
+}
+
 void TestGuardedSettingsStore()
 {
     const auto root =
@@ -2757,8 +2854,14 @@ int wmain(int argc, wchar_t** argv)
         else if (argc == 2 && option == L"--guarded-project-output")
         {
             TestGuardedProjectArchive();
+            TestGuardedExplodedProject();
             TestProjectSaveDurability();
+            TestNativeDestinationRotation();
+            TestProjectRotationFaultRecovery();
+            gFailures += RunProjectPublicationRetryTests();
             gFailures += RunIoProjectDurabilityFaultTests();
+            gFailures += RunProjectLoadWorkTests();
+            gFailures += RunLongPathSaveTests();
             result = gFailures ? 1 : 0;
         }
         if (SUCCEEDED(com))
@@ -2786,6 +2889,7 @@ int wmain(int argc, wchar_t** argv)
     TestSaveRejectsInvalidDocument();
     TestProjectSaveDurability();
     TestGuardedProjectArchive();
+    TestGuardedExplodedProject();
     TestNativeDestinationRotation();
     TestProjectRotationFaultRecovery();
     gFailures += RunProjectPublicationRetryTests();
