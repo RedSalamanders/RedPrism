@@ -38,8 +38,24 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+      - name: Read the selected source's engine pin
+        id: engine
+        shell: pwsh
+        run: |
+          $project = Get-Content -LiteralPath .ci/project.json -Raw | ConvertFrom-Json
+          if ($project.engine.repository -cne 'RedSalamanders/.github' -or $project.engine.ref -cnotmatch '^[0-9a-f]{40}$') {
+            throw 'The selected source must pin an exact RedSalamanders CI engine commit.'
+          }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "ref=$($project.engine.ref)"
+      - name: Check out the exact shared build engine
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: RedSalamanders/.github
+          ref: ${{ steps.engine.outputs.ref }}
+          path: .ci-engine
+          persist-credentials: false
       - name: Prepare required MSVC 14.52 tools
-        uses: ./.github/actions/setup-msvc
+        uses: ./.ci-engine/.github/actions/setup-msvc
         with:
           platform: ARM64
       - name: Run canonical ARM64 test entrypoint
