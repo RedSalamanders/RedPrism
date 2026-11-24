@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Use the shared hosted MSVC setup for current RedPrism native workflows and keep the local verification command as a pinned wrapper.
 - Adopt the shared hosted MSVC action and pinned formatting and repository policy checks.
 - Verify the evidence fixture through public receipts for the same NTFS file.
 - Moved the build profile out of the five project files into `Directory.Build.props`: the toolset (`v145`), the

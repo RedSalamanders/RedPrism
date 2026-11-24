@@ -1,1 +1,0 @@
-- Use the shared hosted MSVC setup for current RedPrism native workflows and keep the local verification command as a pinned wrapper.
