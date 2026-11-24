@@ -65,10 +65,10 @@ namespace RedPrism
 // REDPRISM_VERSION_STRING_W) when the resource cannot be read.
 [[nodiscard]] inline std::wstring FormatRunningModuleVersion(const wchar_t* fallbackVersion)
 {
-    wchar_t modulePath[MAX_PATH]{};
-    const DWORD length = GetModuleFileNameW(nullptr, modulePath, static_cast<DWORD>(MAX_PATH));
+    std::vector<wchar_t> modulePath(32768);
+    const DWORD length = GetModuleFileNameW(nullptr, modulePath.data(), static_cast<DWORD>(modulePath.size()));
     std::wstring formatted;
-    if (length > 0 && length < MAX_PATH && TryReadModuleFileVersion(modulePath, formatted))
+    if (length > 0 && length < modulePath.size() && TryReadModuleFileVersion(modulePath.data(), formatted))
     {
         return formatted;
     }

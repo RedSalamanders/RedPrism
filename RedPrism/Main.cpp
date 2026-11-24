@@ -7,6 +7,7 @@
 #include "MonitorDiagnostics.h"
 #include "Resources.h"
 #include "SettingsStore.h"
+#include "VersionInfo.h"
 #include "WorkerPool.h"
 #include "resource.h"
 
@@ -171,6 +172,21 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     {
         EmitCommandLineText(FormatStringResource(nullptr, IDS_ERROR_UNKNOWN_ARGUMENT, std::wstring_view{unknown}) + L"\n", true, selfTest);
         return 2;
+    }
+    if (commandLineScan.version)
+    {
+        try
+        {
+            const auto version = RedPrism::FormatRunningModuleVersion(nullptr);
+            if (version.empty())
+                return 1;
+            EmitCommandLineText(version + L"\n", false, true);
+            return 0;
+        }
+        catch (const std::bad_alloc&)
+        {
+            return 1;
+        }
     }
 
     RedPrismCommandLine parsed{};

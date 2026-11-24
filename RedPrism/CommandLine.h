@@ -11,6 +11,7 @@
 enum class RedPrismSwitch : uint8_t
 {
     Help = 0,
+    Version,
     Warp,
     SelfTest,
     Screenshot,
@@ -62,6 +63,8 @@ inline constexpr std::array<const wchar_t*, 4> kRedPrismHelpArguments{L"--help",
 
 inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPrismSwitch::Count)> kRedPrismCommandLineSwitches{
     RedPrismCommandLineSwitch{RedPrismSwitch::Help, L"--help", L"-h, /?, -?", RedPrismSwitchValue::None, nullptr, L"Show this text and exit.", L"General"},
+    RedPrismCommandLineSwitch{
+        RedPrismSwitch::Version, L"--version", nullptr, RedPrismSwitchValue::None, nullptr, L"Print the running executable's version and exit.", L"General"},
     RedPrismCommandLineSwitch{RedPrismSwitch::Warp,
                               L"--warp",
                               nullptr,
@@ -241,6 +244,7 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
 struct RedPrismCommandLineScan final
 {
     bool help        = false;
+    bool version     = false;
     bool selfTest    = false;
     bool harnessMode = false;
 };
@@ -277,6 +281,7 @@ struct RedPrismCommandLineScan final
             continue;
         }
         scan.help        = scan.help || entry->id == RedPrismSwitch::Help;
+        scan.version     = scan.version || entry->id == RedPrismSwitch::Version;
         scan.selfTest    = scan.selfTest || entry->id == RedPrismSwitch::SelfTest;
         scan.harnessMode = scan.harnessMode || RedPrismIsHarnessArgument(entry->id);
         if (entry->valueKind == RedPrismSwitchValue::Separate && index + 1 < argumentCount)
@@ -400,7 +405,8 @@ struct RedPrismCommandLineScan final
         }
         switch (entry->id)
         {
-            case RedPrismSwitch::Help: break;
+            case RedPrismSwitch::Help:
+            case RedPrismSwitch::Version: break;
             case RedPrismSwitch::Warp: candidate.warp = true; break;
             case RedPrismSwitch::SelfTest: candidate.selfTest = true; break;
             case RedPrismSwitch::Screenshot:

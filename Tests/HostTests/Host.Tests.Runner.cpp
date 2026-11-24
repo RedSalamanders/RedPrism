@@ -223,6 +223,10 @@ void TestCommandLine() noexcept
 {
     Expect(RedPrismIsHelpArgument(L"--help") && RedPrismIsHelpArgument(L"/?"), "cli.help-aliases");
     Expect(RedPrismFindSwitch(L"--warp") != nullptr, "cli.warp");
+    Expect(RedPrismFindSwitch(L"--version") == &RedPrismSwitchInfo(RedPrismSwitch::Version), "cli.version");
+    wchar_t scanVersion[]  = L"--version";
+    wchar_t* versionArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), scanVersion};
+    Expect(RedPrismScanCommandLine(versionArgs, 2).version && ! RedPrismScanCommandLine(versionArgs, 2).harnessMode, "cli.version-is-production-safe");
     Expect(RedPrismFindSwitch(L"--self-test") != nullptr, "cli.self-test");
     Expect(RedPrismFindSwitch(L"--capture") == &RedPrismSwitchInfo(RedPrismSwitch::Screenshot) &&
                RedPrismFindSwitch(L"--screenshot") == &RedPrismSwitchInfo(RedPrismSwitch::Screenshot),
@@ -248,6 +252,8 @@ void TestCommandLine() noexcept
     wchar_t* benchHelpValueArgs[]                    = {const_cast<wchar_t*>(L"RedPrism.exe"), scanBench, scanHelp};
     const RedPrismCommandLineScan benchHelpValueScan = RedPrismScanCommandLine(benchHelpValueArgs, 3);
     Expect(! benchHelpValueScan.help && ! benchHelpValueScan.selfTest && benchHelpValueScan.harnessMode, "cli.preflight-switch-value-is-not-help");
+    wchar_t* benchVersionValueArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), scanBench, scanVersion};
+    Expect(! RedPrismScanCommandLine(benchVersionValueArgs, 3).version, "cli.preflight-switch-value-is-not-version");
 
     wchar_t scanDemo[]                                  = L"--demo";
     wchar_t* demoSelfTestValueArgs[]                    = {const_cast<wchar_t*>(L"RedPrism.exe"), scanDemo, scanSelfTest};

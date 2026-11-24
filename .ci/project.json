@@ -48,6 +48,15 @@
     "executable": "RedPrism.exe",
     "alias": "redprism",
     "license": "MIT",
-    "minimumOSVersion": "10.0.22000.2600"
+    "minimumOSVersion": "10.0.22000.2600",
+    "smokeTests": [
+      {
+        "command": "redprism",
+        "arguments": [
+          "--version"
+        ],
+        "timeoutSeconds": 30
+      }
+    ]
   }
 }
