@@ -203,19 +203,36 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty\Lucide\LICENSE') -Destin
 Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty/RedMonitor/LICENSE.txt') -Destination (Join-Path $notices 'redmonitor.txt')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty/Notices/InheritedCode.txt') -Destination (Join-Path $notices 'inherited-code.txt')
 
-# DxUi.lib is linked into RedPrism.exe, so its own license ships too. restore-dxui.ps1 (run by build.ps1 above)
-# leaves the pinned source under .build\dependencies\DxUi\source\<commit>, with its license at that root.
-$dxUiLock = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'Dependencies\DxUi.lock.json') | ConvertFrom-Json
-if($null -ne $sdk){
+# Keep the linked DxUi library's notices with the package and bind them to its production input.
+$dxUiNoticeHashes = [ordered]@{}
+if ($null -ne $sdk) {
     Copy-Item -LiteralPath (Join-Path $sdk.SdkRoot 'licenses') -Destination (Join-Path $notices 'DxUiSdk') -Recurse
-}else{
-Import-Module (Join-Path $repoRoot 'Build/DxUiPaths.psm1') -Force
-$dxUiSource = Get-DxUiSourcePath -DependencyRoot (Join-Path $repoRoot '.build/dependencies/DxUi') -Commit $dxUiLock.commit
-$dxUiLicense = Get-ChildItem -LiteralPath $dxUiSource -Filter 'LICENSE*' -File -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $dxUiLicense) {
-    throw "DxUi's license file was not found under $dxUiSource. Run restore-dxui.ps1 -Platform $Platform before packaging."
-}
-Copy-Item -LiteralPath $dxUiLicense.FullName -Destination (Join-Path $notices 'dxui.txt')
+} else {
+    $dxUiLock = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'Dependencies/DxUi.lock.json') | ConvertFrom-Json
+    Import-Module (Join-Path $repoRoot 'Build/DxUiPaths.psm1') -Force
+    $dxUiSource = Get-DxUiSourcePath -DependencyRoot (Join-Path $repoRoot '.build/dependencies/DxUi') -Commit $dxUiLock.commit
+    $noticeFiles = [ordered]@{
+        'dxui.txt'                    = 'LICENSE.txt'
+        'dxui-katex.txt'              = 'docs/licenses/katex.txt'
+        'dxui-rapidyaml.txt'          = 'docs/licenses/rapidyaml.txt'
+        'dxui-rapidyaml-bundled.txt'  = 'docs/licenses/rapidyaml-bundled.txt'
+        'dxui-tomlplusplus.txt'       = 'docs/licenses/tomlplusplus.txt'
+        'dxui-unicode.txt'            = 'ThirdParty/Unicode/17.0.0/LICENSE.txt'
+        'dxui-whatwg.txt'             = 'ThirdParty/Markdown/whatwg-2026-10-18/LICENSE.txt'
+    }
+    $sourceCommit = & git -C $dxUiSource rev-parse HEAD
+    if ($LASTEXITCODE -ne 0 -or $sourceCommit -cne $dxUiLock.commit) {
+        throw "The DxUi notice checkout does not match the production pin $($dxUiLock.commit)."
+    }
+    $noticeChanges = & git -C $dxUiSource status --porcelain --untracked-files=no -- @($noticeFiles.Values)
+    if ($LASTEXITCODE -ne 0 -or $noticeChanges) {
+        throw "The pinned DxUi notices contain local changes under $dxUiSource."
+    }
+    foreach ($name in $noticeFiles.Keys) {
+        $sourceFile = Join-Path $dxUiSource $noticeFiles[$name]
+        Copy-Item -LiteralPath $sourceFile -Destination (Join-Path $notices $name) -ErrorAction Stop
+        $dxUiNoticeHashes[$name] = (Get-FileHash -LiteralPath $sourceFile -Algorithm SHA256).Hash
+    }
 }
 
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\README.md') -Destination (Join-Path $stage 'README.md')
@@ -227,6 +244,27 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') -Destinati
 $zipPath = Join-Path $OutputDirectory "$packageName.zip"
 Remove-Item -LiteralPath $zipPath, "$zipPath.sha256" -ErrorAction SilentlyContinue
 Compress-Archive -LiteralPath $stage -DestinationPath $zipPath -CompressionLevel Optimal
+if ($dxUiNoticeHashes.Count) {
+    $archive = [IO.Compression.ZipFile]::OpenRead($zipPath)
+    try {
+        foreach ($name in $dxUiNoticeHashes.Keys) {
+            $entry = $archive.GetEntry("$packageName/ThirdPartyNotices/$name")
+            if ($null -eq $entry) {
+                throw "The package is missing the pinned DxUi notice $name."
+            }
+            $stream = $entry.Open()
+            try {
+                if ((Get-FileHash -InputStream $stream -Algorithm SHA256).Hash -cne $dxUiNoticeHashes[$name]) {
+                    throw "The packaged DxUi notice $name differs from its pinned source."
+                }
+            } finally {
+                $stream.Dispose()
+            }
+        }
+    } finally {
+        $archive.Dispose()
+    }
+}
 $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText("$zipPath.sha256", "$hash *$packageName.zip`n")
 

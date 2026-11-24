@@ -40,7 +40,8 @@ is no auto-update: RedPrism never contacts a server ([`Core_CrashHandling.md`](.
 | `ThirdPartyNotices\redmonitor.txt` | `ThirdParty/RedMonitor/LICENSE.txt`, the RedMonitor client's notice at the locked commit |
 | `ThirdPartyNotices\inherited-code.txt` | `ThirdParty/Notices/InheritedCode.txt`, the MIT notice of the code RedPrism was ported from |
 | `ThirdPartyNotices\lucide.txt` | `ThirdParty/Lucide/LICENSE` (ISC, plus the MIT notice for the Feather-derived icons) |
-| `ThirdPartyNotices\dxui.txt` | DxUi's own license (MIT), read from the pinned source `restore-dxui.ps1` leaves at `.build\dependencies\DxUi\source\<first-16-commit-hex>\LICENSE*`; packaging fails if it is missing rather than shipping `DxUi.lib` without its notice |
+| `ThirdPartyNotices\\dxui.txt` | The MIT license from the pinned DxUi source checkout. |
+| `ThirdPartyNotices\\dxui-*.txt` | The pinned source's KaTeX, rapidyaml and its bundled libraries, toml++, Unicode and WHATWG notices. Packaging verifies all DxUi notice hashes in the final ZIP. SDK builds stage the verified SDK notice bundle in `ThirdPartyNotices\\DxUiSdk`. |
 | `README.md`, `usage.md` | `docs/README.md` and `docs/usage.md` as shipped |
 | `LICENSE.txt` | The project's MIT license; third-party notices retain their own licenses |
 | `THIRD-PARTY-NOTICES.md` | The list of every component the package compiles in or ships, with its license |
