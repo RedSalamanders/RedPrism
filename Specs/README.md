@@ -110,6 +110,7 @@ Before closing a specification change, run:
 
 ```powershell
 ./validate.ps1
+./validate-specs.ps1
 ./validate-skills.ps1
 ./Tools/Test-Changelog.ps1
 ```

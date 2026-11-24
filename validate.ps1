@@ -27,6 +27,7 @@ if ($CompilerFree) {
         $baseCommit = Resolve-CiCommit $PSScriptRoot $Base
         Invoke-CiProjectScript -Context $context -Script 'Tools/Test-Changelog.ps1' -Arguments @('-Base', $baseCommit)
         Invoke-CiProjectScript -Context $context -Script 'validate-skills.ps1' -Arguments @()
+        Invoke-CiProjectScript -Context $context -Script 'validate-specs.ps1' -Arguments @()
     }
     finally {
         [Environment]::SetEnvironmentVariable('CI_NATIVE_BUILDS_DISABLED', $(if ($null -eq $previous) { [NullString]::Value } else { $previous }), 'Process')
@@ -53,6 +54,7 @@ Check 'Scoped plan is indexed' {
     $done=Join-Path $PSScriptRoot 'Specs/Plans/Done/ScopedTesting_2026-10-05.md'
     if(-not(Test-Path -LiteralPath $done) -and [regex]::Matches($index,'ScopedTesting_2026-10-05\.md').Count -ne 1){throw 'The scoped-testing WIP plan must have one index entry.'}
 }
+Check 'Specifications and local links' { & (Join-Path $PSScriptRoot 'validate-specs.ps1') }
 Check 'Independent tooling and scope regressions' {
     & (Join-Path $PSScriptRoot 'Tests/BuildProcessTests/Invoke-ToolingTests.ps1')
     if($LASTEXITCODE -ne 0){throw "Independent tooling failed: $LASTEXITCODE"}
