@@ -1886,6 +1886,24 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     }
 }
 
+[[nodiscard]] std::vector<std::uint64_t> PrepareFolderRename(const std::wstring& destination)
+{
+    const auto nameBytes = destination.size() * sizeof(wchar_t);
+    const auto size      = offsetof(FILE_RENAME_INFO, FileName) + nameBytes + sizeof(wchar_t);
+    std::vector<std::uint64_t> storage((size + sizeof(std::uint64_t) - 1) / sizeof(std::uint64_t));
+    auto* const rename     = reinterpret_cast<FILE_RENAME_INFO*>(storage.data());
+    rename->FileNameLength = static_cast<DWORD>(nameBytes);
+    std::memcpy(rename->FileName, destination.data(), nameBytes);
+    return storage;
+}
+
+[[nodiscard]] DWORD RenameFolder(HANDLE folder, std::vector<std::uint64_t>& request) noexcept
+{
+    // Zero-initialized flags require a vacant destination name.
+    const auto size = static_cast<DWORD>(request.size() * sizeof(std::uint64_t));
+    return SetFileInformationByHandle(folder, FileRenameInfo, request.data(), size) ? ERROR_SUCCESS : GetLastError();
+}
+
 [[nodiscard]] ProjectIoStatus RotateDestination(const std::wstring& dest,
                                                 const std::wstring& backup,
                                                 const ProjectFolderVersion& accepted,
@@ -1897,12 +1915,7 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     failure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::DestinationToBackupRename);
     if (failure != 0)
         return ProjectIoStatus::Encode; // injected errors are final; never hide deterministic faults with retries
-    const auto nameBytes = backup.size() * sizeof(wchar_t);
-    const auto size      = offsetof(FILE_RENAME_INFO, FileName) + nameBytes + sizeof(wchar_t);
-    std::vector<std::uint64_t> storage((size + sizeof(std::uint64_t) - 1) / sizeof(std::uint64_t));
-    auto* const rename     = reinterpret_cast<FILE_RENAME_INFO*>(storage.data());
-    rename->FileNameLength = static_cast<DWORD>(nameBytes);
-    std::memcpy(rename->FileName, backup.data(), nameBytes); // The zero-initialized request never replaces the backup.
+    auto rename = PrepareFolderRename(backup);
     constexpr std::array<LONGLONG, 2> retryDelays100ns{-25 * 10000ll, -100 * 10000ll};
     wil::unique_handle retryTimer;
     for (std::size_t attempt = 0;; ++attempt)
@@ -1921,10 +1934,12 @@ constexpr unsigned int kMaxCleanupDepth = 128;
                     failure = ERROR_REVISION_MISMATCH;
                     return ProjectIoStatus::Conflict;
                 }
-                if (SetFileInformationByHandle(held.get(), FileRenameInfo, rename, static_cast<DWORD>(size)))
+                failure = RenameFolder(held.get(), rename);
+                if (failure == ERROR_SUCCESS)
                     return ProjectIoStatus::Ok;
             }
-            failure = GetLastError();
+            else
+                failure = GetLastError();
         }
         if (failure == ERROR_FILE_NOT_FOUND || failure == ERROR_PATH_NOT_FOUND || failure == ERROR_ALREADY_EXISTS || failure == ERROR_FILE_EXISTS)
             return ProjectIoStatus::Conflict;
@@ -1947,6 +1962,58 @@ constexpr unsigned int kMaxCleanupDepth = 128;
         if (RequestedFailure(faultPolicy, ProjectSaveFaultStage::DestinationTimerWait) != 0 || WaitForSingleObject(retryTimer.get(), 1000) != WAIT_OBJECT_0)
             return ProjectIoStatus::Encode;
     }
+}
+
+void CleanupPublishedBackup(const std::wstring& backup,
+                            const std::wstring& staging,
+                            const ProjectFolderVersion& accepted,
+                            ProjectSaveFaultPolicy faultPolicy,
+                            ProjectIoObserver observer,
+                            TreeCleanupBuffer& scratch)
+{
+    const auto report = [&](DWORD error) noexcept { Report(observer, ProjectIoStage::BackupCleanupFailed, error); };
+    if (const DWORD error = RequestedFailure(faultPolicy, ProjectSaveFaultStage::BackupCleanup); error != ERROR_SUCCESS)
+    {
+        report(error);
+        return;
+    }
+    auto retireName  = PrepareFolderRename(staging);
+    auto restoreName = PrepareFolderRename(backup);
+    auto held        = OpenProjectEntry(backup, DELETE);
+    if (! held)
+    {
+        report(GetLastError());
+        return;
+    }
+    if (ObserveProjectFolderVersion(backup, {}, held.get()) != accepted)
+    {
+        report(ERROR_REVISION_MISMATCH);
+        return;
+    }
+    if (const DWORD error = RenameFolder(held.get(), retireName); error != ERROR_SUCCESS)
+    {
+        report(error);
+        return;
+    }
+    held.reset();
+    auto restore       = wil::scope_exit([&]() noexcept
+    {
+        const auto folder = OpenProjectEntry(staging, DELETE);
+        ProjectFolderVersion root{};
+        if (folder && ReadProjectFolderRoot(folder.get(), root) && root.volume == accepted.volume && root.fileId == accepted.fileId)
+        {
+            if (const DWORD error = RenameFolder(folder.get(), restoreName); error != ERROR_SUCCESS)
+                report(error);
+        }
+    });
+    const auto retired = ObserveProjectFolderVersion(staging, {});
+    if (! retired || ! SameMovedProjectFolder(*retired, accepted))
+    {
+        report(ERROR_REVISION_MISMATCH);
+        return;
+    }
+    if (DeleteTree(staging, ProjectSaveFaultStage::BackupCleanup, ProjectIoStage::BackupCleanupFailed, {}, observer, scratch))
+        restore.release();
 }
 
 [[nodiscard]] ProjectIoStatus SaveExploded(const std::wstring& dest,
@@ -2049,7 +2116,7 @@ constexpr unsigned int kMaxCleanupDepth = 128;
         const auto verifiedBackup = ObserveProjectFolderVersion(backup, {});
         if ((accepted && verifiedBackup && SameMovedProjectFolder(*verifiedBackup, *accepted)) ||
             (! accepted && previousBackup && verifiedBackup == previousBackup))
-            (void)DeleteTree(backup, ProjectSaveFaultStage::BackupCleanup, ProjectIoStage::BackupCleanupFailed, faultPolicy, observer, cleanupScratch);
+            CleanupPublishedBackup(backup, staging, *verifiedBackup, faultPolicy, observer, cleanupScratch);
         else if (GetFileAttributesW(backup.c_str()) != INVALID_FILE_ATTRIBUTES)
             Report(observer, ProjectIoStage::BackupCleanupFailed, ERROR_REVISION_MISMATCH);
     }

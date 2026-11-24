@@ -47,10 +47,11 @@ fails, the save fails without a `Published` report; the old complete tree remain
 new staging tree is cleaned up when possible, and the failure observer receives both rename errors. When a save
 is retried while `dest` is absent, retain the surviving `dest.old` through the new publication attempt; a failed
 attempt must restore or preserve that same recovery tree. Remove that backup only after successful publication.
-Once staging → `dest` succeeds, publication is irreversible: report `Published` and return `Ok` even if later backup cleanup
-fails; retain `dest.old` as recovery and report its exact cleanup error. Cleanup reports never claim publication or
-replace the initiating failure status. Cleanup touches only the exact reserved backup or uniquely created staging
-path, never sibling names selected by a wildcard.
+After staging → `dest` succeeds, report `Published` and return `Ok`. Before removing the recovery backup, verify its accepted
+version on an open directory handle and move it through that handle into the save's vacant staging name. Verify its
+members after the move, then remove the owned tree. If the backup changes before the move, preserve it and report
+the conflict. If cleanup fails after the move, return the surviving tree to `dest.old` when that name is vacant.
+The cleanup observer reports the exact failure and both recovery names remain available for inspection.
 
 Before the first successful rotation rename, a **native** destination-to-backup rename error
 `ERROR_ACCESS_DENIED` or `ERROR_SHARING_VIOLATION` permits at most two additional attempts after one-shot worker

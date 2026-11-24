@@ -2769,6 +2769,34 @@ void TestGuardedExplodedProject()
     change = {.member = owner.c_str(), .dir = fresh.c_str()};
     Expect(SaveProject(fresh.c_str(), document, std::nullopt, false, {}, observer) == ProjectIoStatus::Conflict && change.exercised && ReadText(owner) == other,
            "project.folder-guard.refuses-competing-creation");
+
+    const auto cleanupProject = (root / L"cleanup").wstring();
+    const auto backupEditFile = (root / L"cleanup.old" / L"external.txt").wstring();
+    struct BackupEdit
+    {
+        const wchar_t* path;
+        unsigned int cleanups = 0;
+        bool written          = false;
+    } backupEdit{backupEditFile.c_str()};
+    const ProjectSaveFaultPolicy editBeforeCleanup{[](void* state, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
+    {
+        auto& edit = *static_cast<BackupEdit*>(state);
+        if (stage == ProjectSaveFaultStage::BackupCleanup && ++edit.cleanups == 2)
+        {
+            const wil::unique_hfile file{CreateFileW(edit.path, GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr)};
+            DWORD written = 0;
+            edit.written  = file && WriteFile(file.get(), other.data(), static_cast<DWORD>(other.size()), &written, nullptr) && written == other.size();
+        }
+        return ERROR_SUCCESS;
+    },
+                                                   &backupEdit};
+    Expect(SaveProject(cleanupProject.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok, "project.folder-guard.backup-cleanup-fixture");
+    const auto cleanupVersion = LoadProject(cleanupProject.c_str()).folderVersion;
+    Expect(cleanupVersion &&
+               SaveProject(cleanupProject.c_str(), document, std::nullopt, false, {}, {}, editBeforeCleanup, nullptr, nullptr, &cleanupVersion) ==
+                   ProjectIoStatus::Ok &&
+               backupEdit.written && ReadText(backupEditFile) == other && LoadProject(cleanupProject.c_str()).status == ProjectIoStatus::Ok,
+           "project.folder-guard.preserves-competing-edit-at-backup-cleanup");
 }
 
 void TestGuardedSettingsStore()
