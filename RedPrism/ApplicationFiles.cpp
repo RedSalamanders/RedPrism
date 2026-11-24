@@ -188,7 +188,7 @@ public:
     }
 };
 
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
 // Another thread holding the clipboard open, as another app does while it reads or writes: a copy's write fails.
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
@@ -1005,7 +1005,7 @@ void Application::EndPointerInteractions() noexcept
     }
 }
 
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
 int Application::RunFilesSelfTest() noexcept
 {
     if (! _chrome || ! _window)

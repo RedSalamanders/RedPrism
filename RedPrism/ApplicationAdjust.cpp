@@ -528,7 +528,7 @@ bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool
     return false;
 }
 
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
 int Application::RunAdjustSelfTest() noexcept
 {
     if (! _chrome || ! _window)

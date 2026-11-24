@@ -482,7 +482,7 @@ HRESULT Application::StartImageImport(std::span<const std::wstring_view> paths, 
     return S_OK;
 }
 
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
 int Application::RunImageImportSelfTest() noexcept
 {
     enum class Target

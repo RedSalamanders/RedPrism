@@ -254,7 +254,7 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 | --- | --- |
 | `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All] [-Asan] [-MSBuildPath <path>]` | Restore WIL, yyjson, libzip, and Clipper2 with the Visual Studio installation and default toolset of the MSBuild in use (`-Asan`: the sanitized tree of the platform) |
 | `.\restore-dxui.ps1 [-Platform x64\|ARM64] [-CheckUpdates]` | Restore the exact DxUi pin as a sparse, long-path-safe checkout; `-CheckUpdates` prints one advisory when DxUi `main` is not the pin |
-| `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Analyze] [-Run]` | Preflight, restore, MSBuild, provenance; `-Analyze` runs native MSVC code analysis |
+| `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Analyze] [-Run] [-EnableTests]` | Preflight, restore, MSBuild and provenance. `-Analyze` runs native MSVC code analysis. |
 | `.\restore.ps1 [-Platform x64\|ARM64]` | Prepare standard product and pinned DxUi dependencies with the same compiler host selection as the build. Defaults to x64. |
 | `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |
 | `.\format.ps1 [-Check]` | The pinned engine clang-format over the `formatRoots` of `.ci/project.json` (`Common/`, `RedPrism/`, `Tests/`) |
@@ -263,6 +263,10 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 
 `build.ps1` locates MSBuild from `MSBUILD_EXE_PATH`, `PATH`, or vswhere (including prerelease VS 2026). Every MSBuild
 invocation writes a UTF-8 log under `.build/logs/`.
+
+`ENABLE_TESTS` compiles the application test hooks. Debug and ASan Debug enable it by default. Release qualification
+and the direct and scoped test runners build with `-EnableTests`. The test artifact attestation binds that mode.
+Ordinary Release builds leave the hooks disabled. Packaging still requests the production-only target.
 
 `build.ps1 -Analyze` passes `RedPrismAnalyze=true`; the root `Directory.Build.targets` enables MSVC native C++ code
 analysis (`/analyze`) and loads `EspXEngine.dll` with its `ConcurrencyCheck.dll` extension only for RedPrism projects.

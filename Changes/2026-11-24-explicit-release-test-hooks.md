@@ -1,0 +1,1 @@
+- Use the common test-hook macro and require explicit test mode for Release builds.

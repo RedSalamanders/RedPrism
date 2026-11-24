@@ -92,7 +92,7 @@ Do not add a second failure path. The successful-allocation padding test is not 
 - **Ordinary selection input on the new jobs.** The marquee, lasso, and polygonal jobs stay off
   unless `_selectionPressTestEnabled`, `_polygonalDrawingTestEnabled`, or `_polygonalPressTestEnabled`
   is set (`RedPrism/Application.h`). Those default false. `package.ps1` forces
-  `RedPrismEnableTests` false for the ZIP. That property compiles `REDPRISM_ENABLE_TESTS`
+  `RedPrismEnableTests` false for the ZIP. That property compiles `ENABLE_TESTS`
   (`Directory.Build.props`); it does not set the gesture flags. If delivery later enables those
   routes, that is a separate qualification gate, not a defect found here. The selection work stays
   on [`SelectionWorkers_2026-10-01.md`](SelectionWorkers_2026-10-01.md). Lasso completion stays on

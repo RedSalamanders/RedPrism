@@ -719,7 +719,7 @@ void Application::RefreshColorJobs() noexcept
     }
     LaunchColorPreview();
 }
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
 int Application::RunColorJobsSelfTest() noexcept
 {
     const auto fail = [](const wchar_t* message) noexcept

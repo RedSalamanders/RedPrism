@@ -667,7 +667,7 @@ void SelfTestFailure(const wchar_t* message) noexcept
     (void)WriteFile(error, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
 }
 
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
 int Application::RunSelfTest() noexcept
 {
     (void)std::setvbuf(stdout, nullptr, _IONBF, 0);

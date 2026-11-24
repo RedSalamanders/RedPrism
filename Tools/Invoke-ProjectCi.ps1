@@ -65,6 +65,7 @@ if ($Phase -in @('ReleaseTestBuild','Qualification','Production')) {
     $sdkDescriptor=$null
     $buildArguments = $profile + @('-BuildNumber',$number,'-MaxCpuCount','2')
     if ($Phase -eq 'Production') { $buildArguments += '-ProductionOnly' }
+    else { $buildArguments += '-EnableTests' }
     if($Configuration -ceq 'Release' -and $Phase -cin @('ReleaseTestBuild','Production')){
         Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.SdkPreparation.psm1')
         $lock=Get-Content (Join-Path $root 'Dependencies/DxUi.lock.json') -Raw|ConvertFrom-Json

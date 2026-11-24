@@ -110,6 +110,7 @@ $buildArguments = @{
     Configuration = $Configuration
     Platform = $Platform
     MaxCpuCount = $MaxCpuCount
+    EnableTests = $true
 }
 if($BuildNumber -gt 0){$buildArguments.BuildNumber=$BuildNumber}
 if ($Rebuild) {
@@ -148,7 +149,7 @@ $buildAttestation=Join-Path $outputRoot 'build-attestation.json'
 if (-not $localSdkMode) {
     $attestationKey = Get-ScopedBuildAttestationKey -Root $repoRoot -Platform $Platform -Configuration $Configuration -BuildNumber $info.FileBuildPart
     if (-not (Test-ScopedReceipt -Path $buildAttestation -Identity $attestationKey)) {
-        throw 'Native artifact/source/profile/toolchain attestation is stale or missing. Run build.ps1 before -SkipBuild.'
+        throw 'Native test artifact/source/profile/toolchain attestation is stale or missing. Run build.ps1 -EnableTests before -SkipBuild.'
     }
 }
 # First, so that every later run is known to end on a failed runtime check instead of opening a dialog on the desktop.
