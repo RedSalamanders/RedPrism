@@ -1,6 +1,10 @@
 <#!
 .SYNOPSIS
-Builds RedPrism and runs host tests plus the hidden WARP self-test.
+Runs affected RedPrism tests or an explicitly selected native profile.
+.DESCRIPTION
+Ordinary calls use Test-Changes.ps1 for affected scopes. Full runs the complete direct profile, and Suites selects explicit scopes.
+.PARAMETER Full
+Run every applicable scope in the selected profile.
 .PARAMETER ParallelSuites
 Maximum suite concurrency. RedPrism runs suites serially to preserve the existing desktop and harness ownership.
 .PARAMETER LocalSdkBuildReceipt
@@ -40,6 +44,20 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSCommandPath
+$affectedOptions = @('Platform','Configuration','SkipBuild','ParallelSuites','Full')
+if (-not $Full -and @($PSBoundParameters.Keys | Where-Object { $_ -notin $affectedOptions }).Count -eq 0) {
+    Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Scope Local
+    $manifest = Read-ScopedTestManifest -Root $repoRoot -SkipProjectRules
+    $problem = Get-ScopedComparisonProblem -Root $repoRoot -BaseRef ('origin/' + $manifest.defaultBranch)
+    if (-not $problem) {
+        $global:LASTEXITCODE = 0
+        & (Join-Path $repoRoot 'Test-Changes.ps1') -Mode Affected -Platform $Platform -Configuration $Configuration `
+            -SkipBuild:$SkipBuild -ParallelSuites $ParallelSuites
+        exit $LASTEXITCODE
+    }
+    Write-Host "Running the full profile because affected selection is unavailable. $problem" -ForegroundColor Yellow
+}
+
 $localSdkMode = [bool]($LocalSdkBuildReceipt -or $LocalSdkBuildSha256)
 if ($localSdkMode -and (-not $IsWindows -or $env:GITHUB_ACTIONS -ceq 'true' -or $env:CI_NATIVE_BUILDS_DISABLED -ceq 'true')) {
     throw 'Local SDK runtime requires local Windows native execution.'
