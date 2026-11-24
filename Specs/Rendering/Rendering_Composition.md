@@ -418,8 +418,9 @@ upload paths until complete resource admission, mip/display publication and meas
 
 A frame never closes the window on its own (RF-401):
 
-- **Device removal at any stage**: when chrome `Prepare`, the composition, the blit, chrome `Composite` or `Present`
-  fails and either the result or `GetDeviceRemovedReason` says the device is gone, the renderer rebuilds the device,
+- **Device loss at any stage**: when chrome `Prepare`, the composition, the blit, chrome `Composite` or `Present`
+  fails with `DXGI_ERROR_DEVICE_REMOVED`, `DXGI_ERROR_DEVICE_RESET`, `DXGI_ERROR_DEVICE_HUNG` or
+  `DXGI_ERROR_DRIVER_INTERNAL_ERROR`, or when `GetDeviceRemovedReason` fails, the renderer rebuilds the device,
   swap chain and target (the chrome follows through `ReplaceDevice`), returns `S_FALSE`, and the host rebinds the
   composition and the brush engine and draws again on the new device. Releasing the old device's objects clears the
   immediate context, drops the target view and the swap chain, and only then flushes that context: D3D11 destroys a

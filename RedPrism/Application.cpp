@@ -8382,26 +8382,34 @@ int Application::RunRenderingSelfTest() noexcept
     _viewport.followsFit = true;
     SyncChrome();
 
-    // A device removed at any stage of a frame is rebuilt and drawn on; the window stays (RF-401).
-    const std::array<std::pair<Renderer::Stage, const wchar_t*>, 5> stages{{
-        {Renderer::Stage::ChromePrepare, L"chrome Prepare"},
-        {Renderer::Stage::Compose, L"the composition"},
-        {Renderer::Stage::Blit, L"the blit"},
-        {Renderer::Stage::ChromeComposite, L"chrome Composite"},
-        {Renderer::Stage::Present, L"Present"},
-    }};
-    for (const auto& [stage, name] : stages)
+    // The renderer rebuilds a failed device and draws on the new device while keeping the window (RF-401).
+    struct DeviceRecoveryCase
     {
-        std::printf("BEGIN rendering.device-recovery stage=%u\n", static_cast<unsigned>(stage));
+        Renderer::Stage stage;
+        HRESULT result;
+        const wchar_t* name;
+    };
+    const std::array<DeviceRecoveryCase, 6> recoveryCases{{
+        {Renderer::Stage::ChromePrepare, DXGI_ERROR_DEVICE_REMOVED, L"chrome Prepare"},
+        {Renderer::Stage::Compose, DXGI_ERROR_DEVICE_REMOVED, L"the composition"},
+        {Renderer::Stage::Blit, DXGI_ERROR_DEVICE_REMOVED, L"the blit"},
+        {Renderer::Stage::ChromeComposite, DXGI_ERROR_DEVICE_REMOVED, L"chrome Composite"},
+        {Renderer::Stage::Present, DXGI_ERROR_DEVICE_REMOVED, L"Present"},
+        {Renderer::Stage::Present, DXGI_ERROR_DEVICE_HUNG, L"Present"},
+    }};
+    for (const auto& [stage, result, name] : recoveryCases)
+    {
+        std::printf("BEGIN rendering.device-recovery stage=%u result=%#010x\n", static_cast<unsigned>(stage), static_cast<unsigned>(result));
         const std::uint64_t generation = _renderer.DeviceGeneration();
-        _renderer.FailNextStageForTest(stage, DXGI_ERROR_DEVICE_REMOVED);
+        _renderer.FailNextStageForTest(stage, result);
         frame();
         if (! _window || FAILED(_frameLoopFailure) || _failedFrames != 0 || _frameInvalidated || _renderer.DeviceGeneration() != generation + 1 ||
             _composition.Device() != _renderer.Device() || _boundDeviceGeneration != _renderer.DeviceGeneration() || ! _brushEngine.Ready() ||
             _composition.CanvasSurfaceBytes() == 0)
         {
-            const std::wstring message = std::format(L"A device removed during {} was not rebuilt and drawn on (failed frames {}, last failure {:#010x} "
+            const std::wstring message = std::format(L"Device failure {:#010x} during {} did not recover (failed frames {}, last failure {:#010x} "
                                                      L"at stage {}, generation {} -> {}, bound {}, brush {}, surfaces {}).\n",
+                                                     static_cast<std::uint32_t>(result),
                                                      name,
                                                      _failedFrames,
                                                      static_cast<std::uint32_t>(_lastFrameFailure),

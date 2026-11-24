@@ -808,5 +808,6 @@ void Renderer::ReleaseDeviceResources() noexcept
 
 bool Renderer::IsDeviceLost(HRESULT result) noexcept
 {
-    return result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET || result == DXGI_ERROR_DRIVER_INTERNAL_ERROR;
+    return result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET || result == DXGI_ERROR_DEVICE_HUNG ||
+           result == DXGI_ERROR_DRIVER_INTERNAL_ERROR;
 }
