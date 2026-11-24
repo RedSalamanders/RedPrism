@@ -1,0 +1,1 @@
+- Validate RedPrism skills, guidance and plan indexes with the pinned shared CI engine.

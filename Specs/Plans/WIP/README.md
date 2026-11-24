@@ -7,9 +7,9 @@ file, and ends with an em dash and its purpose. `ACTIVE` is executable work, `HO
 unresolved product intent, and `RETIRED` a bounded tombstone that names its retirement date, reason, current
 owner, and a `git show` recovery command.
 
-P1 and every child in the HOLD rows are paused since 21 October 2026. Resume only from [`UiNeverBlocks_2026-09-22.md`](UiNeverBlocks_2026-09-22.md). The October checkpoint narrative that used to open this file lives in that plan. `P1MainIntegration_2026-10-21/*.json` is evidence referenced from that plan and from [`P1MainIntegration_2026-10-21.md`](../../TestRuns/P1MainIntegration_2026-10-21.md). It is not a plan.
+P1 and every child in the HOLD rows are paused since 21 October 2026. Resume only from [`UiNeverBlocks_2026-09-22.md`](UiNeverBlocks_2026-09-22.md#saved-continuation--21-october-2026). The October checkpoint narrative that used to open this file lives in that plan. `P1MainIntegration_2026-10-21/*.json` is evidence referenced from that plan and from [`P1MainIntegration_2026-10-21.md`](../../TestRuns/P1MainIntegration_2026-10-21.md). It is not a plan.
 
-Re-checked against `main` `e79a83a` on 1 November 2026. `package.ps1` calls `Get-DxUiSourcePath`. `.github/workflows/ci.yml` triggers `push` to `main`. The busy string, the Inverse and Wand admission ceilings, and the format-7 writer are still the code. Correction notes are in the MergeReview, RedTeam, and DeliveryReview files. Line numbers in [`AdversarialReview_2026-10-21.md`](AdversarialReview_2026-10-21.md) are the 16 October snapshot.
+Re-checked against `main` `e79a83a` on 1 November 2026. `package.ps1` calls `Get-DxUiSourcePath`. `.github/workflows/ci.yml` triggers `push` to `main`. The busy string, the Inverse and Wand admission ceilings, and the format-7 writer are still the code. Correction notes are in the MergeReview, RedTeam, and DeliveryReview files. Line numbers in [`AdversarialReview_2026-10-21.md`](AdversarialReview_2026-10-21.md#redprism-adversarial-review) are the 16 October snapshot.
 
 The Windows DirectX port master program is historical:
 [`WindowsDirectXPort_2026-09-20.md`](../Done/WindowsDirectXPort_2026-09-20.md). The C0–C7 review and the DxUi editor-control adoption are
@@ -25,7 +25,7 @@ rejected for v1) in [`SmartOps_2026-09-20.md`](../Done/SmartOps_2026-09-20.md) C
 [`Packaging_2026-09-20.md`](../Done/Packaging_2026-09-20.md) and C16 Completeness (the whole legacy command surface, the
 unimplemented-function notice, images opened as a layer or a new project, the size cards, the Crop tool, rename and
 merge) in [`Completeness_2026-09-21.md`](../Done/Completeness_2026-09-21.md). Session undo/redo, cut, save-before-replace, exploded-project reparse checks, hostile zip tests, the guide, device recovery, and marching ants are in
-[`PortProgress_2026-09-21.md`](../Done/PortProgress_2026-09-21.md). Tree multi-select and drag-reorder stay on the DxUi plan `TreeReorder_2026-09-21.md`, tracked here by [`DxUiFollowUps_2026-10-01.md`](DxUiFollowUps_2026-10-01.md). Brush measured follow-ups stay in `Specs/TestRuns/Brush_2026-09-21.md`.
+[`PortProgress_2026-09-21.md`](../Done/PortProgress_2026-09-21.md). Tree multi-select and drag-reorder stay on the DxUi plan `TreeReorder_2026-09-21.md`, tracked here by [`DxUiFollowUps_2026-10-01.md`](DxUiFollowUps_2026-10-01.md#implementation-checklist). Brush measured follow-ups stay in `Specs/TestRuns/Brush_2026-09-21.md`.
 The 2026-09-23 whole-codebase review and its fixes are in [`ReviewFixes_2026-09-23.md`](../Done/ReviewFixes_2026-09-23.md).
 Its deferred rows RF-1003, RF-1004 and RF-1115 belong to `UiNeverBlocks_2026-09-22.md`.
 

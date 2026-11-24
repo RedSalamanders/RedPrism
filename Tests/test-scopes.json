@@ -93,19 +93,19 @@
   ],
   "rules": [
     {
-      "pattern": "Build/SkillPackageIntegrity.psm1",
+      "pattern": "validate-skills.ps1",
       "scopes": [
         "Tooling"
       ],
-      "reason": "exact independent skill-validator module",
+      "reason": "independent agent guidance validation",
       "exclusive": true
     },
     {
-      "pattern": "Build/SkillValidation.psm1",
+      "pattern": "Tools/Test-AgentGuidance.ps1",
       "scopes": [
         "Tooling"
       ],
-      "reason": "exact independent skill-validator module",
+      "reason": "independent agent guidance validation",
       "exclusive": true
     },
     {
