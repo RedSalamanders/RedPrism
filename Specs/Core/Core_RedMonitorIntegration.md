@@ -10,6 +10,9 @@ gates. This file keeps only RedPrism's adapter facts.
 - The client header and its MIT notice live under `ThirdParty/RedMonitor/`, recorded in
   [the lock](../../Dependencies/RedMonitor.lock.json). The root `Verify-RedMonitorClient.ps1` verifies them and
   `Update-RedMonitorClient.ps1 -Commit FULL_SHA` updates them with the lock.
+  The root commands verify the pinned bundle under `Dependencies/RedMonitorClientTools/` before invoking it.
+  The lock records the reviewed tooling commit separately from the native client commit. A client refresh preserves
+  the tooling pin.
 - Messages carry the `RedPrism` label. `Common/MonitorDiagnostics.cpp` and `Common/MonitorDiagnostics.h` hold the
   `Client.h` include, the provider owner and the `--redmonitor-probe` handler.
 - `Tests/BuildProcessTests/RedMonitorConsumption.Tests.ps1` holds the offline verification controls.
