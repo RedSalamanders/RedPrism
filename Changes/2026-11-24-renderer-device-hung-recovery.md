@@ -1,0 +1,1 @@
+- Recover the renderer and redraw the editor when a frame reports a hung Direct3D device.
