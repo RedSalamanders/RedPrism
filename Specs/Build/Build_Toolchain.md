@@ -201,7 +201,7 @@ C0–C4 used WIL and yyjson only. C5 adds libzip; C9 adds Clipper2 for selection
 `aws-sdk-cpp`, `sqlite3`, `7zip`, `ftxui`, `pe-parse`, `libjpeg-turbo`, `libpng`, and `libraw` MUST NOT be added by
 this contract.
 
-`vcpkg-install.ps1` clones the pinned tooling under `.build/vcpkg-tool/`, bootstraps it, and installs into the
+`vcpkg-install.ps1` uses the pinned CI engine to prepare the checkout and manifest arguments, bootstraps vcpkg, and installs into the
 platform-scoped tree. `ASan Debug` links its own tree per platform (`vcpkg-install.ps1 -Asan`,
 `.build/vcpkg_installed/x64-asan/` or `-Platform ARM64 -Asan`, `.build/vcpkg_installed/arm64-asan/`): the overlay
 triplet `Build/vcpkg-triplets/x64-windows-asan.cmake` (ARM64: `arm64-windows-asan.cmake`, mirrored, sharing the same
@@ -217,7 +217,7 @@ the newest toolset it finds. `vcpkg-install.ps1` takes the installation from the
 standalone run finds the MSBuild `build.ps1` would), and the toolset from that installation's
 `VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt` (MSBuild reaches the same version for `v145` through
 `Microsoft.VCToolsVersion.v145.default.props`; the two agree on the installation this was written against, and the choice
-follows DxUi's `Get-DxUiDefaultToolset`). Neither is hard-coded, and a missing or malformed version file
+uses the pinned CI engine helper). The selected installation and version come from compiler discovery, and a missing or malformed version file
 fails before anything is cloned, naming the file and the repair. The two differ when a newer toolset is installed beside the
 default: in the historical 14.51-default installation, the side-by-side 14.52 preview lacked an x64-hosted ARM64 compiler, so every fresh ARM64 restore failed
 while configuring its first library (`LNK1104` on `MSVCRTD.lib`), and compiled libraries from a toolset newer than the one that
@@ -230,9 +230,7 @@ vcpkg receives only that directory as `--overlay-triplets`. The sanitizer overla
 which reaches the managed checkout through `..\..\.build\vcpkg-tool`, so the overlay directory stays two levels below the
 repository root (`vcpkg-install.ps1` refuses a layout where it does not). A file is rewritten only when its bytes change. A
 different triplet is a different package ABI hash, so the first restore after a change of the installation, the default
-major.minor, the vcpkg pin or a triplet rebuilds the packages; vcpkg's per-user binary cache serves a repeat. The logic mirrors
-DxUi's `Tools/VcpkgTriplet.psm1`, which pins DxUi's own restore the same way, but depends on neither a restored DxUi checkout
-nor its pin, because `vcpkg-install.ps1` runs before `restore-dxui.ps1` and on its own.
+major.minor, the vcpkg pin or a triplet rebuilds the packages; vcpkg's per-user binary cache serves a repeat. The pinned CI engine generates the application overlay through RedPrism's existing helper. The application restore runs before `restore-dxui.ps1` and also has a standalone entry point.
 `Tests/BuildProcessTests/VcpkgToolsetTests.ps1` covers it, and requires the same overlay text and the same toolset (and
 failures) as the pinned DxUi modules whenever the pin is restored, so a drift shows at the next pin move.
 
