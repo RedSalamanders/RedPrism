@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Keep the newest ten post-adoption crash reports, preserve existing evidence and show each valid pending report once on interactive startup.
 - Use the shared hosted MSVC setup for current RedPrism native workflows and keep the local verification command as a pinned wrapper.
 - Adopt the shared hosted MSVC action and pinned formatting and repository policy checks.
 - Verify the evidence fixture through public receipts for the same NTFS file.
