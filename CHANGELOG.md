@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Bind the root RedMonitor client commands to the producer-owned tooling hashes recorded in the existing lock.
 - Validate RedPrism skills, guidance and plan indexes with the pinned shared CI engine.
 - RedPrism now uses the pinned shared scoped-testing runner, planner and evidence modules. PrePush covers the
   six supported local build profiles, with interactive clipboard suites listed separately. Native tests publish
