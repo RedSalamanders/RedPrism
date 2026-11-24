@@ -13,10 +13,18 @@ function Assert-True([bool]$Condition,[string]$Message){if(-not $Condition){thro
 function Assert-Equal($Expected,$Actual,[string]$Message){if($Expected -cne $Actual){throw "$Message; expected '$Expected', actual '$Actual'."}}
 function Assert-Contains($Values,$Expected,[string]$Message){if($Expected -cnotin $Values){throw $Message}}
 $repository=(& git -C $PSScriptRoot rev-parse --show-toplevel).Trim()
-if(-not $SetupScriptPath){$SetupScriptPath=Join-Path $repository '.github/actions/setup-msvc/Setup.ps1'}
+if(-not $SetupScriptPath){
+    $engine=Join-Path $repository '.ci-engine'
+    $pin=(Get-Content -LiteralPath (Join-Path $repository '.ci/project.json') -Raw|ConvertFrom-Json).engine.ref
+    if((git -C $engine rev-parse HEAD).Trim() -cne $pin -or (git -C $engine --no-optional-locks status --porcelain)){
+        throw 'The setup fixture requires the clean exact CI engine.'
+    }
+    $SetupScriptPath=Join-Path $engine '.github/actions/setup-msvc/Setup.ps1'
+}
+$SetupScriptPath=(Resolve-Path -LiteralPath $SetupScriptPath).Path
 if(-not $IsWindows){Write-Host 'SKIP hosted MSVC GUI bootstrapper fixtures: Windows process semantics required.';return}
 # Retain all attempts as setup evidence.
-$packet=Join-Path $repository ('.build/msvc-setup-fixtures/'+[guid]::NewGuid().ToString('N'))
+$packet=Join-Path $repository ('.build/msvc-'+[guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($packet)
 $source=Join-Path $packet 'FakeInstaller.cs'
 [IO.File]::WriteAllText($source,@'
@@ -51,9 +59,6 @@ $fakeDiscoveryExecutable=Join-Path $packet 'FakeDiscovery.exe'
 if($LASTEXITCODE-ne 0){throw 'Cannot compile the console discovery fixture.'}
 function Invoke-SetupFixture([string]$Name,[int]$ExitCode=0,[string]$Version='14.52.37025',[switch]$Ready,[switch]$VerifyOnly,[switch]$Local,[switch]$BadSignature,[string]$Missing=''){
     $fixture=Join-Path $packet $Name
-    $script=Join-Path $fixture '.github/actions/setup-msvc/Setup.ps1'
-    [void][IO.Directory]::CreateDirectory((Split-Path $script))
-    Copy-Item $SetupScriptPath $script
     $discovery=Join-Path $fixture 'Program Files/Microsoft Visual Studio/Installer/vswhere.exe'
     [void][IO.Directory]::CreateDirectory((Split-Path $discovery))
     Copy-Item -LiteralPath $fakeDiscoveryExecutable -Destination $discovery
@@ -76,7 +81,7 @@ function Invoke-WebRequest {param($Uri,$OutFile) Copy-Item $env:DXUI_FAKE_INSTAL
 function Get-AuthenticodeSignature {param($LiteralPath) [pscustomobject]@{Status=$env:DXUI_FIXTURE_SIGNATURE;SignerCertificate=[pscustomobject]@{Subject='CN=Microsoft Corporation, O=Microsoft Corporation, C=US'}}}
 # Success starts with LASTEXITCODE unset, as on hosted CI. Failure has stale success.
 if($env:DXUI_FIXTURE_EXIT-ne '0'){$global:LASTEXITCODE=0}
-& (Join-Path $PSScriptRoot '.github/actions/setup-msvc/Setup.ps1') -Platform x64 -VerifyOnly:$VerifyOnly
+& $env:REDPRISM_TEST_SHARED_SETUP -ProjectRoot $PSScriptRoot -Platform x64 -VerifyOnly:$VerifyOnly
 '@)
     $start=[Diagnostics.ProcessStartInfo]::new('pwsh')
     $start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
@@ -91,6 +96,7 @@ if($env:DXUI_FIXTURE_EXIT-ne '0'){$global:LASTEXITCODE=0}
     $start.Environment['TEMP']=$start.Environment['RUNNER_TEMP']
     $start.Environment['GITHUB_OUTPUT']=Join-Path $fixture 'github-output.txt'
     $start.Environment['GITHUB_ENV']=Join-Path $fixture 'github-env.txt'
+    $start.Environment['REDPRISM_TEST_SHARED_SETUP']=$SetupScriptPath
     # Model the older installation that wins ambient discovery on hosted images.
     $oldMSBuild=Join-Path $fixture 'old installation/MSBuild/Current/Bin/amd64/MSBuild.exe'
     [void][IO.Directory]::CreateDirectory((Split-Path $oldMSBuild))
@@ -162,9 +168,11 @@ Invoke-TestCase 'successful installer cannot admit another compiler family' {
     $result=Invoke-SetupFixture 'wrong-family' -Version '14.51.36231'
     Assert-True ($result.Exit-ne 0 -and $result.Text-match 'Insiders did not provide default MSVC 14.52') $result.Text
 }
+$missingIndex=0
 foreach($missing in @("VC/Tools/MSVC/14.52.37025/bin/Host$(if([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()-eq 'Arm64'){'arm64'}else{'x64'})/x64/cl.exe",'VC/Tools/MSVC/14.52.37025/lib/x64/clang_rt.asan_dynamic-x86_64.lib','VC/Tools/Llvm/x64/bin/llvm-pdbutil.exe','SDK')){
+    ++$missingIndex
     Invoke-TestCase "successful installer cannot admit missing $missing" {
-        $result=Invoke-SetupFixture ('missing-'+[guid]::NewGuid().ToString('N')) -Missing $missing
+        $result=Invoke-SetupFixture ('missing-'+$missingIndex) -Missing $missing
         Assert-True ($result.Exit-ne 0 -and $result.Text-match 'Insiders did not provide') $result.Text
     }
 }
