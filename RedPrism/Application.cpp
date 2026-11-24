@@ -3100,6 +3100,10 @@ HRESULT Application::CreateMainWindow(bool visible) noexcept
     {
         ShowWindow(window, SW_HIDE);
     }
+    if (! _settingsPath.empty() && ! StartSettingsWatch())
+    {
+        OutputDebugStringW(L"Settings live reload could not start.\n");
+    }
     return S_OK;
 }
 
@@ -4160,22 +4164,16 @@ void Application::Shutdown() noexcept
 
 bool Application::WaitUntilMessage(DWORD timeout) noexcept
 {
-    // The job event and settings watch wait beside messages, including while hidden. No periodic job timer.
-    HANDLE handles[3]{};
+    // Jobs and observations also wake the owner while its window is hidden.
+    HANDLE handles[2]{};
     DWORD count            = 0;
     const DWORD noIndex    = MAXDWORD;
     DWORD jobIndex         = noIndex;
-    DWORD watchIndex       = noIndex;
     DWORD observationIndex = noIndex;
     if (const HANDLE wake = _jobs.WakeHandle(); wake != nullptr)
     {
         jobIndex         = count;
         handles[count++] = wake;
-    }
-    if (const HANDLE watch = SettingsWatchHandle(); watch != nullptr)
-    {
-        watchIndex       = count;
-        handles[count++] = watch;
     }
     if (const HANDLE observation = UiCancellationWakeHandle(); observation != nullptr)
     {
@@ -4193,11 +4191,6 @@ bool Application::WaitUntilMessage(DWORD timeout) noexcept
     {
         return true; // drain only after returning to the outer loop
     }
-    if (watchIndex != noIndex && waitResult == WAIT_OBJECT_0 + watchIndex)
-    {
-        OnSettingsDirectoryChanged(false);
-        return true;
-    }
     const DWORD error = waitResult == WAIT_FAILED ? GetLastError() : ERROR_INVALID_DATA;
     OnFrameLoopFailure(error != ERROR_SUCCESS ? HRESULT_FROM_WIN32(error) : E_FAIL);
     return false;
@@ -4210,11 +4203,10 @@ bool Application::WaitForFrameLatency() noexcept
     {
         return true;
     }
-    HANDLE handles[4]{};
+    HANDLE handles[3]{};
     DWORD count            = 0;
     DWORD observationIndex = MAXDWORD;
     DWORD jobIndex         = MAXDWORD;
-    DWORD watchIndex       = MAXDWORD;
     if (const HANDLE wake = _jobs.WakeHandle(); wake != nullptr)
     {
         jobIndex         = count;
@@ -4222,11 +4214,6 @@ bool Application::WaitForFrameLatency() noexcept
     }
     const DWORD frameIndex = count;
     handles[count++]       = waitable;
-    if (const HANDLE watch = SettingsWatchHandle(); watch != nullptr)
-    {
-        watchIndex       = count;
-        handles[count++] = watch;
-    }
     if (const HANDLE observation = UiCancellationWakeHandle(); observation != nullptr)
     {
         observationIndex = count;
@@ -4241,11 +4228,6 @@ bool Application::WaitForFrameLatency() noexcept
         return false;
     if (jobIndex != MAXDWORD && waitResult == WAIT_OBJECT_0 + jobIndex)
     {
-        return false;
-    }
-    if (watchIndex != MAXDWORD && waitResult == WAIT_OBJECT_0 + watchIndex)
-    {
-        OnSettingsDirectoryChanged(false);
         return false;
     }
     if (waitResult == WAIT_OBJECT_0 + count)
@@ -6098,6 +6080,21 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
                 return 0;
             }
             break;
+        case kSettingsChangedMessage:
+            if (wParam == _settingsWatchGeneration)
+            {
+                if (lParam != 0)
+                {
+                    StopSettingsWatch();
+                    OutputDebugStringW(L"The settings directory watch stopped.\n");
+                }
+                else
+                {
+                    _settingsWatchPending.store(false, std::memory_order_release);
+                }
+                ReloadSettingsIfChanged();
+            }
+            return 0;
         case WM_TIMER:
             if (_uiBenchmark && OnUiCancellationTimer(wParam))
                 return 0;
@@ -6110,12 +6107,6 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
             if (wParam == kJobIndicatorTimerId)
             {
                 OnJobIndicatorTimer();
-                return 0;
-            }
-            if (wParam == kSettingsTimerId)
-            {
-                (void)KillTimer(window, kSettingsTimerId);
-                (void)ReloadSettingsIfChanged();
                 return 0;
             }
             if (wParam == kScreenshotTimerId && ! _screenshotPath.empty() && _window)
@@ -6198,6 +6189,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
             PostQuitMessage(0);
             return 0;
         case WM_NCDESTROY:
+            StopSettingsWatch();
             RemovePropW(window, kWindowCloakHookProperty);
             _windowCloakNotification.reset();
             if (_window.get() == window)

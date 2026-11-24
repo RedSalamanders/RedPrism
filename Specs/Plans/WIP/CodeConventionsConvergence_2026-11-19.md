@@ -29,32 +29,28 @@ Prepared: 2026-11-19.
 - [ ] **H-19 Device-loss results.** The renderer and the GPU job retry sets accept `DXGI_ERROR_DEVICE_REMOVED`,
   `DXGI_ERROR_DEVICE_RESET` and `DXGI_ERROR_DRIVER_INTERNAL_ERROR`. Target: the shared set, which adds
   `DXGI_ERROR_DEVICE_HUNG` (and `D2DERR_RECREATE_TARGET` only where Direct2D draws to the swap chain).
-- [ ] **H-20 Occlusion.** The renderer acts on `DXGI_STATUS_OCCLUDED` from its flip-model `Present`. DxUi measured that
-  status is not a usable signal for a flip-model swap chain on Windows 11 25H2 (DxUi
-  `Measurements/FlipModelOcclusion_2026-11-19/`). Target: occlusion from signals the application owns, as
-  `d3d11-win32-host` states.
-- [ ] **H-09 `yyjson` read flags.** Settings are read with `YYJSON_READ_ALLOW_BOM` only. Target:
-  `YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM`; every numeric field check rejects non-finite values first, since JSON5
-  admits `NaN` and `Infinity`.
-- [ ] **H-15 Settings reload.** One `FindFirstChangeNotification` is waited beside the message queue with a 250 ms
-  timer. Target (RedHome decision D19): a worker that waits on the change and a stop event, coalesces, and posts one
-  notification to the UI thread, which parses and applies.
-- [ ] **H-25 Replace sequence.** Projects and images use `ReplaceFileW` with `REPLACEFILE_IGNORE_MERGE_ERRORS` and a
-  `MoveFileExW(MOVEFILE_REPLACE_EXISTING)` fallback without write-through; settings use
-  `MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`. Target: the shared sequence. The register's
-  common sequence is open again for RedXe's guarded POSIX rename (an owner decision), so this row waits for it.
+- [x] **H-20 Occlusion.** Production rendering follows application-owned visibility, minimize, cloak and power signals.
+  Physical replay remains in RedHome's D21 ledger. [RedPrism #94](https://github.com/RedSalamanders/RedPrism/pull/94)
+- [x] **H-09 `yyjson` read flags.** Settings read JSON5 with BOM support, apply finite typed validation and retain
+  additive values across saves. [RedPrism #109](https://github.com/RedSalamanders/RedPrism/pull/109)
+- [x] **H-15 Settings reload.** A worker coalesces directory changes and posts to the UI thread. The UI thread
+  applies valid edits and keeps its last good settings when the selected file cannot be used. Cold load
+  recovers malformed JSON through a guarded backup and template. A readable incompatible file stays in place.
+- [x] **H-25 Guarded publication.** Image, settings and project saves guard the accepted destination version through
+  commit. Full Runtime and native ARM64 replay remain in RedHome's D21 ledger.
+  [RedPrism #88](https://github.com/RedSalamanders/RedPrism/pull/88)
 - [ ] **H-26 Settings file names.** `settings.json` and `settings.debug.json`. Target: `RedPrism.settings.json` and
   `RedPrism-debug.settings.json`. Existing users' files must be found and migrated once, so the row first states
   that migration in the settings contract.
-- [ ] **H-07 Satellite layout.** `Languages\<tag>\RedPrism.resources.dll`. Target: `Lang\<Module>-<culture>.dll`. No
-  translation ships in v1, so only the loader and the build layout change.
-- [ ] **H-06 Resource string helpers.** `Common/Resources.h` lacks the embedded variants and `MessageBoxResource`.
-  Target: the shared helper names with the existing `std::format_error` fallback kept.
+- [x] **H-07 Satellite layout.** The loader checks `Lang\RedPrism-<culture>.dll` and retains the legacy lookup.
+  [RedPrism #106](https://github.com/RedSalamanders/RedPrism/pull/106)
+- [x] **H-06 Resource string helpers.** The common embedded helpers and `MessageBoxResource` are in `Common/Resources.h`.
+  [RedPrism #102](https://github.com/RedSalamanders/RedPrism/pull/102)
 
 ## Rows already at their target or not applicable
 
 - **H-11** (`--self-test` forces WARP), **H-12** (`UI_Windowing.md`) and **H-23** (`RedPrism/KeyboardState.h`) are the
   targets other repositories move to.
 - **H-13** is converged in RedHome: `AGENTS.md` already states the non-throwing `new` rule the code follows.
-- **H-01, H-02, H-05, H-14** wait for API 6 (RedHome decision D20); **H-16** waits for an owner choice of one crash
-  artifact shape.
+- **H-01, H-02, H-05, H-14** wait for API 6 (RedHome decision D20). **H-16** keeps the local dump and pending marker,
+  claims one startup notice, and retains ten post-adoption reports under D24. [RedPrism #70](https://github.com/RedSalamanders/RedPrism/pull/70)

@@ -419,9 +419,9 @@ frame action (`RedPrism/FrameScheduler.h`). The first matching row wins:
 | State | Action |
 | --- | --- |
 | Completions or UI actions pending | Return to the outer completion/action pump, before visibility checks |
-| Hidden, minimized, cloaked, display-off, system suspended, or swap chain suspended | Block on messages, job wake and settings watch |
-| Presentation available, frame invalidated or chrome animating | Wait on frame latency, messages, job wake and settings watch. Only frame latency proceeds to `Renderer::Render`. |
-| Presentation available and settled | Block on messages, job wake and settings watch |
+| Hidden, minimized, cloaked, display-off, system suspended, or swap chain suspended | Block on messages and job wake events |
+| Presentation available, frame invalidated or chrome animating | Wait on frame latency, messages and job wake events. Only frame latency proceeds to `Renderer::Render`. |
+| Presentation available and settled | Block on messages and job wake events |
 
 `Renderer::Render` is the only Present path. `WM_PAINT` MAY set the invalidation bit and MUST `ValidateRect`; it MUST
 NOT call `Present`, `BeginPaint` text, or GDI fill.

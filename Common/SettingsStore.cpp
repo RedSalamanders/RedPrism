@@ -258,21 +258,31 @@ std::wstring BackupPathFor(const std::wstring& path)
                               time.wMilliseconds);
 }
 
-std::optional<AppSettings> Parse(std::string_view json)
+namespace
+{
+struct ParsedSettingsDocument
+{
+    std::optional<AppSettings> settings;
+    SettingsLoadStatus status = SettingsLoadStatus::Invalid;
+};
+
+[[nodiscard]] ParsedSettingsDocument ParseDocument(std::string_view json)
 {
     if (json.empty())
     {
-        return std::nullopt;
+        return {};
     }
-    const unique_yyjson_doc doc{yyjson_read(json.data(), json.size(), kReadFlags)};
+    yyjson_read_err error{};
+    // The read flags leave the caller's bytes unchanged.
+    const unique_yyjson_doc doc{yyjson_read_opts(const_cast<char*>(json.data()), json.size(), kReadFlags, nullptr, &error)};
     if (! doc)
     {
-        return std::nullopt;
+        return {std::nullopt, error.code == YYJSON_READ_ERROR_MEMORY_ALLOCATION ? SettingsLoadStatus::Unreadable : SettingsLoadStatus::Invalid};
     }
     yyjson_val* root = yyjson_doc_get_root(doc.get());
     if (root == nullptr || ! yyjson_is_obj(root) || ! SchemaOf(root).has_value())
     {
-        return std::nullopt;
+        return {std::nullopt, SettingsLoadStatus::Incompatible};
     }
     AppSettings settings;
     if (std::string theme; JsonRead::ReadString(root, "theme", theme, true))
@@ -313,7 +323,13 @@ std::optional<AppSettings> Parse(std::string_view json)
         }
     }
     settings.shortcuts = ParseShortcuts(yyjson_obj_get(root, "shortcuts"));
-    return settings;
+    return {std::move(settings), SettingsLoadStatus::Loaded};
+}
+} // namespace
+
+std::optional<AppSettings> Parse(std::string_view json)
+{
+    return ParseDocument(json).settings;
 }
 
 std::string Serialize(const AppSettings& settings, std::string_view existingJson)
@@ -593,15 +609,16 @@ SettingsLoadResult LoadCold(const std::wstring& path)
         result.status = SettingsLoadStatus::Unreadable;
         return result;
     }
-    if (auto parsed = Parse(bytes))
+    auto parsed   = ParseDocument(bytes);
+    result.status = parsed.status;
+    if (parsed.settings)
     {
-        result.settings       = std::move(*parsed);
+        result.settings       = std::move(*parsed.settings);
         result.acceptedTarget = std::move(target);
         return result;
     }
 
-    result.status = SettingsLoadStatus::Invalid;
-    if (SUCCEEDED(BackUpAcceptedBytes(target, bytes, &result.backupPath)))
+    if (result.status == SettingsLoadStatus::Invalid && SUCCEEDED(BackUpAcceptedBytes(target, bytes, &result.backupPath)))
         result.templateWritten = SUCCEEDED(WriteAcceptedBytes(target, Serialize(result.settings), &result.acceptedTarget));
     return result;
 }
@@ -628,14 +645,17 @@ HRESULT SaveAccepted(const FileOutputTarget& target, const AppSettings& settings
     {
         if (! ReadAcceptedBytes(target, existing))
             return kOutputVersionConflict;
-        if (Parse(existing))
+        const auto parsed = ParseDocument(existing);
+        if (parsed.settings)
             merge = existing;
-        else
+        else if (parsed.status == SettingsLoadStatus::Invalid)
         {
             const HRESULT backup = BackUpAcceptedBytes(target, existing, backupPath);
             if (FAILED(backup))
                 return backup;
         }
+        else
+            return kOutputVersionConflict;
     }
     const std::string text = Serialize(settings, merge);
     return text.empty() ? E_FAIL : WriteAcceptedBytes(target, text, published);

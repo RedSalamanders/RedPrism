@@ -57,25 +57,23 @@ before the object is allowed: the document is the same.
 | --- | --- |
 | a settings document | its settings (`Loaded`) |
 | missing | the defaults; the template (the defaults, serialized) is written (`Missing`) |
-| not a settings document | preserve the bytes in `<path>.invalid-<yyyyMMdd-HHmmss-fff>` before replacing the same accepted version with the template. Use defaults (`Invalid`) |
+| malformed JSON | preserve the bytes in `<path>.invalid-<yyyyMMdd-HHmmss-fff>` before replacing the same accepted version with the template. Use defaults (`Invalid`) |
+| readable JSON outside the settings contract | use defaults in memory, preserve the file at its path, and withhold save authority (`Incompatible`) |
 | unreadable (I/O error, larger than 16 MiB) | the defaults; nothing is written (`Unreadable`) |
 
 ## Live reload
 
-The application holds one `FindFirstChangeNotification` watch on the settings directory (last write, size, name and
-creation changes) and waits on it beside the message queue and the frame-latency waitable
-(`MsgWaitForMultipleObjectsEx`); nothing polls. A signal arms a 250 ms timer so an editor's several writes coalesce;
-the timer, on the UI thread, compares the file's last-write time and size with what the app last saw and, when
-they differ, calls `SettingsStore::LoadLive`. A settings document that differs from the last-good one applies at
-once (theme, sample ring, layers panel width, JPEG quality, shortcut replacements; the language and the window
-placement wait for the next start). A file that is not a settings document keeps the file as the user left it and the last-good settings
-in memory, and says so on the debugger output; nothing is written. The app's own save updates the seen state so it
-never reloads itself. A watch that cannot be re-armed, or whose directory no longer exists (deleted or renamed
-away), would stay signaled and wake the wait at once, forever: the app watches the directory afresh, and when there
-is no directory left it stops watching (live reload then waits for the next start) and keeps the last-good settings.
+One worker waits on the settings directory change handle and its stop event. It waits for a 250 ms quiet
+interval and posts one pending notification to the owning window. A startup notification catches edits made
+while the window was being created. The UI thread compares the file identity and version with the last
+observed file before parsing it with `SettingsStore::LoadLive`. A valid document updates the live theme,
+sample ring, layer width, JPEG quality and shortcut replacements. Language and window placement apply at
+the next start. Malformed, incompatible or missing input keeps the last-good settings and preserves the file.
+A save records its published version so the watcher skips that version.
 
-STOP: settings are parsed and applied on the UI thread only; a live load never writes the watched file; no
-busy-poll watcher.
+If the watch cannot re-arm or the directory disappears, the worker tries to arm the current path. If it cannot, it posts retirement
+and stops until the next start. Shutdown joins the worker before closing the window. Each watch uses its own
+notification identity, so a queued message from the previous file is ignored after a settings path change.
 
 ## Save
 
@@ -87,8 +85,8 @@ after creating the directory tree. A valid
 existing document is merged: unknown fields and a newer `schema` survive, and so do the `shortcuts` entries this
 version cannot read and the unknown fields inside the entries it keeps (when the entries already say the settings'
 bindings the array is left exactly as the file has it; otherwise the unread entries stay first, then one entry per
-binding, reusing an existing entry that reads the same). An invalid existing document is backed up to
-`<path>.invalid-…` first. The application saves
+binding, reusing an existing entry that reads the same). A save requested against an accepted malformed file backs it up
+to `<path>.invalid-…` first. A readable file outside the settings contract refuses publication. The application saves
 when the main window closes, and when Windows ends the session (`WM_ENDSESSION` with the end confirmed: the process
 may be ended as soon as that message returns, so no close follows; [`UI_Windowing.md`](../UI/UI_Windowing.md)): the
 window placement (`GetWindowPlacement`'s normal rectangle and whether it was maximized), the layers panel width and

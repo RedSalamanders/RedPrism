@@ -2576,6 +2576,16 @@ void TestSettingsStore()
     Expect(brokenWritten && invalid.status == SettingsLoadStatus::Invalid && ! invalid.backupPath.empty() && FileText(invalid.backupPath) == "{ nope" &&
                invalid.templateWritten && invalid.settings == AppSettings{} && SettingsStore::Parse(FileText(invalidPath)) == AppSettings{},
            "settings.cold-invalid-backs-up-and-resets");
+    const std::wstring incompatiblePath          = scratchPath(L"cold-incompatible");
+    constexpr std::string_view incompatibleBytes = "{schema: 'older', theme: 'dark'}\r\n";
+    const bool incompatibleWritten               = SettingsStore::WriteFileAtomic(incompatiblePath, incompatibleBytes);
+    const SettingsLoadResult incompatible        = SettingsStore::LoadCold(incompatiblePath);
+    Expect(incompatibleWritten && incompatible.status == SettingsLoadStatus::Incompatible && incompatible.settings == AppSettings{} &&
+               ! incompatible.templateWritten && incompatible.backupPath.empty() && ! incompatible.acceptedTarget &&
+               FileText(incompatiblePath) == incompatibleBytes && ! SettingsStore::LoadLive(incompatiblePath).has_value(),
+           "settings.cold-incompatible-preserves-original");
+    Expect(! SettingsStore::Save(incompatiblePath, changed) && FileText(incompatiblePath) == incompatibleBytes,
+           "settings.save-refuses-incompatible-destination");
     const std::wstring liveInvalidPath = scratchPath(L"live-invalid");
     const bool brokenAgain             = SettingsStore::WriteFileAtomic(liveInvalidPath, "{ nope again");
     Expect(brokenAgain && ! SettingsStore::LoadLive(liveInvalidPath).has_value() && FileText(liveInvalidPath) == "{ nope again",
