@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Verify the evidence fixture through public receipts for the same NTFS file.
 - Moved the build profile out of the five project files into `Directory.Build.props`: the toolset (`v145`), the
   Windows SDK (`10.0.26100.0`), the Unicode character set, the debug-library choice, the runtime library (`/MDd`,
   `/MD`) and the optimization level (`/Od`, `/O2`), so a project file holds only what is its own (`RedHome`
