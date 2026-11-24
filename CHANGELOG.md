@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Include the full notices from the pinned DxUi source and verify their bytes in the portable ZIP.
 - Use the pinned engine for application vcpkg checkouts, overlay generation and manifest arguments.
 - Bind the root RedMonitor client commands to the producer-owned tooling hashes recorded in the existing lock.
 - Validate RedPrism skills, guidance and plan indexes with the pinned shared CI engine.
