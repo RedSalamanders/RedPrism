@@ -45,6 +45,10 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSCommandPath
 Import-Module (Join-Path $repoRoot 'Build\VisualStudioDiscovery.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Build\VcpkgToolset.psm1') -Force
+Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.EngineBinding.psm1') -ErrorAction Stop
+foreach ($module in @('VcpkgCheckout.psm1', 'VcpkgInstall.psm1')) {
+    Import-Module (Resolve-CiPinnedEngineModule -ProjectRoot $repoRoot -Name $module) -Scope Local -ErrorAction Stop
+}
 $buildRoot = Join-Path $repoRoot '.build'
 $toolRoot = Join-Path $buildRoot 'vcpkg-tool'
 $toolStampPath = Join-Path $buildRoot 'vcpkg-tool.commit'
@@ -83,85 +87,9 @@ if ($toolset.MajorMinor -cne $requiredTools) { throw "This product requires defa
 Write-Host "Visual Studio: $installation" -ForegroundColor Cyan
 Write-Host "MSVC toolset:  $($toolset.Version), the default MSBuild compiles with; vcpkg is pinned to $($toolset.MajorMinor)" -ForegroundColor Cyan
 
-New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
-if (-not (Test-Path -LiteralPath (Join-Path $toolRoot '.git') -PathType Container)) {
-    if (Test-Path -LiteralPath $toolRoot) {
-        throw "The managed vcpkg path exists but is not a Git checkout: $toolRoot"
-    }
+Initialize-CiVcpkgCheckout -ProjectRoot $repoRoot -Path $toolRoot -Repository $repository -Commit $commit
 
-    Write-Host "Cloning pinned vcpkg tooling into $toolRoot" -ForegroundColor Cyan
-    # A complete clone: vcpkg extracts each versioned port with git read-tree and checkout-index in an environment
-    # that holds only GIT_INDEX_FILE. Without SystemRoot that git resolves no host, so it cannot fetch an object a
-    # partial clone left on the server ("Could not resolve host: github.com" for a promisor object).
-    # Set only this managed checkout: a deep checkout root may exceed the traditional Win32 path limit.
-    & git.exe clone -c core.longpaths=true $repository $toolRoot
-    if ($LASTEXITCODE -ne 0) {
-        throw "git clone failed with exit code $LASTEXITCODE."
-    }
-}
-
-$origin = & git.exe -C $toolRoot remote get-url origin
-if ($LASTEXITCODE -ne 0 -or $origin.TrimEnd('/') -ne $repository.TrimEnd('/')) {
-    throw "The managed vcpkg checkout does not use the pinned repository: $repository"
-}
-
-# Earlier versions of this script made a partial, shallow clone. Complete it in place, keeping its HEAD. The filter
-# setting goes only once every object is local, so an interrupted completion is detected and retried.
-if (& git.exe -C $toolRoot config --get remote.origin.partialclonefilter) {
-    Write-Host "Completing the partial vcpkg clone in $toolRoot" -ForegroundColor Cyan
-    if ((& git.exe -C $toolRoot rev-parse --is-shallow-repository) -eq 'true') {
-        & git.exe -C $toolRoot fetch --unshallow origin
-        if ($LASTEXITCODE -ne 0) {
-            throw "Unable to unshallow the managed vcpkg checkout (exit code $LASTEXITCODE)."
-        }
-    }
-    & git.exe -C $toolRoot fetch --refetch --no-filter origin
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to complete the managed vcpkg checkout (exit code $LASTEXITCODE)."
-    }
-    & git.exe -C $toolRoot config --unset-all remote.origin.partialclonefilter
-    & git.exe -C $toolRoot config --unset-all remote.origin.promisor
-}
-
-$dirty = & git.exe -C $toolRoot status --porcelain
-if ($LASTEXITCODE -ne 0) {
-    throw 'Unable to inspect the managed vcpkg checkout.'
-}
-if ($dirty) {
-    throw "The managed vcpkg checkout contains local changes: $toolRoot"
-}
-
-$head = & git.exe -C $toolRoot rev-parse HEAD 2>$null
-if ($LASTEXITCODE -ne 0 -or $head -ne $commit) {
-    Write-Host "Selecting pinned vcpkg commit $commit" -ForegroundColor Cyan
-    # The default branch normally holds the pinned commit. Fetch it only when it is missing, with its history, so
-    # the checkout stays complete and never becomes shallow.
-    if (-not (& git.exe -C $toolRoot rev-parse --verify --quiet "$commit^{commit}")) {
-        & git.exe -C $toolRoot fetch origin $commit
-        if ($LASTEXITCODE -ne 0) {
-            throw "Unable to fetch pinned vcpkg commit $commit."
-        }
-    }
-    & git.exe -C $toolRoot checkout --detach $commit
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to check out pinned vcpkg commit $commit."
-    }
-}
-
-$vcpkg = Join-Path $toolRoot 'vcpkg.exe'
-$stampedCommit = if (Test-Path -LiteralPath $toolStampPath -PathType Leaf) {
-    (Get-Content -Raw -LiteralPath $toolStampPath).Trim()
-} else {
-    ''
-}
-if (-not (Test-Path -LiteralPath $vcpkg -PathType Leaf) -or $stampedCommit -ne $commit) {
-    Write-Host 'Bootstrapping vcpkg...' -ForegroundColor Cyan
-    & (Join-Path $toolRoot 'bootstrap-vcpkg.bat') -disableMetrics
-    if ($LASTEXITCODE -ne 0) {
-        throw "vcpkg bootstrap failed with exit code $LASTEXITCODE."
-    }
-    Set-Content -LiteralPath $toolStampPath -Value $commit -Encoding ascii
-}
+$vcpkg = Initialize-CiVcpkgExecutable -ProjectRoot $repoRoot -ToolRoot $toolRoot -StampPath $toolStampPath -Commit $commit
 
 # One overlay directory holds a pinned copy of every triplet vcpkg can pick here, as target or as host, so an ARM64 restore on
 # an x64 host pins its host triplet too. A sanitizer triplet's chainloaded asan-toolchain.cmake lands beside its copy, and
@@ -199,16 +127,9 @@ foreach ($targetPlatform in $platforms) {
     $downloadsRoot = Join-Path $buildRoot 'vcpkg_downloads'
 
     Write-Host "Installing RedPrism dependencies ($triplet)" -ForegroundColor Cyan
-    $arguments = @(
-        'install',
-        "--triplet=$triplet",
-        "--x-manifest-root=$repoRoot",
-        "--x-install-root=$installRoot",
-        "--x-buildtrees-root=$buildTreesRoot",
-        "--x-packages-root=$packagesRoot",
-        "--downloads-root=$downloadsRoot",
-        "--overlay-triplets=$overlayDirectory"
-    )
+    $arguments = Get-CiVcpkgManifestInstallArguments -ProjectRoot $repoRoot -Triplet $triplet `
+        -InstallRoot $installRoot -BuildTreesRoot $buildTreesRoot -PackagesRoot $packagesRoot `
+        -DownloadsRoot $downloadsRoot -OverlayTriplets $overlayDirectory
     & $vcpkg @arguments
     if ($LASTEXITCODE -ne 0) {
         throw "vcpkg install failed for $triplet with exit code $LASTEXITCODE."
