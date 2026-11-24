@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Add RedPrism's root specification validator for active plan and domain links and run it through the local and Static validators.
 - Route RedPrism's Static CI phase through the same root compiler-free validation command available to developers.
 - Accept the shared `--capture <png>` command and keep `--screenshot` as a compatible alias.
 - Make the root test command select affected scopes by default and keep `-Full` and explicit suites available.
