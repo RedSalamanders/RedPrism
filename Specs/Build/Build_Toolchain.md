@@ -255,6 +255,7 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 | `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All] [-Asan] [-MSBuildPath <path>]` | Restore WIL, yyjson, libzip, and Clipper2 with the Visual Studio installation and default toolset of the MSBuild in use (`-Asan`: the sanitized tree of the platform) |
 | `.\restore-dxui.ps1 [-Platform x64\|ARM64] [-CheckUpdates]` | Restore the exact DxUi pin as a sparse, long-path-safe checkout; `-CheckUpdates` prints one advisory when DxUi `main` is not the pin |
 | `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Analyze] [-Run]` | Preflight, restore, MSBuild, provenance; `-Analyze` runs native MSVC code analysis |
+| `.\restore.ps1 [-Platform x64\|ARM64]` | Prepare standard product and pinned DxUi dependencies with the same compiler host selection as the build. Defaults to x64. |
 | `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |
 | `.\format.ps1 [-Check]` | The pinned engine clang-format over the `formatRoots` of `.ci/project.json` (`Common/`, `RedPrism/`, `Tests/`) |
 | `.\package.ps1 [-Platform] [-SkipBuild] [-SkipSmoke]` | Release build, the portable ZIP with its `.sha256`, the clean-extraction smoke ([`Build_Packaging.md`](Build_Packaging.md)) |
