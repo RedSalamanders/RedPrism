@@ -1,1 +1,0 @@
-- Verify the evidence fixture through public receipts for the same NTFS file.
