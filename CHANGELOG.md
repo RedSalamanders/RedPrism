@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Accept the shared `--capture <png>` command and keep `--screenshot` as a compatible alias.
 - Make the root test command select affected scopes by default and keep `-Full` and explicit suites available.
 - Align the shared engine pin with the reviewed Dependabot policy and portable manifest renderer.
 - Use the common test-hook macro and require explicit test mode for Release builds.

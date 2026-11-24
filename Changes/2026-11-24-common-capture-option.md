@@ -1,1 +1,0 @@
-- Accept the shared `--capture <png>` command and keep `--screenshot` as a compatible alias.
