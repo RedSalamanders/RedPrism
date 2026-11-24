@@ -526,7 +526,8 @@ foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ 
     # The path is quoted as its own argument: Start-Process -ArgumentList joins array elements with a bare space and
     # does not quote them itself, so an unquoted path with a space (a username, "Program Files", ...) would split
     # into two arguments (the crash probe below already quotes its directory the same way).
-    $shotArgs = @('--screenshot', ('"' + $shotPath + '"'), '--warp', '--dpi', "$dpi")
+    $captureSwitch = if ($dpi -eq 96) { '--capture' } else { '--screenshot' }
+    $shotArgs = @($captureSwitch, ('"' + $shotPath + '"'), '--warp', '--dpi', "$dpi")
     if ($demo) { $shotArgs += @('--demo', $demo) }
     $shot = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList $shotArgs `
         -PassThru -RedirectStandardOutput $shotLog -RedirectStandardError $shotErr
