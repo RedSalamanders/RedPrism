@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Align the shared engine pin with the reviewed Dependabot policy and portable manifest renderer.
 - Use the common test-hook macro and require explicit test mode for Release builds.
 - Add a root restore command for pinned RedPrism and DxUi dependencies on x64 and ARM64.
 - Keep the newest ten post-adoption crash reports, preserve existing evidence and show each valid pending report once on interactive startup.
