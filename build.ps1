@@ -5,6 +5,8 @@ Builds, cleans, rebuilds, or runs the RedPrism solution.
 Independent pinned Release SDK descriptor below .build. Exact misses use source; Debug/ASan and analysis use source.
 .PARAMETER MaxCpuCount
 Maximum project/compiler workers. ASan project builds serialize because MSVC stages one shared app-local runtime; C++ /MP retains the requested compiler bound.
+.PARAMETER EnableTests
+Compile native test hooks. Debug and ASan Debug enable them by default.
 #>
 [CmdletBinding()]
 param(
@@ -25,14 +27,16 @@ param(
 
     [ValidateRange(0, 65535)]
     [int] $BuildNumber = 0,
-    [string] $DxUiSdkInputDescriptor = ''
+    [string] $DxUiSdkInputDescriptor = '',
+    [switch] $EnableTests
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($env:CI_NATIVE_BUILDS_DISABLED -eq 'true') { throw 'Native builds are forbidden in compiler-free PR checks.' }
 if($DxUiSdkInputDescriptor -and ($Configuration -cne 'Release' -or $Clean -or $Analyze)){throw 'Pinned SDK inputs require an ordinary Release build.'}
-$env:RedPrismEnableTests = if ($ProductionOnly) { 'false' } else { 'true' }
+if ($ProductionOnly -and $EnableTests) { throw 'ProductionOnly and EnableTests are mutually exclusive.' }
+$enableTestHooks = $EnableTests -or $Configuration -ne 'Release'
 $nativeEntryElapsed = [Diagnostics.Stopwatch]::StartNew()
 Import-Module (Join-Path $PSScriptRoot 'Build/BuildConsole.psm1') -ErrorAction Stop
 
@@ -152,7 +156,7 @@ try {
         "/p:Configuration=$Configuration",
         "/p:Platform=$Platform",
         "/p:RedPrismBuildNumber=$BuildNumber",
-        "/p:RedPrismEnableTests=$env:RedPrismEnableTests",
+        "/p:RedPrismEnableTests=$($enableTestHooks.ToString().ToLowerInvariant())",
         $workerArgument,
         '/nologo',
         '/verbosity:minimal',
@@ -233,7 +237,7 @@ try {
             (Get-ScopedEnvironmentIdentity -Root $repoRoot -Manifest $scopedManifest) -cne $scopedEnvironmentBefore) {
             throw 'Source/toolchain environment changed during build; no build attestation was published.'
         }
-        $attestationKey = Get-ScopedBuildAttestationKey -Root $repoRoot -Platform $Platform -Configuration $Configuration -BuildNumber $BuildNumber -EnableTests (-not $ProductionOnly) -Manifest $scopedManifest
+        $attestationKey = Get-ScopedBuildAttestationKey -Root $repoRoot -Platform $Platform -Configuration $Configuration -BuildNumber $BuildNumber -EnableTests $enableTestHooks -Manifest $scopedManifest
         Write-ScopedReceipt -Path $buildAttestation -Identity $attestationKey
         Write-NativeBuildResult -Project RedPrism -Platform $Platform -Configuration $Configuration -LogPath $logPath -Artifacts @($executable) -Executable $executable -Duration $nativeEntryElapsed.Elapsed
         if ($Run) {

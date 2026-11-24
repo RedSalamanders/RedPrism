@@ -1914,7 +1914,7 @@ private:
 
 } // namespace
 
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
 int Application::RunHostContinuationSelfTest() noexcept
 {
     const auto fail = [](const wchar_t* message) noexcept

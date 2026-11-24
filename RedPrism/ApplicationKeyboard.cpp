@@ -126,7 +126,7 @@ constexpr LPARAM kKeyUpFlags    = (static_cast<LPARAM>(1) << 30) | (static_cast<
     return virtualKey == VK_TAB || (virtualKey >= VK_PRIOR && virtualKey <= VK_DOWN);
 }
 
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
 constexpr UINT_PTR kMenuLoopGuardTimerId = 9;
 bool gMenuLoopGuardFired                 = false;
 bool gMenuLoopGuardArmed                 = false;
@@ -621,7 +621,7 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     return handled;
 }
 
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
 int Application::RunKeyboardSelfTest() noexcept
 {
     if (! _chrome || ! _window)

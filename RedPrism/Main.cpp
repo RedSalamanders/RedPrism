@@ -182,7 +182,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         return 2;
     }
 
-#if ! defined(REDPRISM_ENABLE_TESTS)
+#if ! defined(ENABLE_TESTS)
     if (parsed.selfTest || parsed.crashProbeDirectory != nullptr)
     {
         return 2;
@@ -252,7 +252,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     wil::unique_couninitialize_call comScope{SUCCEEDED(com)};
 
     const bool forceWarp = parsed.warp || parsed.selfTest;
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
     if (parsed.selfTest)
     {
         (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -447,7 +447,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
             return failed;
     }
 #endif
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
     // Declared before Application so this observation follows its natural destruction.
     const auto selfTestLifetime = wil::scope_exit([selfTest = parsed.selfTest]() noexcept
     {
@@ -516,7 +516,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         {
             OutputDebugStringW(L"Command-line paths could not be queued.\n");
         }
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
         else if (parsed.selfTest)
         {
             const ULONGLONG selfTestStarted = GetTickCount64();
@@ -534,13 +534,13 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         }
     }
     // All modes, including early self-test/bench failures, join before UIA/device/satellite/STA teardown.
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
     const ULONGLONG shutdownStarted = GetTickCount64();
     if (parsed.selfTest)
         std::printf("BEGIN self-test.Shutdown\n");
 #endif
     application->Shutdown();
-#if defined(REDPRISM_ENABLE_TESTS)
+#if defined(ENABLE_TESTS)
     if (parsed.selfTest)
         std::printf("END self-test.Shutdown elapsed_ms=%llu\n", static_cast<unsigned long long>(GetTickCount64() - shutdownStarted));
 #endif

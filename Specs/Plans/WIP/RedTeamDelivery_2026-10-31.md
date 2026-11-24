@@ -99,7 +99,7 @@ only names what the 31 October pass added or independently re-anchored.
   - 164 `Runtime.Tests.*` / `Application.Tests.*` TUs are conditioned on
     `RedPrismEnableTests` (`RedPrism.vcxproj`). That part holds.
   - About 15 product TUs still compile `Run*SelfTest` bodies with no
-    `REDPRISM_ENABLE_TESTS` guard, including
+    `ENABLE_TESTS` guard, including
     `ApplicationAdjustmentClosureJobs.cpp:270`, `ApplicationExportJobs.cpp`,
     `ApplicationFileJobs.cpp`, `ApplicationProjectOpenJobs.cpp`,
     `ApplicationProjectSaveJobs.cpp`, `ApplicationHistoryRestoreJobs.cpp`,
@@ -326,7 +326,7 @@ A build is a release candidate only when all of these are true:
 - [ ] ARM64 cross-build; native ARM64 runtime if ARM64 is claimed.
 - [ ] Interactive / manual (IME, accessibility, input) if Q5 requires them.
 - [ ] Paired performance for AR-4 / MR-05 / MR-07 (same fixture, before/after).
-- [ ] `package.ps1` ZIP: `--self-test` exits 2, no `REDPRISM_ENABLE_TESTS`,
+- [ ] `package.ps1` ZIP: `--self-test` exits 2, no `ENABLE_TESTS`,
   portable startup smoke, DxUi license found (CI-8 closed).
 - [ ] DxUi pin includes DX-2; lock sentence in `Core_DxUiIntegration.md` matches
   `Dependencies/DxUi.lock.json`.
