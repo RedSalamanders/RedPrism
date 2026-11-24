@@ -1,6 +1,38 @@
-[CmdletBinding()]param()
+<#
+.SYNOPSIS
+Validates RedPrism. Use CompilerFree for the pull request checks.
+.PARAMETER CompilerFree
+Checks project configuration, workflows, changelog and skill guidance with native builds disabled.
+#>
+[CmdletBinding(DefaultParameterSetName='Full')]
+param(
+    [Parameter(Mandatory, ParameterSetName='CompilerFree')][switch]$CompilerFree,
+    [Parameter(ParameterSetName='CompilerFree')][string]$Base = 'origin/main',
+    [Parameter(ParameterSetName='CompilerFree')][string]$EngineRoot = (Join-Path $PSScriptRoot '.ci-engine'),
+    [Parameter(ParameterSetName='CompilerFree')][ValidateSet('x64','ARM64')][string]$Platform = 'x64',
+    [Parameter(ParameterSetName='CompilerFree')][switch]$DevelopmentEngine
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
+if ($CompilerFree) {
+    $EngineRoot = [IO.Path]::GetFullPath($EngineRoot)
+    Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.Policy.psm1') -Scope Local -ErrorAction Stop
+    Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.Project.psm1') -Scope Local -ErrorAction Stop
+    $context = New-CiProjectContext -Root $PSScriptRoot -EngineRoot $EngineRoot -Phase Static -Platform $Platform -DevelopmentEngine:$DevelopmentEngine
+    $previous = [Environment]::GetEnvironmentVariable('CI_NATIVE_BUILDS_DISABLED', 'Process')
+    try {
+        $env:CI_NATIVE_BUILDS_DISABLED = 'true'
+        Test-CiProjectConfiguration $context
+        & (Join-Path $EngineRoot 'Tools/Test-Workflows.ps1') -Root $PSScriptRoot
+        $baseCommit = Resolve-CiCommit $PSScriptRoot $Base
+        Invoke-CiProjectScript -Context $context -Script 'Tools/Test-Changelog.ps1' -Arguments @('-Base', $baseCommit)
+        Invoke-CiProjectScript -Context $context -Script 'validate-skills.ps1' -Arguments @()
+    }
+    finally {
+        [Environment]::SetEnvironmentVariable('CI_NATIVE_BUILDS_DISABLED', $(if ($null -eq $previous) { [NullString]::Value } else { $previous }), 'Process')
+    }
+    return
+}
 $failures=[Collections.Generic.List[string]]::new()
 function Check([string]$Name,[scriptblock]$Body){try{&$Body;Write-Host "PASS $Name"}catch{$failures.Add($Name+': '+$_.Exception.Message);Write-Host ('FAIL '+$failures[-1]) -ForegroundColor Red}}
 Check 'Skills and repository policy' {

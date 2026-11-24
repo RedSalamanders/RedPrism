@@ -171,7 +171,8 @@ stale-base enforcement, hosted reporter acceptance, local delegation and main ad
 
 ### Static phase
 
-None.
+The Static phase calls root `validate.ps1 -CompilerFree` with the same engine, base and architecture.
+Run `validate.ps1` for the complete local independent tooling validation.
 
 ### Test build and regression
 

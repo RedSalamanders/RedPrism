@@ -1,0 +1,1 @@
+- Route RedPrism's Static CI phase through the same root compiler-free validation command available to developers.
