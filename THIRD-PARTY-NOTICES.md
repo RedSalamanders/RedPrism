@@ -14,9 +14,8 @@ it is distributed.
   rapidyaml 0.16.0, Joao Paulo Magalhaes, MIT, with its bundled debugbreak (Scott Tsai, BSD 2-Clause) and fast_float
   (MIT) notices; tables generated from Unicode 17.0.0, copyright Unicode, Inc., Unicode License V3; and an HTML
   named-character table from the WHATWG snapshot of 18 October 2026, copyright WHATWG (Apple, Google, Mozilla,
-  Microsoft), BSD 3-Clause for code and CC BY 4.0. Their full texts are in DxUi at that commit (`docs/licenses/`,
-  `ThirdParty/Unicode/17.0.0/LICENSE.txt`, `ThirdParty/Markdown/whatwg-2026-10-18/LICENSE.txt`); a source-built
-  package does not stage them yet.
+  Microsoft), BSD 3-Clause for code and CC BY 4.0. Source builds ship the full notices from that revision in
+  `ThirdPartyNotices\\dxui-*.txt`. SDK builds ship the verified SDK notice bundle under `ThirdPartyNotices\\DxUiSdk`.
 - The **RedMonitor** client header, at the commit in [Dependencies/RedMonitor.lock.json](Dependencies/RedMonitor.lock.json),
   copyright (c) 2026 RedSalamander, MIT. Its [notice](ThirdParty/RedMonitor/LICENSE.txt) ships as
   `ThirdPartyNotices\redmonitor.txt`.
