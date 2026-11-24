@@ -1,0 +1,1 @@
+- Align the shared engine pin with the reviewed Dependabot policy and portable manifest renderer.
