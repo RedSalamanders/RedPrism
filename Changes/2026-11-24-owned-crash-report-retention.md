@@ -1,0 +1,1 @@
+- Keep the newest ten post-adoption crash reports, preserve existing evidence and show each valid pending report once on interactive startup.

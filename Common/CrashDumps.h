@@ -11,23 +11,26 @@
 namespace CrashDumps
 {
 inline constexpr std::size_t kPathCapacity = 1024; // wchar_t, the buffers the crash path formats into
-inline constexpr std::size_t kKeepNewest   = 10;   // dumps kept per directory
+inline constexpr std::size_t kKeepNewest   = 10;   // post-adoption dumps kept by interactive startup
 
 // <LocalAppData>\RedPrism\Crashes; empty when the known folder is unavailable.
 [[nodiscard]] std::wstring DefaultDirectory();
 
-// Writes <directory>\RedPrism-<yyyyMMdd-HHmmss>-<pid>.dmp for the running process, with the exception when given
+// Returns a unique repository .build path or verifies an existing requested probe directory under .build.
+// An empty result disables harness crash output when no owned location is available.
+[[nodiscard]] std::wstring HarnessDirectory(const wchar_t* requested = nullptr);
+
+// Writes <directory>\RedPrism-report-<UTC file time>-<pid>.dmp for the running process, with the exception when given
 // (a snapshot without one). Creates the directory tree. Uses no heap, so an exception filter may call it.
 // `pathOut` receives the file written; false leaves nothing behind.
 [[nodiscard]] bool WriteMiniDump(const wchar_t* directory, _EXCEPTION_POINTERS* exception, wchar_t* pathOut, std::size_t pathCapacity) noexcept;
 
-// The marker a crash leaves for the next start: <directory>\pending.txt holding the dump path as UTF-8.
+// Atomically publishes <directory>\pending.txt holding the completed dump path as UTF-8.
 [[nodiscard]] bool RecordPending(const wchar_t* directory, const wchar_t* dumpPath) noexcept;
-// Reads and removes the marker; nullopt when there is none.
+// Claims the marker once, then validates its local dump path. Legacy dump names remain valid.
 [[nodiscard]] std::optional<std::wstring> TakePending(const std::wstring& directory);
 
-// Deletes the RedPrism-*.dmp files beyond the newest `keep` (the names carry the time, so name order is age
-// order) and returns how many went.
+// Deletes post-adoption reports beyond the newest `keep` and returns the number removed.
 std::size_t PruneDumps(const std::wstring& directory, std::size_t keep);
 
 // Installs the process-wide handlers: an unhandled exception, an invalid CRT parameter, a pure virtual call,
