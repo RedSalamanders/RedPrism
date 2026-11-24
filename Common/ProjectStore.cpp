@@ -231,18 +231,25 @@ struct Manifest
 
 // libzip closes its own handle internally; reopen the completed archive and require both flush and close to succeed
 // before the caller can publish it over the current destination.
-[[nodiscard]] bool FlushFileToDisk(const wchar_t* path, ProjectIoObserver observer, ProjectSaveFaultPolicy faultPolicy) noexcept
+[[nodiscard]] bool FlushFileToDisk(const wchar_t* path,
+                                   ProjectIoObserver observer,
+                                   ProjectSaveFaultPolicy faultPolicy,
+                                   std::optional<FileOutputVersion>& stagedVersion) noexcept
 {
     std::wstring apiPath;
     if (FAILED(Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiPath)))
         return false;
     wil::unique_hfile file{
-        CreateFileW(apiPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+        CreateFileW(apiPath.c_str(), GENERIC_WRITE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr)};
     if (! file)
     {
         Report(observer, ProjectIoStage::CreateFailed, GetLastError());
         return false;
     }
+    FileOutputVersion version{};
+    if (FAILED(ReadFileOutputVersion(file.get(), version)))
+        return false;
+    stagedVersion           = version;
     const auto flushFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveFlush);
     if (flushFailure != 0 || ! FlushFileBuffers(file.get()))
     {
@@ -250,6 +257,9 @@ struct Manifest
         Report(observer, ProjectIoStage::FlushFailed, error);
         return false;
     }
+    if (FAILED(ReadFileOutputVersion(file.get(), version)))
+        return false;
+    stagedVersion           = version;
     const auto closeFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveClose);
     if (closeFailure != 0)
     {
@@ -1821,27 +1831,43 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     return ProjectIoStatus::Ok;
 }
 
-[[nodiscard]] ProjectIoStatus SaveZip(const std::wstring& dest,
+[[nodiscard]] wil::unique_hfile OpenOwnedArchiveStage(const std::wstring& path, const FileOutputVersion& expected) noexcept
+{
+    wil::unique_hfile file{
+        CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES | DELETE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr)};
+    FileOutputVersion version{};
+    if (! file || FAILED(ReadFileOutputVersion(file.get(), version)) || version != expected)
+        return {};
+    return file;
+}
+
+[[nodiscard]] ProjectIoStatus SaveZip(const FileOutputTarget& destination,
                                       const std::string& json,
                                       const std::wstring& images,
                                       const std::vector<std::string>& files,
                                       CancelToken cancellation,
                                       ProjectIoObserver observer,
-                                      ProjectSaveFaultPolicy faultPolicy)
+                                      ProjectSaveFaultPolicy faultPolicy,
+                                      std::optional<FileOutputVersion>* publishedVersion)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
-    if (dest.empty())
+    if (destination.path.empty())
         return ProjectIoStatus::Encode;
-    const std::wstring tempCandidate = UniqueSiblingPath(dest);
+    const std::wstring tempCandidate = UniqueSiblingPath(destination.path);
     std::wstring temp;
     if (FAILED(Win32FilePath::PrefixResolvedPath(tempCandidate.c_str(), Win32FilePath::Use::File, temp)))
         return ProjectIoStatus::Encode;
-    bool ownsTemp    = false;
+    std::optional<FileOutputVersion> stagedVersion;
     auto cleanupTemp = wil::scope_exit([&]() noexcept
     {
-        if (ownsTemp)
-            (void)DeleteFileW(temp.c_str());
+        if (! stagedVersion)
+            return;
+        if (const auto file = OpenOwnedArchiveStage(temp, *stagedVersion))
+        {
+            FILE_DISPOSITION_INFO disposition{TRUE};
+            (void)SetFileInformationByHandle(file.get(), FileDispositionInfo, &disposition, sizeof(disposition));
+        }
     });
     // Declared before archive ownership: callbacks keep their borrowed state even on early discard.
     ProjectIoObserver progressObserver = observer;
@@ -1850,7 +1876,6 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     {
         return ProjectIoStatus::Encode;
     }
-    ownsTemp = true; // archive ownership is destroyed before the cleanup guard on every early return
     // libzip borrows this stack token through zip_close/discard. The callback reads only stop state, never UI.
     if (zip_register_cancel_callback_with_state(
             zip.get(), [](zip_t*, void* state) noexcept { return static_cast<CancelToken*>(state)->IsCancelled() ? 1 : 0; }, nullptr, &cancellation) != 0)
@@ -1919,7 +1944,7 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     }
     // libzip has already closed its own handle to `temp`; flush it to disk before it is renamed or replaces
     // another file. Publication is refused when that flush or its transferred handle close fails.
-    if (! FlushFileToDisk(temp.c_str(), observer, faultPolicy))
+    if (! FlushFileToDisk(temp.c_str(), observer, faultPolicy, stagedVersion))
     {
         return ProjectIoStatus::Encode;
     }
@@ -1933,22 +1958,25 @@ constexpr unsigned int kMaxCleanupDepth = 128;
         Report(observer, ProjectIoStage::StagingToDestinationFailed, replaceFailure);
         return ProjectIoStatus::Encode;
     }
-    if (IsFile(dest.c_str()))
+    const auto stage = OpenOwnedArchiveStage(temp, *stagedVersion);
+    if (! stage)
+        return ProjectIoStatus::Encode;
+    const HRESULT publication = PublishFileOutput(stage.get(), destination, cancellation);
+    if (FAILED(publication))
     {
-        if (! ReplaceFileW(dest.c_str(), temp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr) &&
-            ! MoveFileExW(temp.c_str(), dest.c_str(), MOVEFILE_REPLACE_EXISTING))
-        {
-            return ProjectIoStatus::Encode;
-        }
-        cleanupTemp.release();
-        Report(observer, ProjectIoStage::Published);
-        return ProjectIoStatus::Ok;
-    }
-    if (! MoveFileW(temp.c_str(), dest.c_str()))
-    {
+        Report(observer, ProjectIoStage::StagingToDestinationFailed, static_cast<std::uint32_t>(HRESULT_CODE(publication)));
+        if (publication == E_ABORT)
+            return ProjectIoStatus::Cancelled;
+        if (publication == kOutputVersionConflict)
+            return ProjectIoStatus::Conflict;
         return ProjectIoStatus::Encode;
     }
     cleanupTemp.release();
+    if (publishedVersion)
+    {
+        FileOutputVersion version{};
+        *publishedVersion = SUCCEEDED(ReadFileOutputVersion(stage.get(), version)) ? std::optional<FileOutputVersion>{version} : std::nullopt;
+    }
     Report(observer, ProjectIoStage::Published);
     return ProjectIoStatus::Ok;
 }
@@ -2025,10 +2053,23 @@ ProjectLoadResult LoadProject(const wchar_t* path, CancelToken cancellation, Pro
     pixelLimits.layerCount        = (std::min)(pixelLimits.layerCount, static_cast<std::size_t>(kMaxLayerCount));
     pixelLimits.manifestBytes     = (std::min)(pixelLimits.manifestBytes, kMaxProjectManifestBytes);
     pixelLimits.encodedAssetBytes = (std::min)(pixelLimits.encodedAssetBytes, kMaxProjectEncodedAssetBytes);
+    result.archive                = ! IsDirectory(path);
+    FileOutputTarget expectedArchive;
+    wil::unique_hfile archiveGuard;
+    if (result.archive && SUCCEEDED(ObserveFileOutputTarget(path, expectedArchive)) && expectedArchive.acceptedVersion)
+    {
+        archiveGuard.reset(
+            CreateFileW(expectedArchive.path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+        FileOutputVersion held{};
+        if (! archiveGuard || FAILED(ReadFileOutputVersion(archiveGuard.get(), held)) || held != *expectedArchive.acceptedVersion)
+        {
+            result.status = ProjectIoStatus::Conflict;
+            return result;
+        }
+    }
     Manifest manifest{};
-    const ProjectIoStatus status = IsDirectory(path)
-                                       ? LoadExploded(FullPath(path, Win32FilePath::Use::Directory), manifest, cancellation, observer, pixelLimits)
-                                       : LoadZip(path, manifest, cancellation, observer, pixelLimits);
+    const ProjectIoStatus status = ! result.archive ? LoadExploded(FullPath(path, Win32FilePath::Use::Directory), manifest, cancellation, observer, pixelLimits)
+                                                    : LoadZip(path, manifest, cancellation, observer, pixelLimits);
     result.status                = status;
     if (cancellation.IsCancelled())
     {
@@ -2039,6 +2080,16 @@ ProjectLoadResult LoadProject(const wchar_t* path, CancelToken cancellation, Pro
         result.formatVersion = manifest.version;
     if (status == ProjectIoStatus::Ok)
     {
+        if (archiveGuard)
+        {
+            FileOutputTarget current;
+            if (FAILED(ObserveFileOutputTarget(path, current)) || current.acceptedVersion != expectedArchive.acceptedVersion)
+            {
+                result.status = ProjectIoStatus::Conflict;
+                return result;
+            }
+            result.archiveVersion = expectedArchive.acceptedVersion;
+        }
         result.document      = std::move(manifest.document);
         result.activeLayerID = manifest.activeLayerID;
         result.formatVersion = manifest.version;
@@ -2218,13 +2269,32 @@ ProjectIoStatus SaveProject(const wchar_t* path,
                             bool zipArchive,
                             CancelToken cancellation,
                             ProjectIoObserver observer,
-                            ProjectSaveFaultPolicy faultPolicy)
+                            ProjectSaveFaultPolicy faultPolicy,
+                            const FileOutputTarget* acceptedArchive,
+                            std::optional<FileOutputVersion>* publishedArchive)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
     if (path == nullptr || ValidateDocument(document) != DocumentStatus::Ok)
     {
         return ProjectIoStatus::Invalid;
+    }
+    const std::wstring destination = FullPath(path, zipArchive ? Win32FilePath::Use::File : Win32FilePath::Use::Directory);
+    if (destination.empty() || ! std::filesystem::path(destination).has_filename())
+        return ProjectIoStatus::Invalid;
+    FileOutputTarget archiveTarget;
+    if (zipArchive)
+    {
+        if (FAILED(ObserveFileOutputTarget(destination.c_str(), archiveTarget)))
+            return ProjectIoStatus::Conflict;
+        if (acceptedArchive)
+        {
+            std::wstring acceptedPath;
+            if (FAILED(Win32FilePath::Resolve(acceptedArchive->path.c_str(), Win32FilePath::Use::File, acceptedPath)) ||
+                CompareStringOrdinal(archiveTarget.path.c_str(), -1, acceptedPath.c_str(), -1, TRUE) != CSTR_EQUAL ||
+                archiveTarget.acceptedVersion != acceptedArchive->acceptedVersion)
+                return ProjectIoStatus::Conflict;
+        }
     }
     std::string json;
     if (! WriteManifest(document, activeLayerID, json, cancellation))
@@ -2233,9 +2303,6 @@ ProjectIoStatus SaveProject(const wchar_t* path,
             return ProjectIoStatus::Cancelled;
         return json.size() > kMaxManifestBytes ? ProjectIoStatus::TooLarge : ProjectIoStatus::Encode;
     }
-    const std::wstring destination = FullPath(path, zipArchive ? Win32FilePath::Use::File : Win32FilePath::Use::Directory);
-    if (destination.empty() || ! std::filesystem::path(destination).has_filename())
-        return ProjectIoStatus::Invalid;
     const std::wstring stagingCandidate = UniqueSiblingPath(destination);
     std::wstring staging;
     if (FAILED(Win32FilePath::PrefixResolvedPath(stagingCandidate.c_str(), Win32FilePath::Use::Directory, staging)))
@@ -2270,7 +2337,7 @@ ProjectIoStatus SaveProject(const wchar_t* path,
     {
         return encoded;
     }
-    const auto status = zipArchive ? SaveZip(destination, json, images, files, cancellation, observer, faultPolicy)
+    const auto status = zipArchive ? SaveZip(archiveTarget, json, images, files, cancellation, observer, faultPolicy, publishedArchive)
                                    : SaveExploded(destination, staging, cancellation, observer, faultPolicy, *cleanupScratch);
     if (status == ProjectIoStatus::Ok && ! zipArchive)
         cleanup.release(); // rotation transferred the directory; this name no longer denotes our staging.

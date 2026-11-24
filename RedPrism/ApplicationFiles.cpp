@@ -383,14 +383,18 @@ HRESULT Application::SelectHostOutput(HostRequest& request, HostWriteFormat form
                 const HRESULT observed = ObserveImageOutputTarget(write->path->c_str(), target);
                 if (FAILED(observed))
                     return observed;
-                return request.TrySelectOutput(target.path, _hostInputBudget, false, target.acceptedVersion) ? S_OK
-                                                                                                             : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+                return request.TrySelectOutput(target.path, _hostInputBudget, false, target.acceptedVersion, true) ? S_OK
+                                                                                                                   : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
             }
             return request.TrySelectOutput(write->path.value(), _hostInputBudget) ? S_OK : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
         }
         if (format == HostWriteFormat::Project && ! saveAs && ! _documentPath.empty())
         {
-            return request.TrySelectOutput(_documentPath, _hostInputBudget) ? S_OK : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+            if (_documentIsArchive && ! _documentArchiveVersion)
+                return kOutputVersionConflict;
+            return request.TrySelectOutput(_documentPath, _hostInputBudget, false, _documentArchiveVersion, _documentIsArchive)
+                       ? S_OK
+                       : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
         }
         if (_quietUi || ! _window)
         {
@@ -417,7 +421,7 @@ HRESULT Application::SelectHostOutput(HostRequest& request, HostWriteFormat form
                                     format == HostWriteFormat::Project ? 2u : 1u,
                                     request,
                                     _hostInputBudget,
-                                    format != HostWriteFormat::Project);
+                                    format == HostWriteFormat::Project);
     }
     catch (const std::bad_alloc&)
     {
@@ -733,7 +737,9 @@ void Application::ReplaceDocument(CanvasDocument document, const std::optional<G
         return;
     _canvasPanLast.reset();
     _session.ReplaceDocument(std::move(document), active);
-    _documentPath        = std::move(path);
+    _documentPath      = std::move(path);
+    _documentIsArchive = false;
+    _documentArchiveVersion.reset();
     _viewport.followsFit = true;
     DocumentChanged();
 }

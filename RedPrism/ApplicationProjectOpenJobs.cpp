@@ -217,6 +217,8 @@ public:
             else
             {
                 std::swap(_owner._documentPath, _payload->path);
+                _owner._documentIsArchive      = _payload->loaded.archive;
+                _owner._documentArchiveVersion = _payload->loaded.archiveVersion;
                 _owner.FinishPreparedDocumentReplacement();
                 _owner._viewport.followsFit = true;
                 _owner.DocumentChanged();

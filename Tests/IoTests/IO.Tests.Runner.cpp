@@ -1571,7 +1571,7 @@ void TestProjectSaveDurability()
         blockedSave = SaveProject(zipPath.c_str(), document, std::nullopt, true);
     }
     locked.reset();
-    Expect(blockedSave == ProjectIoStatus::Encode, "save-durability.replace-failure-reported");
+    Expect(blockedSave == ProjectIoStatus::Conflict, "save-durability.locked-destination-reports-conflict");
     const ProjectLoadResult preserved = LoadProject(zipPath.c_str());
     Expect(preserved.status == ProjectIoStatus::Ok && preserved.document.id == document.id && preserved.document.resolution != document.resolution &&
                ReadText(zipPath) == savedArchive,
@@ -2594,6 +2594,86 @@ void TestSettingsStore()
     std::filesystem::remove_all(root, error);
 }
 
+void TestGuardedProjectArchive()
+{
+    DocumentFixture fixture;
+    fixture.id          = Guid::Generate();
+    fixture.width       = 2;
+    fixture.height      = 2;
+    ImageLayer layer    = ImageLayer::Blank(L"Guarded archive", Vec2{2, 2});
+    const Raster pixels = SolidBgra(2, 2, 7, 19, 31, 255);
+    layer.asset         = RasterAsset{pixels, Raster::MakeThumbnail(pixels), layer.name};
+    fixture.layers.push_back(std::move(layer));
+    CanvasDocument document = std::move(fixture).Seal();
+
+    const auto root =
+        std::filesystem::path(ScratchRoot()) / (L"guarded-archive-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64()));
+    std::error_code error;
+    std::filesystem::create_directories(root, error);
+    const auto cleanup                               = wil::scope_exit([&] { std::filesystem::remove_all(root, error); });
+    const std::wstring file                          = (root / L"edited.prism").wstring();
+    const std::wstring fresh                         = (root / L"created.prism").wstring();
+    const std::wstring moved                         = (root / L"moved.prism").wstring();
+    static constexpr std::string_view competingBytes = "an external editor owns these bytes";
+    struct CompetingEdit
+    {
+        const wchar_t* path     = nullptr;
+        const wchar_t* renameTo = nullptr;
+        bool succeeded          = false;
+    };
+    CompetingEdit edit;
+    const ProjectIoObserver observer{[](void* context, ProjectIoStage stage, unsigned int) noexcept
+    {
+        if (stage != ProjectIoStage::Staged)
+            return;
+        auto& pending = *static_cast<CompetingEdit*>(context);
+        if (pending.renameTo)
+        {
+            pending.succeeded = MoveFileExW(pending.path, pending.renameTo, MOVEFILE_WRITE_THROUGH) != FALSE;
+            return;
+        }
+        const wil::unique_hfile handle{CreateFileW(pending.path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)};
+        DWORD written     = 0;
+        pending.succeeded = handle && WriteFile(handle.get(), competingBytes.data(), static_cast<DWORD>(competingBytes.size()), &written, nullptr) &&
+                            written == competingBytes.size();
+    },
+                                     &edit};
+
+    Expect(! error && SaveProject(file.c_str(), document, std::nullopt, true) == ProjectIoStatus::Ok, "project.guard.creates-archive");
+    const auto loaded = LoadProject(file.c_str());
+    FileOutputTarget accepted;
+    Expect(loaded.status == ProjectIoStatus::Ok && loaded.archive && loaded.archiveVersion && SUCCEEDED(ObserveFileOutputTarget(file.c_str(), accepted)) &&
+               accepted.acceptedVersion == loaded.archiveVersion,
+           "project.guard.open-binds-decoded-version");
+
+    edit.path = file.c_str();
+    Expect(SaveProject(file.c_str(), document, std::nullopt, true, {}, observer, {}, &accepted) == ProjectIoStatus::Conflict && edit.succeeded &&
+               ReadText(file) == competingBytes,
+           "project.guard.preserves-edit-during-staging");
+    Expect(SaveProject(file.c_str(), document, std::nullopt, true, {}, {}, {}, &accepted) == ProjectIoStatus::Conflict && ReadText(file) == competingBytes,
+           "project.guard.refuses-stale-preconfirmed-version");
+
+    FileOutputTarget retry;
+    std::optional<FileOutputVersion> published;
+    Expect(SUCCEEDED(ObserveFileOutputTarget(file.c_str(), retry)) &&
+               SaveProject(file.c_str(), document, std::nullopt, true, {}, {}, {}, &retry, &published) == ProjectIoStatus::Ok && published &&
+               LoadProject(file.c_str()).archiveVersion == published,
+           "project.guard.retry-binds-the-published-archive");
+
+    retry.acceptedVersion = published;
+    edit                  = CompetingEdit{file.c_str(), moved.c_str()};
+    Expect(SaveProject(file.c_str(), document, std::nullopt, true, {}, observer, {}, &retry) == ProjectIoStatus::Conflict && edit.succeeded &&
+               GetFileAttributesW(file.c_str()) == INVALID_FILE_ATTRIBUTES && LoadProject(moved.c_str()).status == ProjectIoStatus::Ok,
+           "project.guard.preserves-renamed-archive-and-empty-name");
+
+    FileOutputTarget absent;
+    edit = CompetingEdit{fresh.c_str()};
+    Expect(SUCCEEDED(ObserveFileOutputTarget(fresh.c_str(), absent)) && ! absent.acceptedVersion &&
+               SaveProject(fresh.c_str(), document, std::nullopt, true, {}, observer, {}, &absent) == ProjectIoStatus::Conflict && edit.succeeded &&
+               ReadText(fresh) == competingBytes,
+           "project.guard.refuses-competing-creation");
+}
+
 void TestGuardedSettingsStore()
 {
     const auto root =
@@ -2674,6 +2754,13 @@ int wmain(int argc, wchar_t** argv)
             TestGuardedSettingsStore();
             result = gFailures ? 1 : 0;
         }
+        else if (argc == 2 && option == L"--guarded-project-output")
+        {
+            TestGuardedProjectArchive();
+            TestProjectSaveDurability();
+            gFailures += RunIoProjectDurabilityFaultTests();
+            result = gFailures ? 1 : 0;
+        }
         if (SUCCEEDED(com))
             CoUninitialize();
         return result;
@@ -2698,6 +2785,7 @@ int wmain(int argc, wchar_t** argv)
     TestImportOntoDocument();
     TestSaveRejectsInvalidDocument();
     TestProjectSaveDurability();
+    TestGuardedProjectArchive();
     TestNativeDestinationRotation();
     TestProjectRotationFaultRecovery();
     gFailures += RunProjectPublicationRetryTests();

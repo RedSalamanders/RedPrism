@@ -99,9 +99,15 @@ exceeding either reports ERROR_FILENAME_EXCED_RANGE. Real cleanup errors may lea
 Read-only files are not forcibly changed. Capture and report the initiating Win32 error before later cleanup.
 
 ZIP projects write into a unique file in the exact destination parent using the sibling naming rule below,
-opened with `ZIP_CREATE | ZIP_EXCL`, then
-`ReplaceFileW` (with the existing `MoveFileExW` fallback). Each staged manifest/asset file is flushed and closed
-successfully before publication; ZIP close, flush, and handle close must all succeed before replacement. A failed
+opened with `ZIP_CREATE | ZIP_EXCL`. Each staged manifest and asset is flushed and closed
+successfully before publication. ZIP close, flush and handle close must also succeed. The reopened archive
+must match the flushed temporary's identity before a guarded rename can publish it.
+
+Opening an archive records the accepted file ID, size and timestamps for subsequent saves. The Save As
+confirmation carries the version observed before the prompt. The writer compares it before staging and at
+publication. A competing edit, rename or creation leaves the competing bytes in place and keeps the
+document's pending edits. A destination that cannot be guarded, including a file held open without delete sharing,
+reports a conflict. A new archive name uses a non-replacing rename. A failed
 pre-publication staging or durability step leaves the previous destination intact and removes only the temporary
 file or directory owned by that save. Existing ZIP readers accept both stored and deflated entries. Writers store
 already encoded PNG assets and deflate the manifest.

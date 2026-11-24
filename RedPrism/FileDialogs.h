@@ -37,6 +37,6 @@ struct FilterStrings
                                            UINT filterCount,
                                            HostRequest& request,
                                            HostInputBudget& budget,
-                                           bool guardImageExport) noexcept;
+                                           bool project) noexcept;
 // The message for a failed project load.
 [[nodiscard]] UINT LoadErrorStringId(ProjectIoStatus status) noexcept;

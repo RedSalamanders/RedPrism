@@ -19,6 +19,7 @@ enum class ProjectIoStatus
     MissingImage,
     Encode,
     Cancelled,
+    Conflict,
 };
 
 inline constexpr std::size_t kMaxProjectManifestBytes     = 4u * 1024u * 1024u;
@@ -49,6 +50,8 @@ struct ProjectLoadResult
     CanvasDocument document{};
     std::optional<Guid> activeLayerID;
     int formatVersion = 0;
+    bool archive      = false;
+    std::optional<FileOutputVersion> archiveVersion;
 };
 
 enum class ProjectIoStage
@@ -215,9 +218,11 @@ template <typename AttributeFn> [[nodiscard]] bool ExplodedMemberPathAllowed(con
                                           const CanvasDocument& document,
                                           const std::optional<Guid>& activeLayerID,
                                           bool zipArchive,
-                                          CancelToken cancellation           = {},
-                                          ProjectIoObserver observer         = {},
-                                          ProjectSaveFaultPolicy faultPolicy = {});
+                                          CancelToken cancellation                           = {},
+                                          ProjectIoObserver observer                         = {},
+                                          ProjectSaveFaultPolicy faultPolicy                 = {},
+                                          const FileOutputTarget* acceptedArchive            = nullptr,
+                                          std::optional<FileOutputVersion>* publishedArchive = nullptr);
 // The image becomes a layer above the active one (legacy EditorSession.insert), centered on `center` (a drop point,
 // in document pixels) or else on the canvas; into an empty document it becomes the canvas and `center` is ignored.
 [[nodiscard]] ProjectIoStatus ImportImageOnto(CanvasDocument& document,

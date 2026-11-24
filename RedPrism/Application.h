@@ -1684,6 +1684,8 @@ private:
     CanvasRenderer _composition;
     std::wstring _screenshotPath;
     std::wstring _documentPath;
+    std::optional<FileOutputVersion> _documentArchiveVersion;
+    bool _documentIsArchive = false;
     uint32_t _screenshotDpi = 0;
     EditorTool _tool        = EditorTool::Move;
     // The Move tool's and the selection tools' header choices: host state, never the document session's (RF-810).

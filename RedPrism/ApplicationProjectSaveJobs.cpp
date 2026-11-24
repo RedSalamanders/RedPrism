@@ -33,14 +33,16 @@ public:
                    CanvasDocument document,
                    std::optional<Guid> active,
                    Guid revision,
-                   std::wstring path,
+                   FileOutputTarget target,
+                   bool guardedArchive,
                    std::shared_ptr<WorkerWriteCompletion> write)
         : _owner(owner),
           _stamp(stamp),
           _document(std::move(document)),
           _active(active),
           _revision(revision),
-          _path(std::move(path)),
+          _target(std::move(target)),
+          _guardedArchive(guardedArchive),
           _write(std::move(write)),
           _gate(owner._projectSaveTestGate),
           _ownerThread(GetCurrentThreadId())
@@ -64,9 +66,9 @@ public:
             throw std::bad_alloc{};
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
-        const auto attributes = GetFileAttributesW(_path.c_str());
+        const auto attributes = GetFileAttributesW(_target.path.c_str());
         const bool folder     = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        const bool zip        = ! folder && PathLooksLikeZipProject(_path.c_str());
+        _archive              = _guardedArchive || (! folder && PathLooksLikeZipProject(_target.path.c_str()));
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.
 // Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
 #pragma warning(push)
@@ -197,7 +199,15 @@ public:
             },
                            &progress};
         }
-        _status = SaveProject(_path.c_str(), _document, _active, zip, context.cancellation, observer, faultPolicy);
+        _status = SaveProject(_target.path.c_str(),
+                              _document,
+                              _active,
+                              _archive,
+                              context.cancellation,
+                              observer,
+                              faultPolicy,
+                              _guardedArchive ? &_target : nullptr,
+                              &_publishedArchiveVersion);
         if (_gate && _gate->holdRecoveryReaderForTest)
         {
             progress.recoveryReader.reset(); // Retire the actual reader before the original acknowledgement.
@@ -224,7 +234,9 @@ public:
         std::int32_t error  = result.error;
         if (_published && current)
         {
-            _owner._documentPath = std::move(_path);
+            _owner._documentPath           = std::move(_target.path);
+            _owner._documentIsArchive      = _archive;
+            _owner._documentArchiveVersion = _publishedArchiveVersion;
             _owner._session.history.MarkSaved(_revision);
             outcome = result.status == JobStatus::Cancelled || _owner._historyWork.CancelRequested(_stamp) ? HostOutcome::Cancelled : HostOutcome::Succeeded;
             error   = outcome == HostOutcome::Cancelled ? E_ABORT : S_OK;
@@ -244,11 +256,16 @@ public:
         else if (outcome == HostOutcome::Succeeded && (_status != ProjectIoStatus::Ok || ! _published))
         {
             outcome = _status == ProjectIoStatus::Cancelled ? HostOutcome::Cancelled : HostOutcome::Failed;
-            error   = _status == ProjectIoStatus::TooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) : outcome == HostOutcome::Cancelled ? E_ABORT : E_FAIL;
+            error   = _status == ProjectIoStatus::TooLarge   ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                      : _status == ProjectIoStatus::Conflict ? kOutputVersionConflict
+                      : outcome == HostOutcome::Cancelled    ? E_ABORT
+                                                             : E_FAIL;
         }
         if (outcome == HostOutcome::Failed)
         {
-            const auto stringId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_SAVE_PROJECT;
+            const auto stringId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)) ? IDS_ERROR_TOO_LARGE
+                                  : error == static_cast<std::int32_t>(kOutputVersionConflict)                 ? IDS_ERROR_PROJECT_SAVE_CONFLICT
+                                                                                                               : IDS_ERROR_SAVE_PROJECT;
             ++_owner._errorsShown;
             _owner._lastErrorId = static_cast<UINT>(stringId);
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, static_cast<UINT>(stringId));
@@ -278,13 +295,16 @@ private:
     const CanvasDocument _document;
     const std::optional<Guid> _active;
     const Guid _revision;
-    std::wstring _path;
+    FileOutputTarget _target;
+    const bool _guardedArchive;
     const std::shared_ptr<WorkerWriteCompletion> _write;
     const std::shared_ptr<ProjectSaveTestGate> _gate;
     const DWORD _ownerThread;
     unsigned int _assets    = 0;
     ProjectIoStatus _status = ProjectIoStatus::Encode;
     bool _published         = false; // worker-only writes, owner reads only after final acknowledged completion
+    bool _archive           = false;
+    std::optional<FileOutputVersion> _publishedArchiveVersion;
 };
 #pragma warning(pop)
 
@@ -333,13 +353,15 @@ HRESULT Application::StartProjectSave() noexcept
             {
                 CanvasDocument snapshot = _session.Document().value();
                 snapshot.selection.reset(); // selection is not a project manifest field
-                std::unique_ptr<Job> job = std::make_unique<ProjectSaveJob>(*this,
-                                                                            _projectSaveStamp.value(),
-                                                                            std::move(snapshot),
-                                                                            _session.ActiveLayerID(),
-                                                                            _session.history.CurrentRevision(),
-                                                                            std::wstring(resolved.data(), units),
-                                                                            write);
+                std::unique_ptr<Job> job =
+                    std::make_unique<ProjectSaveJob>(*this,
+                                                     _projectSaveStamp.value(),
+                                                     std::move(snapshot),
+                                                     _session.ActiveLayerID(),
+                                                     _session.history.CurrentRevision(),
+                                                     FileOutputTarget{std::wstring(resolved.data(), units), _activeHostRequest->input.SelectedOutputVersion()},
+                                                     _activeHostRequest->input.SelectedOutputIsGuardedFile(),
+                                                     write);
                 JobTicket ticket;
                 result = static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Io, _session.DocumentSerial(), memory + bookkeeping}, ticket));
                 if (SUCCEEDED(result))

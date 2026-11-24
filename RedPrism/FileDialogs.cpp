@@ -262,7 +262,7 @@ HRESULT PickOutputForRequest(HWND owner,
                              UINT filterCount,
                              HostRequest& request,
                              HostInputBudget& budget,
-                             bool guardImageExport) noexcept
+                             bool project) noexcept
 {
     try
     {
@@ -306,16 +306,8 @@ HRESULT PickOutputForRequest(HWND owner,
         {
             return result;
         }
-        options |= FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST;
-        if (guardImageExport)
-        {
-            options &= ~static_cast<FILEOPENDIALOGOPTIONS>(FOS_OVERWRITEPROMPT);
-            options |= FOS_NOTESTFILECREATE;
-        }
-        else
-        {
-            options |= FOS_OVERWRITEPROMPT;
-        }
+        options |= FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_NOTESTFILECREATE;
+        options &= ~static_cast<FILEOPENDIALOGOPTIONS>(FOS_OVERWRITEPROMPT);
         result = dialog->SetOptions(options);
         if (FAILED(result))
         {
@@ -334,16 +326,20 @@ HRESULT PickOutputForRequest(HWND owner,
             const auto path = HostBoundedPathView(shellPath.get());
             if (! path || path->empty())
                 return kInvalidDialogInput;
-            if (! guardImageExport)
-                return request.TrySelectOutput(path.value(), budget) ? S_OK : kInvalidDialogInput;
-
-            ImageOutputTarget target;
-            result = ObserveImageOutputTarget(path->data(), target);
-            if (FAILED(result))
-                return result;
-            if (target.acceptedVersion)
+            const DWORD attributes    = project ? GetFileAttributesW(path->data()) : INVALID_FILE_ATTRIBUTES;
+            const bool existingFolder = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+            const bool guardFile      = ! project || (! existingFolder && PathLooksLikeZipProject(path->data()));
+            FileOutputTarget target;
+            if (guardFile)
             {
-                const auto prompt  = FormatStringResource(nullptr, IDS_CONFIRM_EXPORT_OVERWRITE, target.path);
+                result = ObserveFileOutputTarget(path->data(), target);
+                if (FAILED(result))
+                    return result;
+            }
+            if (guardFile ? target.acceptedVersion.has_value() : attributes != INVALID_FILE_ATTRIBUTES)
+            {
+                const auto file    = guardFile ? std::wstring_view{target.path} : path.value();
+                const auto prompt  = FormatStringResource(nullptr, project ? IDS_CONFIRM_PROJECT_OVERWRITE : IDS_CONFIRM_EXPORT_OVERWRITE, file);
                 const auto caption = LoadStringResource(nullptr, IDS_APP_TITLE);
                 const int answer   = MessageBoxW(owner, prompt.c_str(), caption.c_str(), MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
                 if (answer == IDNO)
@@ -351,7 +347,9 @@ HRESULT PickOutputForRequest(HWND owner,
                 if (answer != IDYES)
                     return kDialogCancelled;
             }
-            return request.TrySelectOutput(target.path, budget, false, target.acceptedVersion) ? S_OK : kInvalidDialogInput;
+            return request.TrySelectOutput(guardFile ? std::wstring_view{target.path} : path.value(), budget, false, target.acceptedVersion, guardFile)
+                       ? S_OK
+                       : kInvalidDialogInput;
         }
     }
     catch (const std::bad_alloc&)
@@ -370,6 +368,7 @@ UINT LoadErrorStringId(ProjectIoStatus status) noexcept
         case ProjectIoStatus::Ok:
         case ProjectIoStatus::Invalid:
         case ProjectIoStatus::Encode:
+        case ProjectIoStatus::Conflict:
         case ::ProjectIoStatus::Cancelled:
         default: return IDS_ERROR_OPEN_PROJECT;
     }
