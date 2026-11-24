@@ -55,7 +55,8 @@ The ZIP is expanded into a fresh folder and the extracted executable runs with a
 `%SystemRoot%\System32`, `%SystemRoot%` and `System32\Wbem`, so a DLL the package forgot cannot be found on the
 developer's machine: `--help` MUST exit 0 and print the command catalog; `--self-test --warp` MUST refuse with exit 2;
 `--screenshot <owned-path> --warp` MUST exit 0 and create a nonempty hidden native capture. The extracted executable
-MUST carry the packaged file version. Smoke evidence is retained. The full in-product regression suite belongs to
+MUST carry the packaged file version. The extracted executable's `--version` command exits within 30 seconds
+and prints that same file version. Smoke evidence is retained. The full in-product regression suite belongs to
 the preceding test-enabled Release role; see [unified CI](Build_UnifiedCI.md). The smoke is skipped with a notice when the host cannot run the platform (ARM64 packaged on x64) or
 with `-SkipSmoke`.
 

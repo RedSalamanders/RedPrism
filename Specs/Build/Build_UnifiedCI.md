@@ -199,6 +199,9 @@ existing tests enabled. Build receipts bind that role; ZIP smoke checks refusal 
 
 winget publication uses this product's own explicitly configured MIT license.
 
+Native WinGet qualification runs the installed `redprism --help` and `redprism --version` commands
+through the real alias on x64 and ARM64. The version command exits before starting the editor.
+
 Application publication uses WINGET_TOKEN. The owner's 2026-10-31 policy selects the current public organization
 repositories except DxUi for organization WINGET_TOKEN access; all six repositories are public, and private applications
 remain excluded until their separate public transition. Repository-level secrets override the organization secret and

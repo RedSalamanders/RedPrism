@@ -311,7 +311,18 @@ if ($SkipSmoke) {
     if ($extractedInfo.FileVersion -ne $info.FileVersion) {
         throw 'The extracted executable does not carry the packaged version.'
     }
-    Write-Host 'PASS clean-extraction smoke (help, test-mode refusal, hidden WARP capture, version identity)' -ForegroundColor Green
+    $versionLog = Join-Path $smoke 'version.log'
+    $versionErr = Join-Path $smoke 'version.err.log'
+    $versionProbe = Start-Process -FilePath $extracted -ArgumentList @('--version') -WindowStyle Hidden -PassThru `
+        -WorkingDirectory $smoke -RedirectStandardOutput $versionLog -RedirectStandardError $versionErr -Environment @{ Path = $systemPath }
+    if (-not $versionProbe.WaitForExit(30000)) {
+        throw "The extracted RedPrism.exe --version did not exit within 30 seconds. Logs: $versionLog, $versionErr"
+    }
+    $versionText = [string](Get-Content -LiteralPath $versionLog -Raw -ErrorAction SilentlyContinue)
+    if ($versionProbe.ExitCode -ne 0 -or $versionText.Trim() -cne $extractedInfo.FileVersion) {
+        throw 'The extracted RedPrism.exe --version did not report its file version.'
+    }
+    Write-Host 'PASS clean-extraction smoke (help, test-mode refusal, hidden WARP capture, version command and identity)' -ForegroundColor Green
 }
 
 # ── Summary ──────────────────────────────────────────────────────────────────

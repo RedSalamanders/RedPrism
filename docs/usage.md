@@ -17,6 +17,7 @@ Every switch is declared in `RedPrism/CommandLine.h`. `--help` prints that catal
 | `--bench buffers`, `--bench buffers45` | Compare copy/adopt image-result ownership in alternating pairs at 4K or 45 MP, with identical output checksums |
 | `--crash-probe <dir>` | Hidden crash-handler check: crash on purpose and confirm the dump lands in `<dir>` (used by `test.ps1`) |
 | `--help` | Print the catalog and exit 0 |
+| `--version` | Print the executable version and exit before opening the editor |
 
 Exit codes: 0 ok, 1 allocation, 2 command line or window, 5 graphics, 8 screenshot capture unsupported, 9 screenshot
 capture failed.
