@@ -1,0 +1,1 @@
+- Make the root test command select affected scopes by default and keep `-Full` and explicit suites available.

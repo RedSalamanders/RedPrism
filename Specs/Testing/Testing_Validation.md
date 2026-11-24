@@ -941,8 +941,11 @@ size-card host gate covers 22 terminal/ordering scenarios, including admitted ca
 allocation points, epoch-only staleness, retained redo/source and off-owner complete aggregate destruction.
 The full frozen x64 suites and ARM64 cross-builds pass ([evidence](../TestRuns/SizeHistoryPublication_2026-10-01.md)); these correctness gates make no timing claim.
 
-`.\test.ps1 [-Platform x64|ARM64] [-Configuration Debug|Release|'ASan Debug'] [-Rebuild]` builds through `build.ps1`,
-then runs every assertion below. It MUST exit 0 only when all of them pass. Expected nonzero exits from isolated
+`.\test.ps1 [-Platform x64|ARM64] [-Configuration Debug|Release|'ASan Debug']` delegates to the affected-scope runner.
+A clean comparison can return `NOTHING_SELECTED` with repository coverage `NOT_EVALUATED`. When a checkout lacks the
+comparison base, the command runs the full profile. Use `-Full` to request that profile explicitly or `-Suites` to
+pick specific scopes. The full profile builds through `build.ps1`, runs every applicable assertion below, and MUST
+exit 0 only when they pass. Expected nonzero exits from isolated
 negative-test children (`HostTests.exe --asan-probe`, `RedPrism.exe --no-such-switch`) MUST NOT become the test
 entrypoint's success exit code and MUST NOT be reused as the pass/fail signal for a later gate.
 
