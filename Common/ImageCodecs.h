@@ -2,6 +2,7 @@
 
 #include "Document.h"
 #include "Executor.h"
+#include "GuardedFileCommit.h"
 #include "ImageOutputTarget.h"
 
 #include <optional>
@@ -44,18 +45,8 @@ struct JpegExportOptions
     double resolution = 72;
 };
 
-enum class ImageOutputPublishStage : std::uint8_t
-{
-    BeforeFinalCheck,
-    BeforeClassicCheck,
-};
-
-struct ImageOutputPublishPolicy final
-{
-    void* context                                               = nullptr;
-    void (*checkpoint)(void*, ImageOutputPublishStage) noexcept = nullptr;
-    bool forceClassic                                           = false;
-};
+using ImageOutputPublishStage  = FileOutputPublishStage;
+using ImageOutputPublishPolicy = FileOutputPublishPolicy;
 
 // Resolve the path and observe the file version before confirming an overwrite or queuing an export.
 [[nodiscard]] std::int32_t ObserveImageOutputTarget(const wchar_t* path, ImageOutputTarget& target) noexcept;

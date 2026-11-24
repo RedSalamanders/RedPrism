@@ -1,5 +1,7 @@
 #pragma once
 
+#include "GuardedFileCommit.h"
+
 #include "KeyChord.h"
 
 #include <cstdint>
@@ -74,6 +76,7 @@ struct SettingsLoadResult
     SettingsLoadStatus status = SettingsLoadStatus::Loaded;
     std::wstring backupPath; // Invalid: where the bytes went (empty when the backup itself failed)
     bool templateWritten = false;
+    std::optional<FileOutputTarget> acceptedTarget;
 };
 
 namespace SettingsStore
@@ -101,13 +104,17 @@ namespace SettingsStore
 [[nodiscard]] SettingsLoadResult LoadCold(const std::wstring& path);
 // A running app: the document, or nullopt when the file is missing or invalid (the caller keeps its last-good
 // settings). Never writes.
-[[nodiscard]] std::optional<AppSettings> LoadLive(const std::wstring& path);
-// Writes atomically (a temporary file replaced into place), creating the directory; an invalid existing file is
-// backed up first (`backupPath` names it), a valid one keeps its unknown fields.
+[[nodiscard]] std::optional<AppSettings> LoadLive(const std::wstring& path, std::optional<FileOutputTarget>* acceptedTarget = nullptr);
+// Publishes only against the accepted version. A new version or competing creation reports kOutputVersionConflict.
+[[nodiscard]] HRESULT SaveAccepted(const FileOutputTarget& target,
+                                   const AppSettings& settings,
+                                   std::optional<FileOutputTarget>* published = nullptr,
+                                   std::wstring* backupPath                   = nullptr);
+// Observes the current destination immediately before saving. An invalid file is backed up before replacement.
 [[nodiscard]] bool Save(const std::wstring& path, const AppSettings& settings, std::wstring* backupPath = nullptr);
 
 // Whole-file helpers shared with the crash marker. ReadFileBytes is false for a missing or unreadable file;
-// `lastError` (optional) receives GetLastError. WriteFileAtomic writes <path>.tmp-<pid> and moves it into place.
+// `lastError` receives the read result. WriteFileAtomic publishes a uniquely owned and flushed sibling.
 [[nodiscard]] bool ReadFileBytes(const std::wstring& path, std::string& bytes, unsigned long* lastError = nullptr);
 [[nodiscard]] bool WriteFileAtomic(const std::wstring& path, std::string_view bytes);
 } // namespace SettingsStore

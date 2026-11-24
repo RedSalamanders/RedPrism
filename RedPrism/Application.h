@@ -224,7 +224,7 @@ public:
     [[nodiscard]] bool OpenCommandLinePaths(std::span<const std::wstring_view> paths) noexcept;
     void Shutdown() noexcept;
     // Settings (Specs/Core/Core_Settings.md): the file to read, watch and write; empty for a run without one.
-    void UseSettings(std::wstring path, const AppSettings& settings) noexcept;
+    void UseSettings(std::wstring path, const AppSettings& settings, std::optional<FileOutputTarget> acceptedTarget) noexcept;
 
 private:
     [[nodiscard]] bool EnableSelectionOutlineForTest(bool allowHidden = true) noexcept;
@@ -1895,6 +1895,7 @@ private:
     SizeDialog _sizeDialog;
     bool _forceWarp = false;
     std::wstring _settingsPath;
+    std::optional<FileOutputTarget> _settingsFileTarget;
     AppSettings _settings;
     wil::unique_hfind_change _settingsWatch;
     FILETIME _settingsSeenWrite{};

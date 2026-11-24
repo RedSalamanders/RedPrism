@@ -1,4 +1,4 @@
-﻿#include "CodecFileStream.h"
+#include "CodecFileStream.h"
 #include "Win32FilePath.h"
 
 #include <algorithm>
@@ -255,14 +255,11 @@ HRESULT CodecFileStream::CloseChecked() noexcept
     return CloseHandle(handle) ? S_OK : HRESULT_FROM_WIN32(GetLastError());
 }
 
-HRESULT CodecFileStream::RenameTemporary(FILE_INFO_BY_HANDLE_CLASS kind, FILE_RENAME_INFO& info, DWORD size) noexcept
+HRESULT CodecFileStream::PublishTemporary(const FileOutputTarget& target, FileOutputPublishPolicy policy)
 {
     if (! _file || _readOnly || _dirty)
         return STG_E_INVALIDFUNCTION;
-    if (_cancellation.IsCancelled())
-        return E_ABORT;
-
-    return SetFileInformationByHandle(_file.get(), kind, &info, size) ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+    return PublishFileOutput(_file.get(), target, _cancellation, policy);
 }
 
 void CodecFileStream::DiscardTemporary() noexcept

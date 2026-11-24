@@ -612,126 +612,6 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     bytes = std::move(encoded);
     return ImageCodecStatus::Ok;
 }
-[[nodiscard]] HRESULT ReadImageOutputVersion(HANDLE handle, ImageOutputVersion& version) noexcept
-{
-    FILE_ID_INFO file{};
-    FILE_BASIC_INFO times{};
-    FILE_STANDARD_INFO standard{};
-    if (! GetFileInformationByHandleEx(handle, FileIdInfo, &file, sizeof(file)) ||
-        ! GetFileInformationByHandleEx(handle, FileBasicInfo, &times, sizeof(times)) ||
-        ! GetFileInformationByHandleEx(handle, FileStandardInfo, &standard, sizeof(standard)))
-        return HRESULT_FROM_WIN32(GetLastError());
-    constexpr FILE_ID_128 kEmptyId{};
-    if ((times.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0 ||
-        std::memcmp(file.FileId.Identifier, kEmptyId.Identifier, sizeof(kEmptyId.Identifier)) == 0 || standard.DeletePending || standard.EndOfFile.QuadPart < 0)
-        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-    version = {
-        .size          = static_cast<std::uint64_t>(standard.EndOfFile.QuadPart),
-        .lastWriteTime = times.LastWriteTime.QuadPart,
-        .changeTime    = times.ChangeTime.QuadPart,
-        .volume        = file.VolumeSerialNumber,
-    };
-    std::memcpy(version.fileId.data(), file.FileId.Identifier, version.fileId.size());
-    return S_OK;
-}
-
-[[nodiscard]] HRESULT ObserveImageOutputVersion(const std::wstring& path, std::optional<ImageOutputVersion>& version) noexcept
-{
-    version.reset();
-    const wil::unique_hfile file{CreateFileW(path.c_str(),
-                                             FILE_READ_ATTRIBUTES,
-                                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                             nullptr,
-                                             OPEN_EXISTING,
-                                             FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
-                                             nullptr)};
-    if (! file)
-    {
-        const DWORD error = GetLastError();
-        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? S_OK : HRESULT_FROM_WIN32(error);
-    }
-    ImageOutputVersion observed{};
-    const HRESULT result = ReadImageOutputVersion(file.get(), observed);
-    if (SUCCEEDED(result))
-        version = observed;
-    return result;
-}
-
-[[nodiscard]] ImageCodecStatus PublishImageOutput(CodecFileStream& file,
-                                                  const ImageOutputTarget& target,
-                                                  CancelToken cancellation,
-                                                  ImageOutputPublishPolicy policy)
-{
-    constexpr std::size_t kHeaderBytes = offsetof(FILE_RENAME_INFO, FileName);
-    const std::size_t nameBytes        = target.path.size() * sizeof(wchar_t);
-    const std::size_t bytes            = kHeaderBytes + nameBytes + sizeof(wchar_t);
-    std::vector<std::uint64_t> storage((bytes + sizeof(std::uint64_t) - 1) / sizeof(std::uint64_t));
-    auto* const rename     = reinterpret_cast<FILE_RENAME_INFO*>(storage.data());
-    rename->FileNameLength = static_cast<DWORD>(nameBytes);
-    std::memcpy(rename->FileName, target.path.data(), nameBytes);
-    const auto stillAccepted = [&target]() noexcept
-    {
-        std::optional<ImageOutputVersion> current;
-        return SUCCEEDED(ObserveImageOutputVersion(target.path, current)) && current == target.acceptedVersion;
-    };
-    const auto checkpoint = [&policy](ImageOutputPublishStage stage) noexcept
-    {
-        if (policy.checkpoint)
-            policy.checkpoint(policy.context, stage);
-    };
-    const auto resultStatus = [&stillAccepted](HRESULT result) noexcept
-    {
-        if (SUCCEEDED(result))
-            return ImageCodecStatus::Ok;
-        if (result == E_ABORT)
-            return ImageCodecStatus::Cancelled;
-        if (result == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS) || result == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) ||
-            result == HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) || ! stillAccepted())
-            return ImageCodecStatus::Conflict;
-        return ImageCodecStatus::Encode;
-    };
-
-    if (! target.acceptedVersion)
-    {
-        checkpoint(ImageOutputPublishStage::BeforeFinalCheck);
-        rename->ReplaceIfExists = FALSE;
-        return resultStatus(file.RenameTemporary(FileRenameInfo, *rename, static_cast<DWORD>(bytes)));
-    }
-
-    wil::unique_hfile guard{CreateFileW(target.path.c_str(),
-                                        FILE_READ_ATTRIBUTES | DELETE,
-                                        FILE_SHARE_READ | FILE_SHARE_DELETE,
-                                        nullptr,
-                                        OPEN_EXISTING,
-                                        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
-                                        nullptr)};
-    ImageOutputVersion held{};
-    if (! guard || FAILED(ReadImageOutputVersion(guard.get(), held)) || held != target.acceptedVersion.value())
-        return ImageCodecStatus::Conflict;
-
-    checkpoint(ImageOutputPublishStage::BeforeFinalCheck);
-    if (cancellation.IsCancelled())
-        return ImageCodecStatus::Cancelled;
-    if (! stillAccepted())
-        return ImageCodecStatus::Conflict;
-    rename->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
-    const HRESULT result =
-        policy.forceClassic ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) : file.RenameTemporary(FileRenameInfoEx, *rename, static_cast<DWORD>(bytes));
-    if (result != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && result != HRESULT_FROM_WIN32(ERROR_INVALID_FUNCTION) &&
-        result != HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER) && result != HRESULT_FROM_WIN32(ERROR_CALL_NOT_IMPLEMENTED) && result != E_ACCESSDENIED)
-        return resultStatus(result);
-
-    // A classic replacement needs the target guard closed. Recheck the name after releasing it.
-    guard.reset();
-    checkpoint(ImageOutputPublishStage::BeforeClassicCheck);
-    if (cancellation.IsCancelled())
-        return ImageCodecStatus::Cancelled;
-    if (! stillAccepted())
-        return ImageCodecStatus::Conflict;
-    rename->ReplaceIfExists = TRUE;
-    return resultStatus(file.RenameTemporary(FileRenameInfo, *rename, static_cast<DWORD>(bytes)));
-}
-
 [[nodiscard]] ImageCodecStatus EncodeToFile(const Raster& image,
                                             const GUID& container,
                                             double quality,
@@ -770,25 +650,21 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
         return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Encode;
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    const auto published = PublishImageOutput(*file, target, cancellation, policy);
-    if (published == ImageCodecStatus::Ok)
+    const HRESULT publish = file->PublishTemporary(target, policy);
+    if (SUCCEEDED(publish))
+    {
         cleanup.release();
-    return published;
+        return ImageCodecStatus::Ok;
+    }
+    if (publish == E_ABORT)
+        return ImageCodecStatus::Cancelled;
+    return publish == kOutputVersionConflict ? ImageCodecStatus::Conflict : ImageCodecStatus::Encode;
 }
 } // namespace
 
 std::int32_t ObserveImageOutputTarget(const wchar_t* path, ImageOutputTarget& target) noexcept
 {
-    ImageOutputTarget observed;
-    const HRESULT resolved = Win32FilePath::Resolve(path, Win32FilePath::Use::File, observed.path);
-    if (FAILED(resolved))
-        return resolved;
-    if (observed.path.size() > kMaxImageOutputPathUnits)
-        return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
-    const HRESULT result = ObserveImageOutputVersion(observed.path, observed.acceptedVersion);
-    if (SUCCEEDED(result))
-        target = std::move(observed);
-    return result;
+    return ObserveFileOutputTarget(path, target);
 }
 
 bool WriteFileBytesToDisk(const wchar_t* path, const std::uint8_t* bytes, std::size_t size) noexcept

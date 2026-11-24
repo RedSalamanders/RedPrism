@@ -1,0 +1,1 @@
+- Preserve concurrent edits to RedPrism settings during normal saves and startup recovery.

@@ -71,10 +71,11 @@ void CountNamedElements(IRawElementProviderFragment* fragment, int& named, int& 
 }
 } // namespace
 
-void Application::UseSettings(std::wstring path, const AppSettings& settings) noexcept
+void Application::UseSettings(std::wstring path, const AppSettings& settings, std::optional<FileOutputTarget> acceptedTarget) noexcept
 {
     StopSettingsWatch();
-    _settingsPath = std::move(path);
+    _settingsPath       = std::move(path);
+    _settingsFileTarget = std::move(acceptedTarget);
     if (! _settingsPath.empty())
     {
         (void)StartSettingsWatch();
@@ -203,15 +204,17 @@ bool Application::ReloadSettingsIfChanged() noexcept
     {
         return false;
     }
-    _settingsSeenWrite                    = data.ftLastWriteTime;
-    _settingsSeenSize                     = size;
-    const std::optional<AppSettings> live = SettingsStore::LoadLive(_settingsPath);
+    _settingsSeenWrite = data.ftLastWriteTime;
+    _settingsSeenSize  = size;
+    std::optional<FileOutputTarget> acceptedTarget;
+    const std::optional<AppSettings> live = SettingsStore::LoadLive(_settingsPath, &acceptedTarget);
     if (! live.has_value())
     {
         // Live invalid: keep the file as the user left it and the last-good settings in memory.
         OutputDebugStringW(L"The settings file is not a settings document; keeping the previous settings.\n");
         return true;
     }
+    _settingsFileTarget = std::move(acceptedTarget);
     if (live.value() == _settings)
     {
         return true;
@@ -246,9 +249,21 @@ void Application::SaveSettings() noexcept
     {
         _settings.layersPanelWidth = _chrome->LayersWidthDip();
     }
-    if (SettingsStore::Save(_settingsPath, _settings))
+    if (! _settingsFileTarget)
     {
+        OutputDebugStringW(L"Settings save deferred because the current file version could not be accepted.\n");
+        return;
+    }
+    std::optional<FileOutputTarget> published;
+    const HRESULT saved = SettingsStore::SaveAccepted(*_settingsFileTarget, _settings, &published);
+    if (SUCCEEDED(saved))
+    {
+        _settingsFileTarget = std::move(published);
         NoteSettingsFileState(); // our own write is not a change to reload
+    }
+    else if (saved == kOutputVersionConflict)
+    {
+        OutputDebugStringW(L"Settings changed on disk. The newer file was preserved.\n");
     }
 }
 
@@ -500,7 +515,8 @@ int Application::RunProductHardeningSelfTest() noexcept
         SelfTestFailure(L"The self-test could not write its settings file.\n");
         return 5;
     }
-    UseSettings(path, initial);
+    SettingsLoadResult loaded = SettingsStore::LoadCold(path);
+    UseSettings(path, initial, std::move(loaded.acceptedTarget));
     if (! _settingsWatch || ! _chrome->ThemeIsDark() || ! _settings.sampleRing)
     {
         SelfTestFailure(L"The settings watch did not start from the self-test file.\n");
@@ -582,6 +598,7 @@ int Application::RunProductHardeningSelfTest() noexcept
     }
     StopSettingsWatch();
     _settingsPath.clear();
+    _settingsFileTarget.reset();
     std::filesystem::remove_all(scratch, error);
     return 0;
 }

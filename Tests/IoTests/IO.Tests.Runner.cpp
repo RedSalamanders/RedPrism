@@ -2594,6 +2594,57 @@ void TestSettingsStore()
     std::filesystem::remove_all(root, error);
 }
 
+void TestGuardedSettingsStore()
+{
+    const auto root =
+        std::filesystem::path(ScratchRoot()) / (L"guarded-settings-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64()));
+    const std::wstring path  = (root / L"settings.json").wstring();
+    const std::wstring moved = (root / L"moved.json").wstring();
+    std::error_code error;
+    const auto cleanup         = wil::scope_exit([&] { std::filesystem::remove_all(root, error); });
+    const std::string original = R"({"schema":1,"theme":"dark","vendor":17})";
+    const std::string newer    = R"({"schema":1,"theme":"light","vendor":41})";
+    AppSettings pending;
+    pending.sampleRing = false;
+
+    FileOutputTarget vacant;
+    Expect(SUCCEEDED(ObserveFileOutputTarget(path.c_str(), vacant)) && ! vacant.acceptedVersion, "settings.guard.accepts-missing-name");
+    Expect(SettingsStore::WriteFileAtomic(path, original), "settings.guard.creates-fixture");
+    Expect(SettingsStore::SaveAccepted(vacant, pending) == kOutputVersionConflict && FileText(path) == original, "settings.guard.refuses-competing-create");
+
+    std::optional<FileOutputTarget> accepted;
+    Expect(SettingsStore::LoadLive(path, &accepted).has_value() && accepted.has_value(), "settings.guard.binds-read-version");
+    Expect(SettingsStore::WriteFileAtomic(path, newer), "settings.guard.writes-competing-edit");
+    Expect(accepted && SettingsStore::SaveAccepted(*accepted, pending) == kOutputVersionConflict && FileText(path) == newer,
+           "settings.guard.preserves-newer-replacement");
+
+    Expect(SettingsStore::LoadLive(path, &accepted).has_value() && accepted.has_value(), "settings.guard.accepts-retry-version");
+    wil::unique_hfile writer{
+        CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr)};
+    Expect(writer && accepted && SettingsStore::SaveAccepted(*accepted, pending) == kOutputVersionConflict, "settings.guard.refuses-live-writer");
+    writer.reset();
+
+    std::optional<FileOutputTarget> published;
+    Expect(accepted && SUCCEEDED(SettingsStore::SaveAccepted(*accepted, pending, &published)) && published &&
+               FileText(path).find("\"vendor\": 41") != std::string::npos && SettingsStore::LoadLive(path) == pending,
+           "settings.guard.retry-preserves-unknown-data");
+    const std::string committed = FileText(path);
+    Expect(MoveFileExW(path.c_str(), moved.c_str(), MOVEFILE_WRITE_THROUGH) && published &&
+               SettingsStore::SaveAccepted(*published, pending) == kOutputVersionConflict && GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES &&
+               FileText(moved) == committed,
+           "settings.guard.does-not-recreate-renamed-file");
+
+    Expect(SettingsStore::WriteFileAtomic(path, original) && SettingsStore::LoadLive(path, &accepted).has_value() &&
+               SettingsStore::WriteFileAtomic(path, "{ invalid edit") && ! SettingsStore::LoadLive(path, &accepted) && accepted &&
+               SettingsStore::SaveAccepted(*accepted, pending) == kOutputVersionConflict && FileText(path) == "{ invalid edit",
+           "settings.guard.live-invalid-edit-keeps-original-bytes");
+
+    bool temporaryLeft = false;
+    for (const auto& entry : std::filesystem::directory_iterator(root, error))
+        temporaryLeft = temporaryLeft || entry.path().filename().wstring().find(L".~") != std::wstring::npos;
+    Expect(! error && ! temporaryLeft, "settings.guard.removes-owned-temporaries");
+}
+
 int wmain(int argc, wchar_t** argv)
 {
     // Before anything can fail a check: a CRT report ends the run with exit code 3 and no dialog (RF-702,
@@ -2612,9 +2663,17 @@ int wmain(int argc, wchar_t** argv)
     if (argc > 1)
     {
         const std::wstring_view option(argv[1]);
-        const int result = option == L"--bench-file"                          ? RunFileIoBench(argc, argv)
-                           : argc == 2 && option == L"--guarded-image-output" ? RunGuardedImageOutputTests()
-                                                                              : 2;
+        int result = 2;
+        if (option == L"--bench-file")
+            result = RunFileIoBench(argc, argv);
+        else if (argc == 2 && option == L"--guarded-image-output")
+            result = RunGuardedImageOutputTests();
+        else if (argc == 2 && option == L"--guarded-settings-output")
+        {
+            TestSettingsStore();
+            TestGuardedSettingsStore();
+            result = gFailures ? 1 : 0;
+        }
         if (SUCCEEDED(com))
             CoUninitialize();
         return result;
@@ -2659,6 +2718,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunProjectLoadWorkTests();
     gFailures += RunLongPathSaveTests();
     TestSettingsStore();
+    TestGuardedSettingsStore();
     if (gFailures != 0)
     {
         std::printf("%d test(s) failed.\n", gFailures);

@@ -387,6 +387,7 @@
     <ClCompile Include="..\..\Common\WorkerPool.cpp" />
     <ClCompile Include="..\..\Common\WorkerWake.cpp" />
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />
+    <ClCompile Include="..\..\Common\GuardedFileCommit.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\..\Common\PipelineTrace.cpp" />
     <ClCompile Include="..\..\Common\UiTiming.cpp" />
