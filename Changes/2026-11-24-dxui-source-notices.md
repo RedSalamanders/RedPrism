@@ -1,1 +1,0 @@
-- Include the full notices from the pinned DxUi source and verify their bytes in the portable ZIP.
