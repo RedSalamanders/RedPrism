@@ -86,7 +86,7 @@ namespace SettingsStore
 [[nodiscard]] std::wstring LocalAppDataFolder();
 // <LocalAppData>\RedPrism
 [[nodiscard]] std::wstring DefaultDirectory();
-// settings.json (Release) or settings.debug.json (Debug builds keep their own file).
+// RedPrism.settings.json (Release) or RedPrism-debug.settings.json (Debug and ASan Debug).
 [[nodiscard]] const wchar_t* FileName(bool debugBuild) noexcept;
 [[nodiscard]] std::wstring DefaultPath(bool debugBuild);
 // <path>.invalid-<yyyyMMdd-HHmmss>
@@ -101,8 +101,8 @@ namespace SettingsStore
 // not know inside the entries it keeps.
 [[nodiscard]] std::string Serialize(const AppSettings& settings, std::string_view existingJson = {});
 
-// Startup: a missing file writes the template. Malformed JSON gets a backup and the template.
-// Readable JSON outside the settings contract stays in place.
+// Startup migrates a valid same-profile legacy file when the canonical name is missing. Other missing
+// names use the template. Malformed JSON is backed up before recovery. Readable incompatible files stay in place.
 [[nodiscard]] SettingsLoadResult LoadCold(const std::wstring& path);
 // A running app: the document, or nullopt when the file is missing or invalid (the caller keeps its last-good
 // settings). Never writes.

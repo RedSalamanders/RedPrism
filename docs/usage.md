@@ -109,15 +109,16 @@ The amount is measured from the original press. Releasing ends the drag without 
 
 ## Settings, crash reports and languages
 
-RedPrism keeps its settings in `%LocalAppData%\RedPrism\settings.json` (`settings.debug.json` for Debug builds), a
-small JSON5 document written when RedPrism closes or Windows ends the session. It accepts comments and
-single-quoted strings. Settings include `theme`
+RedPrism keeps its settings in `%LocalAppData%\RedPrism\RedPrism.settings.json`
+(`RedPrism-debug.settings.json` for Debug builds). On the first ordinary start after upgrading, RedPrism copies
+a valid file from its former name if the new name is still available. The JSON5 settings document accepts comments
+and single-quoted strings. RedPrism writes it when it closes or Windows ends the session. Settings include `theme`
 (`system`, `light`, `dark`), `language` (a tag such as `fr-FR`, empty for Windows' display language),
 `layersPanelWidth`, `sampleRing`, `jpegQuality`, the `window` placement and `shortcuts` (keyboard shortcut
 replacements, below). Edits while RedPrism runs apply as you save the file (the theme, the sample ring, the panel
 width, the JPEG quality, shortcut replacements); the language and the window placement take effect at the next
-start. RedPrism leaves an invalid settings file alone while it runs. At the next start it is backed up as
-`settings.json.invalid-…` and replaced by the defaults. Windows high contrast overrides the theme while it is on.
+start. RedPrism keeps its running settings when an edit fails validation. At the next start, it backs up malformed JSON as
+`RedPrism.settings.json.invalid-…` and installs defaults. Readable JSON outside the settings contract stays in place. Windows high contrast overrides the theme while it is on.
 
 Help › Command List (or its search field) finds and runs any command by name and shows its current shortcut. To
 change one, add an entry to the `shortcuts` array, such as `{"commandId": "cmd/edit/swapPalette", "ctrl": true,

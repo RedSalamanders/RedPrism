@@ -1,0 +1,1 @@
+- Use the shared RedPrism settings filenames and migrate existing files with exclusive creation.
