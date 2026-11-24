@@ -1,0 +1,1 @@
+- Add RedPrism's root specification validator for active plan and domain links and run it through the local and Static validators.
