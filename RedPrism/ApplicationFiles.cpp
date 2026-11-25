@@ -8,6 +8,7 @@
 #include "ImageCodecs.h"
 #include "JobUiPolicy.h"
 #include "KeyboardState.h"
+#include "Localization.h"
 #include "ProjectStore.h"
 #include "Prompts.h"
 #include "Resources.h"
@@ -22,6 +23,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
 #include <format>
 #include <memory>
@@ -2238,14 +2240,57 @@ int Application::RunSessionSelfTest() noexcept
         _closeConfirmed        = false;
         _forcedDiscard.reset();
         std::error_code error;
-        const std::filesystem::path scratch =
-            std::filesystem::temp_directory_path(error) / (L"RedPrism.SelfTest.endsession-" + std::to_wstring(GetCurrentProcessId()));
-        std::filesystem::remove_all(scratch, error);
-        _settingsPath = (scratch / L"settings.json").wstring();
+        std::filesystem::path buildRoot{Localization::ExecutableDirectory()};
+        for (; buildRoot.has_filename(); buildRoot = buildRoot.parent_path())
+        {
+            const DWORD attributes = GetFileAttributesW(buildRoot.c_str());
+            if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+            {
+                buildRoot.clear();
+                break;
+            }
+            if (buildRoot.filename() == L".build")
+                break;
+        }
+        if (buildRoot.filename() != L".build" || ! std::filesystem::is_regular_file(buildRoot.parent_path() / L"RedPrism.sln", error) || error)
+        {
+            SelfTestFailure(L"The session-end settings test requires a repository-owned build directory.\n");
+            return 5;
+        }
+        const auto scratch = buildRoot / (L"session-settings-run-" + Guid::Generate().ToString());
+        if (! std::filesystem::create_directory(scratch, error) || error)
+        {
+            SelfTestFailure(L"The session-end settings test could not create its directory.\n");
+            return 5;
+        }
+        const auto cleanSettings        = wil::scope_exit([&]() noexcept
+        {
+            std::error_code ignored;
+            std::filesystem::remove_all(scratch, ignored);
+        });
+        const std::wstring settingsPath = (scratch / L"settings.json").wstring();
+        FileOutputTarget target;
+        if (FAILED(ObserveFileOutputTarget(settingsPath.c_str(), target)) || target.acceptedVersion)
+        {
+            SelfTestFailure(L"The session-end settings test could not accept a vacant destination.\n");
+            return 5;
+        }
+        auto priorPath             = std::exchange(_settingsPath, settingsPath);
+        auto priorTarget           = std::exchange(_settingsFileTarget, std::optional<FileOutputTarget>{std::move(target)});
+        const auto priorVersion    = std::exchange(_settingsSeenVersion, std::nullopt);
+        const auto restoreSettings = wil::scope_exit([&]() noexcept
+        {
+            _settingsPath        = std::move(priorPath);
+            _settingsFileTarget  = std::move(priorTarget);
+            _settingsSeenVersion = priorVersion;
+        });
         (void)SendMessageW(_window.get(), WM_ENDSESSION, TRUE, ENDSESSION_LOGOFF);
-        const bool settingsSaved = std::filesystem::exists(_settingsPath, error);
-        _settingsPath.clear();
-        std::filesystem::remove_all(scratch, error);
+        std::optional<FileOutputTarget> readback;
+        const auto saved         = SettingsStore::LoadLive(settingsPath, &readback);
+        const bool settingsSaved = saved && saved->window.valid && readback && readback->acceptedVersion && _settingsFileTarget &&
+                                   _settingsFileTarget->acceptedVersion == readback->acceptedVersion;
+        if (settingsSaved)
+            std::puts("PASS session-end.settings-publishes-accepted-profile");
         if (refused != FALSE || ! reasonShown || ! earlierOrdinaryPending || critical == FALSE || ! oldMessageTagged || ! oldReasonRemoved ||
             refusedAgain != FALSE || ! currentPromptQueued || ! staleMessageIgnored || ! keptOpen || ! queueFilled || refusedAtCapacity != FALSE ||
             ! fullPromptQueued || ! fullAdmissionReleasedBlock || ! queueFullPreservedDocument || ! drainedQueue || refusedAfterCapacity != FALSE ||

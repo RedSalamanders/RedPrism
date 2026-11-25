@@ -39,9 +39,10 @@ Prepared: 2026-11-19.
 - [x] **H-25 Guarded publication.** Image, settings and project saves guard the accepted destination version through
   commit. Full Runtime and native ARM64 replay remain in RedHome's D21 ledger.
   [RedPrism #88](https://github.com/RedSalamanders/RedPrism/pull/88)
-- [ ] **H-26 Settings file names.** `settings.json` and `settings.debug.json`. Target: `RedPrism.settings.json` and
-  `RedPrism-debug.settings.json`. Existing users' files must be found and migrated once, so the row first states
-  that migration in the settings contract.
+- [x] **H-26 Settings file names.** Debug uses `RedPrism-debug.settings.json` and Release uses
+  `RedPrism.settings.json`. When the selected canonical file is absent, startup can copy the matching legacy
+  profile into the vacant destination. The legacy file is preserved.
+  [RedPrism #118](https://github.com/RedSalamanders/RedPrism/pull/118)
 - [x] **H-07 Satellite layout.** The loader checks `Lang\RedPrism-<culture>.dll` and retains the legacy lookup.
   [RedPrism #106](https://github.com/RedSalamanders/RedPrism/pull/106)
 - [x] **H-06 Resource string helpers.** The common embedded helpers and `MessageBoxResource` are in `Common/Resources.h`.

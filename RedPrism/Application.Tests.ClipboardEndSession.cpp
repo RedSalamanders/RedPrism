@@ -11,7 +11,6 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
-#include <filesystem>
 #include <memory>
 
 namespace
@@ -154,18 +153,13 @@ int Application::RunClipboardEndSessionSelfTest() noexcept
         return 5;
     }
     const std::wstring priorSettingsPath = _settingsPath;
-    std::error_code filesystemError;
-    const auto settingsScratch = std::filesystem::temp_directory_path(filesystemError) / (L"RedPrism.EndSessionClipboard." + Guid::Generate().ToString());
-    if (filesystemError || ! std::filesystem::create_directory(settingsScratch, filesystemError) || filesystemError)
-        return 5;
-    _settingsPath      = (settingsScratch / L"settings.json").wstring();
+    // Keep session messages focused on the clipboard transaction.
+    _settingsPath.clear();
     const auto restore = wil::scope_exit([&]() noexcept
     {
         _clipboardWorkTestGate.reset();
         _settingsPath = priorSettingsPath;
         (void)SystemClipboard::RestoreContents(_window.get(), savedClipboard);
-        std::error_code ignored;
-        std::filesystem::remove_all(settingsScratch, ignored);
     });
 
 // Existing identity/RAII/reference traits intentionally delete these implicit operations.

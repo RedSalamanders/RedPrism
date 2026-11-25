@@ -1,0 +1,1 @@
+- Bind the session-end settings self-test to an accepted vacant file and check the published settings version.
