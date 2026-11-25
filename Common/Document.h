@@ -2056,7 +2056,7 @@ public:
     [[nodiscard]] static bool RefreshPreparedResidency(Publication& publication,
                                                        const std::optional<CanvasDocument>& current,
                                                        CancelToken cancellation = {},
-                                                       PrepareObserver observer = {});
+                                                       PrepareObserver observer = {nullptr, nullptr});
     // Owner-only constant-time hint. It never samples raster bytes or changes history. Empty history needs no
     // maintenance. Reference-written history with no index must be rebuilt on the worker before a budget claim.
     [[nodiscard]] bool NeedsResidencyMaintenance() const noexcept;
@@ -2066,7 +2066,7 @@ public:
     [[nodiscard]] static std::optional<Publication> PrepareResidencyMaintenance(StateView view,
                                                                                 const std::optional<CanvasDocument>& current,
                                                                                 CancelToken cancellation = {},
-                                                                                PrepareObserver observer = {});
+                                                                                PrepareObserver observer = {nullptr, nullptr});
     // Detached preparation owns all snapshot, entry, container and trim allocations. nullopt means cancellation
     // or ineligible/default state. Allocation failures propagate to the standard worker runner. The returned
     // publication must survive apply/drop and retire on the worker lane: Publish swaps retired live containers
@@ -2078,21 +2078,24 @@ public:
                                                                 const std::optional<Guid>& afterActive,
                                                                 std::wstring name,
                                                                 CancelToken cancellation                              = {},
-                                                                PrepareObserver observer                              = {},
+                                                                PrepareObserver observer                              = {nullptr, nullptr},
                                                                 std::shared_ptr<const SharedPublicationMemory> memory = {});
-    [[nodiscard]] static std::optional<Publication> PrepareRestore(StateView view, bool redo, CancelToken cancellation = {}, PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<Publication> PrepareRestore(StateView view,
+                                                                   bool redo,
+                                                                   CancelToken cancellation = {},
+                                                                   PrepareObserver observer = {nullptr, nullptr});
     [[nodiscard]] static std::optional<Publication> PrepareBegin(StateView view,
                                                                  const std::optional<CanvasDocument>& before,
                                                                  const std::optional<Guid>& active,
                                                                  std::wstring name,
                                                                  CancelToken cancellation                              = {},
-                                                                 PrepareObserver observer                              = {},
+                                                                 PrepareObserver observer                              = {nullptr, nullptr},
                                                                  std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] static std::optional<Publication> PrepareEnd(StateView view,
                                                                const std::optional<CanvasDocument>& after,
                                                                const std::optional<Guid>& active,
                                                                CancelToken cancellation                              = {},
-                                                               PrepareObserver observer                              = {},
+                                                               PrepareObserver observer                              = {nullptr, nullptr},
                                                                std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool CanPublish(const Publication& publication) const noexcept;
     // Prepare a dependent closure before the first publication becomes visible. The resulting view belongs to
@@ -2126,7 +2129,7 @@ public:
     [[nodiscard]] static bool RefreshPreparedResidency(ReplacementPublication& publication,
                                                        const std::optional<CanvasDocument>& current,
                                                        CancelToken cancellation = {},
-                                                       PrepareObserver observer = {});
+                                                       PrepareObserver observer = {nullptr, nullptr});
     [[nodiscard]] static std::optional<ReplacementPublication> PrepareReplacement(StateView view,
                                                                                   const std::optional<CanvasDocument>& baseline,
                                                                                   const std::optional<Guid>& baselineActive,
@@ -2134,7 +2137,7 @@ public:
                                                                                   const std::optional<Guid>& afterActive,
                                                                                   std::wstring name,
                                                                                   CancelToken cancellation = {},
-                                                                                  PrepareObserver observer = {});
+                                                                                  PrepareObserver observer = {nullptr, nullptr});
     [[nodiscard]] bool CanPublishReplacement(const ReplacementPublication& publication) const noexcept;
     // New/Close save the final replacement state, including New's one entry from an absent baseline.
     [[nodiscard]] static std::optional<ReplacementPublication> PrepareSavedReplacement(StateView view,
@@ -2142,7 +2145,7 @@ public:
                                                                                        const std::optional<Guid>& afterActive,
                                                                                        std::wstring name,
                                                                                        CancelToken cancellation = {},
-                                                                                       PrepareObserver observer = {});
+                                                                                       PrepareObserver observer = {nullptr, nullptr});
     [[nodiscard]] bool PublishReplacement(ReplacementPublication& publication) noexcept;
 
     void Begin(std::wstring name, const std::optional<CanvasDocument>& document, const std::optional<Guid>& selection);

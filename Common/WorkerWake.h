@@ -36,7 +36,7 @@ public:
     ~WorkerWake();
     WorkerWake(const WorkerWake&)            = delete;
     WorkerWake& operator=(const WorkerWake&) = delete;
-    [[nodiscard]] HRESULT Initialize(PTP_POOL pool, std::uint32_t capacity, Dispatch dispatch, void* context, Observer observer = {}) noexcept;
+    [[nodiscard]] HRESULT Initialize(PTP_POOL pool, std::uint32_t capacity, Dispatch dispatch, void* context, Observer observer = {nullptr, nullptr}) noexcept;
     [[nodiscard]] HRESULT Request(WakeLane channel) noexcept;
     void Close() noexcept;
 

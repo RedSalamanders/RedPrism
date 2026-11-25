@@ -48,7 +48,7 @@ public:
                                        ID3D11DeviceContext* immediate,
                                        std::uint64_t generation,
                                        GpuResidencyReservation& reservation) noexcept;
-    [[nodiscard]] HRESULT CreateOnWorker(PreparedLassoDraftRaster raster, CancelToken cancellation = {}, Observer observer = {}) noexcept;
+    [[nodiscard]] HRESULT CreateOnWorker(PreparedLassoDraftRaster raster, CancelToken cancellation = {}, Observer observer = {nullptr, nullptr}) noexcept;
     // All source/view/device values must still match the current requested display. A stale candidate
     // remains unpublished and retains its original charge for worker retirement.
     [[nodiscard]] HRESULT PublishOwner(ID3D11Device* device,
