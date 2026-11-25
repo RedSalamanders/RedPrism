@@ -1,1 +1,0 @@
-- Tooling: enforce the shared private member naming convention in RedPrism's C++ sources and test fixtures.
