@@ -42,6 +42,8 @@ check. Shared payloads remain read-only; edit only independent copies. Preserve 
 - Repo skills live in `.agents/skills/` and must pass `.\validate-skills.ps1`.
 - Generated products belong under `.build/`; never commit them.
 - Preserve the documented blend math, project schema and independent numeric goldens in the owning specs.
+- Use `_camelCase` for private and protected non-static fields. Keep public data fields in `camelCase`.
+  The root `.clang-tidy` applies the identifier-naming and reserved-identifier checks.
 
 Native test output follows [the retention contract](Specs/Testing/Testing_RunEvidence.md): unique per-run evidence,
 preserved failures and interruptions, verified identities/hashes/streams/metadata, and no automatic old-run sweep.
