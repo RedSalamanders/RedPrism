@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Use the shared RedPrism settings filenames and migrate existing files with exclusive creation.
 - Exercise successful and refused host writes with an accepted current archive and a separate new output.
 - Watch RedPrism settings on a worker and coalesce reload notifications on the window owner thread.
 - Register the guarded project-save fixture in the native test inventory so Release qualification can run its suites.
