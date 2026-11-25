@@ -41,7 +41,7 @@ The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 | Session end | See below |
 | Pointer loss | See below |
 | Minimum size | `WM_GETMINMAXINFO` keeps the client at least the rail, a 200 DIP canvas, the splitter and the minimum layers panel wide, and the menu, tabs, tool header, a 200 DIP canvas and the status strip tall, at the window's DPI (or the `--dpi` layout DPI) |
-| Power | `RegisterPowerSettingNotification` for `GUID_SESSION_DISPLAY_STATUS`; display-off blocks Present except in the screenshot and bounded `ui-smoke` correctness harnesses. Full UI performance runs refuse display-off measurements. |
+| Presentation | The window owns visibility, minimize state and DWM cloak notifications. It observes session display power through `GUID_SESSION_DISPLAY_STATUS` and system suspend and resume through `WM_POWERBROADCAST`. The frame scheduler waits on events while presentation is unavailable. The screenshot and bounded `ui-smoke` correctness harnesses can draw with the display off. |
 | Adapter follow | `WM_EXITSIZEMOVE`, `WM_DISPLAYCHANGE`, and `WM_DPICHANGED` call `EnsureDeviceForWindowMonitor` |
 
 No chrome child HWND is created over the swap chain. Common file dialogs (`IFileDialog`) are allowed from C7; they are
@@ -176,7 +176,7 @@ own/admit startup paths fails startup locally.
 | `--warp` | Force WARP (Microsoft Basic Render Driver) |
 | `--isa scalar\|sse2\|avx2\|avx512\|neon` | Force a CPU kernel tier before worker startup. Missing, empty, duplicate, unknown and `auto` values are refused. Unsupported or unimplemented tiers exit 2 with a localized diagnostic before creating the application. Currently only Scalar is implemented; no override selects Auto, which selects Scalar. |
 | `--self-test` | Create the titled window **hidden**, force WARP, assert the DPI-adjusted 1280×800 logical client, composite DxUi chrome, prove visible surface then 0 when hidden, exit 0 |
-| `--capture <png>` (also `--screenshot <png>`) | Show the titled window without activating it, present chrome and the canvas (whatever the display's power, the window's visibility or occlusion), start the capture delay after the first frame that reached the display, capture through Windows.Graphics.Capture, exit 0, 8 when this system cannot capture a window (`E_NOTIMPL`, the capture API absent) or 9 when the capture failed or never happened |
+| `--capture <png>` (also `--screenshot <png>`) | Show the titled window without activating it, present chrome and the canvas (including while the display is off or the window is hidden or cloaked), start the capture delay after the first frame that reached the display, capture through Windows.Graphics.Capture, exit 0, 8 when this system cannot capture a window (`E_NOTIMPL`, the capture API absent) or 9 when the capture failed or never happened |
 | `--dpi 96\|144` | Override layout DPI and the 1280×800 logical client scale for `--screenshot` |
 | `--bench brush` | Run the brush benchmark on the selected device and exit |
 | `--bench kernels` | Run the CPU kernel benchmark at 3840×2160 with 10 samples, without creating a window or initializing the GPU |

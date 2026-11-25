@@ -1,0 +1,1 @@
+- Schedule RedPrism presents from its window and power events and retire hidden document surfaces without DXGI probes.

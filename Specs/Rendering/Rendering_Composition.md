@@ -174,9 +174,9 @@ An adjustment layer (`ImageLayer::adjustment`, no pixels of its own) reworks the
   the existing canvas failure path, leaves the document intact and never publishes a partial committed raster.
 - Canvas surfaces: two BGRA8 canvases with mip chains, two BGRA8 stack surfaces (allocated on the first clipping
   stack), and a pool of R8 coverage textures reused across compositions. `CanvasSurfaceBytes()` reports all of them.
-  Hidden, minimized (`WM_SIZE` 0 × 0), occluded (`Present` reported `DXGI_STATUS_OCCLUDED`) or display-off windows
-  drop them (`ReleaseDocumentSurfaces`, `CanvasSurfaceBytes() == 0`) and MUST NOT Present; the first frame that can
-  reach the display composes them again. A `--screenshot` capture keeps them.
+  A window that is hidden, minimized, cloaked, display-off or suspended drops them
+  (`ReleaseDocumentSurfaces`, `CanvasSurfaceBytes() == 0`) and waits for a presentation event. The first frame that
+  can reach the display composes them again. An owned `--screenshot` capture keeps them.
 - Device loss rebuilds shaders, surfaces and the raster cache as one operation. The host rebinds the composition and
   the brush engine when the renderer's device generation changes, so a rebuilt device at the old one's address is
   never mistaken for it.
@@ -440,9 +440,8 @@ A frame never closes the window on its own (RF-401):
 Clear → chrome `Prepare` (layout, hole) → `Compose` (only when dirty) + `BlitToTarget` (discard outside the hole,
 checkerboard + optional pixel grid; canvas mips generated first when zoomed out and the composite changed) → DxUi
 `Composite` over the canvas (its surface is transparent where no control paints, so tooltips and popups can overlap
-the canvas) → one `Present`. Occlusion stays on the C1 scheduler; when DXGI's occlusion message could not be
-registered, an occluded window probes (`Present` `DXGI_PRESENT_TEST`) on each wake and retries the registration
-instead of waiting for a message that never comes.
+the canvas) → one `Present`. The C1 scheduler waits on application visibility, minimize, cloak, power and
+suspend events. A `DXGI_STATUS_OCCLUDED` result records an unsuccessful presentation attempt.
 
 ## Validation
 
@@ -472,7 +471,7 @@ here so goldens are not silently rebaselined:
 | Adjustment layers (C12, `adjust.*`, legacy `AdjustmentLayerTests`) | a Levels layer with output white 0 blackens the white beneath but not the red above, stays live when the base changes and does nothing hidden; a clipped inverted master curve turns the green base magenta and leaves the blue alone until unclipped (then yellow); Hue 120 turns red green (±8), opacity 0 and a black mask keep the pixels; Multiply keeps the coverage `[255,128,32,0]` exactly and a 128 mask mixes half red half green at the same alphas; Levels, Curves, Exposure and Gradient Map match `Adjust::ApplyAdjustment` within 1/255, Hue/Saturation within 4, Grain within 2; tables and the cube count in `CanvasSurfaceBytes` and go with the surfaces |
 | GPU adjustment previews (`adjust-preview.*`, `adjust.reuse.*`) | all six kinds match CPU filter + selection mix + normal composition at the above tolerances; translated/scaled layer, partial alpha, selection, mask, opacity, clipping, folder and upper/background records stay correct; committed readback ignores the transient preview; hidden/device reconstruction, clear and settled zero-pass frames work; settings reuse LUT/cube storage and kind switches release the previous lookup |
 | HSL blends (C12, `blend.hsl-golden`) | Hue, Saturation, Color and Luminosity at opacity 1 and 0.5 match `Adjust::BlendStraight` composited over the opaque backdrop within 2/255 |
-| Frame loop (RF-408, RF-409, RF-410, `ants.*`, `frame.*`) | the ants' dash steps every 120 ms through 8 steps and the loop waits exactly until the next step; occluded without the occlusion message probes, with it waits; a capture draws with the display off, the window hidden and occluded |
+| Frame loop (RF-408, RF-409, RF-410, `ants.*`, `frame.*`) | the ants' dash steps every 120 ms through 8 steps and the loop waits until the next step. A cloaked window waits for events and an owned capture can draw with the display off. |
 
 `CompositionTests` compiles the shaders with the application's flags (`/Ges /O3`, stripped), so it runs the same
 bytecode. `RedPrism.exe --self-test --warp` proves the host side (`RunRenderingSelfTest`): Actual Pixels is 1:1 on
@@ -592,7 +591,7 @@ The opt-in application route binds the actual device/context queue before its fi
 An unavailable initial context cannot count as a displayed or successfully prepared graph. The normal startup
 route remains unchanged until the complete pending-edit, stroke, utility and row consumers are qualified.
 
-Hidden, minimized, display-off or occluded state immediately removes the published display pointer and
+Hidden, minimized, cloaked, display-off or suspended state immediately removes the published display pointer and
 cancels useful graph preparation. Existing graphs keep their original reservations through real command and
 last-use acknowledgements, producer joins and worker destruction. Repeated requests while suspended admit
 no replacement and create no ready loop. One actual visible-state transition requests the current document;

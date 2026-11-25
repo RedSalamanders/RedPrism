@@ -74,6 +74,7 @@
 class ChromeHost;
 class PreparedLayerRows;
 struct UiBenchmarkState;
+struct HostFrameState;
 class UiCancellationObservation;
 struct ApplicationShutdownTestProbe;
 struct ApplicationProcessingTestProbe;
@@ -373,6 +374,8 @@ private:
     void InvalidateFrame() noexcept;
     void ReportCanvasFailure(HRESULT failure) noexcept;
     void OnFrameLoopFailure(HRESULT failure) noexcept;
+    [[nodiscard]] HostFrameState ReadHostFrameState() const noexcept;
+    void UpdateWindowCloaked(bool cloaked) noexcept;
     void ReleaseSurfacesWhileUnseen() noexcept;
     [[nodiscard]] int ExitCode(int quitCode) const noexcept;
     int RunRenderingSelfTest() noexcept;
@@ -1398,6 +1401,7 @@ private:
     HINSTANCE _instance = nullptr;
     wil::unique_hwnd _window;
     wil::unique_hpowernotify _displayPowerNotification;
+    wil::unique_any<HWINEVENTHOOK, decltype(&::UnhookWinEvent), ::UnhookWinEvent> _windowCloakNotification;
     Renderer _renderer;
     std::unique_ptr<ChromeHost> _chrome;
     // Declared before the session: a pending stroke tells its engine when the session drops it.
@@ -1907,8 +1911,10 @@ private:
     bool _classRegistered                = false;
     bool _rendererReady                  = false;
     bool _windowVisible                  = false;
+    bool _windowMinimized                = false;
+    bool _windowCloaked                  = false;
     bool _displayPoweredOn               = true;
-    bool _occlusionStatusChanged         = false;
+    bool _systemSuspended                = false;
     bool _frameInvalidated               = true;
     bool _mouseTracked                   = false;
     bool _screenshotArmed                = false;

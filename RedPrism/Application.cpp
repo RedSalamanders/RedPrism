@@ -36,6 +36,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <dwmapi.h>
 #include <format>
 #include <new>
 #include <powrprof.h>
@@ -55,12 +56,28 @@
 
 namespace
 {
-constexpr int kDefaultClientWidth           = 1280;
-constexpr int kDefaultClientHeight          = 800;
-constexpr UINT kScreenshotDelayMilliseconds = 800;
-constexpr double kCommandZoomStep           = 1.25;
+constexpr int kDefaultClientWidth            = 1280;
+constexpr int kDefaultClientHeight           = 800;
+constexpr UINT kScreenshotDelayMilliseconds  = 800;
+constexpr double kCommandZoomStep            = 1.25;
+constexpr UINT kWindowCloakChangedMessage    = WM_APP + 1;
+constexpr wchar_t kWindowCloakHookProperty[] = L"RedPrism.WindowCloakHook";
 // Frames in a row that may fail before drawing stops and the window asks to close (RF-401).
 constexpr int kFailedFramesBeforeClose = 3;
+
+[[nodiscard]] bool ReadWindowCloaked(HWND window) noexcept
+{
+    DWORD cloaked = 0;
+    return SUCCEEDED(DwmGetWindowAttribute(window, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked != 0;
+}
+
+void CALLBACK OnWindowCloakEvent(HWINEVENTHOOK hook, DWORD, HWND window, LONG object, LONG child, DWORD, DWORD) noexcept
+{
+    if (window && object == OBJID_WINDOW && child == CHILDID_SELF && GetPropW(window, kWindowCloakHookProperty) == hook)
+    {
+        PostMessageW(window, kWindowCloakChangedMessage, 0, 0);
+    }
+}
 
 [[nodiscard]] std::uint64_t HostHistoryLimit() noexcept
 {
@@ -394,21 +411,13 @@ int Application::Run(int showCommand) noexcept
             continue;
         }
 
-        const bool capturing = ! _screenshotPath.empty();
-        // Smoke validates command/result ordering, never performance. Like the screenshot harness it may
-        // draw with the display powered off, while retaining the ordinary visibility and occlusion guards.
-        const bool displayOn = _displayPoweredOn || (_uiBenchmark && _uiBenchmark->smoke);
-        if (! _renderer.IsOccluded() || capturing)
-        {
-            _occlusionStatusChanged = false;
-        }
         ReleaseSurfacesWhileUnseen();
+        auto state = ReadHostFrameState();
 
         // Marching ants: the dash steps one DIP every 120 ms while a non-empty outline shows and a frame can reach
         // the display; the wait below wakes for the next step, nothing else (RF-408).
-        DWORD waitTimeout   = INFINITE;
-        const bool drawable = capturing || (_windowVisible && displayOn && ! _renderer.IsSuspended() && ! _renderer.IsOccluded());
-        if (_marchingAnts && _chrome && drawable)
+        DWORD waitTimeout = INFINITE;
+        if (_marchingAnts && _chrome && CanRenderHostFrame(state))
         {
             const std::uint64_t now = GetTickCount64();
             const float phase       = MarchingAntsPhase(now);
@@ -424,41 +433,13 @@ int Application::Run(int showCommand) noexcept
             InvalidateFrame();
         }
 
-        HostFrameState state;
-        state.windowVisible          = _windowVisible;
-        state.displayPoweredOn       = displayOn;
-        state.rendererSuspended      = _renderer.IsSuspended();
-        state.rendererOccluded       = _renderer.IsOccluded();
-        state.occlusionStatusChanged = _occlusionStatusChanged;
-        state.frameInvalidated       = _frameInvalidated;
-        state.chromeAnimating        = _chrome && _chrome->NeedsAnimation();
-        state.occlusionMessages      = _renderer.OcclusionMessages();
-        state.capturing              = capturing;
-        state.completionsPending     = _jobs.HasUiWork();
-        HostFrameAction frameAction  = SelectHostFrameAction(state);
+        state.frameInvalidated   = _frameInvalidated;
+        state.chromeAnimating    = _chrome && _chrome->NeedsAnimation();
+        state.completionsPending = _jobs.HasUiWork();
+        const auto frameAction   = SelectHostFrameAction(state);
         if (frameAction == HostFrameAction::DrainCompletions)
         {
             continue; // a producer published after this pass's drain; return to the shared outer pump
-        }
-        if (frameAction == HostFrameAction::ProbeOcclusion)
-        {
-            _occlusionStatusChanged = false;
-            result                  = _renderer.ProbeOcclusion();
-            if (FAILED(result))
-            {
-                OutputDebugStringW(L"Swap-chain occlusion probe failed.\n");
-                OnFrameLoopFailure(result);
-                continue;
-            }
-            if (_renderer.IsOccluded())
-            {
-                // Still hidden: wait for the next message (the occlusion status, or any other without it).
-                (void)WaitUntilMessage();
-                continue;
-            }
-            ReleaseSurfacesWhileUnseen(); // The actual occlusion probe permits one display resume transition.
-            InvalidateFrame();
-            frameAction = HostFrameAction::Render;
         }
 
         if (frameAction == HostFrameAction::WaitForMessage)
@@ -624,12 +605,37 @@ void Application::OnFrameLoopFailure(HRESULT failure) noexcept
     PostMessageW(_window.get(), WM_CLOSE, 0, 0);
 }
 
+HostFrameState Application::ReadHostFrameState() const noexcept
+{
+    // Smoke validates result ordering with the display powered off and still observes the window and system state.
+    return HostFrameState{
+        .windowVisible     = _windowVisible,
+        .windowMinimized   = _windowMinimized,
+        .windowCloaked     = _windowCloaked,
+        .displayPoweredOn  = _displayPoweredOn || (_uiBenchmark && _uiBenchmark->smoke),
+        .systemSuspended   = _systemSuspended,
+        .rendererSuspended = _renderer.IsSuspended(),
+        .capturing         = ! _screenshotPath.empty(),
+    };
+}
+
+void Application::UpdateWindowCloaked(bool cloaked) noexcept
+{
+    if (std::exchange(_windowCloaked, cloaked) == cloaked)
+    {
+        return;
+    }
+    ReleaseSurfacesWhileUnseen();
+    if (! cloaked)
+    {
+        InvalidateFrame();
+    }
+}
+
 void Application::ReleaseSurfacesWhileUnseen() noexcept
 {
-    // Hidden, minimized, occluded or display-off windows keep no document surfaces (Rendering_Composition.md,
-    // RF-411); the next frame that can reach the display composes them again.
-    const bool displayOff = ! _displayPoweredOn && ! (_uiBenchmark && _uiBenchmark->smoke);
-    const bool unseen     = _screenshotPath.empty() && (! _windowVisible || displayOff || _renderer.IsSuspended() || _renderer.IsOccluded());
+    // When presentation is unavailable, retire document surfaces until the next visible frame (RF-411).
+    const bool unseen = ! CanRenderHostFrame(ReadHostFrameState());
     if (_committedDisplayInitialized)
     {
         _committedDisplay.SetSuspendedOwner(unseen && ! _committedDisplayAllowHiddenForTest);
@@ -3073,6 +3079,16 @@ HRESULT Application::CreateMainWindow(bool visible) noexcept
     {
         return result;
     }
+
+    SetLastError(ERROR_SUCCESS);
+    _windowCloakNotification.reset(SetWinEventHook(EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED, nullptr, OnWindowCloakEvent, 0, 0, WINEVENT_OUTOFCONTEXT));
+    if (! _windowCloakNotification || ! SetPropW(window, kWindowCloakHookProperty, _windowCloakNotification.get()))
+    {
+        const DWORD error = GetLastError();
+        _windowCloakNotification.reset();
+        return error != ERROR_SUCCESS ? HRESULT_FROM_WIN32(error) : E_FAIL;
+    }
+    _windowCloaked = ReadWindowCloaked(window);
 
     DragAcceptFiles(window, TRUE);
     if (_screenshotDpi != 0)
@@ -5888,7 +5904,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
     switch (message)
     {
         case kUiBenchmarkMessage: ExecuteUiBenchmarkStep(); return 0;
-        case WM_SIZE: return OnSize(LOWORD(lParam), HIWORD(lParam));
+        case WM_SIZE: _windowMinimized = wParam == SIZE_MINIMIZED; return _windowMinimized ? OnSize(0, 0) : OnSize(LOWORD(lParam), HIWORD(lParam));
         case WM_GETMINMAXINFO: OnGetMinMaxInfo(window, reinterpret_cast<MINMAXINFO*>(lParam)); return 0;
         case WM_DPICHANGED:
         {
@@ -6115,7 +6131,20 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
             }
             break;
         case WM_POWERBROADCAST:
-            if (wParam == PBT_POWERSETTINGCHANGE && lParam != 0)
+            if (wParam == PBT_APMSUSPEND)
+            {
+                _systemSuspended = true;
+                ReleaseSurfacesWhileUnseen();
+            }
+            else if (wParam == PBT_APMRESUMEAUTOMATIC || wParam == PBT_APMRESUMESUSPEND)
+            {
+                if (std::exchange(_systemSuspended, false))
+                {
+                    ReleaseSurfacesWhileUnseen();
+                    InvalidateFrame();
+                }
+            }
+            else if (wParam == PBT_POWERSETTINGCHANGE && lParam != 0)
             {
                 const auto* setting = reinterpret_cast<const POWERBROADCAST_SETTING*>(lParam);
                 if (setting && setting->PowerSetting == GUID_SESSION_DISPLAY_STATUS && setting->DataLength >= sizeof(DWORD))
@@ -6131,7 +6160,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
                 }
             }
             return TRUE;
-        case Renderer::kOcclusionStatusMessage: _occlusionStatusChanged = true; return 0;
+        case kWindowCloakChangedMessage: UpdateWindowCloaked(ReadWindowCloaked(window)); return 0;
         case WM_ERASEBKGND: return 1;
         case WM_PAINT:
             InvalidateFrame();
@@ -6169,6 +6198,8 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
             PostQuitMessage(0);
             return 0;
         case WM_NCDESTROY:
+            RemovePropW(window, kWindowCloakHookProperty);
+            _windowCloakNotification.reset();
             if (_window.get() == window)
             {
                 (void)_window.release();
@@ -8782,40 +8813,38 @@ int Application::RunRenderingSelfTest() noexcept
         return 5;
     }
 
-    // Minimized or occluded, the document keeps no surfaces; the next frame composes them again (RF-411). The
-    // display's power and the occlusion DWM reports for the hidden window are the machine's (asleep displays report
-    // both), so the step pins them and restores them after.
+    // Minimize and cloak retire the document surfaces. The fixture supplies window and power transitions (RF-411).
     frame();
     RECT client{};
     (void)GetClientRect(_window.get(), &client);
     const UINT clientWidth      = static_cast<UINT>(client.right - client.left);
     const UINT clientHeight     = static_cast<UINT>(client.bottom - client.top);
     const bool displayPoweredOn = _displayPoweredOn;
+    const bool wasCloaked       = _windowCloaked;
     _displayPoweredOn           = true;
-    _renderer.SetOccludedForTest(false);
+    _windowCloaked              = false;
     (void)HandleMessage(_window.get(), WM_SIZE, SIZE_MINIMIZED, 0);
     const bool minimizedReleased = _composition.CanvasSurfaceBytes() == 0 && _renderer.IsSuspended();
     (void)HandleMessage(_window.get(), WM_SIZE, SIZE_RESTORED, MAKELPARAM(clientWidth, clientHeight));
     frame();
     const bool restoredDrawn = _composition.CanvasSurfaceBytes() != 0;
     _windowVisible           = true;
-    _renderer.SetOccludedForTest(true);
-    ReleaseSurfacesWhileUnseen();
-    const bool occludedReleased = _composition.CanvasSurfaceBytes() == 0;
-    _renderer.SetOccludedForTest(false);
+    UpdateWindowCloaked(true);
+    const bool cloakedReleased = _composition.CanvasSurfaceBytes() == 0;
+    UpdateWindowCloaked(false);
     frame();
     ReleaseSurfacesWhileUnseen();
     const bool visibleKept = _composition.CanvasSurfaceBytes() != 0;
-    _renderer.SetOccludedForTest(std::nullopt);
-    _windowVisible    = false;
-    _displayPoweredOn = displayPoweredOn;
-    if (! minimizedReleased || ! restoredDrawn || ! occludedReleased || ! visibleKept)
+    _windowCloaked         = wasCloaked;
+    _windowVisible         = false;
+    _displayPoweredOn      = displayPoweredOn;
+    if (! minimizedReleased || ! restoredDrawn || ! cloakedReleased || ! visibleKept)
     {
-        SelfTestFailure(std::format(L"A minimized or occluded window kept its document surfaces (minimized released "
-                                    L"{}, restored drawn {}, occluded released {}, visible kept {}).\n",
+        SelfTestFailure(std::format(L"A minimized or cloaked window kept its document surfaces (minimized released "
+                                    L"{}, restored drawn {}, cloaked released {}, visible kept {}).\n",
                                     minimizedReleased,
                                     restoredDrawn,
-                                    occludedReleased,
+                                    cloakedReleased,
                                     visibleKept));
         return 5;
     }

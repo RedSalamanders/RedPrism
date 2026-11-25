@@ -201,12 +201,14 @@ int Application::RunStandaloneCommittedDisplaySelfTest(HINSTANCE instance) noexc
             power.status = 1;
             (void)owner->HandleMessage(owner->_window.get(), WM_POWERBROADCAST, PBT_POWERSETTINGCHANGE, reinterpret_cast<LPARAM>(&power));
             resumed("power-on-handler-admits-one-current-display");
-            owner->_renderer.SetOccludedForTest(true);
-            owner->ReleaseSurfacesWhileUnseen();
-            suspended("occlusion-policy-excludes-display-before-next-frame", "occluded-root-retires-without-polling");
-            owner->_renderer.SetOccludedForTest(false);
-            owner->ReleaseSurfacesWhileUnseen();
-            resumed("confirmed-visible-policy-resumes-current-display");
+            owner->UpdateWindowCloaked(true);
+            suspended("cloak-event-excludes-display-before-next-frame", "cloaked-root-retires-without-polling");
+            owner->UpdateWindowCloaked(false);
+            resumed("uncloak-event-resumes-current-display");
+            (void)owner->HandleMessage(owner->_window.get(), WM_POWERBROADCAST, PBT_APMSUSPEND, 0);
+            suspended("system-suspend-excludes-display-before-return", "system-suspend-root-retires-on-events");
+            (void)owner->HandleMessage(owner->_window.get(), WM_POWERBROADCAST, PBT_APMRESUMEAUTOMATIC, 0);
+            resumed("system-resume-admits-one-current-display");
         }
         owner->Shutdown();
         expect(owner->_shutdownComplete && ! owner->_committedDisplayInitialized && ! owner->_acknowledgedCommittedDisplay &&

@@ -152,38 +152,27 @@ void TestAdapterSelection() noexcept
 
 void TestFrameScheduler() noexcept
 {
-    HostFrameState state{};
-    Expect(SelectHostFrameAction(state) == HostFrameAction::WaitForMessage, "frame.hidden-suspended");
+    Expect(SelectHostFrameAction({}) == HostFrameAction::WaitForMessage, "frame.hidden-suspended");
 
-    state.windowVisible     = true;
-    state.displayPoweredOn  = true;
-    state.rendererSuspended = false;
-    state.frameInvalidated  = true;
-    Expect(SelectHostFrameAction(state) == HostFrameAction::Render, "frame.dirty");
+    constexpr HostFrameState visible{.windowVisible = true, .displayPoweredOn = true, .rendererSuspended = false};
+    Expect(SelectHostFrameAction(visible) == HostFrameAction::Render, "frame.dirty");
 
-    state.frameInvalidated = false;
-    Expect(SelectHostFrameAction(state) == HostFrameAction::WaitForMessage, "frame.idle");
+    auto animating             = visible;
+    animating.frameInvalidated = false;
+    Expect(SelectHostFrameAction(animating) == HostFrameAction::WaitForMessage, "frame.idle");
+    animating.chromeAnimating = true;
+    Expect(SelectHostFrameAction(animating) == HostFrameAction::Render, "frame.chrome-animating");
 
-    state.rendererOccluded       = true;
-    state.occlusionStatusChanged = false;
-    Expect(SelectHostFrameAction(state) == HostFrameAction::WaitForMessage, "frame.occluded-wait");
-
-    state.occlusionStatusChanged = true;
-    Expect(SelectHostFrameAction(state) == HostFrameAction::ProbeOcclusion, "frame.occluded-probe");
-
-    state.rendererOccluded       = false;
-    state.occlusionStatusChanged = false;
-    state.frameInvalidated       = false;
-    state.chromeAnimating        = true;
-    Expect(SelectHostFrameAction(state) == HostFrameAction::Render, "frame.chrome-animating");
-
+    auto state          = animating;
+    state.windowCloaked = true;
+    Expect(SelectHostFrameAction(state) == HostFrameAction::WaitForMessage, "frame.cloaked-wait");
+    state.windowCloaked = false;
+    Expect(SelectHostFrameAction(state) == HostFrameAction::Render, "frame.uncloaked-resumes");
+    state.windowMinimized = true;
+    Expect(SelectHostFrameAction(state) == HostFrameAction::WaitForMessage, "frame.minimized");
+    state                   = animating;
     state.rendererSuspended = true;
-    Expect(SelectHostFrameAction(state) == HostFrameAction::WaitForMessage, "frame.suspended");
-
-    state.rendererSuspended = false;
-    state.displayPoweredOn  = false;
-    state.frameInvalidated  = true;
-    Expect(SelectHostFrameAction(state) == HostFrameAction::WaitForMessage, "frame.display-off");
+    Expect(SelectHostFrameAction(state) == HostFrameAction::WaitForMessage, "frame.renderer-suspended");
 
     struct CompletionPriorityCase final
     {
@@ -193,20 +182,27 @@ void TestFrameScheduler() noexcept
         const char* clearedName;
     };
     constexpr std::array completionPriorityCases{
-        CompletionPriorityCase{
-            {false, true, false, false, false, true}, HostFrameAction::WaitForMessage, "frame.completions-hidden", "frame.completions-hidden-cleared"},
-        CompletionPriorityCase{
-            {true, true, true, false, false, true}, HostFrameAction::WaitForMessage, "frame.completions-suspended", "frame.completions-suspended-cleared"},
-        CompletionPriorityCase{
-            {true, true, false, true, true, false}, HostFrameAction::ProbeOcclusion, "frame.completions-occluded", "frame.completions-occluded-cleared"},
-        CompletionPriorityCase{{true, false, false, false, false, true},
+        CompletionPriorityCase{{.displayPoweredOn = true, .rendererSuspended = false},
+                               HostFrameAction::WaitForMessage,
+                               "frame.completions-hidden",
+                               "frame.completions-hidden-cleared"},
+        CompletionPriorityCase{{.windowVisible = true, .windowCloaked = true, .displayPoweredOn = true, .rendererSuspended = false},
+                               HostFrameAction::WaitForMessage,
+                               "frame.completions-cloaked",
+                               "frame.completions-cloaked-cleared"},
+        CompletionPriorityCase{{.windowVisible = true, .displayPoweredOn = true, .systemSuspended = true, .rendererSuspended = false},
+                               HostFrameAction::WaitForMessage,
+                               "frame.completions-system-suspended",
+                               "frame.completions-system-suspended-cleared"},
+        CompletionPriorityCase{{.windowVisible = true, .rendererSuspended = false},
                                HostFrameAction::WaitForMessage,
                                "frame.completions-display-off",
                                "frame.completions-display-off-cleared"},
-        CompletionPriorityCase{
-            {true, true, false, false, false, false}, HostFrameAction::WaitForMessage, "frame.completions-idle", "frame.completions-idle-cleared"},
-        CompletionPriorityCase{
-            {true, true, false, false, false, true}, HostFrameAction::Render, "frame.completions-render", "frame.completions-render-cleared"},
+        CompletionPriorityCase{{.windowVisible = true, .displayPoweredOn = true, .rendererSuspended = false, .frameInvalidated = false},
+                               HostFrameAction::WaitForMessage,
+                               "frame.completions-idle",
+                               "frame.completions-idle-cleared"},
+        CompletionPriorityCase{visible, HostFrameAction::Render, "frame.completions-render", "frame.completions-render-cleared"},
     };
     for (const CompletionPriorityCase& testCase : completionPriorityCases)
     {
