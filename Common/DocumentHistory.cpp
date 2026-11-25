@@ -236,11 +236,11 @@ std::shared_ptr<const HistoryStorageTopology> DocumentHistory::PrepareTopology(c
 {
     if (cancellation.IsCancelled())
         return {};
-    const std::array candidates{state.pending ? state.pending->before : nullptr,
-                                state.past.empty() ? nullptr : state.past.back()->before,
-                                state.past.empty() ? nullptr : state.past.back()->after,
-                                state.future.empty() ? nullptr : state.future.back()->before,
-                                state.future.empty() ? nullptr : state.future.back()->after};
+    const std::array candidates{state._pending ? state._pending->before : nullptr,
+                                state._past.empty() ? nullptr : state._past.back()->before,
+                                state._past.empty() ? nullptr : state._past.back()->after,
+                                state._future.empty() ? nullptr : state._future.back()->before,
+                                state._future.empty() ? nullptr : state._future.back()->after};
     for (const auto& candidate : candidates)
         if (candidate && candidate->storageTopology && candidate->storageTopology->Matches(document))
             return candidate->storageTopology;
@@ -249,7 +249,7 @@ std::shared_ptr<const HistoryStorageTopology> DocumentHistory::PrepareTopology(c
     for (const auto& candidate : candidates)
         if (! previous && candidate && candidate->storageTopology)
             previous = candidate->storageTopology;
-    return HistoryStorageTopology::PrepareIncremental(document, std::move(previous), cancellation, state.publicationMemory);
+    return HistoryStorageTopology::PrepareIncremental(document, std::move(previous), cancellation, state._publicationMemory);
 }
 
 std::shared_ptr<const DocumentHistory::Snapshot> DocumentHistory::SealSnapshot(Snapshot snapshot, const StateView& state, CancelToken cancellation)
@@ -260,7 +260,7 @@ std::shared_ptr<const DocumentHistory::Snapshot> DocumentHistory::SealSnapshot(S
     const auto bounds = snapshot.OwnershipBounds();
     if (! bounds)
         return {};
-    return MakeLocallyOwnedPublicationObject<const Snapshot>(state.publicationMemory, bounds->ownershipBytes, 0, std::move(snapshot));
+    return MakeLocallyOwnedPublicationObject<const Snapshot>(state._publicationMemory, bounds->ownershipBytes, 0, std::move(snapshot));
 }
 
 DocumentHistory::DocumentHistory(int entryLimit, std::uint64_t retainedByteLimit) noexcept
@@ -272,40 +272,40 @@ DocumentHistory::DocumentHistory(int entryLimit, std::uint64_t retainedByteLimit
 
 DocumentHistory::Publication::~Publication() noexcept
 {
-    if (residencyPermit)
-        residencyPermit->Reset();
+    if (_residencyPermit)
+        _residencyPermit->Reset();
 }
 
 DocumentHistory::Publication::Publication(Publication&& source) noexcept
 {
-    if (source.residencyPermit)
-        source.residencyPermit->Reset();
-    state   = std::move(source.state);
-    restore = std::move(source.restore);
-    source.restore.reset();
-    expectedRevision        = source.expectedRevision;
-    expectedEpoch           = source.expectedEpoch;
-    published               = std::exchange(source.published, true);
-    sampledResidency        = std::exchange(source.sampledResidency, false);
-    requiresResidencyPermit = std::exchange(source.requiresResidencyPermit, false);
+    if (source._residencyPermit)
+        source._residencyPermit->Reset();
+    _state   = std::move(source._state);
+    _restore = std::move(source._restore);
+    source._restore.reset();
+    _expectedRevision        = source._expectedRevision;
+    _expectedEpoch           = source._expectedEpoch;
+    _published               = std::exchange(source._published, true);
+    _sampledResidency        = std::exchange(source._sampledResidency, false);
+    _requiresResidencyPermit = std::exchange(source._requiresResidencyPermit, false);
 }
 
 DocumentHistory::Publication& DocumentHistory::Publication::operator=(Publication&& source) noexcept
 {
     if (this != &source)
     {
-        if (residencyPermit)
-            residencyPermit->Reset();
-        if (source.residencyPermit)
-            source.residencyPermit->Reset();
-        state   = std::move(source.state);
-        restore = std::move(source.restore);
-        source.restore.reset();
-        expectedRevision        = source.expectedRevision;
-        expectedEpoch           = source.expectedEpoch;
-        published               = std::exchange(source.published, true);
-        sampledResidency        = std::exchange(source.sampledResidency, false);
-        requiresResidencyPermit = std::exchange(source.requiresResidencyPermit, false);
+        if (_residencyPermit)
+            _residencyPermit->Reset();
+        if (source._residencyPermit)
+            source._residencyPermit->Reset();
+        _state   = std::move(source._state);
+        _restore = std::move(source._restore);
+        source._restore.reset();
+        _expectedRevision        = source._expectedRevision;
+        _expectedEpoch           = source._expectedEpoch;
+        _published               = std::exchange(source._published, true);
+        _sampledResidency        = std::exchange(source._sampledResidency, false);
+        _requiresResidencyPermit = std::exchange(source._requiresResidencyPermit, false);
     }
     return *this;
 }
@@ -313,24 +313,24 @@ DocumentHistory::Publication& DocumentHistory::Publication::operator=(Publicatio
 DocumentHistory::StateView DocumentHistory::CaptureState() const noexcept
 {
     StateView view;
-    view.past         = _past;
-    view.future       = _future;
-    view.pending      = _pending;
-    view.storageIndex = _storageIndex;
-    view.owner        = this;
-    view.revision     = _revision;
-    view.epoch        = _stateEpoch;
-    view.depth        = _depth;
-    view.entryLimit   = _entryLimit;
-    view.byteLimit    = _retainedByteLimit;
+    view._past         = _past;
+    view._future       = _future;
+    view._pending      = _pending;
+    view._storageIndex = _storageIndex;
+    view._owner        = this;
+    view._revision     = _revision;
+    view._epoch        = _stateEpoch;
+    view._depth        = _depth;
+    view._entryLimit   = _entryLimit;
+    view._byteLimit    = _retainedByteLimit;
     return view;
 }
 
 bool DocumentHistory::IsCurrent(const StateView& view) const noexcept
 {
-    return view.owner == this && view.epoch == _stateEpoch && view.revision == _revision &&
-           (! view.requirePredecessor || (view.precedingPast.Identity() == _past.Identity() && view.precedingFuture.Identity() == _future.Identity() &&
-                                          view.precedingPending == _pending && view.precedingDepth == _depth));
+    return view._owner == this && view._epoch == _stateEpoch && view._revision == _revision &&
+           (! view._requirePredecessor || (view._precedingPast.Identity() == _past.Identity() && view._precedingFuture.Identity() == _future.Identity() &&
+                                           view._precedingPending == _pending && view._precedingDepth == _depth));
 }
 
 DocumentHistory::Authority DocumentHistory::CaptureAuthority() const noexcept
@@ -350,13 +350,13 @@ bool DocumentHistory::IsCurrent(const Authority& authority) const noexcept
 const std::wstring& DocumentHistory::StateView::UndoName() const noexcept
 {
     static const std::wstring empty;
-    return past.empty() ? empty : past.back()->name;
+    return _past.empty() ? empty : _past.back()->name;
 }
 
 const std::wstring& DocumentHistory::StateView::RedoName() const noexcept
 {
     static const std::wstring empty;
-    return future.empty() ? empty : future.back()->name;
+    return _future.empty() ? empty : _future.back()->name;
 }
 
 namespace
@@ -443,31 +443,31 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEdit(StateVi
                                                                          PrepareObserver observer,
                                                                          std::shared_ptr<const SharedPublicationMemory> memory)
 {
-    view.publicationMemory = std::move(memory);
-    if (! view.owner || cancellation.IsCancelled() || view.depth < 0 || (view.depth != 0 && ! view.pending))
+    view._publicationMemory = std::move(memory);
+    if (! view._owner || cancellation.IsCancelled() || view._depth < 0 || (view._depth != 0 && ! view._pending))
         return std::nullopt;
     Publication result;
-    result.expectedEpoch    = view.epoch;
-    result.expectedRevision = view.revision;
-    result.state            = std::move(view);
+    result._expectedEpoch    = view._epoch;
+    result._expectedRevision = view._revision;
+    result._state            = std::move(view);
     // Begin/End within an existing transaction does not close it or replace its opening snapshot/name.
-    if (result.state.depth != 0)
+    if (result._state._depth != 0)
         return result;
     const auto same = HistoryDocumentsEqual(before, after, cancellation);
     if (! same)
         return std::nullopt;
     if (same.value())
         return result;
-    Snapshot opening{{}, beforeActive, result.expectedRevision};
+    Snapshot opening{{}, beforeActive, result._expectedRevision};
     Snapshot finished{{}, afterActive, Guid::Generate()};
     if (! HistoryPrepareCheckpoint(observer, PrepareStage::BeforeSnapshot, cancellation) || ! CopyHistoryDocument(before, opening.document, cancellation))
         return std::nullopt;
-    auto openingOwner = SealSnapshot(std::move(opening), result.state, cancellation);
+    auto openingOwner = SealSnapshot(std::move(opening), result._state, cancellation);
     if (! openingOwner)
         return std::nullopt;
     if (! HistoryPrepareCheckpoint(observer, PrepareStage::AfterSnapshot, cancellation) || ! CopyHistoryDocument(after, finished.document, cancellation))
         return std::nullopt;
-    auto finishedOwner = SealSnapshot(std::move(finished), result.state, cancellation);
+    auto finishedOwner = SealSnapshot(std::move(finished), result._state, cancellation);
     if (! finishedOwner)
         return std::nullopt;
     if (! HistoryPrepareCheckpoint(observer, PrepareStage::Entry, cancellation))
@@ -480,45 +480,46 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEdit(StateVi
     const auto entryBounds = draftEntry.OwnershipBounds();
     if (! entryBounds)
         return std::nullopt;
-    auto entry = MakeLocallyOwnedPublicationObject<const Entry>(result.state.publicationMemory, entryBounds->ownershipBytes, nameBytes, std::move(draftEntry));
+    auto entry =
+        MakeLocallyOwnedPublicationObject<const Entry>(result._state._publicationMemory, entryBounds->ownershipBytes, nameBytes, std::move(draftEntry));
     if (! HistoryPrepareCheckpoint(observer, PrepareStage::StackGrowth, cancellation))
         return std::nullopt;
-    result.state.past.push_back(entry, result.state.publicationMemory);
-    result.state.future.clear();
-    result.state.revision = entry->after->revision;
-    if (! HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) || ! TrimPrepared(result.state, after, cancellation, observer))
+    result._state._past.push_back(entry, result._state._publicationMemory);
+    result._state._future.clear();
+    result._state._revision = entry->after->revision;
+    if (! HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) || ! TrimPrepared(result._state, after, cancellation, observer))
         return std::nullopt;
-    result.sampledResidency = true;
+    result._sampledResidency = true;
     return result;
 }
 
 std::optional<DocumentHistory::Publication> DocumentHistory::PrepareRestore(StateView view, bool redo, CancelToken cancellation, PrepareObserver observer)
 {
-    if (! view.owner || view.depth != 0 || cancellation.IsCancelled() || (redo ? view.future.empty() : view.past.empty()))
+    if (! view._owner || view._depth != 0 || cancellation.IsCancelled() || (redo ? view._future.empty() : view._past.empty()))
         return std::nullopt;
     Publication result;
-    result.expectedEpoch    = view.epoch;
-    result.expectedRevision = view.revision;
-    result.state            = std::move(view);
-    auto& source            = redo ? result.state.future : result.state.past;
-    auto& destination       = redo ? result.state.past : result.state.future;
-    const auto entry        = source.back();
-    const auto& snapshot    = *(redo ? entry->after : entry->before);
+    result._expectedEpoch    = view._epoch;
+    result._expectedRevision = view._revision;
+    result._state            = std::move(view);
+    auto& source             = redo ? result._state._future : result._state._past;
+    auto& destination        = redo ? result._state._past : result._state._future;
+    const auto entry         = source.back();
+    const auto& snapshot     = *(redo ? entry->after : entry->before);
     Snapshot restore{{}, snapshot.activeLayerID, snapshot.revision};
     restore.storageTopology = snapshot.storageTopology;
     if (! HistoryPrepareCheckpoint(observer, PrepareStage::RestoreSnapshot, cancellation) ||
         ! CopyHistoryDocument(snapshot.document, restore.document, cancellation))
         return std::nullopt;
-    result.restore = std::move(restore); // independent owner survives even if trim discards both entry handles
+    result._restore = std::move(restore); // independent owner survives even if trim discards both entry handles
     if (! HistoryPrepareCheckpoint(observer, PrepareStage::StackGrowth, cancellation))
         return std::nullopt;
     destination.push_back(entry);
     source.pop_back();
-    result.state.revision = snapshot.revision;
+    result._state._revision = snapshot.revision;
     if (! HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) ||
-        ! TrimPrepared(result.state, result.restore->document, cancellation, observer))
+        ! TrimPrepared(result._state, result._restore->document, cancellation, observer))
         return std::nullopt;
-    result.sampledResidency = true;
+    result._sampledResidency = true;
     return result;
 }
 
@@ -531,30 +532,30 @@ std::optional<DocumentHistory::ReplacementPublication> DocumentHistory::PrepareR
                                                                                            CancelToken cancellation,
                                                                                            PrepareObserver observer)
 {
-    if (! view.owner || view.depth < 0 || (view.depth != 0 && ! view.pending) ||
+    if (! view._owner || view._depth < 0 || (view._depth != 0 && ! view._pending) ||
         ! HistoryPrepareCheckpoint(observer, PrepareStage::ReplacementReset, cancellation))
         return std::nullopt;
-    const Guid expectedRevision       = view.revision;
-    const std::uint64_t expectedEpoch = view.epoch;
+    const Guid expectedRevision       = view._revision;
+    const std::uint64_t expectedEpoch = view._epoch;
     const Guid baselineRevision       = Guid::Generate();
-    view.past.clear();
-    view.future.clear();
-    view.pending.reset();
-    view.storageIndex.reset();
-    view.depth    = 0;
-    view.revision = baselineRevision;
-    auto prepared = PrepareEdit(std::move(view), baseline, baselineActive, after, afterActive, std::move(name), cancellation, observer);
+    view._past.clear();
+    view._future.clear();
+    view._pending.reset();
+    view._storageIndex.reset();
+    view._depth    = 0;
+    view._revision = baselineRevision;
+    auto prepared  = PrepareEdit(std::move(view), baseline, baselineActive, after, afterActive, std::move(name), cancellation, observer);
     if (! prepared || cancellation.IsCancelled())
         return std::nullopt;
     // PrepareEdit recorded its opening against the new saved baseline; only publication validates the old lineage.
-    prepared->expectedRevision = expectedRevision;
-    prepared->expectedEpoch    = expectedEpoch;
+    prepared->_expectedRevision = expectedRevision;
+    prepared->_expectedEpoch    = expectedEpoch;
     return ReplacementPublication(std::move(prepared.value()), baselineRevision);
 }
 
 bool DocumentHistory::CanPublishReplacement(const ReplacementPublication& publication) const noexcept
 {
-    return CanPublish(publication.history);
+    return CanPublish(publication._history);
 }
 
 std::optional<DocumentHistory::ReplacementPublication> DocumentHistory::PrepareSavedReplacement(StateView view,
@@ -566,16 +567,16 @@ std::optional<DocumentHistory::ReplacementPublication> DocumentHistory::PrepareS
 {
     auto result = PrepareReplacement(std::move(view), std::nullopt, std::nullopt, after, afterActive, std::move(name), cancellation, observer);
     if (result)
-        result->savedRevision = result->history.state.revision;
+        result->_savedRevision = result->_history._state._revision;
     return result;
 }
 
 bool DocumentHistory::PublishReplacement(ReplacementPublication& publication) noexcept
 {
-    if (! Publish(publication.history))
+    if (! Publish(publication._history))
         return false;
     // Unlike an edit/restore, validated document replacement deliberately installs a new saved lineage.
-    _savedRevision = publication.savedRevision;
+    _savedRevision = publication._savedRevision;
     return true;
 }
 
@@ -587,19 +588,20 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareBegin(StateV
                                                                           PrepareObserver observer,
                                                                           std::shared_ptr<const SharedPublicationMemory> memory)
 {
-    view.publicationMemory = std::move(memory);
-    if (! view.owner || view.depth < 0 || view.depth == (std::numeric_limits<int>::max)() || cancellation.IsCancelled() || (view.depth != 0 && ! view.pending))
+    view._publicationMemory = std::move(memory);
+    if (! view._owner || view._depth < 0 || view._depth == (std::numeric_limits<int>::max)() || cancellation.IsCancelled() ||
+        (view._depth != 0 && ! view._pending))
         return std::nullopt;
     Publication result;
-    result.expectedEpoch    = view.epoch;
-    result.expectedRevision = view.revision;
-    result.state            = std::move(view);
-    if (result.state.depth == 0)
+    result._expectedEpoch    = view._epoch;
+    result._expectedRevision = view._revision;
+    result._state            = std::move(view);
+    if (result._state._depth == 0)
     {
-        Snapshot opening{{}, active, result.expectedRevision};
+        Snapshot opening{{}, active, result._expectedRevision};
         if (! HistoryPrepareCheckpoint(observer, PrepareStage::PendingSnapshot, cancellation) || ! CopyHistoryDocument(before, opening.document, cancellation))
             return std::nullopt;
-        auto openingOwner = SealSnapshot(std::move(opening), result.state, cancellation);
+        auto openingOwner = SealSnapshot(std::move(opening), result._state, cancellation);
         if (! openingOwner)
             return std::nullopt;
         if (! HistoryPrepareCheckpoint(observer, PrepareStage::PendingRecord, cancellation))
@@ -610,14 +612,14 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareBegin(StateV
         if (! bounds || pending.name.capacity() > (maximum - 64) / sizeof(wchar_t) - 1)
             return std::nullopt;
         const auto nameBytes = (pending.name.capacity() + 1) * sizeof(wchar_t) + 64;
-        result.state.pending =
-            result.state.publicationMemory
-                ? MakeLocallyOwnedPublicationObject<const Pending>(result.state.publicationMemory, bounds->ownershipBytes, nameBytes, std::move(pending))
+        result._state._pending =
+            result._state._publicationMemory
+                ? MakeLocallyOwnedPublicationObject<const Pending>(result._state._publicationMemory, bounds->ownershipBytes, nameBytes, std::move(pending))
                 : std::make_shared<const Pending>(std::move(pending));
-        if (! result.state.pending)
+        if (! result._state._pending)
             return std::nullopt;
     }
-    ++result.state.depth;
+    ++result._state._depth;
     if (cancellation.IsCancelled())
         return std::nullopt;
     return result;
@@ -630,17 +632,17 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEnd(StateVie
                                                                         PrepareObserver observer,
                                                                         std::shared_ptr<const SharedPublicationMemory> memory)
 {
-    view.publicationMemory = std::move(memory);
-    if (! view.owner || view.depth <= 0 || ! view.pending || cancellation.IsCancelled())
+    view._publicationMemory = std::move(memory);
+    if (! view._owner || view._depth <= 0 || ! view._pending || cancellation.IsCancelled())
         return std::nullopt;
     Publication result;
-    result.expectedEpoch    = view.epoch;
-    result.expectedRevision = view.revision;
-    result.state            = std::move(view);
-    --result.state.depth;
-    if (result.state.depth != 0)
+    result._expectedEpoch    = view._epoch;
+    result._expectedRevision = view._revision;
+    result._state            = std::move(view);
+    --result._state._depth;
+    if (result._state._depth != 0)
         return result;
-    const auto pending = std::move(result.state.pending);
+    const auto pending = std::move(result._state._pending);
     const auto same    = HistoryDocumentsEqual(pending->before->document, after, cancellation);
     if (! same)
         return std::nullopt;
@@ -649,7 +651,7 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEnd(StateVie
     Snapshot finished{{}, active, Guid::Generate()};
     if (! HistoryPrepareCheckpoint(observer, PrepareStage::AfterSnapshot, cancellation) || ! CopyHistoryDocument(after, finished.document, cancellation))
         return std::nullopt;
-    auto finishedOwner = SealSnapshot(std::move(finished), result.state, cancellation);
+    auto finishedOwner = SealSnapshot(std::move(finished), result._state, cancellation);
     if (! finishedOwner)
         return std::nullopt;
     if (! HistoryPrepareCheckpoint(observer, PrepareStage::Entry, cancellation))
@@ -660,60 +662,61 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEnd(StateVie
     if (! bounds || draft.name.capacity() > (maximum - 64) / sizeof(wchar_t) - 1)
         return std::nullopt;
     const auto nameBytes = (draft.name.capacity() + 1) * sizeof(wchar_t) + 64;
-    const auto entry = result.state.publicationMemory
-                           ? MakeLocallyOwnedPublicationObject<const Entry>(result.state.publicationMemory, bounds->ownershipBytes, nameBytes, std::move(draft))
-                           : std::make_shared<const Entry>(std::move(draft));
+    const auto entry =
+        result._state._publicationMemory
+            ? MakeLocallyOwnedPublicationObject<const Entry>(result._state._publicationMemory, bounds->ownershipBytes, nameBytes, std::move(draft))
+            : std::make_shared<const Entry>(std::move(draft));
     if (! entry)
         return std::nullopt;
     if (! HistoryPrepareCheckpoint(observer, PrepareStage::StackGrowth, cancellation))
         return std::nullopt;
-    result.state.past.push_back(entry, result.state.publicationMemory);
-    result.state.future.clear();
-    result.state.revision = entry->after->revision;
-    if (! HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) || ! TrimPrepared(result.state, after, cancellation, observer))
+    result._state._past.push_back(entry, result._state._publicationMemory);
+    result._state._future.clear();
+    result._state._revision = entry->after->revision;
+    if (! HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) || ! TrimPrepared(result._state, after, cancellation, observer))
         return std::nullopt;
-    result.sampledResidency = true;
+    result._sampledResidency = true;
     return result;
 }
 
 bool DocumentHistory::CanPublish(const Publication& publication) const noexcept
 {
-    return ! publication.published && publication.state.owner == this && publication.expectedEpoch == _stateEpoch &&
-           publication.expectedRevision == _revision &&
-           (! publication.state.requirePredecessor ||
-            (publication.state.precedingPast.Identity() == _past.Identity() && publication.state.precedingFuture.Identity() == _future.Identity() &&
-             publication.state.precedingPending == _pending && publication.state.precedingDepth == _depth));
+    return ! publication._published && publication._state._owner == this && publication._expectedEpoch == _stateEpoch &&
+           publication._expectedRevision == _revision &&
+           (! publication._state._requirePredecessor ||
+            (publication._state._precedingPast.Identity() == _past.Identity() && publication._state._precedingFuture.Identity() == _future.Identity() &&
+             publication._state._precedingPending == _pending && publication._state._precedingDepth == _depth));
 }
 
 std::optional<DocumentHistory::StateView> DocumentHistory::FollowingPreparedState(const Publication& publication) noexcept
 {
-    if (publication.published || ! publication.state.owner || publication.state.epoch != publication.expectedEpoch ||
-        publication.expectedEpoch == (std::numeric_limits<std::uint64_t>::max)())
+    if (publication._published || ! publication._state._owner || publication._state._epoch != publication._expectedEpoch ||
+        publication._expectedEpoch == (std::numeric_limits<std::uint64_t>::max)())
         return std::nullopt;
-    auto state               = publication.state;
-    state.epoch              = publication.expectedEpoch + 1;
-    state.requirePredecessor = true;
-    state.precedingPast      = publication.state.past;
-    state.precedingFuture    = publication.state.future;
-    state.precedingPending   = publication.state.pending;
-    state.precedingDepth     = publication.state.depth;
+    auto state                = publication._state;
+    state._epoch              = publication._expectedEpoch + 1;
+    state._requirePredecessor = true;
+    state._precedingPast      = publication._state._past;
+    state._precedingFuture    = publication._state._future;
+    state._precedingPending   = publication._state._pending;
+    state._precedingDepth     = publication._state._depth;
     return state;
 }
 
 bool DocumentHistory::Publish(Publication& publication) noexcept
 {
-    if (! CanPublish(publication) || (publication.requiresResidencyPermit && ! publication.residencyPermit))
+    if (! CanPublish(publication) || (publication._requiresResidencyPermit && ! publication._residencyPermit))
         return false;
-    _past.swap(publication.state.past);
-    _future.swap(publication.state.future);
-    _pending.swap(publication.state.pending);
-    _storageIndex.swap(publication.state.storageIndex);
-    std::swap(_depth, publication.state.depth);
-    std::swap(_revision, publication.state.revision);
+    _past.swap(publication._state._past);
+    _future.swap(publication._state._future);
+    _pending.swap(publication._state._pending);
+    _storageIndex.swap(publication._state._storageIndex);
+    std::swap(_depth, publication._state._depth);
+    std::swap(_revision, publication._state._revision);
     ++_stateEpoch;
-    publication.published = true;
-    if (publication.residencyPermit)
-        publication.residencyPermit->Reset();
+    publication._published = true;
+    if (publication._residencyPermit)
+        publication._residencyPermit->Reset();
     // Saved revision belongs to the owner and can have changed while this publication was prepared.
     return true;
 }
@@ -1433,7 +1436,7 @@ struct DocumentHistory::StorageIndex final : DeferredReleaseNode
 #pragma warning(pop)
 std::shared_ptr<const HistoryStorageTopology> DocumentHistory::CurrentStorageTopology(const StateView& state) noexcept
 {
-    return state.storageIndex ? state.storageIndex->current : nullptr;
+    return state._storageIndex ? state._storageIndex->current : nullptr;
 }
 
 std::optional<RecordOwnershipBounds> DocumentHistory::Snapshot::OwnershipBounds() const noexcept
@@ -1680,16 +1683,16 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
     if (! currentTopology)
         return false;
     std::vector<EntryHandle> removalOrder;
-    removalOrder.reserve(state.past.size() + state.future.size());
-    for (const auto& entry : state.past)
+    removalOrder.reserve(state._past.size() + state._future.size());
+    for (const auto& entry : state._past)
         removalOrder.push_back(entry);
-    for (const auto& entry : state.future)
+    for (const auto& entry : state._future)
         removalOrder.push_back(entry);
-    auto index = StorageIndex::Update(state.storageIndex, removalOrder, currentTopology, state.publicationMemory, cancellation, observer);
+    auto index = StorageIndex::Update(state._storageIndex, removalOrder, currentTopology, state._publicationMemory, cancellation, observer);
     if (! index)
         return false;
     std::size_t drop = 0;
-    while (removalOrder.size() - drop > static_cast<std::size_t>(state.entryLimit) || index->retainedBytes > state.byteLimit)
+    while (removalOrder.size() - drop > static_cast<std::size_t>(state._entryLimit) || index->retainedBytes > state._byteLimit)
     {
         if (cancellation.IsCancelled() || drop == removalOrder.size() || ! index->RemoveEntry(removalOrder[drop].get(), cancellation, observer))
             return false;
@@ -1697,58 +1700,58 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
     }
     if (! HistoryPrepareCheckpoint(observer, PrepareStage::StorageIndexBounds, cancellation) || ! index->CacheBounds(cancellation))
         return false;
-    const auto dropPast = (std::min)(drop, state.past.size());
-    state.past.erase(state.past.begin(), state.past.begin() + static_cast<std::ptrdiff_t>(dropPast), state.publicationMemory);
+    const auto dropPast = (std::min)(drop, state._past.size());
+    state._past.erase(state._past.begin(), state._past.begin() + static_cast<std::ptrdiff_t>(dropPast), state._publicationMemory);
     drop -= dropPast;
-    state.future.erase(state.future.begin(), state.future.begin() + static_cast<std::ptrdiff_t>(drop), state.publicationMemory);
-    index->publicationMemory = state.publicationMemory;
-    if (state.publicationMemory)
+    state._future.erase(state._future.begin(), state._future.begin() + static_cast<std::ptrdiff_t>(drop), state._publicationMemory);
+    index->publicationMemory = state._publicationMemory;
+    if (state._publicationMemory)
     {
         const auto retiredBytes = index->ownershipBytes;
-        state.storageIndex      = MakeLocallyOwnedPublicationObject<const StorageIndex>(state.publicationMemory, retiredBytes, 0, std::move(*index));
+        state._storageIndex     = MakeLocallyOwnedPublicationObject<const StorageIndex>(state._publicationMemory, retiredBytes, 0, std::move(*index));
     }
     else
     {
         // The archived behavioral reference adapter already owns an intrusive retirement node. Preserve its exact
         // whole-index deferred destruction and cached bound rather than allocating a different wrapper.
-        auto* raw          = index.release();
-        state.storageIndex = std::shared_ptr<const StorageIndex>(raw, StorageIndex::Retire{}, PublicationGraphAllocator<StorageIndex>{{}});
+        auto* raw           = index.release();
+        state._storageIndex = std::shared_ptr<const StorageIndex>(raw, StorageIndex::Retire{}, PublicationGraphAllocator<StorageIndex>{{}});
     }
     return ! cancellation.IsCancelled();
 }
 
 DocumentHistory::ResidencyValidation DocumentHistory::ResidencyPermit::TryAcquire(Publication& publication) noexcept
 {
-    if (_publication || _lease.Held() || publication.published || ! publication.state.owner)
+    if (_publication || _lease.Held() || publication._published || ! publication._state._owner)
         return ResidencyValidation::Invalid;
-    if (! publication.sampledResidency)
+    if (! publication._sampledResidency)
         return ResidencyValidation::Ready; // Begin/nested/no-op does not publish a new resident trim decision
-    if (! publication.state.storageIndex)
+    if (! publication._state._storageIndex)
         return ResidencyValidation::Invalid;
-    publication.requiresResidencyPermit = true;
+    publication._requiresResidencyPermit = true;
     if (! _lease.TryAcquire())
         return ResidencyValidation::Busy;
-    if (publication.state.storageIndex->residencyEpoch != Raster::ResidencyEpoch())
+    if (publication._state._storageIndex->residencyEpoch != Raster::ResidencyEpoch())
     {
         _lease.Reset();
         return ResidencyValidation::Refresh;
     }
-    _publication                = &publication;
-    publication.residencyPermit = this;
+    _publication                 = &publication;
+    publication._residencyPermit = this;
     return ResidencyValidation::Ready;
 }
 
 void DocumentHistory::ResidencyPermit::Reset() noexcept
 {
-    if (_publication && _publication->residencyPermit == this)
-        _publication->residencyPermit = nullptr;
+    if (_publication && _publication->_residencyPermit == this)
+        _publication->_residencyPermit = nullptr;
     _publication = nullptr;
     _lease.Reset();
 }
 
 DocumentHistory::ResidencyValidation DocumentHistory::ResidencyPermit::TryAcquire(ReplacementPublication& publication) noexcept
 {
-    return TryAcquire(publication.history);
+    return TryAcquire(publication._history);
 }
 
 bool DocumentHistory::RefreshPreparedResidency(ReplacementPublication& publication,
@@ -1756,7 +1759,7 @@ bool DocumentHistory::RefreshPreparedResidency(ReplacementPublication& publicati
                                                CancelToken cancellation,
                                                PrepareObserver observer)
 {
-    return RefreshPreparedResidency(publication.history, current, cancellation, observer);
+    return RefreshPreparedResidency(publication._history, current, cancellation, observer);
 }
 
 bool DocumentHistory::RefreshPreparedResidency(Publication& publication,
@@ -1764,24 +1767,24 @@ bool DocumentHistory::RefreshPreparedResidency(Publication& publication,
                                                CancelToken cancellation,
                                                PrepareObserver observer)
 {
-    if (publication.published || ! publication.state.owner || publication.residencyPermit || cancellation.IsCancelled())
+    if (publication._published || ! publication._state._owner || publication._residencyPermit || cancellation.IsCancelled())
         return false;
-    if (! publication.sampledResidency)
+    if (! publication._sampledResidency)
         return true;
-    if (! publication.state.storageIndex || ! publication.state.storageIndex->current || ! publication.state.storageIndex->current->Matches(current))
+    if (! publication._state._storageIndex || ! publication._state._storageIndex->current || ! publication._state._storageIndex->current->Matches(current))
         return false;
     // Contention alone does not invalidate the resident witness. Wait on the worker with its stop token,
     // then avoid cloning/rebuilding the index if no cache grew. A later growth is still caught by owner try.
     auto residency = Raster::AcquireResidencyLease(cancellation);
     if (! residency.Held())
         return false;
-    if (publication.state.storageIndex->residencyEpoch == Raster::ResidencyEpoch())
+    if (publication._state._storageIndex->residencyEpoch == Raster::ResidencyEpoch())
         return ! cancellation.IsCancelled();
     residency.Reset();
-    auto candidate = publication.state;
+    auto candidate = publication._state;
     if (! TrimPrepared(candidate, current, cancellation, observer) || cancellation.IsCancelled())
         return false;
-    publication.state = std::move(candidate);
+    publication._state = std::move(candidate);
     return true;
 }
 
@@ -1795,14 +1798,14 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareResidencyMai
                                                                                          CancelToken cancellation,
                                                                                          PrepareObserver observer)
 {
-    if (! view.owner || cancellation.IsCancelled())
+    if (! view._owner || cancellation.IsCancelled())
         return std::nullopt;
     Publication result;
-    result.expectedEpoch    = view.epoch;
-    result.expectedRevision = view.revision;
-    result.state            = std::move(view);
-    if (! HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) || ! TrimPrepared(result.state, current, cancellation, observer))
+    result._expectedEpoch    = view._epoch;
+    result._expectedRevision = view._revision;
+    result._state            = std::move(view);
+    if (! HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) || ! TrimPrepared(result._state, current, cancellation, observer))
         return std::nullopt;
-    result.sampledResidency = true;
+    result._sampledResidency = true;
     return result;
 }

@@ -2,7 +2,7 @@
 Checks: '-*,bugprone-reserved-identifier,readability-identifier-naming'
 WarningsAsErrors: 'bugprone-reserved-identifier,readability-identifier-naming'
 HeaderFilterRegex: '(^|[/\\])(Common|RedPrism|Tests)[/\\].*\.(h|hpp)$'
-ExcludeHeaderFilterRegex: '(^|[/\\])Common[/\\]BoundedClipper[/\\]'
+ExcludeHeaderFilterRegex: '(^|[/\\])(Common[/\\]BoundedClipper|ThirdParty|\.ci-engine|\.build[/\\](dependencies|vcpkg_installed))[/\\]'
 CheckOptions:
   - key: readability-identifier-naming.PrivateMemberCase
     value: camelBack

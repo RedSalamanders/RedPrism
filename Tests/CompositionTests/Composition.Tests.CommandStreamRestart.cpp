@@ -65,90 +65,90 @@ class Parent final : public Job, public GpuCommandSourceReceiver
         AwaitGpu,
         Retire
     };
-    JobScheduler& jobs;
-    GpuWorkQueue& queue;
-    GpuCommandPump& commands;
-    RestartPump& pump;
-    Observation& observation;
-    ID3D11Device& device;
-    const DWORD ownerThread = GetCurrentThreadId();
-    GpuCommandStream stream;
-    GpuCommandSourceLease source;
-    GpuCompletionContext retiredCapture;
-    Stage stage    = Stage::Open;
-    unsigned round = 0;
-    wil::com_ptr_nothrow<ID3D11DeviceContext> deferred;
-    std::unique_ptr<GpuRecordingCommands> recording;
-    bool producerFinished       = false;
-    std::uint32_t firstProducer = 0;
+    JobScheduler& _jobs;
+    GpuWorkQueue& _queue;
+    GpuCommandPump& _commands;
+    RestartPump& _pump;
+    Observation& _observation;
+    ID3D11Device& _device;
+    const DWORD _ownerThread = GetCurrentThreadId();
+    GpuCommandStream _stream;
+    GpuCommandSourceLease _source;
+    GpuCompletionContext _retiredCapture;
+    Stage _stage    = Stage::Open;
+    unsigned _round = 0;
+    wil::com_ptr_nothrow<ID3D11DeviceContext> _deferred;
+    std::unique_ptr<GpuRecordingCommands> _recording;
+    bool _producerFinished       = false;
+    std::uint32_t _firstProducer = 0;
 
     void Resume(Stage next, JobExecutionLane lane = JobExecutionLane::Compute) noexcept
     {
-        stage = next;
-        if (! jobs.Resume(observation.original, lane))
+        _stage = next;
+        if (! _jobs.Resume(_observation.original, lane))
             std::terminate();
     }
 
 public:
     Parent(JobScheduler& j, GpuWorkQueue& q, GpuCommandPump& c, RestartPump& p, Observation& o, ID3D11Device& d) noexcept
-        : jobs(j),
-          queue(q),
-          commands(c),
-          pump(p),
-          observation(o),
-          device(d)
+        : _jobs(j),
+          _queue(q),
+          _commands(c),
+          _pump(p),
+          _observation(o),
+          _device(d)
     {
     }
     JobResult Run(JobContext& context) override
     {
-        if (stage != Stage::Record)
+        if (_stage != Stage::Record)
             return {};
-        producerFinished   = false;
+        _producerFinished  = false;
         HRESULT result     = E_FAIL;
         const auto produce = [&]() noexcept
         {
             const auto finish = wil::scope_exit([&]() noexcept
             {
-                stream.FinishProducerForWork(result);
-                producerFinished = true;
+                _stream.FinishProducerForWork(result);
+                _producerFinished = true;
             });
-            if (round == 0)
+            if (_round == 0)
             {
-                firstProducer = GetCurrentThreadId();
-                result        = device.CreateDeferredContext(0, deferred.put());
+                _firstProducer = GetCurrentThreadId();
+                result         = _device.CreateDeferredContext(0, _deferred.put());
                 if (SUCCEEDED(result))
-                    result = recording->InitializeForWork(deferred.get(), stream, context.cancellation);
-                Expect(SUCCEEDED(result) && stream.ProductionEpochForWork() == 1, "private-policy-initializes-on-original-first-epoch");
+                    result = _recording->InitializeForWork(_deferred.get(), _stream, context.cancellation);
+                Expect(SUCCEEDED(result) && _stream.ProductionEpochForWork() == 1, "private-policy-initializes-on-original-first-epoch");
             }
             else
             {
-                Expect(static_cast<std::int32_t>(recording->StatusForWork()) == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID)),
+                Expect(static_cast<std::int32_t>(_recording->StatusForWork()) == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID)),
                        "old-private-policy-cannot-record-before-fresh-epoch-rebind");
-                Expect(round != 1 || GetCurrentThreadId() != firstProducer, "second-production-stage-uses-a-different-actual-thread");
+                Expect(_round != 1 || GetCurrentThreadId() != _firstProducer, "second-production-stage-uses-a-different-actual-thread");
                 std::stop_source cancelled;
                 (void)cancelled.request_stop();
-                Expect(recording->RestartForWork(deferred.get(), stream, CancelToken(cancelled.get_token())) == E_ABORT,
+                Expect(_recording->RestartForWork(_deferred.get(), _stream, CancelToken(cancelled.get_token())) == E_ABORT,
                        "cancelled-rebind-refuses-without-consuming-fresh-epoch");
                 GpuCommandStream foreign;
-                Expect(IsInvalidArgument(recording->RestartForWork(deferred.get(), foreign, {})), "foreign-original-stream-cannot-rebind-private-policy");
-                Expect(IsInvalidArgument(recording->RestartForWork(nullptr, stream, {})), "foreign-context-cannot-rebind-private-policy");
-                result = recording->RestartForWork(deferred.get(), stream, context.cancellation);
-                Expect(SUCCEEDED(result) && stream.ProductionEpochForWork() == round + 1, "joined-original-restart-rebinds-existing-private-residency");
+                Expect(IsInvalidArgument(_recording->RestartForWork(_deferred.get(), foreign, {})), "foreign-original-stream-cannot-rebind-private-policy");
+                Expect(IsInvalidArgument(_recording->RestartForWork(nullptr, _stream, {})), "foreign-context-cannot-rebind-private-policy");
+                result = _recording->RestartForWork(_deferred.get(), _stream, context.cancellation);
+                Expect(SUCCEEDED(result) && _stream.ProductionEpochForWork() == _round + 1, "joined-original-restart-rebinds-existing-private-residency");
             }
             if (FAILED(result))
                 return;
-            Expect(static_cast<std::int32_t>(recording->RestartForWork(deferred.get(), stream, {})) ==
+            Expect(static_cast<std::int32_t>(_recording->RestartForWork(_deferred.get(), _stream, {})) ==
                        static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
                    "same-production-epoch-cannot-rebind-private-policy-twice");
-            Expect(recording->ContextStatusForWork(&device, deferred.get()) == S_OK, "rebound-policy-keeps-exact-private-device-and-context");
-            recording->CheckpointForWork();
-            result = recording->StatusForWork();
+            Expect(_recording->ContextStatusForWork(&_device, _deferred.get()) == S_OK, "rebound-policy-keeps-exact-private-device-and-context");
+            _recording->CheckpointForWork();
+            result = _recording->StatusForWork();
         };
-        if (! recording)
-            recording = std::make_unique<GpuRecordingCommands>();
-        if (round == 1)
+        if (! _recording)
+            _recording = std::make_unique<GpuRecordingCommands>();
+        if (_round == 1)
         {
-            Expect(static_cast<std::int32_t>(recording->StatusForWork()) == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
+            Expect(static_cast<std::int32_t>(_recording->StatusForWork()) == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
                    "previous-producer-cannot-use-policy-after-original-epoch-advances");
             std::thread nextProducer(produce);
             nextProducer.join();
@@ -159,56 +159,56 @@ public:
     }
     void RetireWorkerStage(JobContext&, JobResult result) noexcept override
     {
-        if (stage == Stage::Record && ! producerFinished)
-            stream.FinishProducerForWork(result.status == JobStatus::Finished ? S_OK : E_FAIL);
-        if (stage == Stage::Retire)
+        if (_stage == Stage::Record && ! _producerFinished)
+            _stream.FinishProducerForWork(result.status == JobStatus::Finished ? S_OK : E_FAIL);
+        if (_stage == Stage::Retire)
         {
-            observation.allRetirementsOffOwner &= GetCurrentThreadId() != ownerThread;
-            if (! stream.RetireForWork())
+            _observation.allRetirementsOffOwner &= GetCurrentThreadId() != _ownerThread;
+            if (! _stream.RetireForWork())
                 std::terminate();
-            retiredCapture = {};
-            if (round == 2)
+            _retiredCapture = {};
+            if (_round == 2)
             {
-                recording.reset();
-                deferred.reset();
+                _recording.reset();
+                _deferred.reset();
             }
         }
     }
     bool DeferRetirement(JobResult result, JobTicket ticket) noexcept override
     {
-        if (ticket != observation.original || result.status != JobStatus::Finished)
+        if (ticket != _observation.original || result.status != JobStatus::Finished)
             std::terminate();
-        switch (stage)
+        switch (_stage)
         {
             case Stage::Open:
-                Expect(IsInvalidArgument(stream.RestartOwner()), "uninitialized-stream-refuses-restart");
-                if (FAILED(stream.InitializeOwner(jobs, ticket, queue.DeviceGeneration())) || FAILED(commands.AttachOwner(stream, ticket, *this, source)))
+                Expect(IsInvalidArgument(_stream.RestartOwner()), "uninitialized-stream-refuses-restart");
+                if (FAILED(_stream.InitializeOwner(_jobs, ticket, _queue.DeviceGeneration())) || FAILED(_commands.AttachOwner(_stream, ticket, *this, _source)))
                     std::terminate();
-                Expect(IsInvalidArgument(stream.RestartOwner()), "unretired-producer-refuses-restart-in-exact-callback");
+                Expect(IsInvalidArgument(_stream.RestartOwner()), "unretired-producer-refuses-restart-in-exact-callback");
                 Resume(Stage::Record, JobExecutionLane::GpuRecording);
                 return true;
             case Stage::Record:
-                ++observation.joinedRecorders;
-                Expect(IsInvalidArgument(stream.RestartOwner()), "joined-recording-without-worker-retirement-refuses-restart");
-                stage = Stage::AwaitGpu;
-                jobs.NotifyOwnerWork();
+                ++_observation.joinedRecorders;
+                Expect(IsInvalidArgument(_stream.RestartOwner()), "joined-recording-without-worker-retirement-refuses-restart");
+                _stage = Stage::AwaitGpu;
+                _jobs.NotifyOwnerWork();
                 return true;
             case Stage::Retire:
             {
-                ++observation.retiredStreams;
-                if (++round == 3)
+                ++_observation.retiredStreams;
+                if (++_round == 3)
                 {
-                    stream.RequestStopOwner();
-                    Expect(IsInvalidArgument(stream.RestartOwner()), "stopped-stream-cannot-restart-even-after-join");
+                    _stream.RequestStopOwner();
+                    Expect(IsInvalidArgument(_stream.RestartOwner()), "stopped-stream-cannot-restart-even-after-join");
                     return false;
                 }
                 HRESULT foreignResult = S_OK;
-                std::thread foreign([&]() noexcept { foreignResult = stream.RestartOwner(); });
+                std::thread foreign([&]() noexcept { foreignResult = _stream.RestartOwner(); });
                 foreign.join();
                 Expect(IsInvalidArgument(foreignResult), "foreign-thread-cannot-restart-joined-stream");
-                Expect(SUCCEEDED(stream.RestartOwner()), "exact-original-joined-callback-restarts-existing-stream");
-                Expect(stream.BelongsToOwner(jobs, ticket, queue.DeviceGeneration()), "restart-retains-original-ticket-and-device");
-                if (FAILED(commands.AttachOwner(stream, ticket, *this, source)))
+                Expect(SUCCEEDED(_stream.RestartOwner()), "exact-original-joined-callback-restarts-existing-stream");
+                Expect(_stream.BelongsToOwner(_jobs, ticket, _queue.DeviceGeneration()), "restart-retains-original-ticket-and-device");
+                if (FAILED(_commands.AttachOwner(_stream, ticket, *this, _source)))
                     std::terminate();
                 Resume(Stage::Record, JobExecutionLane::GpuRecording);
                 return true;
@@ -219,18 +219,18 @@ public:
     }
     void Completed(JobResult result) noexcept override
     {
-        Expect(IsInvalidArgument(stream.RestartOwner()), "terminal-callback-has-no-restart-authority");
-        observation.terminal = result;
-        observation.finished = true;
-        pump.parent          = nullptr;
+        Expect(IsInvalidArgument(_stream.RestartOwner()), "terminal-callback-has-no-restart-authority");
+        _observation.terminal = result;
+        _observation.finished = true;
+        _pump.parent          = nullptr;
     }
     void CommandAcknowledgedOwner(JobTicket ticket, GpuCommandLease command, HRESULT result) noexcept override
     {
-        if (ticket != observation.original || command.source != ticket || FAILED(result) || round >= 3)
+        if (ticket != _observation.original || command.source != ticket || FAILED(result) || _round >= 3)
             std::terminate();
-        observation.commands[round] = command;
-        ++observation.gpuAcknowledgements;
-        jobs.NotifyOwnerWork();
+        _observation.commands[_round] = command;
+        ++_observation.gpuAcknowledgements;
+        _jobs.NotifyOwnerWork();
     }
     void CommandSourceFailedOwner(JobTicket, HRESULT) noexcept override
     {
@@ -238,23 +238,23 @@ public:
     }
     bool Ready() const noexcept
     {
-        return stage == Stage::AwaitGpu && stream.CanRetireOwner();
+        return _stage == Stage::AwaitGpu && _stream.CanRetireOwner();
     }
     void PumpOwner() noexcept
     {
         if (! Ready())
             return;
-        Expect(IsInvalidArgument(stream.RestartOwner()), "owner-pump-without-original-joined-callback-refuses-restart");
-        if (round == 2)
+        Expect(IsInvalidArgument(_stream.RestartOwner()), "owner-pump-without-original-joined-callback-refuses-restart");
+        if (_round == 2)
         {
-            const auto old     = observation.commands[0];
-            const auto current = observation.commands[2];
+            const auto old     = _observation.commands[0];
+            const auto current = _observation.commands[2];
             Expect(old.ordinal == 1 && current.ordinal == 3 && old.slot == current.slot, "reused-physical-slot-has-monotonic-original-command-ordinal");
-            Expect(! stream.AcknowledgeOwner(old) && ! stream.BeginExecuteOwner(old), "old-command-lease-cannot-acknowledge-or-execute-reused-slot");
+            Expect(! _stream.AcknowledgeOwner(old) && ! _stream.BeginExecuteOwner(old), "old-command-lease-cannot-acknowledge-or-execute-reused-slot");
         }
-        if (! commands.DetachOwner(source, retiredCapture) || ! stream.AuthorizeRetirementOwner())
+        if (! _commands.DetachOwner(_source, _retiredCapture) || ! _stream.AuthorizeRetirementOwner())
             std::terminate();
-        source = {};
+        _source = {};
         Resume(Stage::Retire);
     }
 };

@@ -176,78 +176,78 @@ class Parent final : public Job, public GpuCommandSourceReceiver
     };
 #pragma warning(pop)
 
-    JobScheduler& jobs;
-    GpuWorkQueue& queue;
-    GpuCommandPump& commands;
-    CommittedDisplayController& display;
-    Client& client;
-    ParentPump& pump;
-    Observation& observation;
-    const std::uint32_t ownerThread;
-    std::unique_ptr<Payload> payload;
-    CommittedDisplayPublicationSlot slot;
-    CommittedDisplaySeedLease seed;
-    GpuResidencyReservation gpu;
-    GpuCommandSourceLease commandSource;
-    Stage stage            = Stage::Allocate;
-    bool recordingJoined   = false;
-    bool streamInitialized = false;
-    bool producerFinished  = false;
-    HRESULT terminal       = S_OK;
-    bool published         = false;
+    JobScheduler& _jobs;
+    GpuWorkQueue& _queue;
+    GpuCommandPump& _commands;
+    CommittedDisplayController& _display;
+    Client& _client;
+    ParentPump& _pump;
+    Observation& _observation;
+    const std::uint32_t _ownerThread;
+    std::unique_ptr<Payload> _payload;
+    CommittedDisplayPublicationSlot _slot;
+    CommittedDisplaySeedLease _seed;
+    GpuResidencyReservation _gpu;
+    GpuCommandSourceLease _commandSource;
+    Stage _stage            = Stage::Allocate;
+    bool _recordingJoined   = false;
+    bool _streamInitialized = false;
+    bool _producerFinished  = false;
+    HRESULT _terminal       = S_OK;
+    bool _published         = false;
 
     void Resume(Stage next, JobExecutionLane lane = JobExecutionLane::Compute) noexcept
     {
-        stage = next;
-        if (! jobs.Resume(observation.original, lane))
+        _stage = next;
+        if (! _jobs.Resume(_observation.original, lane))
             std::terminate();
     }
 
 public:
     Parent(JobScheduler& j, GpuWorkQueue& q, GpuCommandPump& c, CommittedDisplayController& d, Client& cl, ParentPump& p, Observation& o) noexcept
-        : jobs(j),
-          queue(q),
-          commands(c),
-          display(d),
-          client(cl),
-          pump(p),
-          observation(o),
-          ownerThread(GetCurrentThreadId())
+        : _jobs(j),
+          _queue(q),
+          _commands(c),
+          _display(d),
+          _client(cl),
+          _pump(p),
+          _observation(o),
+          _ownerThread(GetCurrentThreadId())
     {
     }
 
     JobResult Run(JobContext& context) override
     {
-        observation.usefulWorkersOffOwner &= GetCurrentThreadId() != ownerThread;
-        ++observation.runs;
-        if (stage == Stage::Allocate)
-            payload = std::make_unique<Payload>();
-        else if (stage == Stage::Prepare)
+        _observation.usefulWorkersOffOwner &= GetCurrentThreadId() != _ownerThread;
+        ++_observation.runs;
+        if (_stage == Stage::Allocate)
+            _payload = std::make_unique<Payload>();
+        else if (_stage == Stage::Prepare)
         {
-            auto draft = CanvasDocumentDraft::Clone(payload->source, 1, context.cancellation);
+            auto draft = CanvasDocumentDraft::Clone(_payload->source, 1, context.cancellation);
             if (! draft)
                 return {JobStatus::Failed, E_INVALIDARG};
             draft->EditLayers()[0].opacity = 0.5;
             auto sealed                    = draft->Seal(context.cancellation);
             if (! sealed)
                 return {JobStatus::Failed, E_INVALIDARG};
-            payload->source    = std::move(*sealed);
-            payload->admission = RasterResidencyCpuAdmission::Estimate(payload->source, {16384, queueGeneration, 1024 * 1024, 128 * 1024});
-            payload->memory    = SharedPublicationMemory::CreateForWork();
-            payload->prepared  = PreparedCommittedDisplay::PrepareForWork(ownerThread,
-                                                                          payload->source,
-                                                                          payload->admission,
-                                                                          kParentBytes,
-                                                                          payload->device.get(),
-                                                                          payload->context.get(),
-                                                                          std::move(payload->captured),
-                                                                          context.cancellation);
-            if (! payload->prepared)
+            _payload->source    = std::move(*sealed);
+            _payload->admission = RasterResidencyCpuAdmission::Estimate(_payload->source, {16384, queueGeneration, 1024 * 1024, 128 * 1024});
+            _payload->memory    = SharedPublicationMemory::CreateForWork();
+            _payload->prepared  = PreparedCommittedDisplay::PrepareForWork(_ownerThread,
+                                                                           _payload->source,
+                                                                           _payload->admission,
+                                                                           kParentBytes,
+                                                                           _payload->device.get(),
+                                                                           _payload->context.get(),
+                                                                           std::move(_payload->captured),
+                                                                           context.cancellation);
+            if (! _payload->prepared)
                 return {JobStatus::Failed, E_OUTOFMEMORY};
         }
-        else if (stage == Stage::Record)
+        else if (_stage == Stage::Record)
         {
-            const HRESULT status = payload->prepared->RecordForWork(payload->stream, context.cancellation, seed.GraphForWork());
+            const HRESULT status = _payload->prepared->RecordForWork(_payload->stream, context.cancellation, _seed.GraphForWork());
             return FAILED(status) ? JobResult{JobStatus::Failed, status} : JobResult{};
         }
         return {};
@@ -256,34 +256,34 @@ public:
 
     void RetireWorkerStage(JobContext&, JobResult result) noexcept override
     {
-        if (stage == Stage::Record && ! producerFinished)
+        if (_stage == Stage::Record && ! _producerFinished)
         {
-            payload->stream.FinishProducerForWork(result.status == JobStatus::Finished ? S_OK : result.status == JobStatus::Failed ? result.error : E_ABORT);
-            producerFinished = true;
+            _payload->stream.FinishProducerForWork(result.status == JobStatus::Finished ? S_OK : result.status == JobStatus::Failed ? result.error : E_ABORT);
+            _producerFinished = true;
         }
-        if (stage == Stage::RetireStream)
+        if (_stage == Stage::RetireStream)
         {
-            if (! payload->stream.RetireForWork())
+            if (! _payload->stream.RetireForWork())
                 std::terminate();
-            observation.streamRetiredOffOwner = GetCurrentThreadId() != ownerThread;
+            _observation.streamRetiredOffOwner = GetCurrentThreadId() != _ownerThread;
         }
-        if (stage == Stage::Cleanup)
+        if (_stage == Stage::Cleanup)
         {
             // Adoption consumed the graph, so this destructor cannot hide partial GPU retirement.
-            if (! published || ! payload || ! payload->prepared)
+            if (! _published || ! _payload || ! _payload->prepared)
                 std::terminate();
-            payload.reset();
-            observation.payloadRetiredOffOwner = GetCurrentThreadId() != ownerThread;
+            _payload.reset();
+            _observation.payloadRetiredOffOwner = GetCurrentThreadId() != _ownerThread;
         }
     }
     bool DeferRetirement(JobResult result, JobTicket ticket) noexcept override
     {
-        if (ticket != observation.original)
+        if (ticket != _observation.original)
             std::terminate();
-        ++observation.acknowledgements;
-        if (result.status != JobStatus::Finished || FAILED(terminal))
+        ++_observation.acknowledgements;
+        if (result.status != JobStatus::Finished || FAILED(_terminal))
             std::terminate(); // Success probe must not accidentally qualify failure cleanup.
-        switch (stage)
+        switch (_stage)
         {
             case Stage::Allocate:
             {
@@ -294,48 +294,50 @@ public:
                 wrongSlot.slot = (ticket.slot + 1) % JobScheduler::kCapacity;
                 CommittedDisplayPublicationSlot foreignClaim;
                 Expect("successful-joined-callback-authorizes-only-its-exact-original-ticket",
-                       jobs.InAcknowledgedJobCallback(ticket) && ! jobs.InAcknowledgedJobCallback(wrongGeneration) &&
-                           ! jobs.InAcknowledgedJobCallback(wrongSlot) && ! display.ClaimPublicationSlotOwner(wrongGeneration, foreignClaim) && ! foreignClaim);
-                if (! client.DescribeCommittedDisplayOwner(descriptor) || ! display.ClaimPublicationSlotOwner(ticket, slot) ||
-                    ! display.AcquirePublishedSeedOwner(descriptor.key, seed))
+                       _jobs.InAcknowledgedJobCallback(ticket) && ! _jobs.InAcknowledgedJobCallback(wrongGeneration) &&
+                           ! _jobs.InAcknowledgedJobCallback(wrongSlot) && ! _display.ClaimPublicationSlotOwner(wrongGeneration, foreignClaim) &&
+                           ! foreignClaim);
+                if (! _client.DescribeCommittedDisplayOwner(descriptor) || ! _display.ClaimPublicationSlotOwner(ticket, _slot) ||
+                    ! _display.AcquirePublishedSeedOwner(descriptor.key, _seed))
                     std::terminate();
-                Expect("original-owner-preclaims-fixed-slot-and-exact-cached-seed", bool(slot) && bool(seed));
+                Expect("original-owner-preclaims-fixed-slot-and-exact-cached-seed", bool(_slot) && bool(_seed));
                 CommittedDisplayPublicationSlot second;
-                const auto charged = jobs.ReservedMemoryBytes();
+                const auto charged = _jobs.ReservedMemoryBytes();
                 Expect("second-publication-slot-refuses-without-changing-charge",
-                       ! display.ClaimPublicationSlotOwner(ticket, second) && ! second && jobs.ReservedMemoryBytes() == charged);
-                payload->source  = *descriptor.document;
-                payload->device  = descriptor.device;
-                payload->context = descriptor.immediate;
-                queueGeneration  = descriptor.key.deviceGeneration;
-                if (FAILED(queue.CaptureCompletionContext(payload->captured)))
+                       ! _display.ClaimPublicationSlotOwner(ticket, second) && ! second && _jobs.ReservedMemoryBytes() == charged);
+                _payload->source  = *descriptor.document;
+                _payload->device  = descriptor.device;
+                _payload->context = descriptor.immediate;
+                queueGeneration   = descriptor.key.deviceGeneration;
+                if (FAILED(_queue.CaptureCompletionContext(_payload->captured)))
                     std::terminate();
                 Resume(Stage::Prepare);
                 return true;
             }
             case Stage::Prepare:
             {
-                const auto* manifest = payload->prepared->ManifestAfterJoin();
-                if (! manifest || FAILED(display.ReservePublicationGpuOwner(slot, payload->device.get(), client.software, manifest->RequiredGpuBytes(), gpu)))
+                const auto* manifest = _payload->prepared->ManifestAfterJoin();
+                if (! manifest ||
+                    FAILED(_display.ReservePublicationGpuOwner(_slot, _payload->device.get(), _client.software, manifest->RequiredGpuBytes(), _gpu)))
                     std::terminate();
                 Expect("complete-CPU-and-fresh-actual-GPU-admission-precede-recording",
-                       payload->admission.IsValid() && gpu.Bytes() >= manifest->RequiredGpuBytes() && ! payload->memory->IsBound() &&
-                           display.PublicationSlotCurrentOwner(slot));
-                if (FAILED(payload->stream.InitializeOwner(jobs, ticket, queueGeneration)) ||
-                    FAILED(commands.AttachOwner(payload->stream, ticket, *this, commandSource)))
+                       _payload->admission.IsValid() && _gpu.Bytes() >= manifest->RequiredGpuBytes() && ! _payload->memory->IsBound() &&
+                           _display.PublicationSlotCurrentOwner(_slot));
+                if (FAILED(_payload->stream.InitializeOwner(_jobs, ticket, queueGeneration)) ||
+                    FAILED(_commands.AttachOwner(_payload->stream, ticket, *this, _commandSource)))
                     std::terminate();
-                streamInitialized = true;
+                _streamInitialized = true;
                 Resume(Stage::Record, JobExecutionLane::GpuRecording);
                 return true;
             }
             case Stage::Record:
-                recordingJoined = true;
-                if (! display.ReleasePublishedSeedOwner(seed))
+                _recordingJoined = true;
+                if (! _display.ReleasePublishedSeedOwner(_seed))
                     std::terminate();
-                stage = Stage::AwaitCommands;
-                jobs.NotifyOwnerWork();
+                _stage = Stage::AwaitCommands;
+                _jobs.NotifyOwnerWork();
                 return true;
-            case Stage::RetireStream: stage = Stage::Publish; return false; // Exact successful DeferCompletion gets the publication-transfer authority.
+            case Stage::RetireStream: _stage = Stage::Publish; return false; // Exact successful DeferCompletion gets the publication-transfer authority.
             case Stage::Cleanup: return false;
             case ::Parent::Stage::AwaitCommands:
             case ::Parent::Stage::Publish:
@@ -344,81 +346,82 @@ public:
     }
     bool DeferCompletion(JobResult, JobTicket ticket) noexcept override
     {
-        if (stage != Stage::Publish)
+        if (_stage != Stage::Publish)
             return false;
-        if (ticket != observation.original || ! display.PublicationSlotCurrentOwner(slot) || FAILED(payload->memory->BindForPublication(jobs, ticket)) ||
-            ! payload->prepared->BindMemoryOwner(payload->memory) || FAILED(payload->prepared->PublishOwner()))
+        if (ticket != _observation.original || ! _display.PublicationSlotCurrentOwner(_slot) || FAILED(_payload->memory->BindForPublication(_jobs, ticket)) ||
+            ! _payload->prepared->BindMemoryOwner(_payload->memory) || FAILED(_payload->prepared->PublishOwner()))
             std::terminate();
-        const auto cpuBefore = jobs.ReservedMemoryBytes();
-        const auto gpuBefore = gpu.Bytes();
+        const auto cpuBefore = _jobs.ReservedMemoryBytes();
+        const auto gpuBefore = _gpu.Bytes();
         Expect("same-original-ticket-binds-whole-publication-after-real-recording-and-transport-retirement",
-               payload->memory->Bytes() == kParentBytes && recordingJoined && observation.streamRetiredOffOwner && ! seed && payload->stream.CanRetireOwner());
+               _payload->memory->Bytes() == kParentBytes && _recordingJoined && _observation.streamRetiredOffOwner && ! _seed &&
+                   _payload->stream.CanRetireOwner());
         Expect("old-document-generation-refuses-adoption-with-all-owners-preserved",
-               ! display.AdoptPublicationOwner(slot, *payload->prepared, gpu) && bool(slot) && gpu.Bytes() == gpuBefore &&
-                   jobs.ReservedMemoryBytes() == cpuBefore && payload->prepared->ManifestAfterJoin());
+               ! _display.AdoptPublicationOwner(_slot, *_payload->prepared, _gpu) && bool(_slot) && _gpu.Bytes() == gpuBefore &&
+                   _jobs.ReservedMemoryBytes() == cpuBefore && _payload->prepared->ManifestAfterJoin());
         Expect("bound-accounting-provenance-is-the-exact-original-scheduler-and-ticket",
-               payload->memory->BoundTo(jobs, ticket) && ! payload->memory->BoundTo(jobs, JobTicket{ticket.slot, ticket.generation + 1}));
+               _payload->memory->BoundTo(_jobs, ticket) && ! _payload->memory->BoundTo(_jobs, JobTicket{ticket.slot, ticket.generation + 1}));
         Expect("preflight-accepts-only-the-exact-final-layer-root-before-document-mutation",
-               display.CanAdoptPublicationOwner(slot, *payload->prepared, gpu, payload->source) &&
-                   ! display.CanAdoptPublicationOwner(slot, *payload->prepared, gpu, *client.session.Document()));
+               _display.CanAdoptPublicationOwner(_slot, *_payload->prepared, _gpu, _payload->source) &&
+                   ! _display.CanAdoptPublicationOwner(_slot, *_payload->prepared, _gpu, *_client.session.Document()));
         GpuResidencyBudget foreignLedger;
         GpuResidencyAdmission foreignDecision;
-        auto foreignReservation = foreignLedger.ReserveOwner(gpu.Bytes(), {queueGeneration, 1024ull * 1024 * 1024, 0}, foreignDecision);
+        auto foreignReservation = foreignLedger.ReserveOwner(_gpu.Bytes(), {queueGeneration, 1024ull * 1024 * 1024, 0}, foreignDecision);
         Expect("foreign-ledger-reservation-refuses-before-document-or-history-mutation",
-               foreignReservation && ! display.CanAdoptPublicationOwner(slot, *payload->prepared, foreignReservation, payload->source) &&
-                   jobs.ReservedMemoryBytes() == cpuBefore && gpu.Bytes() == gpuBefore && bool(slot));
+               foreignReservation && ! _display.CanAdoptPublicationOwner(_slot, *_payload->prepared, foreignReservation, _payload->source) &&
+                   _jobs.ReservedMemoryBytes() == cpuBefore && _gpu.Bytes() == gpuBefore && bool(_slot));
         foreignReservation.ResetOwner();
         // Fixture-only surrogate for the eventual prepared history/document publication. No nested callback.
-        client.session.EditForTest([&](CanvasDocument& document) noexcept { std::swap(document, payload->source); });
-        if (! display.AdoptPublicationOwner(slot, *payload->prepared, gpu))
+        _client.session.EditForTest([&](CanvasDocument& document) noexcept { std::swap(document, _payload->source); });
+        if (! _display.AdoptPublicationOwner(_slot, *_payload->prepared, _gpu))
             std::terminate();
-        published                        = true;
-        observation.chargedAtPublication = jobs.ReservedMemoryBytes();
+        _published                        = true;
+        _observation.chargedAtPublication = _jobs.ReservedMemoryBytes();
         Expect("one-generation-document-swap-adopts-exact-layer-root-and-original-device",
-               ! slot && ! gpu && client.graph && client.graph->IsPublishedOnOwner(client.device, client.context) && ! payload->prepared->ManifestAfterJoin() &&
-                   observation.chargedAtPublication >= kParentBytes);
+               ! _slot && ! _gpu && _client.graph && _client.graph->IsPublishedOnOwner(_client.device, _client.context) &&
+                   ! _payload->prepared->ManifestAfterJoin() && _observation.chargedAtPublication >= kParentBytes);
         Resume(Stage::Cleanup);
         return true; // Same FIFO record survives publication through payload/command/context retirement.
     }
     void Completed(JobResult result) noexcept override
     {
-        if (stage != Stage::Cleanup || payload || slot || seed || gpu || ! published)
+        if (_stage != Stage::Cleanup || _payload || _slot || _seed || _gpu || ! _published)
             std::terminate();
-        observation.terminal = result;
-        Expect("final-Completed-has-no-successful-acknowledgement-capture-authority", ! jobs.InAcknowledgedJobCallback(observation.original));
-        observation.finished = true;
-        pump.parent          = nullptr;
+        _observation.terminal = result;
+        Expect("final-Completed-has-no-successful-acknowledgement-capture-authority", ! _jobs.InAcknowledgedJobCallback(_observation.original));
+        _observation.finished = true;
+        _pump.parent          = nullptr;
     }
     void CommandAcknowledgedOwner(JobTicket ticket, GpuCommandLease command, HRESULT status) noexcept override
     {
-        if (ticket != observation.original || command.source != observation.original)
+        if (ticket != _observation.original || command.source != _observation.original)
             std::terminate();
         if (FAILED(status))
-            terminal = status;
-        jobs.NotifyOwnerWork();
+            _terminal = status;
+        _jobs.NotifyOwnerWork();
     }
     void CommandSourceFailedOwner(JobTicket ticket, HRESULT status) noexcept override
     {
-        if (ticket != observation.original)
+        if (ticket != _observation.original)
             std::terminate();
-        terminal = status;
-        jobs.NotifyOwnerWork();
+        _terminal = status;
+        _jobs.NotifyOwnerWork();
     }
     bool Waiting() const noexcept
     {
-        return stage == Stage::AwaitCommands;
+        return _stage == Stage::AwaitCommands;
     }
     bool Ready() const noexcept
     {
-        return Waiting() && recordingJoined && streamInitialized && payload->stream.CanRetireOwner();
+        return Waiting() && _recordingJoined && _streamInitialized && _payload->stream.CanRetireOwner();
     }
     void Pump() noexcept
     {
         if (! Ready())
             return;
-        if (FAILED(terminal) || ! commands.DetachOwner(commandSource, payload->detachedCommandOwner) || ! payload->stream.AuthorizeRetirementOwner())
+        if (FAILED(_terminal) || ! _commands.DetachOwner(_commandSource, _payload->detachedCommandOwner) || ! _payload->stream.AuthorizeRetirementOwner())
             std::terminate();
-        commandSource = {};
+        _commandSource = {};
         Resume(Stage::RetireStream);
     }
 };
@@ -444,21 +447,21 @@ void ParentPump::Pump() noexcept
 #pragma warning(disable : 4626 5027)
 class Follower final : public Job
 {
-    Observation& observation;
+    Observation& _observation;
 
 public:
-    explicit Follower(Observation& value) noexcept : observation(value)
+    explicit Follower(Observation& value) noexcept : _observation(value)
     {
     }
     JobResult Run(JobContext&) override
     {
-        observation.followerStarted    = true;
-        observation.followerAfterFinal = observation.finished;
+        _observation.followerStarted    = true;
+        _observation.followerAfterFinal = _observation.finished;
         return {};
     }
     void Completed(JobResult result) noexcept override
     {
-        observation.followerFinished = result.status == JobStatus::Finished;
+        _observation.followerFinished = result.status == JobStatus::Finished;
     }
 };
 #pragma warning(pop)
