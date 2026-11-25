@@ -154,6 +154,7 @@
   "RedPrism/Runtime.Tests.MaskWorkTestGate.h",
   "RedPrism/Runtime.Tests.PixelMoveWorkTestGate.h",
   "RedPrism/Runtime.Tests.ProjectOpenTestGate.h",
+  "RedPrism/Runtime.Tests.ProjectSaveFixture.h",
   "RedPrism/Runtime.Tests.ProjectSaveTestGate.h",
   "RedPrism/Runtime.Tests.RasterEditTestGate.h",
   "RedPrism/Runtime.Tests.SelectionCommandTestGate.h",

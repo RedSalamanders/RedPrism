@@ -1,0 +1,1 @@
+- Register the guarded project-save fixture in the native test inventory so Release qualification can run its suites.
