@@ -110,12 +110,13 @@ The amount is measured from the original press. Releasing ends the drag without 
 ## Settings, crash reports and languages
 
 RedPrism keeps its settings in `%LocalAppData%\RedPrism\settings.json` (`settings.debug.json` for Debug builds), a
-small JSON document written when RedPrism closes or Windows ends the session, and readable in any editor: `theme`
+small JSON5 document written when RedPrism closes or Windows ends the session. It accepts comments and
+single-quoted strings. Settings include `theme`
 (`system`, `light`, `dark`), `language` (a tag such as `fr-FR`, empty for Windows' display language),
 `layersPanelWidth`, `sampleRing`, `jpegQuality`, the `window` placement and `shortcuts` (keyboard shortcut
 replacements, below). Edits while RedPrism runs apply as you save the file (the theme, the sample ring, the panel
 width, the JPEG quality, shortcut replacements); the language and the window placement take effect at the next
-start. A file that is not valid JSON is left alone while RedPrism runs; at the next start it is backed up as
+start. RedPrism leaves an invalid settings file alone while it runs. At the next start it is backed up as
 `settings.json.invalid-…` and replaced by the defaults. Windows high contrast overrides the theme while it is on.
 
 Help › Command List (or its search field) finds and runs any command by name and shows its current shortcut. To

@@ -39,6 +39,7 @@
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <objbase.h>
 #include <stop_token>
 #include <string>
@@ -2498,6 +2499,21 @@ void TestSettingsStore()
     Expect(bomParsed.has_value() && bomParsed->theme == ThemePreference::Light &&
                SettingsStore::Serialize(AppSettings{}, bom).find("\"extra\": 7") != std::string::npos,
            "settings.parse-accepts-a-byte-order-mark");
+    constexpr std::string_view json5 = "\xEF\xBB\xBF"
+                                       R"({schema:0x2, theme:'dark', layersPanelWidth:NaN, jpegQuality:Infinity, sampleRing:false,
+            future:{limit:-Infinity, label:'keep',},})";
+    const auto json5Settings         = SettingsStore::Parse(json5);
+    const AppSettings defaults;
+    Expect(json5Settings && json5Settings->theme == ThemePreference::Dark && ! json5Settings->sampleRing &&
+               json5Settings->layersPanelWidth == defaults.layersPanelWidth && json5Settings->jpegQuality == defaults.jpegQuality,
+           "settings.json5-typed-values-and-non-finite-defaults");
+    const std::string json5Saved = json5Settings ? SettingsStore::Serialize(*json5Settings, json5) : std::string{};
+    Expect(json5Settings && SettingsStore::Parse(json5Saved) == json5Settings && json5Saved.find("\"schema\": 2") != std::string::npos &&
+               json5Saved.find("\"limit\": -Infinity") != std::string::npos && json5Saved.find("\"label\": \"keep\"") != std::string::npos,
+           "settings.json5-save-retains-unknown-values");
+    AppSettings nonFinite = defaults;
+    nonFinite.jpegQuality = std::numeric_limits<double>::infinity();
+    Expect(SettingsStore::Serialize(nonFinite, json5).empty(), "settings.serialize-rejects-non-finite-typed-values");
     // Integral reals read as ints (as ProjectStore reads them); INT_MIN is outside ±32767, not a crash.
     const std::optional<AppSettings> reals = SettingsStore::Parse(R"({"schema":1.0,"window":{"x":10.0,"y":-20,"width":800.0,"height":600,"maximized":false}})");
     const std::optional<AppSettings> extreme  = SettingsStore::Parse(R"({"schema":1,"window":{"x":-2147483648,"y":0,"width":800,"height":600}})");

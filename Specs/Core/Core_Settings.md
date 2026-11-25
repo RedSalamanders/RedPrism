@@ -1,7 +1,7 @@
 # RedPrism settings
 
 Status: current normative repository contract
-Last reviewed: 2026-09-23
+Last reviewed: 2026-11-24
 Owner: `Common/SettingsStore.*`, `RedPrism/ApplicationSettings.cpp`, `RedPrism/Main.cpp`
 
 ## Scope
@@ -25,9 +25,13 @@ the live reload from a file of its own under `%TEMP%`.
 
 ## Document
 
-A JSON object (UTF-8, pretty-printed by the store) whose `schema` field (an integer ≥ 1) carries compatibility. The
+A UTF-8 JSON5 object whose `schema` field (an integer ≥ 1) carries compatibility. The
 file name never does. Fields the store does not know are kept through a save; a field it knows but cannot use
 takes its default, field by field, so one bad value never discards the rest.
+
+The reader accepts comments, trailing commas, single-quoted strings, unquoted member names and hexadecimal
+numbers. Known numeric fields use finite values. The formatted writer retains copied unknown values, including
+JSON5 non-finite literals.
 
 | Field | Type, range | Default | Applies |
 | --- | --- | --- | --- |
