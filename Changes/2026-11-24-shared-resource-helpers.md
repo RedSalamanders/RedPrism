@@ -1,1 +1,0 @@
-- Use the common embedded string and message-box helpers while retaining satellite fallback.
