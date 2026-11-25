@@ -5,16 +5,17 @@ function Assert-LayerRowsAccounting {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string[]] $Lines,
-        [Parameter(Mandatory)] [hashtable] $BenchReservations
+        [Parameter(Mandatory)] [hashtable] $BenchReservations,
+        [ValidateRange(3, 11)] [int] $ExpectedTrials = 3
     )
     $rows = @($Lines | Where-Object { $_ -match '^LAYER ROWS ACCOUNTING\b' })
-    if ($rows.Count -ne 3 -or $BenchReservations.Count -ne 3) {
-        throw 'Expected exactly three accounting rows and three BENCH reservations.'
+    if ($rows.Count -ne $ExpectedTrials -or $BenchReservations.Count -ne $ExpectedTrials) {
+        throw "Expected exactly $ExpectedTrials accounting rows and BENCH reservations."
     }
     $seen = [System.Collections.Generic.HashSet[int]]::new()
     $previousMetadata = [uint64] 0
     foreach ($row in $rows) {
-        if ($row -notmatch '^LAYER ROWS ACCOUNTING trial=(?<trial>[0-2]) reservedBytes=(?<reserved>\d+) rowBytes=(?<rows>\d+) metadataBytes=(?<metadata>\d+) releasingBytes=(?<releasing>\d+) originals=(?<originals>\d+)$') {
+        if ($row -notmatch '^LAYER ROWS ACCOUNTING trial=(?<trial>\d+) reservedBytes=(?<reserved>\d+) rowBytes=(?<rows>\d+) metadataBytes=(?<metadata>\d+) releasingBytes=(?<releasing>\d+) originals=(?<originals>\d+)$') {
             throw "Malformed layer-row accounting row: $row"
         }
         $trial = [int]::Parse($Matches['trial'], [System.Globalization.CultureInfo]::InvariantCulture)
