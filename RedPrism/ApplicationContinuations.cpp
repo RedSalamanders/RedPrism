@@ -7,6 +7,7 @@
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
 #include "Runtime.Tests.ColorWorkTestGate.h"
+#include "Runtime.Tests.ProjectSaveFixture.h"
 #include "SelectionCommandWork.h"
 #include "UiBenchmark.h"
 #include "resource.h"
@@ -2400,6 +2401,7 @@ int Application::RunHostFlowSelfTest() noexcept
     const auto project   = prefix + L"-source.prism";
     const auto imagePath = prefix + L"-source.png";
     const auto output    = prefix + L"-output.prism";
+    const auto current   = prefix + L"-current.prism";
     const auto cleanup   = wil::scope_exit([&]() noexcept
     {
         if (_colorWorkTestGate)
@@ -2417,6 +2419,7 @@ int Application::RunHostFlowSelfTest() noexcept
         (void)DeleteFileW(project.c_str());
         (void)DeleteFileW(imagePath.c_str());
         (void)DeleteFileW(output.c_str());
+        (void)DeleteFileW(current.c_str());
     });
     const auto source    = SolidRaster(4, 1, 0xFF404040u);
     DocumentFixture fixtureDraft;
@@ -2441,7 +2444,14 @@ int Application::RunHostFlowSelfTest() noexcept
         if (! settle())
             return false;
         _colorWorkTestGate.reset();
-        ReplaceDocument(fixture, id, output);
+        // The active document is an accepted archive. The supplied export or Save As destination is a different name.
+        (void)DeleteFileW(current.c_str());
+        const auto accepted = ProjectSaveFixture::SeedArchive(current, fixture, id);
+        if (! accepted)
+            return false;
+        ReplaceDocument(fixture, id, current);
+        _documentIsArchive      = true;
+        _documentArchiveVersion = accepted;
         if (failed)
             _session.SelectAll();
         if (! BeginColorEdit(failed ? ChromeHost::kCommandContentAwareFill : ChromeHost::kCommandLevels))
@@ -2489,7 +2499,7 @@ int Application::RunHostFlowSelfTest() noexcept
             HostRequestInput input = HostCommandInput{ChromeHost::kCommandNewLayer};
             switch (index)
             {
-                case 0: input = HostWriteInput{HostWriteFormat::Project, false, output}; break;
+                case 0: input = HostWriteInput{HostWriteFormat::Project, true, output}; break;
                 case 1: input = HostWriteInput{HostWriteFormat::Png, false, output}; break;
                 case 2: input = HostWriteInput{HostWriteFormat::Jpeg, false, output}; break;
                 case 3: input = HostNewInput{}; break;
@@ -2592,7 +2602,15 @@ int Application::RunHostFlowSelfTest() noexcept
             else
             {
                 if (receipt.Read().outcome != HostOutcome::Succeeded || _session.HasColorEdit())
-                    return fail(L"A successful host settlement failed to execute its dependent action.\n");
+                {
+                    const auto actual = receipt.Read();
+                    SelfTestFailure(std::format(L"Host flow {} mode {} did not settle and execute (outcome {}, error 0x{:08X}).\n",
+                                                index,
+                                                mode,
+                                                static_cast<unsigned int>(actual.outcome),
+                                                static_cast<unsigned int>(actual.error)));
+                    return 5;
+                }
                 if ((index >= 14 && index <= 16 && _session.ActiveLayerID() != otherId) ||
                     (index == 16 && (! _chrome->RenameCardOpen() || _renameLayer != otherId)) ||
                     (index == 17 && _session.Document()->layers.front().id != otherId) || (index == 18 && _session.ActiveLayer()->name != L"Owned rename") ||
