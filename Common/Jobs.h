@@ -455,7 +455,7 @@ public:
     // borrowed resources while the release sink remains installed. No successful-work authority is granted.
     // The preallocated final MTA callback runs worker before release/recycle drain and teardown. No hook is run
     // for an uninitialized/already closed scheduler, and useful-work cancellation cannot suppress retirement.
-    void Close(CloseHooks hooks = {}) noexcept;
+    void Close(CloseHooks hooks = {nullptr, nullptr, nullptr}) noexcept;
     [[nodiscard]] bool IsIdle() const noexcept;
     // Actual initialized pool size for diagnostics; zero before initialization or after Close. Owner thread.
     [[nodiscard]] unsigned int WorkerCount() const noexcept;
