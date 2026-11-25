@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Watch RedPrism settings on a worker and coalesce reload notifications on the window owner thread.
 - Register the guarded project-save fixture in the native test inventory so Release qualification can run its suites.
 - Read RedPrism settings as JSON5 and preserve unknown values when saving.
 - Read RedPrism translations from the shared Lang layout and keep support for existing satellite installations.

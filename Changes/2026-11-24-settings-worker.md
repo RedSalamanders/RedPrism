@@ -1,1 +1,0 @@
-- Watch RedPrism settings on a worker and coalesce reload notifications on the window owner thread.
