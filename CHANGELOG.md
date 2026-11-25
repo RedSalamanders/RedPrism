@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Read RedPrism translations from the shared Lang layout and keep support for existing satellite installations.
 - Exercise guarded project publication in the brush and selection lifecycle save fixtures.
 - Use the common embedded string and message-box helpers while retaining satellite fallback.
 - Make the file self-test reopen a real project archive before saving an adjustment and supply an explicit new output for the donorless fill case. The adjustment assertions exercise the guarded in-place save with an accepted file identity.
