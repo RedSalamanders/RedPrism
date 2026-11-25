@@ -319,9 +319,9 @@ int Application::RunFileEndSessionSelfTest() noexcept
     const std::wstring previousSettings = _settingsPath;
     const auto previousDiscard          = _forcedDiscard;
     bool retainFailedFixture            = false;
-    _settingsPath                       = (root / L"settings.json").wstring();
-    _forcedDiscard                      = false;
-    const auto restore                  = wil::scope_exit([&]() noexcept
+    _settingsPath.clear();
+    _forcedDiscard     = false;
+    const auto restore = wil::scope_exit([&]() noexcept
     {
         if (_projectSaveTestGate)
             (void)SetEvent(_projectSaveTestGate->release.get());
