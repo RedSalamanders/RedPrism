@@ -1,1 +1,0 @@
-- Exercise guarded project publication in the brush and selection lifecycle save fixtures.
