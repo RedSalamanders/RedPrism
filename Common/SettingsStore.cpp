@@ -235,7 +235,7 @@ std::wstring DefaultDirectory()
 
 const wchar_t* FileName(bool debugBuild) noexcept
 {
-    return debugBuild ? L"settings.debug.json" : L"settings.json";
+    return debugBuild ? L"RedPrism-debug.settings.json" : L"RedPrism.settings.json";
 }
 
 std::wstring DefaultPath(bool debugBuild)
@@ -585,6 +585,49 @@ namespace
         *backupPath = std::move(backup.path);
     return result;
 }
+[[nodiscard]] std::optional<SettingsLoadResult> MigrateLegacySettings(const FileOutputTarget& destination)
+{
+    const auto separator         = destination.path.find_last_of(L"\\/");
+    const auto leafStart         = separator == std::wstring::npos ? 0 : separator + 1;
+    const std::wstring_view leaf = std::wstring_view{destination.path}.substr(leafStart);
+    const wchar_t* legacyName    = nullptr;
+    if (leaf == FileName(false))
+        legacyName = L"settings.json";
+    else if (leaf == FileName(true))
+        legacyName = L"settings.debug.json";
+    else
+        return std::nullopt;
+
+    const auto legacyPath = destination.path.substr(0, leafStart) + legacyName;
+    FileOutputTarget legacy;
+    SettingsLoadResult result;
+    if (FAILED(ObserveFileOutputTarget(legacyPath.c_str(), legacy)))
+    {
+        result.status = SettingsLoadStatus::Unreadable;
+        return result;
+    }
+    if (! legacy.acceptedVersion)
+        return std::nullopt;
+
+    std::string bytes;
+    if (! ReadAcceptedBytes(legacy, bytes))
+    {
+        result.status = SettingsLoadStatus::Unreadable;
+        return result;
+    }
+    auto settings = Parse(bytes);
+    if (! settings)
+        return std::nullopt;
+
+    result.settings = std::move(*settings);
+    if (FAILED(WriteAcceptedBytes(destination, bytes, &result.acceptedTarget)))
+    {
+        // Creation is exclusive. If another process published a valid file, load its version and leave its bytes alone.
+        if (auto current = LoadLive(destination.path, &result.acceptedTarget))
+            result.settings = std::move(*current);
+    }
+    return result;
+}
 } // namespace
 
 SettingsLoadResult LoadCold(const std::wstring& path)
@@ -598,6 +641,9 @@ SettingsLoadResult LoadCold(const std::wstring& path)
     }
     if (! target.acceptedVersion)
     {
+        if (auto migrated = MigrateLegacySettings(target))
+            return std::move(*migrated);
+
         result.status          = SettingsLoadStatus::Missing;
         result.templateWritten = SUCCEEDED(WriteAcceptedBytes(target, Serialize(result.settings), &result.acceptedTarget));
         return result;

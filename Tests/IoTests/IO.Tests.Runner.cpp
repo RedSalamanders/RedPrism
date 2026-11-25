@@ -2437,10 +2437,11 @@ void TestProjectRotationFaultRecovery()
 
 void TestSettingsStore()
 {
-    Expect(std::wstring_view{SettingsStore::FileName(true)} == L"settings.debug.json" && std::wstring_view{SettingsStore::FileName(false)} == L"settings.json",
+    Expect(std::wstring_view{SettingsStore::FileName(true)} == L"RedPrism-debug.settings.json" &&
+               std::wstring_view{SettingsStore::FileName(false)} == L"RedPrism.settings.json",
            "settings.file-names");
     const std::wstring directory = SettingsStore::DefaultDirectory();
-    Expect(directory.ends_with(L"\\RedPrism") && SettingsStore::DefaultPath(false) == directory + L"\\settings.json", "settings.default-paths");
+    Expect(directory.ends_with(L"\\RedPrism") && SettingsStore::DefaultPath(false) == directory + L"\\RedPrism.settings.json", "settings.default-paths");
 
     const std::optional<AppSettings> minimal = SettingsStore::Parse("{\"schema\":1}");
     Expect(minimal.has_value() && minimal.value() == AppSettings{}, "settings.parse-minimal-is-defaults");
@@ -2870,8 +2871,32 @@ void TestGuardedSettingsStore()
                SettingsStore::SaveAccepted(*accepted, pending) == kOutputVersionConflict && FileText(path) == "{ invalid edit",
            "settings.guard.live-invalid-edit-keeps-original-bytes");
 
+    const std::wstring canonical = (root / SettingsStore::FileName(false)).wstring();
+    Expect(SettingsStore::WriteFileAtomic(path, original), "settings.migration.writes-release-fixture");
+    const auto migrated = SettingsStore::LoadCold(canonical);
+    Expect(migrated.status == SettingsLoadStatus::Loaded && migrated.acceptedTarget && migrated.acceptedTarget->acceptedVersion &&
+               migrated.settings.theme == ThemePreference::Dark && FileText(canonical) == original && FileText(path) == original,
+           "settings.migration.copies-exact-release-bytes");
+    Expect(SettingsStore::WriteFileAtomic(path, newer) && SettingsStore::LoadCold(canonical).settings.theme == ThemePreference::Dark &&
+               FileText(canonical) == original && FileText(path) == newer,
+           "settings.migration.an-existing-new-file-wins");
+
+    const std::wstring legacyDebug    = (root / L"settings.debug.json").wstring();
+    const std::wstring canonicalDebug = (root / SettingsStore::FileName(true)).wstring();
+    Expect(SettingsStore::WriteFileAtomic(legacyDebug, newer) && SettingsStore::LoadCold(canonicalDebug).settings.theme == ThemePreference::Light &&
+               FileText(canonicalDebug) == newer && FileText(legacyDebug) == newer && FileText(canonical) == original,
+           "settings.migration.keeps-debug-and-release-independent");
+
+    const std::wstring legacyInvalid = (root / L"invalid" / L"settings.json").wstring();
+    const std::wstring recovered     = (root / L"invalid" / SettingsStore::FileName(false)).wstring();
+    Expect(SettingsStore::WriteFileAtomic(legacyInvalid, "{ invalid legacy"), "settings.migration.writes-invalid-fixture");
+    const auto fallback = SettingsStore::LoadCold(recovered);
+    Expect(fallback.status == SettingsLoadStatus::Missing && fallback.templateWritten && FileText(legacyInvalid) == "{ invalid legacy" &&
+               SettingsStore::LoadLive(recovered) == AppSettings{},
+           "settings.migration.preserves-invalid-legacy-bytes");
+
     bool temporaryLeft = false;
-    for (const auto& entry : std::filesystem::directory_iterator(root, error))
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(root, error))
         temporaryLeft = temporaryLeft || entry.path().filename().wstring().find(L".~") != std::wstring::npos;
     Expect(! error && ! temporaryLeft, "settings.guard.removes-owned-temporaries");
 }

@@ -15,11 +15,17 @@ file is treated, and how the running application applies it. The chrome that sho
 
 | Build | File |
 | --- | --- |
-| Release | `%LocalAppData%\RedPrism\settings.json` |
-| Debug, ASan Debug | `%LocalAppData%\RedPrism\settings.debug.json` |
+| Release | `%LocalAppData%\RedPrism\RedPrism.settings.json` |
+| Debug, ASan Debug | `%LocalAppData%\RedPrism\RedPrism-debug.settings.json` |
 
 `SettingsStore::DefaultPath(debugBuild)` names the file; `LocalAppDataFolder` comes from `SHGetFolderPathW`
-(`CSIDL_LOCAL_APPDATA`). The harness switches (`--self-test`, `--screenshot`, `--demo`, `--bench`, `--crash-probe`)
+(`CSIDL_LOCAL_APPDATA`). On an ordinary start with a missing canonical file, the store looks for the same
+profile's former file (`settings.json` for Release and `settings.debug.json` for Debug). It copies a valid
+document byte for byte with exclusive creation and keeps the legacy file. A competing canonical file wins
+and the migration never changes it. An invalid legacy file stays in place while the canonical path gets
+the template. An unreadable legacy file stays eligible for migration on a later start.
+
+The harness switches (`--self-test`, `--screenshot`, `--demo`, `--bench`, `--crash-probe`)
 MUST NOT read or write the user's file: they run with the defaults (dark chrome, English) and the self-test drives
 the live reload from a file of its own under `%TEMP%`.
 
