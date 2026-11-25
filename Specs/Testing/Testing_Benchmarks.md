@@ -251,8 +251,9 @@ The colored Canvas Size extension is likewise `canvas-size-fill-refused-pixel-bu
 existing layers plus the requested extension exceed the pixel ceiling (the current 45 MP and 100 MP fixtures), with the unchanged
 document/history required. The smoke gate covers all 27 operation rows, including `project-save`, which measures
 the production project-save continuation through worker completion and a presented frame, plus `png-export`
-and `jpeg-export` through their production graph. The saved result must
-reach its expected state. This row is a harness measurement only; no hardware timing result or threshold follows
+and `jpeg-export` through their production graph. The save warmup creates a vacant fixture archive through the
+explicit output route. Each recorded save guards publication with the archive version returned by the preceding
+trial. The save receipt must succeed and establish the current archive version before accepting a sample. This row is a harness measurement only; no hardware timing result or threshold follows
 from smoke. Historical 18-row and 15-row reports remain evidence of their recorded version.
 
 `gradient-preview-coalesced` drives repeated endpoint changes through the Application gradient drag producer while an

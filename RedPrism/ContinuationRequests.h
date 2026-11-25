@@ -157,6 +157,7 @@ struct HostWriteInput final
     HostWriteFormat format;
     bool saveAs = false;
     std::optional<std::wstring> path; // an already selected path, when supplied; otherwise the runner selects it
+    bool requireVacantArchive = false;
 };
 struct HostPathsInput final
 {
@@ -511,6 +512,8 @@ enum class HostPathReadFailure : std::uint8_t
         }
         else if constexpr (std::is_same_v<Input, HostWriteInput>)
         {
+            if (value.requireVacantArchive && (value.format != HostWriteFormat::Project || ! value.path || value.path->empty()))
+                return false;
             return ! value.path || (value.path->size() <= HostInputBudget::kMaxPathUnits && string(value.path.value()));
         }
         else if constexpr (std::is_same_v<Input, HostLayerRenameInput>)

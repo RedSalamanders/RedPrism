@@ -1,0 +1,1 @@
+- Bind the project-save benchmark to its vacant fixture archive and retain the accepted version for each repeated save.
