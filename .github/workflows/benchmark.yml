@@ -1,0 +1,64 @@
+name: Manual paired layer-row benchmark
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_baseline:
+        description: Exact baseline commit
+        type: string
+        required: true
+      benchmark_candidate:
+        description: Exact candidate commit, defaulting to the dispatched ref
+        type: string
+        default: ''
+      benchmark_calibration_aa:
+        description: Measure one revision under both labels
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  paired-benchmark:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read the pinned engine revision
+        id: engine
+        shell: pwsh
+        run: |
+          $pin = (Get-Content -LiteralPath .ci/project.json -Raw | ConvertFrom-Json).engine.ref
+          if ($pin -cnotmatch '^[a-f0-9]{40}$') { throw 'Expected an exact engine revision.' }
+          "ref=$pin" >> $env:GITHUB_OUTPUT
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: RedSalamanders/.github
+          ref: ${{ steps.engine.outputs.ref }}
+          path: .ci-engine
+          persist-credentials: false
+      - uses: ./.github/actions/setup-msvc
+        with:
+          platform: x64
+      - name: Collect paired WARP layer-row evidence
+        shell: pwsh
+        env:
+          REDPRISM_BENCHMARK_BASELINE: ${{ inputs.benchmark_baseline }}
+          REDPRISM_BENCHMARK_CANDIDATE: ${{ inputs.benchmark_candidate || github.sha }}
+          REDPRISM_BENCHMARK_AA: ${{ inputs.benchmark_calibration_aa }}
+        run: |
+          if ($env:REDPRISM_BENCHMARK_BASELINE -cnotmatch '^[a-f0-9]{40}$' -or
+              $env:REDPRISM_BENCHMARK_CANDIDATE -cnotmatch '^[a-f0-9]{40}$') {
+              throw 'Supply exact baseline and candidate commits.'
+          }
+          .\performance-paired.ps1 -BaselineRevision $env:REDPRISM_BENCHMARK_BASELINE `
+              -CandidateRevision $env:REDPRISM_BENCHMARK_CANDIDATE -CalibrationAA:($env:REDPRISM_BENCHMARK_AA -ceq 'true')
+      - name: Retain benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: redprism-paired-layer-rows-${{ github.run_attempt }}
+          path: .build/paired/*/evidence/**
+          include-hidden-files: true
+          if-no-files-found: warn

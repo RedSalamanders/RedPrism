@@ -2594,6 +2594,14 @@ Correctness checks must preserve the final storage layer's active Guid and its s
 
 These diagnostics use a hidden 2×1 canvas and do not measure visible-frame G1, external COM RPC/client latency, or GPU residency. `layer-rows-smoke` is correctness-only. Neither mode changes performance requirements or thresholds, and diagnostic output alone does not qualify G1.
 
+The manual `performance-paired.ps1` command and `benchmark.yml` run the full layer-row workload in source-bound
+x64 Release WARP builds. The baseline and candidate use the same benchmark implementation, engine revision and
+dependency inputs. A calibration run measures one revision under both labels. Twelve independently assigned ABBA
+or BAAB blocks are the default. The driver retains the literal order, per-trial timings, original-output accounting,
+process logs, and build attestations beneath `.build/paired/<run>/evidence`. Paired differences separate initial
+publication from the ten rename trials and keep the worker-inclusive elapsed time separate from owner and UIA work.
+The manual job checks evidence completeness. G1 and product performance acceptance retain their existing review gates.
+
 ### P1 exclusive stroke sample controls
 
 The candidate registers `Document.Tests.StrokeSample` and `Document.Tests.StrokeSampleSession` for exact

@@ -1,0 +1,1 @@
+- Add a manual paired x64 Release WARP run for the full layer-row workload, with exact build identities and retained timing and accounting evidence.
