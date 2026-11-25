@@ -4,6 +4,7 @@
 #include "ChromeHost.h"
 #include "ProjectStore.h"
 #include "Runtime.Tests.LayerMetadataTestGate.h"
+#include "Runtime.Tests.ProjectSaveFixture.h"
 #include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
@@ -21,6 +22,9 @@ int Application::RunCanvasBrushLifetimeWindowSelfTest() noexcept
 {
     const auto viewport                         = _viewport;
     const auto path                             = _documentPath;
+    const bool isArchive                        = _documentIsArchive;
+    const auto archiveVersion                   = _documentArchiveVersion;
+    const auto folderVersion                    = _documentFolderVersion;
     const auto settings                         = _session.brushSettings;
     const auto maskWhite                        = _session.maskPaintWhite;
     const auto mode                             = _session.brushMode;
@@ -105,6 +109,9 @@ int Application::RunCanvasBrushLifetimeWindowSelfTest() noexcept
                                           &pump,
                                           viewport,
                                           &path,
+                                          isArchive,
+                                          archiveVersion,
+                                          folderVersion,
                                           settings,
                                           maskWhite,
                                           mode,
@@ -143,6 +150,9 @@ int Application::RunCanvasBrushLifetimeWindowSelfTest() noexcept
         _closeDeferred            = originalCloseDeferred;
         _viewport                 = viewport;
         _documentPath             = path;
+        _documentIsArchive        = isArchive;
+        _documentArchiveVersion   = archiveVersion;
+        _documentFolderVersion    = folderVersion;
         _session.brushSettings    = settings;
         _session.maskPaintWhite   = maskWhite;
         _session.brushMode        = mode;
@@ -313,12 +323,18 @@ int Application::RunCanvasBrushLifetimeWindowSelfTest() noexcept
         _viewport.pan          = {};
         _viewport.followsFit   = false;
         const auto output      = std::wstring(temporary) + L"RedPrism-canvas-lifetime-window-" + std::to_wstring(GetCurrentProcessId()) + L"-" +
-                                 std::to_wstring(++index) + (scenario.failWrite ? L"-missing/failed.prism" : L".prism");
+                                 std::to_wstring(++index) + L".prism";
         if (GetFileAttributesW(output.c_str()) != INVALID_FILE_ATTRIBUTES)
             return 5;
-        const auto removeFile = wil::scope_exit([&output]() noexcept { (void)DeleteFileW(output.c_str()); });
-        _documentPath         = output;
-        _forcedDiscardAnswer  = scenario.save ? Prompts::Answer::First : Prompts::Answer::Second;
+        const auto removeFile     = wil::scope_exit([&output]() noexcept { (void)DeleteFileW(output.c_str()); });
+        const auto initialVersion = scenario.save ? ProjectSaveFixture::SeedArchive(output, _session.Document().value(), target) : std::nullopt;
+        if (scenario.save && (! initialVersion || (scenario.failWrite && ! DeleteFileW(output.c_str()))))
+            return 5;
+        _documentPath           = output;
+        _documentIsArchive      = scenario.save;
+        _documentArchiveVersion = initialVersion;
+        _documentFolderVersion.reset();
+        _forcedDiscardAnswer = scenario.save ? Prompts::Answer::First : Prompts::Answer::Second;
         DocumentChanged();
         OnLayerOpacity(.25, ChromeEditPhase::Preview);
         const bool preview = settle() && _opacityEdit && _session.ActiveLayer()->opacity == .25 && _session.history.UndoCount() == 0;
@@ -350,12 +366,12 @@ int Application::RunCanvasBrushLifetimeWindowSelfTest() noexcept
                                               ! _canvasLifetime && ! _canvasBrushInput.Busy() && ! _session.PendingBrushOpening() && ! _activeHostRequest &&
                                               _hostRequests.Size() == 0 && _hostInputBudget.Used() == 0 && MetadataAccountingSettledForTest();
 
-        bool exactSaved = GetFileAttributesW(output.c_str()) == INVALID_FILE_ATTRIBUTES;
+        bool exactSaved = ProjectSaveFixture::ArchiveUnchanged(output, std::nullopt);
         if (scenario.save && ! scenario.failWrite)
         {
             const auto loaded = LoadProject(output.c_str());
             exactSaved        = false;
-            if (loaded.status == ProjectIoStatus::Ok)
+            if (loaded.status == ProjectIoStatus::Ok && loaded.archiveVersion && loaded.archiveVersion != initialVersion)
                 for (const auto& layer : loaded.document.layers)
                     if (layer.id == target && layer.asset)
                         exactSaved = layer.opacity == .25 && sample(layer.asset->image, 8, 8) == redPixel && sample(layer.asset->image, 12, 8) == redPixel &&
@@ -363,15 +379,15 @@ int Application::RunCanvasBrushLifetimeWindowSelfTest() noexcept
         }
         const auto dependentResult        = state.dependent.Read();
         const bool generationAdvancedOnce = scenario.endSession ? state.generation == state.generationBefore + 1 : state.generation == state.generationBefore;
-        const bool failedWrite            = scenario.failWrite && dependentResult.outcome == HostOutcome::Failed && FAILED(dependentResult.error) &&
-                                            pump.closePosts == 0 && ! _closeConfirmed && ! _endSessionPending && generationAdvancedOnce &&
-                                            _session.history.UndoCount() == 2 && _session.history.IsModified();
-        const bool successfulClose        = ! scenario.failWrite && dependentResult.outcome == HostOutcome::Succeeded && pump.closePosts == 1 &&
-                                            pump.closeAfterAcknowledgement && _closeConfirmed && ! _closeDeferred &&
-                                            state.stroke.Read().outcome != HostOutcome::Pending && ! _endSessionPending && generationAdvancedOnce;
-        const bool routeResult            = scenario.failWrite ? failedWrite : successfulClose;
-        const bool sameDocument           = _session.DocumentSerial() == state.serial && _session.Document().has_value() && _session.Document()->width == 32 &&
-                                            _session.Document()->height == 24;
+        const bool failedWrite     = scenario.failWrite && dependentResult.outcome == HostOutcome::Failed && dependentResult.error == kOutputVersionConflict &&
+                                     pump.closePosts == 0 && ! _closeConfirmed && ! _endSessionPending && generationAdvancedOnce &&
+                                     _session.history.UndoCount() == 2 && _session.history.IsModified();
+        const bool successfulClose = ! scenario.failWrite && dependentResult.outcome == HostOutcome::Succeeded && pump.closePosts == 1 &&
+                                     pump.closeAfterAcknowledgement && _closeConfirmed && ! _closeDeferred &&
+                                     state.stroke.Read().outcome != HostOutcome::Pending && ! _endSessionPending && generationAdvancedOnce;
+        const bool routeResult     = scenario.failWrite ? failedWrite : successfulClose;
+        const bool sameDocument    = _session.DocumentSerial() == state.serial && _session.Document().has_value() && _session.Document()->width == 32 &&
+                                     _session.Document()->height == 24;
 
         const bool passedPreview   = expect(scenario.name, "opacity-preview-is-literal-and-uncommitted", preview);
         const bool passedHeld      = expect(scenario.name, "history-gate-held-before-brush-replay", held);

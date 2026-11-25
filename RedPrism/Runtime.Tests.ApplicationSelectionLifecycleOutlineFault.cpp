@@ -4,6 +4,7 @@
 #include "ProjectStore.h"
 #include "Prompts.h"
 #include "Runtime.Tests.DocumentLifecycleTestGate.h"
+#include "Runtime.Tests.ProjectSaveFixture.h"
 #include "Runtime.Tests.ProjectSaveTestGate.h"
 #include "Runtime.Tests.SelectionMoveCloseTestGate.h"
 
@@ -189,6 +190,9 @@ int Application::RunSelectionLifecycleOutlineFaultSelfTest() noexcept
     const auto originalViewport          = _viewport;
     const auto originalTool              = _tool;
     const auto originalPath              = _documentPath;
+    const bool originalIsArchive         = _documentIsArchive;
+    const auto originalArchiveVersion    = _documentArchiveVersion;
+    const auto originalFolderVersion     = _documentFolderVersion;
     const auto originalAnswer            = _forcedDiscardAnswer;
     const bool originalCloseConfirmed    = _closeConfirmed;
     const bool originalSessionPending    = _endSessionPending;
@@ -248,10 +252,13 @@ int Application::RunSelectionLifecycleOutlineFaultSelfTest() noexcept
             _session.CancelSelectionMove();
         }
         CancelSizeCard();
-        _viewport            = originalViewport;
-        _tool                = originalTool;
-        _documentPath        = originalPath;
-        _forcedDiscardAnswer = originalAnswer;
+        _viewport               = originalViewport;
+        _tool                   = originalTool;
+        _documentPath           = originalPath;
+        _documentIsArchive      = originalIsArchive;
+        _documentArchiveVersion = originalArchiveVersion;
+        _documentFolderVersion  = originalFolderVersion;
+        _forcedDiscardAnswer    = originalAnswer;
         discardClosePosts();
         _closeConfirmed           = originalCloseConfirmed;
         _endSessionPending        = originalSessionPending;
@@ -526,8 +533,15 @@ int Application::RunSelectionLifecycleOutlineFaultSelfTest() noexcept
             state.generation = _session.Generation();
             state.opening    = _session.SelectionMoveOpening();
             state.output     = (root / (std::to_wstring(modes) + L".prism")).wstring();
-            _documentPath    = state.output;
-            state.close      = std::make_shared<SelectionMoveCloseTestGate>();
+            const auto initialVersion =
+                test.save ? ProjectSaveFixture::SeedArchive(state.output, _session.Document().value(), _session.ActiveLayerID()) : std::nullopt;
+            if (test.save && ! initialVersion)
+                return 5;
+            _documentPath           = state.output;
+            _documentIsArchive      = test.save;
+            _documentArchiveVersion = initialVersion;
+            _documentFolderVersion.reset();
+            state.close = std::make_shared<SelectionMoveCloseTestGate>();
             state.close->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
             state.lifecycle = std::make_shared<DocumentLifecycleTestGate>();
             state.writer    = std::make_shared<ProjectSaveTestGate>();
@@ -614,7 +628,7 @@ int Application::RunSelectionLifecycleOutlineFaultSelfTest() noexcept
                 expect(test.name,
                        "no-write-or-replacement-after-close-refusal",
                        ! state.saveVisited && ! state.lifecycleVisited && ! state.lifecycle->retired.load() &&
-                           GetFileAttributesW(state.output.c_str()) == INVALID_FILE_ATTRIBUTES);
+                           ProjectSaveFixture::ArchiveUnchanged(state.output, initialVersion));
                 if (stale)
                     expect(test.name,
                            "new-authority-preserved",
@@ -727,14 +741,15 @@ int Application::RunSelectionLifecycleOutlineFaultSelfTest() noexcept
                 const auto loaded = LoadProject(state.output.c_str());
                 expect(test.name,
                        "saved-file-is-original-40x40-before-replacement",
-                       loaded.status == ProjectIoStatus::Ok && loaded.document.width == 40 && loaded.document.height == 40 &&
-                           loaded.document.layers.size() == 1 && loaded.document.layers.front().opacity == 0.5 && ! loaded.document.selection);
+                       loaded.status == ProjectIoStatus::Ok && loaded.archiveVersion && loaded.archiveVersion != initialVersion &&
+                           loaded.document.width == 40 && loaded.document.height == 40 && loaded.document.layers.size() == 1 &&
+                           loaded.document.layers.front().opacity == 0.5 && ! loaded.document.selection);
                 if (test.mode == Mode::SavePublishedCancel || test.mode == Mode::SaveColor || test.mode == Mode::SaveCard || test.mode == Mode::SaveSession ||
                     test.mode == Mode::PublishedSaveSession)
                     expect(test.name, "published-save-marker-survives-replacement-refusal", ! _session.history.IsModified());
             }
             else
-                expect(test.name, "no-unacknowledged-output", GetFileAttributesW(state.output.c_str()) == INVALID_FILE_ATTRIBUTES);
+                expect(test.name, "no-unacknowledged-output", ProjectSaveFixture::ArchiveUnchanged(state.output, initialVersion));
             if (state.younger)
                 expect(test.name,
                        "younger-undo-waits-for-lifecycle-acknowledgement",
