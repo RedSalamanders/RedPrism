@@ -388,7 +388,9 @@ HRESULT Application::SelectHostOutput(HostRequest& request, HostWriteFormat form
                 return request.TrySelectOutput(target.path, _hostInputBudget, false, target.acceptedVersion, true) ? S_OK
                                                                                                                    : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
             }
-            return request.TrySelectOutput(write->path.value(), _hostInputBudget) ? S_OK : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+            return request.TrySelectOutput(write->path.value(), _hostInputBudget, false, std::nullopt, write->requireVacantArchive)
+                       ? S_OK
+                       : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
         }
         if (format == HostWriteFormat::Project && ! saveAs && ! _documentPath.empty())
         {

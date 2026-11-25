@@ -1000,7 +1000,14 @@ void Application::PrepareUiBenchmarkStep() noexcept
         state.samplerReceipt.reset();
         OnTool(EditorTool::Eyedropper);
     }
-    _documentPath = operation.expected == Expected::Saved ? state.savePath : std::wstring{};
+    // Each repeated save uses the archive identity acknowledged by the previous trial.
+    if (operation.expected != Expected::Saved || _documentPath != state.savePath || ! _documentIsArchive)
+    {
+        _documentPath.clear();
+        _documentIsArchive = false;
+        _documentArchiveVersion.reset();
+        _documentFolderVersion.reset();
+    }
     if (operation.prepareCommand)
     {
         OnCommand(operation.prepareCommand);
@@ -1153,7 +1160,23 @@ void Application::ExecuteUiBenchmarkStep() noexcept
     }
     else if (operation.expected == Expected::Saved)
     {
-        _uiBenchmark->saveReceipt = QueueHostWrite(HostWriteFormat::Project, false);
+        if (_documentPath.empty())
+        {
+            try
+            {
+                _uiBenchmark->saveReceipt =
+                    QueueHostInput(HostWriteInput{.format = HostWriteFormat::Project, .path = _uiBenchmark->savePath, .requireVacantArchive = true});
+            }
+            catch (const std::bad_alloc&)
+            {
+                FailUiBenchmark("project-save-output-admission");
+                return;
+            }
+        }
+        else
+        {
+            _uiBenchmark->saveReceipt = QueueHostWrite(HostWriteFormat::Project, false);
+        }
         ReportHostAdmission(_uiBenchmark->saveReceipt.value());
     }
     else if (operation.expected == Expected::Opened)
@@ -1365,7 +1388,7 @@ void Application::AdvanceUiBenchmark() noexcept
     // Successful writer receipts require the captured backend publication fact. Timing validation never reads or
     // decodes output files synchronously; separate codec and continuation tests validate the written bytes.
     const bool saved = expected == Expected::Saved && state.saveReceipt && state.saveReceipt->Read().outcome == HostOutcome::Succeeded &&
-                       _documentPath == state.savePath && ! edit && ! _session.history.IsModified() &&
+                       _documentPath == state.savePath && _documentIsArchive && _documentArchiveVersion && ! edit && ! _session.history.IsModified() &&
                        _session.history.CurrentRevision() == state.previousRevision && layer && layer->asset && layer->asset->image == state.previousImage;
     const bool opened =
         expected == Expected::Opened && state.savedBaselineReady && state.saveReceipt && state.saveReceipt->Read().outcome == HostOutcome::Succeeded &&
