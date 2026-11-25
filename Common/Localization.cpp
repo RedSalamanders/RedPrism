@@ -2,39 +2,56 @@
 
 #include <algorithm>
 #include <cwctype>
+#include <utility>
 
 namespace Localization
 {
 namespace
 {
-void AddCandidate(std::vector<std::wstring>& out, std::wstring_view directory, std::wstring_view tag)
+void AddCandidate(std::vector<std::wstring>& out, std::wstring path)
 {
-    if (tag.empty())
-    {
-        return;
-    }
-    std::wstring path{directory};
-    path += L'\\';
-    path += kSatelliteFolder;
-    path += L'\\';
-    path.append(tag);
-    path += L'\\';
-    path += kSatelliteName;
     if (std::find(out.begin(), out.end(), path) == out.end())
     {
         out.push_back(std::move(path));
     }
 }
 
-// "fr-FR" then "fr": a regional table when there is one, the language's otherwise.
-void AddTagFamily(std::vector<std::wstring>& out, std::wstring_view directory, std::wstring_view tag)
+void AddTagPaths(std::vector<std::wstring>& out, std::wstring_view directory, std::wstring_view tag)
 {
-    AddCandidate(out, directory, tag);
-    const std::size_t dash = tag.find(L'-');
-    if (dash != std::wstring_view::npos && dash > 0)
+    std::wstring path{directory};
+    path += L"\\Lang\\RedPrism-";
+    path.append(tag);
+    path += L".dll";
+    AddCandidate(out, std::move(path));
+
+    std::wstring previous{directory};
+    previous += L"\\Languages\\";
+    previous.append(tag);
+    previous += L"\\RedPrism.resources.dll";
+    AddCandidate(out, std::move(previous));
+}
+
+// "fr-FR" then "fr": a regional table when there is one, the language's otherwise.
+[[nodiscard]] bool AddTagFamily(std::vector<std::wstring>& out, std::wstring_view directory, std::wstring_view tag)
+{
+    const auto isTagCharacter = [](wchar_t character) noexcept
     {
-        AddCandidate(out, directory, tag.substr(0, dash));
+        return (character >= L'a' && character <= L'z') || (character >= L'A' && character <= L'Z') || (character >= L'0' && character <= L'9') ||
+               character == L'-';
+    };
+    if (tag.empty() || tag.size() >= LOCALE_NAME_MAX_LENGTH || tag.front() == L'-' || tag.back() == L'-' || tag.find(L"--") != std::wstring_view::npos ||
+        ! std::all_of(tag.begin(), tag.end(), isTagCharacter))
+    {
+        return false;
     }
+
+    AddTagPaths(out, directory, tag);
+    const std::size_t dash = tag.find(L'-');
+    if (dash != std::wstring_view::npos)
+    {
+        AddTagPaths(out, directory, tag.substr(0, dash));
+    }
+    return true;
 }
 
 // Whether `tag` is the embedded table's language ("en", "EN-gb").
@@ -91,20 +108,22 @@ std::vector<std::wstring> SatelliteCandidates(std::wstring_view executableDirect
     {
         directory.remove_suffix(1);
     }
+    if (directory.empty())
+    {
+        return candidates;
+    }
     // The embedded table is English: an English tag ends the list (after a regional English table, if one ships),
     // so `language: "en"` or an English display language ahead of another one keeps the English strings.
     if (! preferredTag.empty())
     {
-        AddTagFamily(candidates, directory, preferredTag);
-        if (IsEmbeddedLanguage(preferredTag))
+        if (AddTagFamily(candidates, directory, preferredTag) && IsEmbeddedLanguage(preferredTag))
         {
             return candidates;
         }
     }
     for (const std::wstring& language : systemLanguages)
     {
-        AddTagFamily(candidates, directory, language);
-        if (IsEmbeddedLanguage(language))
+        if (AddTagFamily(candidates, directory, language) && IsEmbeddedLanguage(language))
         {
             break;
         }

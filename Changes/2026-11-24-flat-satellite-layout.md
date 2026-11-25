@@ -1,0 +1,1 @@
+- Read RedPrism translations from the shared Lang layout and keep support for existing satellite installations.
