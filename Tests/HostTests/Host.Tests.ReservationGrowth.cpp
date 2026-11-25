@@ -194,10 +194,10 @@ private:
 #pragma warning(disable : 4625 4626 5026 5027)
 struct SuccessorState final
 {
-    explicit SuccessorState(StageState& predecessor) noexcept : predecessor_(predecessor)
+    explicit SuccessorState(StageState& predecessor) noexcept : previousStage(predecessor)
     {
     }
-    StageState& predecessor_;
+    StageState& previousStage;
     std::atomic<bool> entered{false};
     std::atomic<bool> sawFinalCallback{false};
     std::atomic<unsigned int> completions{0};
@@ -216,15 +216,15 @@ public:
     }
     JobResult Run(JobContext&) override
     {
-        _state.sawFinalCallback.store(_state.predecessor_.finalCallbackPublished.load(std::memory_order_acquire), std::memory_order_release);
+        _state.sawFinalCallback.store(_state.previousStage.finalCallbackPublished.load(std::memory_order_acquire), std::memory_order_release);
         _state.entered.store(true, std::memory_order_release);
-        (void)SetEvent(_state.predecessor_.successorEntered.get());
+        (void)SetEvent(_state.previousStage.successorEntered.get());
         return {};
     }
     void Completed(JobResult) noexcept override
     {
         _state.completions.fetch_add(1, std::memory_order_relaxed);
-        (void)SetEvent(_state.predecessor_.successorCompleted.get());
+        (void)SetEvent(_state.previousStage.successorCompleted.get());
     }
 
 private:

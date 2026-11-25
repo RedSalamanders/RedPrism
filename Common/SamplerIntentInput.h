@@ -29,14 +29,14 @@ public:
     using Admission                                 = SamplerInput::Admission;
     static constexpr std::uint32_t kPendingCapacity = SamplerInput::kPendingCapacity;
 
-    explicit SamplerIntentInput(std::uint64_t sequenceSeed = 0) noexcept : input_(sequenceSeed)
+    explicit SamplerIntentInput(std::uint64_t sequenceSeed = 0) noexcept : _input(sequenceSeed)
     {
     }
 
     SamplerIntentInput(const SamplerIntentInput&)            = delete;
     SamplerIntentInput& operator=(const SamplerIntentInput&) = delete;
 
-    SamplerIntentInput(SamplerIntentInput&& other) noexcept : input_(std::move(other.input_))
+    SamplerIntentInput(SamplerIntentInput&& other) noexcept : _input(std::move(other._input))
     {
         MoveMetadataFrom(other);
     }
@@ -45,7 +45,7 @@ public:
     {
         if (this != &other)
         {
-            input_ = std::move(other.input_);
+            _input = std::move(other._input);
             MoveMetadataFrom(other);
         }
         return *this;
@@ -53,142 +53,142 @@ public:
 
     [[nodiscard]] bool Begin(std::uint64_t opening, std::int32_t width, std::int32_t height) noexcept
     {
-        if (! input_.Begin(opening, width, height))
+        if (! _input.Begin(opening, width, height))
         {
             return false;
         }
-        head_         = 0;
-        pendingCount_ = 0;
-        activeIntent_.reset();
-        hasPendingTail_ = false;
+        _head         = 0;
+        _pendingCount = 0;
+        _activeIntent.reset();
+        _hasPendingTail = false;
         return true;
     }
 
     [[nodiscard]] Admission Accept(std::uint64_t opening, std::int32_t x, std::int32_t y, SamplerPointIntent intent) noexcept
     {
         bool samePendingPointAndIntent = false;
-        if (hasPendingTail_)
+        if (_hasPendingTail)
         {
-            const std::uint32_t tail  = (head_ + pendingCount_ - 1) % kPendingCapacity;
-            samePendingPointAndIntent = pendingTailX_ == x && pendingTailY_ == y && pendingIntents_[tail] == intent;
+            const std::uint32_t tail  = (_head + _pendingCount - 1) % kPendingCapacity;
+            samePendingPointAndIntent = _pendingTailX == x && _pendingTailY == y && _pendingIntents[tail] == intent;
         }
 
-        const Admission admission = input_.Accept(opening, x, y, samePendingPointAndIntent);
+        const Admission admission = _input.Accept(opening, x, y, samePendingPointAndIntent);
         if (admission == Admission::Recorded)
         {
-            const std::uint32_t tail = (head_ + pendingCount_) % kPendingCapacity;
-            pendingIntents_[tail]    = intent;
-            ++pendingCount_;
-            pendingTailX_   = x;
-            pendingTailY_   = y;
-            hasPendingTail_ = true;
+            const std::uint32_t tail = (_head + _pendingCount) % kPendingCapacity;
+            _pendingIntents[tail]    = intent;
+            ++_pendingCount;
+            _pendingTailX   = x;
+            _pendingTailY   = y;
+            _hasPendingTail = true;
         }
         else if (admission == Admission::Coalesced)
         {
-            const std::uint32_t tail = (head_ + pendingCount_ - 1) % kPendingCapacity;
-            pendingIntents_[tail]    = intent;
+            const std::uint32_t tail = (_head + _pendingCount - 1) % kPendingCapacity;
+            _pendingIntents[tail]    = intent;
         }
         return admission;
     }
 
     [[nodiscard]] std::optional<SamplerIntentPoint> SelectNext(std::uint64_t opening) noexcept
     {
-        const std::optional<SamplerPoint> point = input_.SelectNext(opening);
+        const std::optional<SamplerPoint> point = _input.SelectNext(opening);
         if (! point.has_value())
         {
             return std::nullopt;
         }
-        activeIntent_ = pendingIntents_[head_];
-        head_         = (head_ + 1) % kPendingCapacity;
-        --pendingCount_;
-        hasPendingTail_ = pendingCount_ != 0;
-        return SamplerIntentPoint{point.value(), activeIntent_.value()};
+        _activeIntent = _pendingIntents[_head];
+        _head         = (_head + 1) % kPendingCapacity;
+        --_pendingCount;
+        _hasPendingTail = _pendingCount != 0;
+        return SamplerIntentPoint{point.value(), _activeIntent.value()};
     }
 
     [[nodiscard]] bool Acknowledge(SamplerPointStamp stamp, std::optional<std::uint32_t> opaqueArgb) noexcept
     {
-        if (! input_.Acknowledge(stamp, opaqueArgb))
+        if (! _input.Acknowledge(stamp, opaqueArgb))
         {
             return false;
         }
-        activeIntent_.reset();
+        _activeIntent.reset();
         return true;
     }
 
     [[nodiscard]] bool Seal(std::uint64_t opening) noexcept
     {
-        return input_.Seal(opening);
+        return _input.Seal(opening);
     }
 
     [[nodiscard]] bool Cancel(std::uint64_t opening) noexcept
     {
-        if (! input_.Cancel(opening))
+        if (! _input.Cancel(opening))
         {
             return false;
         }
-        head_           = 0;
-        pendingCount_   = 0;
-        hasPendingTail_ = false;
+        _head           = 0;
+        _pendingCount   = 0;
+        _hasPendingTail = false;
         return true;
     }
 
     [[nodiscard]] bool IsFinished(std::uint64_t opening) const noexcept
     {
-        return input_.IsFinished(opening);
+        return _input.IsFinished(opening);
     }
 
     [[nodiscard]] bool HasNoWork(std::uint64_t opening) const noexcept
     {
-        return input_.HasNoWork(opening);
+        return _input.HasNoWork(opening);
     }
 
     [[nodiscard]] std::optional<SamplerIntentPoint> ActivePoint(std::uint64_t opening) const noexcept
     {
-        const std::optional<SamplerPoint> point = input_.ActivePoint(opening);
-        if (! point.has_value() || ! activeIntent_.has_value())
+        const std::optional<SamplerPoint> point = _input.ActivePoint(opening);
+        if (! point.has_value() || ! _activeIntent.has_value())
         {
             return std::nullopt;
         }
-        return SamplerIntentPoint{point.value(), activeIntent_.value()};
+        return SamplerIntentPoint{point.value(), _activeIntent.value()};
     }
 
     [[nodiscard]] std::optional<SamplerOpaqueColor> LatestOpaqueColor() const noexcept
     {
-        return input_.LatestOpaqueColor();
+        return _input.LatestOpaqueColor();
     }
 
     [[nodiscard]] std::uint32_t PendingCount() const noexcept
     {
-        return pendingCount_;
+        return _pendingCount;
     }
 
     [[nodiscard]] std::uint64_t LastSequence() const noexcept
     {
-        return input_.LastSequence();
+        return _input.LastSequence();
     }
 
 private:
     void MoveMetadataFrom(SamplerIntentInput& other) noexcept
     {
-        pendingIntents_ = other.pendingIntents_;
-        activeIntent_   = other.activeIntent_;
-        head_           = other.head_;
-        pendingCount_   = other.pendingCount_;
-        pendingTailX_   = other.pendingTailX_;
-        pendingTailY_   = other.pendingTailY_;
-        hasPendingTail_ = other.hasPendingTail_;
-        other.activeIntent_.reset();
-        other.head_           = 0;
-        other.pendingCount_   = 0;
-        other.hasPendingTail_ = false;
+        _pendingIntents = other._pendingIntents;
+        _activeIntent   = other._activeIntent;
+        _head           = other._head;
+        _pendingCount   = other._pendingCount;
+        _pendingTailX   = other._pendingTailX;
+        _pendingTailY   = other._pendingTailY;
+        _hasPendingTail = other._hasPendingTail;
+        other._activeIntent.reset();
+        other._head           = 0;
+        other._pendingCount   = 0;
+        other._hasPendingTail = false;
     }
 
-    SamplerInput input_;
-    std::array<SamplerPointIntent, kPendingCapacity> pendingIntents_{};
-    std::optional<SamplerPointIntent> activeIntent_;
-    std::uint32_t head_         = 0;
-    std::uint32_t pendingCount_ = 0;
-    std::int32_t pendingTailX_  = 0;
-    std::int32_t pendingTailY_  = 0;
-    bool hasPendingTail_        = false;
+    SamplerInput _input;
+    std::array<SamplerPointIntent, kPendingCapacity> _pendingIntents{};
+    std::optional<SamplerPointIntent> _activeIntent;
+    std::uint32_t _head         = 0;
+    std::uint32_t _pendingCount = 0;
+    std::int32_t _pendingTailX  = 0;
+    std::int32_t _pendingTailY  = 0;
+    bool _hasPendingTail        = false;
 };

@@ -39,31 +39,34 @@ struct CopyCounter final
 
 struct Handle final
 {
-    Handle(CopyCounter& counter, int value, std::shared_ptr<int> witness = {}) noexcept : counter_(&counter), value_(value), witness_(std::move(witness))
+    Handle(CopyCounter& counter, int value, std::shared_ptr<int> witness = {}) noexcept
+        : copyCounter(&counter),
+          entryValue(value),
+          retainedWitness(std::move(witness))
     {
     }
 
-    Handle(const Handle& other) noexcept : counter_(other.counter_), value_(other.value_), witness_(other.witness_)
+    Handle(const Handle& other) noexcept : copyCounter(other.copyCounter), entryValue(other.entryValue), retainedWitness(other.retainedWitness)
     {
-        counter_->copies.fetch_add(1, std::memory_order_relaxed);
+        copyCounter->copies.fetch_add(1, std::memory_order_relaxed);
     }
     Handle& operator=(const Handle& other) noexcept
     {
         if (this != &other)
         {
-            counter_ = other.counter_;
-            value_   = other.value_;
-            witness_ = other.witness_;
-            counter_->copies.fetch_add(1, std::memory_order_relaxed);
+            copyCounter     = other.copyCounter;
+            entryValue      = other.entryValue;
+            retainedWitness = other.retainedWitness;
+            copyCounter->copies.fetch_add(1, std::memory_order_relaxed);
         }
         return *this;
     }
     Handle(Handle&&) noexcept            = default;
     Handle& operator=(Handle&&) noexcept = default;
 
-    CopyCounter* counter_{};
-    int value_{};
-    std::shared_ptr<int> witness_;
+    CopyCounter* copyCounter{};
+    int entryValue{};
+    std::shared_ptr<int> retainedWitness;
 };
 
 using Entries = HistoryEntries<Handle>;
@@ -76,21 +79,21 @@ struct OwnershipMeasure final
 struct MeasuredEntry final
 {
     MeasuredEntry(OwnershipMeasure& measure, int value, std::optional<RecordOwnershipBounds> bounds) noexcept
-        : measure_(&measure),
-          value_(value),
-          bounds_(bounds)
+        : ownershipMeasure(&measure),
+          entryValue(value),
+          ownershipBounds(bounds)
     {
     }
 
     [[nodiscard]] std::optional<RecordOwnershipBounds> OwnershipBounds() const noexcept
     {
-        ++measure_->calls;
-        return bounds_;
+        ++ownershipMeasure->calls;
+        return ownershipBounds;
     }
 
-    OwnershipMeasure* measure_{};
-    int value_{};
-    std::optional<RecordOwnershipBounds> bounds_;
+    OwnershipMeasure* ownershipMeasure{};
+    int entryValue{};
+    std::optional<RecordOwnershipBounds> ownershipBounds;
 };
 
 using MeasuredHandle  = std::shared_ptr<const MeasuredEntry>;
@@ -201,14 +204,14 @@ void TestOwnershipCachePopAndEraseRestoreCompleteBounds()
     entries.push_back(MakeMeasuredEntry(measure, 3, RecordOwnershipBounds{5, 8, 4}));
     entries.pop_back();
     const auto afterPop = entries.OwnershipBounds();
-    Expect(oneEntryBounds.has_value() && entries.size() == 2 && entries.back()->value_ == 2 && afterPop.has_value() &&
+    Expect(oneEntryBounds.has_value() && entries.size() == 2 && entries.back()->entryValue == 2 && afterPop.has_value() &&
                afterPop->metadataBytes > oneEntryBounds->metadataBytes + 3 && afterPop->ownershipBytes > oneEntryBounds->ownershipBytes + 7 &&
                afterPop->rasterNodes == oneEntryBounds->rasterNodes + 2,
            "ownership-cache-pop-remeasures-retained-complete-vector");
 
     entries.erase(entries.begin(), entries.begin() + 1);
     const auto afterErase = entries.OwnershipBounds();
-    Expect(entries.size() == 1 && entries.back()->value_ == 2 && afterErase.has_value() && afterPop.has_value() &&
+    Expect(entries.size() == 1 && entries.back()->entryValue == 2 && afterErase.has_value() && afterPop.has_value() &&
                afterErase->metadataBytes == ExpectedRootBytes(entries) + 3 && afterErase->ownershipBytes == ExpectedRootBytes(entries) + 7 &&
                afterErase->rasterNodes == 2,
            "ownership-cache-erase-rebuilds-bounds-for-surviving-entry");
@@ -222,7 +225,7 @@ void TestOwnershipCacheRefusesInvalidChildrenAndOverflow()
     {
         MeasuredEntries entries;
         entries.push_back(std::move(entry));
-        Expect(HasUnavailableBounds(entries) && entries.size() == 1 && entries.back()->value_ == kValue, name);
+        Expect(HasUnavailableBounds(entries) && entries.size() == 1 && entries.back()->entryValue == kValue, name);
     };
 
     assertRefusalPreservesContents(MakeMeasuredEntry(measure, kValue, std::nullopt), "ownership-cache-unavailable-child-keeps-valid-entry");
@@ -234,8 +237,8 @@ void TestOwnershipCacheRefusesInvalidChildrenAndOverflow()
     MeasuredEntries rasterOverflow;
     rasterOverflow.push_back(MakeMeasuredEntry(measure, kValue, RecordOwnershipBounds{0, 1, (std::numeric_limits<std::uint64_t>::max)()}));
     rasterOverflow.push_back(MakeMeasuredEntry(measure, kValue + 1, RecordOwnershipBounds{0, 1, 1}));
-    Expect(HasUnavailableBounds(rasterOverflow) && rasterOverflow.size() == 2 && (*rasterOverflow.begin())->value_ == kValue &&
-               rasterOverflow.back()->value_ == kValue + 1,
+    Expect(HasUnavailableBounds(rasterOverflow) && rasterOverflow.size() == 2 && (*rasterOverflow.begin())->entryValue == kValue &&
+               rasterOverflow.back()->entryValue == kValue + 1,
            "ownership-cache-raster-overflow-keeps-valid-entries");
 
     MeasuredEntries nullEntry;
@@ -264,10 +267,11 @@ void TestStackStorageMetadataExcludesChildrenAndPreservesRoots()
     Expect(stable && measure.calls == calls && captured.Identity() == entries.Identity(), "storage-only-queries-never-measure-children-or-clone-root");
     entries.push_back(MakeMeasuredEntry(measure, 4, RecordOwnershipBounds{0, 8 * kLargeChild, 1}));
     Expect(entries.StorageMetadataBytes() && *entries.StorageMetadataBytes() < 4096 && captured.StorageMetadataBytes() == stackBytes && captured.size() == 1 &&
-               captured.back()->value_ == 3,
+               captured.back()->entryValue == 3,
            "storage-only-old-root-survives-new-eight-mib-child");
     MeasuredEntries moved = std::move(entries);
-    Expect(entries.StorageMetadataBytes() == std::optional(std::uint64_t{}) && moved.StorageMetadataBytes() && moved.size() == 2 && moved.back()->value_ == 4,
+    Expect(entries.StorageMetadataBytes() == std::optional(std::uint64_t{}) && moved.StorageMetadataBytes() && moved.size() == 2 &&
+               moved.back()->entryValue == 4,
            "storage-only-move-transfers-capacity-and-clears-source");
     moved.clear();
     Expect(moved.StorageMetadataBytes() == std::optional(std::uint64_t{}) && captured.StorageMetadataBytes() == stackBytes,
@@ -293,7 +297,7 @@ bool ValuesAre(const Entries& entries, const int* expected, std::size_t count) n
     std::size_t index = 0;
     for (auto it = entries.begin(); it != entries.end(); ++it, ++index)
     {
-        if (it->value_ != expected[index])
+        if (it->entryValue != expected[index])
             return false;
     }
     return true;
@@ -314,16 +318,16 @@ void TestEmptySharingAndReads()
 
     int nonConstReadSum = 0;
     for (auto it = entries.begin(); it != entries.end(); ++it)
-        nonConstReadSum += it->value_;
-    const bool nonConstRead = entries.size() == 2 && entries.back().value_ == 22 && nonConstReadSum == 33 && entries.Identity() == originalIdentity &&
+        nonConstReadSum += it->entryValue;
+    const bool nonConstRead = entries.size() == 2 && entries.back().entryValue == 22 && nonConstReadSum == 33 && entries.Identity() == originalIdentity &&
                               counter.copies.load(std::memory_order_relaxed) == 0;
     Expect(nonConstRead, "nonconst-reads-do-not-detach-or-copy-handles");
 
     const Entries& constEntries = entries;
     int constReadSum            = 0;
     for (auto it = constEntries.begin(); it != constEntries.end(); ++it)
-        constReadSum += it->value_;
-    Expect(constReadSum == 33 && constEntries.back().value_ == 22 && constEntries.Identity() == originalIdentity &&
+        constReadSum += it->entryValue;
+    Expect(constReadSum == 33 && constEntries.back().entryValue == 22 && constEntries.Identity() == originalIdentity &&
                counter.copies.load(std::memory_order_relaxed) == 0,
            "const-reads-do-not-detach-or-copy-handles");
 
@@ -414,7 +418,7 @@ void TestRootOwnsHandleWitness()
     }
     Entries captured = entries;
     entries.clear();
-    Expect(! witness.expired() && captured.back().value_ == 73, "captured-root-retains-handle-witness-after-clear");
+    Expect(! witness.expired() && captured.back().entryValue == 73, "captured-root-retains-handle-witness-after-clear");
     captured.clear();
     Expect(witness.expired(), "handle-witness-expires-after-final-root-owner");
 }
@@ -447,7 +451,7 @@ void TestConcurrentReadersAndPrivateWriter()
                 int value = 0;
                 for (auto it = privateRead.begin(); it != privateRead.end(); ++it, ++value)
                 {
-                    if (it->value_ != value)
+                    if (it->entryValue != value)
                         correct = false;
                 }
                 rendezvous.arrive_and_wait();
@@ -461,7 +465,8 @@ void TestConcurrentReadersAndPrivateWriter()
         {
             rendezvous.arrive_and_wait();
             writer.push_back(Handle{counter, 100 + round});
-            if (writer.size() != static_cast<std::size_t>(13 + round) || writer.back().value_ != 100 + round || base.size() != 12 || base.back().value_ != 11)
+            if (writer.size() != static_cast<std::size_t>(13 + round) || writer.back().entryValue != 100 + round || base.size() != 12 ||
+                base.back().entryValue != 11)
             {
                 writerResult = false;
             }
@@ -491,28 +496,31 @@ struct RefusalState final
 
 struct RefusingHandle final
 {
-    RefusingHandle(RefusalState& state, int value, std::shared_ptr<int> witness) noexcept : state_(&state), value_(value), witness_(std::move(witness))
+    RefusingHandle(RefusalState& state, int value, std::shared_ptr<int> witness) noexcept
+        : refusalState(&state),
+          entryValue(value),
+          retainedWitness(std::move(witness))
     {
     }
 
-    RefusingHandle(const RefusingHandle& other) : state_(other.state_), value_(other.value_)
+    RefusingHandle(const RefusingHandle& other) : refusalState(other.refusalState), entryValue(other.entryValue)
     {
-        ++state_->copyAttempts;
-        if (state_->copyAttempts == state_->refuseOnAttempt)
+        ++refusalState->copyAttempts;
+        if (refusalState->copyAttempts == refusalState->refuseOnAttempt)
         {
-            ++state_->refusedCopies;
+            ++refusalState->refusedCopies;
             throw std::bad_alloc{};
         }
-        witness_ = other.witness_;
-        ++state_->successfulCopies;
+        retainedWitness = other.retainedWitness;
+        ++refusalState->successfulCopies;
     }
     RefusingHandle& operator=(const RefusingHandle&)     = delete;
     RefusingHandle(RefusingHandle&&) noexcept            = default;
     RefusingHandle& operator=(RefusingHandle&&) noexcept = default;
 
-    RefusalState* state_{};
-    int value_{};
-    std::shared_ptr<int> witness_;
+    RefusalState* refusalState{};
+    int entryValue{};
+    std::shared_ptr<int> retainedWitness;
 };
 
 using RefusalEntries = HistoryEntries<RefusingHandle>;
@@ -538,7 +546,7 @@ bool RefusalValuesAre(const RefusalEntries& entries, const int* expected, std::s
     std::size_t index = 0;
     for (auto it = entries.begin(); it != entries.end(); ++it, ++index)
     {
-        if (it->value_ != expected[index])
+        if (it->entryValue != expected[index])
             return false;
     }
     return true;
