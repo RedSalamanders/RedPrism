@@ -150,6 +150,7 @@
     <ClInclude Include="..\Common\ImageImportWork.h" />
     <ClInclude Include="..\Common\ProjectSaveWork.h" />
     <ClInclude Include="Runtime.Tests.ProjectSaveTestGate.h" />
+    <ClInclude Include="Runtime.Tests.ProjectSaveFixture.h" />
     <ClInclude Include="WorkerWriteCompletion.h" />
     <ClInclude Include="Runtime.Tests.EndSessionWriteTestGate.h" />
     <ClInclude Include="Runtime.Tests.ProjectOpenTestGate.h" />

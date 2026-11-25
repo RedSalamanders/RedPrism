@@ -4,6 +4,7 @@
 #include "ChromeHost.h"
 #include "ModalProbePrompts.h"
 #include "Runtime.Tests.LayerMetadataTestGate.h"
+#include "Runtime.Tests.ProjectSaveFixture.h"
 #include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
@@ -17,18 +18,21 @@
 
 int Application::RunCanvasBrushLifetimeAuthoritySelfTest() noexcept
 {
-    const auto viewport    = _viewport;
-    const auto path        = _documentPath;
-    const auto settings    = _session.brushSettings;
-    const auto mode        = _session.brushMode;
-    const auto maskWhite   = _session.maskPaintWhite;
-    const auto tool        = _tool;
-    const auto forced      = _forcedDiscardAnswer;
-    const auto pendingEnd  = _endSessionPending;
-    const auto deferredEnd = _endSessionPromptDeferred;
-    const auto pan         = _spacePan;
-    const auto settle      = [this]() noexcept { return SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled; };
-    const auto cleanup     = wil::scope_exit([&]() noexcept
+    const auto viewport       = _viewport;
+    const auto path           = _documentPath;
+    const bool isArchive      = _documentIsArchive;
+    const auto archiveVersion = _documentArchiveVersion;
+    const auto folderVersion  = _documentFolderVersion;
+    const auto settings       = _session.brushSettings;
+    const auto mode           = _session.brushMode;
+    const auto maskWhite      = _session.maskPaintWhite;
+    const auto tool           = _tool;
+    const auto forced         = _forcedDiscardAnswer;
+    const auto pendingEnd     = _endSessionPending;
+    const auto deferredEnd    = _endSessionPromptDeferred;
+    const auto pan            = _spacePan;
+    const auto settle         = [this]() noexcept { return SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled; };
+    const auto cleanup        = wil::scope_exit([&]() noexcept
     {
         if (_layerMetadataTestGate)
             (void)SetEvent(_layerMetadataTestGate->release.get());
@@ -46,6 +50,9 @@ int Application::RunCanvasBrushLifetimeAuthoritySelfTest() noexcept
         _canvasBrushReceipt       = {};
         _viewport                 = viewport;
         _documentPath             = path;
+        _documentIsArchive        = isArchive;
+        _documentArchiveVersion   = archiveVersion;
+        _documentFolderVersion    = folderVersion;
         _session.brushSettings    = settings;
         _session.brushMode        = mode;
         _session.maskPaintWhite   = maskWhite;
@@ -269,9 +276,15 @@ int Application::RunCanvasBrushLifetimeAuthoritySelfTest() noexcept
             std::wstring(temporary) + L"RedPrism-canvas-authority-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(++index) + L".prism";
         if (GetFileAttributesW(output.c_str()) != INVALID_FILE_ATTRIBUTES)
             return 5;
-        const auto removeFile = wil::scope_exit([&output]() noexcept { (void)DeleteFileW(output.c_str()); });
-        _documentPath         = output;
-        _forcedDiscardAnswer  = scenario.save ? Prompts::Answer::First : Prompts::Answer::Second;
+        const auto removeFile     = wil::scope_exit([&output]() noexcept { (void)DeleteFileW(output.c_str()); });
+        const auto initialVersion = scenario.save ? ProjectSaveFixture::SeedArchive(output, _session.Document().value(), target) : std::nullopt;
+        if (scenario.save && ! initialVersion)
+            return 5;
+        _documentPath           = output;
+        _documentIsArchive      = scenario.save;
+        _documentArchiveVersion = initialVersion;
+        _documentFolderVersion.reset();
+        _forcedDiscardAnswer = scenario.save ? Prompts::Answer::First : Prompts::Answer::Second;
         State state{*this, scenario};
         ModalProbePrompts presenter(QuietPrompts(), &state, modal);
         const Prompts* previous   = _prompts;
@@ -310,7 +323,7 @@ int Application::RunCanvasBrushLifetimeAuthoritySelfTest() noexcept
                      "lost-decision-cannot-execute-or-select-output",
                      state.refusedBeforeSettlement && ! _canvasLifetime &&
                          state.dependent.Read() == ContinuationReceipt::Result{cancelled ? HostOutcome::Cancelled : HostOutcome::Stale, E_ABORT} &&
-                         _session.DocumentSerial() == state.serial && GetFileAttributesW(output.c_str()) == INVALID_FILE_ATTRIBUTES))
+                         _session.DocumentSerial() == state.serial && ProjectSaveFixture::ArchiveUnchanged(output, initialVersion)))
             return 5;
         const bool original    = scenario.fault == Fault::EndCancelled || scenario.fault == Fault::EndGeneration;
         const bool authority   = original                        ? _canvasBrushInput.Sampling() && stroke.Read().outcome == HostOutcome::Pending
