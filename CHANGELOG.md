@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Tooling: enforce the shared private member naming convention in RedPrism's C++ sources and test fixtures.
 - Bind the session-end settings self-test to an accepted vacant file and check the published settings version.
 - Use the shared RedPrism settings filenames and migrate existing files with exclusive creation.
 - Exercise successful and refused host writes with an accepted current archive and a separate new output.
