@@ -1851,87 +1851,87 @@ public:
         StateView(const StateView&)            = default;
         StateView& operator=(const StateView&) = default;
         StateView(StateView&& source) noexcept
-            : past(std::move(source.past)),
-              future(std::move(source.future)),
-              pending(std::move(source.pending)),
-              storageIndex(std::move(source.storageIndex)),
-              publicationMemory(std::move(source.publicationMemory)),
-              owner(std::exchange(source.owner, nullptr)),
-              revision(source.revision),
-              epoch(source.epoch),
-              depth(source.depth),
-              entryLimit(source.entryLimit),
-              byteLimit(source.byteLimit),
-              requirePredecessor(std::exchange(source.requirePredecessor, false)),
-              precedingPast(std::move(source.precedingPast)),
-              precedingFuture(std::move(source.precedingFuture)),
-              precedingPending(std::move(source.precedingPending)),
-              precedingDepth(source.precedingDepth)
+            : _past(std::move(source._past)),
+              _future(std::move(source._future)),
+              _pending(std::move(source._pending)),
+              _storageIndex(std::move(source._storageIndex)),
+              _publicationMemory(std::move(source._publicationMemory)),
+              _owner(std::exchange(source._owner, nullptr)),
+              _revision(source._revision),
+              _epoch(source._epoch),
+              _depth(source._depth),
+              _entryLimit(source._entryLimit),
+              _byteLimit(source._byteLimit),
+              _requirePredecessor(std::exchange(source._requirePredecessor, false)),
+              _precedingPast(std::move(source._precedingPast)),
+              _precedingFuture(std::move(source._precedingFuture)),
+              _precedingPending(std::move(source._precedingPending)),
+              _precedingDepth(source._precedingDepth)
         {
         }
         StateView& operator=(StateView&& source) noexcept
         {
             if (this != &source)
             {
-                past               = std::move(source.past);
-                future             = std::move(source.future);
-                pending            = std::move(source.pending);
-                storageIndex       = std::move(source.storageIndex);
-                publicationMemory  = std::move(source.publicationMemory);
-                owner              = std::exchange(source.owner, nullptr);
-                revision           = source.revision;
-                epoch              = source.epoch;
-                depth              = source.depth;
-                entryLimit         = source.entryLimit;
-                byteLimit          = source.byteLimit;
-                requirePredecessor = std::exchange(source.requirePredecessor, false);
-                precedingPast      = std::move(source.precedingPast);
-                precedingFuture    = std::move(source.precedingFuture);
-                precedingPending   = std::move(source.precedingPending);
-                precedingDepth     = source.precedingDepth;
+                _past               = std::move(source._past);
+                _future             = std::move(source._future);
+                _pending            = std::move(source._pending);
+                _storageIndex       = std::move(source._storageIndex);
+                _publicationMemory  = std::move(source._publicationMemory);
+                _owner              = std::exchange(source._owner, nullptr);
+                _revision           = source._revision;
+                _epoch              = source._epoch;
+                _depth              = source._depth;
+                _entryLimit         = source._entryLimit;
+                _byteLimit          = source._byteLimit;
+                _requirePredecessor = std::exchange(source._requirePredecessor, false);
+                _precedingPast      = std::move(source._precedingPast);
+                _precedingFuture    = std::move(source._precedingFuture);
+                _precedingPending   = std::move(source._precedingPending);
+                _precedingDepth     = source._precedingDepth;
             }
             return *this;
         }
         [[nodiscard]] Guid Revision() const noexcept
         {
-            return revision;
+            return _revision;
         }
         [[nodiscard]] int Depth() const noexcept
         {
-            return depth;
+            return _depth;
         }
         [[nodiscard]] std::size_t PastCount() const noexcept
         {
-            return past.size();
+            return _past.size();
         }
         [[nodiscard]] std::size_t FutureCount() const noexcept
         {
-            return future.size();
+            return _future.size();
         }
         [[nodiscard]] const std::wstring& UndoName() const noexcept;
         [[nodiscard]] const std::wstring& RedoName() const noexcept;
 
     private:
         friend class DocumentHistory;
-        HistoryEntries<EntryHandle> past;
-        HistoryEntries<EntryHandle> future;
-        std::shared_ptr<const Pending> pending;
-        std::shared_ptr<const StorageIndex> storageIndex;
+        HistoryEntries<EntryHandle> _past;
+        HistoryEntries<EntryHandle> _future;
+        std::shared_ptr<const Pending> _pending;
+        std::shared_ptr<const StorageIndex> _storageIndex;
         // Explicit worker construction scope; newly allocated roots retain this owner independently.
-        std::shared_ptr<const SharedPublicationMemory> publicationMemory;
-        const DocumentHistory* owner = nullptr; // opaque identity only; workers never dereference the live history
-        Guid revision;
-        std::uint64_t epoch     = 0;
-        int depth               = 0;
-        int entryLimit          = 0;
-        std::uint64_t byteLimit = 0;
+        std::shared_ptr<const SharedPublicationMemory> _publicationMemory;
+        const DocumentHistory* _owner = nullptr; // opaque identity only; workers never dereference the live history
+        Guid _revision;
+        std::uint64_t _epoch     = 0;
+        int _depth               = 0;
+        int _entryLimit          = 0;
+        std::uint64_t _byteLimit = 0;
         // A dependent publication owns the exact predecessor roots, preventing another publication at
         // the same epoch/revision from satisfying its authority. Capturing these handles never allocates.
-        bool requirePredecessor = false;
-        HistoryEntries<EntryHandle> precedingPast;
-        HistoryEntries<EntryHandle> precedingFuture;
-        std::shared_ptr<const Pending> precedingPending;
-        int precedingDepth = 0;
+        bool _requirePredecessor = false;
+        HistoryEntries<EntryHandle> _precedingPast;
+        HistoryEntries<EntryHandle> _precedingFuture;
+        std::shared_ptr<const Pending> _precedingPending;
+        int _precedingDepth = 0;
     };
     [[nodiscard]] StateView CaptureState() const noexcept;
     [[nodiscard]] bool IsCurrent(const StateView& view) const noexcept;
@@ -1994,32 +1994,32 @@ public:
         Publication& operator=(Publication&& source) noexcept;
         [[nodiscard]] const std::optional<Snapshot>& RestoreSnapshot() const noexcept
         {
-            return restore;
+            return _restore;
         }
         [[nodiscard]] std::optional<Snapshot> TakeRestoreSnapshot() noexcept
         {
-            if (! published)
+            if (! _published)
                 return std::nullopt;
-            auto result = std::move(restore);
-            restore.reset();
+            auto result = std::move(_restore);
+            _restore.reset();
             return result;
         }
         [[nodiscard]] bool ChangesRevision() const noexcept
         {
-            return state.revision != expectedRevision;
+            return _state._revision != _expectedRevision;
         }
 
     private:
         friend class DocumentHistory;
         friend class ResidencyPermit;
-        StateView state;
-        std::optional<Snapshot> restore;
-        Guid expectedRevision;
-        std::uint64_t expectedEpoch      = 0;
-        bool published                   = false;
-        bool sampledResidency            = false;
-        bool requiresResidencyPermit     = false;
-        ResidencyPermit* residencyPermit = nullptr; // borrowed only within the acquiring owner's completion
+        StateView _state;
+        std::optional<Snapshot> _restore;
+        Guid _expectedRevision;
+        std::uint64_t _expectedEpoch      = 0;
+        bool _published                   = false;
+        bool _sampledResidency            = false;
+        bool _requiresResidencyPermit     = false;
+        ResidencyPermit* _residencyPermit = nullptr; // borrowed only within the acquiring owner's completion
     };
     enum class ResidencyValidation : std::uint8_t
     {
@@ -2056,7 +2056,7 @@ public:
     [[nodiscard]] static bool RefreshPreparedResidency(Publication& publication,
                                                        const std::optional<CanvasDocument>& current,
                                                        CancelToken cancellation = {},
-                                                       PrepareObserver observer = {});
+                                                       PrepareObserver observer = {nullptr, nullptr});
     // Owner-only constant-time hint. It never samples raster bytes or changes history. Empty history needs no
     // maintenance. Reference-written history with no index must be rebuilt on the worker before a budget claim.
     [[nodiscard]] bool NeedsResidencyMaintenance() const noexcept;
@@ -2066,7 +2066,7 @@ public:
     [[nodiscard]] static std::optional<Publication> PrepareResidencyMaintenance(StateView view,
                                                                                 const std::optional<CanvasDocument>& current,
                                                                                 CancelToken cancellation = {},
-                                                                                PrepareObserver observer = {});
+                                                                                PrepareObserver observer = {nullptr, nullptr});
     // Detached preparation owns all snapshot, entry, container and trim allocations. nullopt means cancellation
     // or ineligible/default state. Allocation failures propagate to the standard worker runner. The returned
     // publication must survive apply/drop and retire on the worker lane: Publish swaps retired live containers
@@ -2078,21 +2078,24 @@ public:
                                                                 const std::optional<Guid>& afterActive,
                                                                 std::wstring name,
                                                                 CancelToken cancellation                              = {},
-                                                                PrepareObserver observer                              = {},
+                                                                PrepareObserver observer                              = {nullptr, nullptr},
                                                                 std::shared_ptr<const SharedPublicationMemory> memory = {});
-    [[nodiscard]] static std::optional<Publication> PrepareRestore(StateView view, bool redo, CancelToken cancellation = {}, PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<Publication> PrepareRestore(StateView view,
+                                                                   bool redo,
+                                                                   CancelToken cancellation = {},
+                                                                   PrepareObserver observer = {nullptr, nullptr});
     [[nodiscard]] static std::optional<Publication> PrepareBegin(StateView view,
                                                                  const std::optional<CanvasDocument>& before,
                                                                  const std::optional<Guid>& active,
                                                                  std::wstring name,
                                                                  CancelToken cancellation                              = {},
-                                                                 PrepareObserver observer                              = {},
+                                                                 PrepareObserver observer                              = {nullptr, nullptr},
                                                                  std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] static std::optional<Publication> PrepareEnd(StateView view,
                                                                const std::optional<CanvasDocument>& after,
                                                                const std::optional<Guid>& active,
                                                                CancelToken cancellation                              = {},
-                                                               PrepareObserver observer                              = {},
+                                                               PrepareObserver observer                              = {nullptr, nullptr},
                                                                std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool CanPublish(const Publication& publication) const noexcept;
     // Prepare a dependent closure before the first publication becomes visible. The resulting view belongs to
@@ -2111,22 +2114,22 @@ public:
         ReplacementPublication& operator=(ReplacementPublication&&) noexcept = default;
         [[nodiscard]] Guid BaselineRevision() const noexcept
         {
-            return savedRevision;
+            return _savedRevision;
         }
 
     private:
         friend class DocumentHistory;
         friend class ResidencyPermit;
-        ReplacementPublication(Publication prepared, Guid baseline) noexcept : history(std::move(prepared)), savedRevision(baseline)
+        ReplacementPublication(Publication prepared, Guid baseline) noexcept : _history(std::move(prepared)), _savedRevision(baseline)
         {
         }
-        Publication history;
-        Guid savedRevision;
+        Publication _history;
+        Guid _savedRevision;
     };
     [[nodiscard]] static bool RefreshPreparedResidency(ReplacementPublication& publication,
                                                        const std::optional<CanvasDocument>& current,
                                                        CancelToken cancellation = {},
-                                                       PrepareObserver observer = {});
+                                                       PrepareObserver observer = {nullptr, nullptr});
     [[nodiscard]] static std::optional<ReplacementPublication> PrepareReplacement(StateView view,
                                                                                   const std::optional<CanvasDocument>& baseline,
                                                                                   const std::optional<Guid>& baselineActive,
@@ -2134,7 +2137,7 @@ public:
                                                                                   const std::optional<Guid>& afterActive,
                                                                                   std::wstring name,
                                                                                   CancelToken cancellation = {},
-                                                                                  PrepareObserver observer = {});
+                                                                                  PrepareObserver observer = {nullptr, nullptr});
     [[nodiscard]] bool CanPublishReplacement(const ReplacementPublication& publication) const noexcept;
     // New/Close save the final replacement state, including New's one entry from an absent baseline.
     [[nodiscard]] static std::optional<ReplacementPublication> PrepareSavedReplacement(StateView view,
@@ -2142,7 +2145,7 @@ public:
                                                                                        const std::optional<Guid>& afterActive,
                                                                                        std::wstring name,
                                                                                        CancelToken cancellation = {},
-                                                                                       PrepareObserver observer = {});
+                                                                                       PrepareObserver observer = {nullptr, nullptr});
     [[nodiscard]] bool PublishReplacement(ReplacementPublication& publication) noexcept;
 
     void Begin(std::wstring name, const std::optional<CanvasDocument>& document, const std::optional<Guid>& selection);

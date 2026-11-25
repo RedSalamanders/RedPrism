@@ -70,7 +70,7 @@ public:
     void RequestStop() noexcept;
     // Join all producers, run owner cleanup, then retire its CPU owners on a preallocated MTA callback.
     // The pool/apartment survive both hooks. A failed initialization has no worker hook or retained work.
-    void Close(CloseWork work = {}) noexcept;
+    void Close(CloseWork work = {nullptr, nullptr, nullptr}) noexcept;
     [[nodiscard]] unsigned int Concurrency() const noexcept override
     {
         return _threadCount;

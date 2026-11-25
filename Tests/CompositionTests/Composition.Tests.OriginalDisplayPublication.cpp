@@ -177,50 +177,51 @@ class Parent final : public Job
         RetireGraph,
         Destroy
     };
-    JobScheduler& jobs;
-    GpuWorkQueue& queue;
-    GpuCommandPump& commands;
-    CommittedDisplayController& display;
-    Client& client;
-    struct PixelPump& pump;
-    Observation& observation;
-    const Scenario scenario;
-    const std::uint32_t ownerThread      = GetCurrentThreadId();
-    const std::uint64_t beforeGeneration = client.session.Generation();
-    const Guid beforeRevision            = client.session.history.CurrentRevision();
-    const std::uint64_t documentSerial   = client.session.DocumentSerial();
-    const void* beforeLayers             = client.session.Document()->layers.Identity();
-    Stage stage                          = Stage::Allocate;
-    std::unique_ptr<OriginalDisplayPublication> publication;
-    std::shared_ptr<SharedPublicationMemory> memory;
-    std::shared_ptr<SharedPublicationMemory> retirementMemory;
-    std::optional<PixelMoveOpeningInput> openingInput;
-    std::optional<PreparedPixelMoveOpening> opening;
-    std::optional<PixelMoveClosureInput> closeInput;
-    std::optional<PreparedPixelMoveClosure> closure;
-    DocumentHistory::ResidencyPermit residency;
-    JobResult terminal;
+    JobScheduler& _jobs;
+    GpuWorkQueue& _queue;
+    GpuCommandPump& _commands;
+    CommittedDisplayController& _display;
+    Client& _client;
+    struct PixelPump& _pump;
+    Observation& _observation;
+    const Scenario _scenario;
+    const std::uint32_t _ownerThread      = GetCurrentThreadId();
+    const std::uint64_t _beforeGeneration = _client.session.Generation();
+    const Guid _beforeRevision            = _client.session.history.CurrentRevision();
+    const std::uint64_t _documentSerial   = _client.session.DocumentSerial();
+    const void* _beforeLayers             = _client.session.Document()->layers.Identity();
+    Stage _stage                          = Stage::Allocate;
+    std::unique_ptr<OriginalDisplayPublication> _publication;
+    std::shared_ptr<SharedPublicationMemory> _memory;
+    std::shared_ptr<SharedPublicationMemory> _retirementMemory;
+    std::optional<PixelMoveOpeningInput> _openingInput;
+    std::optional<PreparedPixelMoveOpening> _opening;
+    std::optional<PixelMoveClosureInput> _closeInput;
+    std::optional<PreparedPixelMoveClosure> _closure;
+    DocumentHistory::ResidencyPermit _residency;
+    JobResult _terminal;
 
     bool Unchanged() const noexcept
     {
-        return client.session.Generation() == beforeGeneration && client.session.history.CurrentRevision() == beforeRevision &&
-               client.session.Document()->layers.Identity() == beforeLayers && client.session.history.CanRedo() && client.publications == 1 && ! client.rows;
+        return _client.session.Generation() == _beforeGeneration && _client.session.history.CurrentRevision() == _beforeRevision &&
+               _client.session.Document()->layers.Identity() == _beforeLayers && _client.session.history.CanRedo() && _client.publications == 1 &&
+               ! _client.rows;
     }
     void Resume(Stage next, JobExecutionLane lane = JobExecutionLane::Compute) noexcept
     {
-        stage = next;
-        if (! jobs.Resume(observation.original, lane))
+        _stage = next;
+        if (! _jobs.Resume(_observation.original, lane))
             BoundaryFailure(__LINE__);
     }
     bool BeginCleanup() noexcept
     {
-        residency.Reset();
-        if (! observation.changed && opening && client.session.IsPreparedDeferredPixelMoveGestureCurrent(opening.value()))
-            if (! client.session.AbortPreparedDeferredPixelMoveIfCurrent(opening.value()))
+        _residency.Reset();
+        if (! _observation.changed && _opening && _client.session.IsPreparedDeferredPixelMoveGestureCurrent(_opening.value()))
+            if (! _client.session.AbortPreparedDeferredPixelMoveIfCurrent(_opening.value()))
                 BoundaryFailure(__LINE__);
         // The original record retains its whole reservation through cleanup. The small accounting
         // alias transfers only in Completed, after every useful worker and graph destructor joined.
-        if (! publication->DetachForRetirementOwner())
+        if (! _publication->DetachForRetirementOwner())
             BoundaryFailure(__LINE__);
         Resume(Stage::RetireGraph);
         return true;
@@ -235,219 +236,221 @@ public:
            struct PixelPump& p,
            Observation& o,
            Scenario s) noexcept
-        : jobs(j),
-          queue(q),
-          commands(c),
-          display(d),
-          client(cl),
-          pump(p),
-          observation(o),
-          scenario(s)
+        : _jobs(j),
+          _queue(q),
+          _commands(c),
+          _display(d),
+          _client(cl),
+          _pump(p),
+          _observation(o),
+          _scenario(s)
     {
     }
 
     JobResult Run(JobContext& context) override
     {
-        ++observation.stages;
-        if (GetCurrentThreadId() == ownerThread || (stage != Stage::RetireGraph && stage != Stage::Destroy && context.reservedMemoryBytes != kBytes))
+        ++_observation.stages;
+        if (GetCurrentThreadId() == _ownerThread || (_stage != Stage::RetireGraph && _stage != Stage::Destroy && context.reservedMemoryBytes != kBytes))
             return {JobStatus::Failed, E_UNEXPECTED};
-        if (stage == Stage::Allocate)
+        if (_stage == Stage::Allocate)
         {
-            const OriginalDisplayPublication::Bounds bounds{scenario == Scenario::CpuRefused ? 1 : 384ull * 1024 * 1024,
-                                                            scenario == Scenario::GpuRefused ? 1 : 256ull * 1024 * 1024};
-            publication = std::make_unique<OriginalDisplayPublication>(ownerThread, bounds);
-            memory      = SharedPublicationMemory::CreateForWork(kBytes);
+            const OriginalDisplayPublication::Bounds bounds{_scenario == Scenario::CpuRefused ? 1 : 384ull * 1024 * 1024,
+                                                            _scenario == Scenario::GpuRefused ? 1 : 256ull * 1024 * 1024};
+            _publication = std::make_unique<OriginalDisplayPublication>(_ownerThread, bounds);
+            _memory      = SharedPublicationMemory::CreateForWork(kBytes);
         }
-        else if (stage == Stage::Open)
+        else if (_stage == Stage::Open)
         {
-            auto result = DocumentSession::PrepareDeferredPixelMoveOpening(std::move(openingInput.value()), context.cancellation);
-            openingInput.reset();
+            auto result = DocumentSession::PrepareDeferredPixelMoveOpening(std::move(_openingInput.value()), context.cancellation);
+            _openingInput.reset();
             if (! result.prepared || result.status != PixelMoveLiftStatus::Ready)
                 return {JobStatus::Failed, E_FAIL};
-            opening.emplace(std::move(result.prepared.value()));
+            _opening.emplace(std::move(result.prepared.value()));
         }
-        else if (stage == Stage::Prepare)
+        else if (_stage == Stage::Prepare)
         {
-            auto result = DocumentSession::PrepareDeferredPixelMoveClosure(std::move(closeInput.value()), context.cancellation, memory);
-            closeInput.reset();
+            auto result = DocumentSession::PrepareDeferredPixelMoveClosure(std::move(_closeInput.value()), context.cancellation, _memory);
+            _closeInput.reset();
             if (! result || ! result->FinalDocument())
                 return {JobStatus::Failed, E_FAIL};
-            closure.emplace(std::move(result.value()));
+            _closure.emplace(std::move(result.value()));
             OriginalDisplayPublication::RowInput rows;
-            rows.documentSerial = documentSerial + (scenario == Scenario::WrongRowEpoch ? 1u : 0u); // Captured scalar.
+            rows.documentSerial = _documentSerial + (_scenario == Scenario::WrongRowEpoch ? 1u : 0u); // Captured scalar.
             rows.firstItemId    = PreparedLayerRows::FirstItemIdentity;
             rows.hiddenPattern  = L"{0} (hidden)";
-            return publication->PrepareForWork(*closure->FinalDocument(), std::move(rows), context.cancellation);
+            return _publication->PrepareForWork(*_closure->FinalDocument(), std::move(rows), context.cancellation);
         }
-        else if (stage == Stage::Record)
-            return publication->RecordForWork(context.cancellation);
-        else if (stage == Stage::Refresh)
-            return closure->RefreshHistoryResidency(context.cancellation) ? JobResult{} : JobResult{JobStatus::Failed, E_ABORT};
+        else if (_stage == Stage::Record)
+            return _publication->RecordForWork(context.cancellation);
+        else if (_stage == Stage::Refresh)
+            return _closure->RefreshHistoryResidency(context.cancellation) ? JobResult{} : JobResult{JobStatus::Failed, E_ABORT};
         return {};
     }
     void RetireWorkerStage(JobContext&, JobResult result) noexcept override
     {
-        if (stage == Stage::Record)
-            publication->FinishRecordingForWork(result);
-        else if (stage == Stage::RetireTransport)
+        if (_stage == Stage::Record)
+            _publication->FinishRecordingForWork(result);
+        else if (_stage == Stage::RetireTransport)
         {
-            if (! publication->RetireTransportForWork())
+            if (! _publication->RetireTransportForWork())
                 BoundaryFailure(__LINE__);
-            observation.transportRetired = GetCurrentThreadId() != ownerThread;
+            _observation.transportRetired = GetCurrentThreadId() != _ownerThread;
         }
-        else if (stage == Stage::RetireGraph)
+        else if (_stage == Stage::RetireGraph)
         {
-            if (! publication->RetireGraphForWork())
+            if (! _publication->RetireGraphForWork())
                 BoundaryFailure(__LINE__);
-            opening.reset();
-            closure.reset();
-            openingInput.reset();
-            closeInput.reset();
-            memory.reset();
-            observation.graphRetired = GetCurrentThreadId() != ownerThread;
+            _opening.reset();
+            _closure.reset();
+            _openingInput.reset();
+            _closeInput.reset();
+            _memory.reset();
+            _observation.graphRetired = GetCurrentThreadId() != _ownerThread;
         }
-        else if (stage == Stage::Destroy)
+        else if (_stage == Stage::Destroy)
         {
-            publication.reset();
-            observation.destroyed = GetCurrentThreadId() != ownerThread;
+            _publication.reset();
+            _observation.destroyed = GetCurrentThreadId() != _ownerThread;
         }
     }
     bool DeferRetirement(JobResult result, JobTicket ticket) noexcept override
     {
-        if (ticket != observation.original)
+        if (ticket != _observation.original)
             BoundaryFailure(__LINE__);
-        if (stage == Stage::Record)
+        if (_stage == Stage::Record)
         {
-            if (! publication->RecordingJoinedOwner())
+            if (! _publication->RecordingJoinedOwner())
                 BoundaryFailure(__LINE__);
             if (result.status != JobStatus::Finished)
-                terminal = result;
-            if (scenario == Scenario::CancelAfterRecord)
+                _terminal = result;
+            if (_scenario == Scenario::CancelAfterRecord)
             {
-                terminal = {JobStatus::Cancelled};
-                publication->StopOwner();
-                if (! jobs.Cancel(ticket))
+                _terminal = {JobStatus::Cancelled};
+                _publication->StopOwner();
+                if (! _jobs.Cancel(ticket))
                     BoundaryFailure(__LINE__);
                 Expect("cancellation-keeps-original-memory-before-transport-retirement",
-                       Unchanged() && jobs.ReservedMemoryBytes() >= kBytes && ! memory->IsBound());
+                       Unchanged() && _jobs.ReservedMemoryBytes() >= kBytes && ! _memory->IsBound());
             }
-            stage = Stage::AwaitTransport;
-            jobs.NotifyOwnerWork();
+            _stage = Stage::AwaitTransport;
+            _jobs.NotifyOwnerWork();
             return true;
         }
-        if (stage == Stage::RetireGraph)
+        if (_stage == Stage::RetireGraph)
         {
-            if (! publication->FinishRetirementOwner())
+            if (! _publication->FinishRetirementOwner())
                 BoundaryFailure(__LINE__);
             Resume(Stage::Destroy);
             return true;
         }
-        if (stage == Stage::Destroy)
+        if (_stage == Stage::Destroy)
             return false;
         if (result.status != JobStatus::Finished)
         {
-            terminal = result;
-            Expect(scenario == Scenario::CancelAfterRecord ? "cancelled-recording-preserves-committed-bytes-history-redo-rows-and-graph"
-                                                           : "refused-final-preparation-preserves-committed-bytes-history-redo-rows-and-graph",
+            _terminal = result;
+            Expect(_scenario == Scenario::CancelAfterRecord ? "cancelled-recording-preserves-committed-bytes-history-redo-rows-and-graph"
+                                                            : "refused-final-preparation-preserves-committed-bytes-history-redo-rows-and-graph",
                    Unchanged());
-            if (scenario == Scenario::WrongRowEpoch)
+            if (_scenario == Scenario::WrongRowEpoch)
                 Expect("wrong-row-document-epoch-refuses-before-recording-or-row-publication",
-                       result.error == E_INVALIDARG && ! publication->HasRecorderOwner() && Unchanged());
+                       result.error == E_INVALIDARG && ! _publication->HasRecorderOwner() && Unchanged());
             return BeginCleanup();
         }
-        if (stage == Stage::RetireTransport)
-            stage = Stage::Publish;
+        if (_stage == Stage::RetireTransport)
+            _stage = Stage::Publish;
         return false;
     }
     bool DeferCompletion(JobResult, JobTicket ticket) noexcept override
     {
-        if (stage == Stage::Allocate)
+        if (_stage == Stage::Allocate)
         {
             CommittedDisplayDescriptor descriptor;
-            if (! client.DescribeCommittedDisplayOwner(descriptor) || FAILED(publication->CaptureOwner(jobs, ticket, queue, commands, display, descriptor)))
+            if (! _client.DescribeCommittedDisplayOwner(descriptor) ||
+                FAILED(_publication->CaptureOwner(_jobs, ticket, _queue, _commands, _display, descriptor)))
                 BoundaryFailure(__LINE__);
-            auto input = client.session.PrepareDeferredPixelMoveOpeningInput(scenario == Scenario::Duplicate);
+            auto input = _client.session.PrepareDeferredPixelMoveOpeningInput(_scenario == Scenario::Duplicate);
             if (! input)
                 BoundaryFailure(__LINE__);
-            retirementMemory = memory;
-            openingInput.emplace(std::move(input.value()));
+            _retirementMemory = _memory;
+            _openingInput.emplace(std::move(input.value()));
             Expect("original-admission-captures-source-only-in-its-joined-callback", Unchanged());
             Resume(Stage::Open);
             return true;
         }
-        if (stage == Stage::Open)
+        if (_stage == Stage::Open)
         {
-            if (! client.session.ApplyPreparedDeferredPixelMoveOpeningIfCurrent(opening.value()) ||
-                ! client.session.MovePreparedDeferredPixelMoveIfCurrent(opening.value(), 1, 0))
+            if (! _client.session.ApplyPreparedDeferredPixelMoveOpeningIfCurrent(_opening.value()) ||
+                ! _client.session.MovePreparedDeferredPixelMoveIfCurrent(_opening.value(), 1, 0))
                 BoundaryFailure(__LINE__);
-            auto input = client.session.PrepareDeferredPixelMoveClosureInput(opening.value());
+            auto input = _client.session.PrepareDeferredPixelMoveClosureInput(_opening.value());
             if (! input)
                 BoundaryFailure(__LINE__);
-            closeInput.emplace(std::move(input.value()));
+            _closeInput.emplace(std::move(input.value()));
             Expect("pending-opening-and-offset-preserve-committed-source-and-redo", Unchanged());
             Resume(Stage::Prepare);
             return true;
         }
-        if (stage == Stage::Prepare)
+        if (_stage == Stage::Prepare)
         {
             Expect("complete-final-document-and-rows-prepare-before-any-CPU-publication", Unchanged());
-            const auto admitted = publication->AdmitRecordingOwner();
+            const auto admitted = _publication->AdmitRecordingOwner();
             if (FAILED(admitted))
                 BoundaryFailure(__LINE__); // The two selected bound failures occur before recording admission.
             Resume(Stage::Record, JobExecutionLane::GpuRecording);
             return true;
         }
-        if (stage == Stage::Publish || stage == Stage::Refresh)
+        if (_stage == Stage::Publish || _stage == Stage::Refresh)
         {
-            Expect("real-recording-and-transport-retire-before-CPU-history-rows-publication", Unchanged() && observation.transportRetired);
-            const auto decision = closure->TryAcquireHistoryResidency(residency);
+            Expect("real-recording-and-transport-retire-before-CPU-history-rows-publication", Unchanged() && _observation.transportRetired);
+            const auto decision = _closure->TryAcquireHistoryResidency(_residency);
             if (decision == DocumentHistory::ResidencyValidation::Refresh)
             {
-                residency.Reset();
+                _residency.Reset();
                 Resume(Stage::Refresh);
                 return true;
             }
-            if (decision != DocumentHistory::ResidencyValidation::Ready || FAILED(memory->BindForPublication(jobs, ticket)) ||
-                FAILED(publication->PreparePublicationOwner(memory, *closure->FinalDocument())))
+            if (decision != DocumentHistory::ResidencyValidation::Ready || FAILED(_memory->BindForPublication(_jobs, ticket)) ||
+                FAILED(_publication->PreparePublicationOwner(_memory, *_closure->FinalDocument())))
                 BoundaryFailure(__LINE__);
-            Expect("exact-original-bound-memory-and-ready-private-GPU-do-not-publish-CPU-early", Unchanged() && memory->BoundTo(jobs, ticket));
-            if (! client.session.ApplyPreparedDeferredPixelMoveClosureIfCurrent(closure.value()) || ! publication->AdoptOwner(client.rows,
-                                                                                                                              [](void* raw) noexcept
+            Expect("exact-original-bound-memory-and-ready-private-GPU-do-not-publish-CPU-early", Unchanged() && _memory->BoundTo(_jobs, ticket));
+            if (! _client.session.ApplyPreparedDeferredPixelMoveClosureIfCurrent(_closure.value()) || ! _publication->AdoptOwner(_client.rows,
+                                                                                                                                 [](void* raw) noexcept
             {
                 auto& value            = *static_cast<Client*>(raw);
                 value.rowMetadataReady = value.rows && value.rows->Source().layers.Identity() == value.session.Document()->layers.Identity();
             },
-                                                                                                                              &client))
+                                                                                                                                 &_client))
                 BoundaryFailure(__LINE__);
-            Expect("owner-row-metadata-is-installed-before-graph-callback", client.rowMetadataReady && client.finalCallbackSawRows);
-            residency.Reset();
-            observation.changed = true;
+            Expect("owner-row-metadata-is-installed-before-graph-callback", _client.rowMetadataReady && _client.finalCallbackSawRows);
+            _residency.Reset();
+            _observation.changed = true;
             Expect("one-checked-CPU-history-swap-adopts-prepared-rows-before-graph-callback",
-                   client.session.Generation() == beforeGeneration + 1 && ! client.session.history.CanRedo() && client.session.history.CanUndo() &&
-                       client.publications == 2 && client.finalCallbackSawRows && client.rows && client.rows->HasMemoryLease() && publication->AdoptedOwner());
+                   _client.session.Generation() == _beforeGeneration + 1 && ! _client.session.history.CanRedo() && _client.session.history.CanUndo() &&
+                       _client.publications == 2 && _client.finalCallbackSawRows && _client.rows && _client.rows->HasMemoryLease() &&
+                       _publication->AdoptedOwner());
             return BeginCleanup();
         }
         return false;
     }
     bool Ready() const noexcept
     {
-        return stage == Stage::AwaitTransport && publication->TransportReadyOwner();
+        return _stage == Stage::AwaitTransport && _publication->TransportReadyOwner();
     }
     void Advance() noexcept
     {
-        if (! Ready() || ! publication->AuthorizeTransportRetirementOwner())
+        if (! Ready() || ! _publication->AuthorizeTransportRetirementOwner())
             BoundaryFailure(__LINE__);
         Resume(Stage::RetireTransport);
     }
     void Completed(JobResult result) noexcept override
     {
-        if (stage != Stage::Destroy || publication)
+        if (_stage != Stage::Destroy || _publication)
             BoundaryFailure(__LINE__);
-        if (! retirementMemory || (! retirementMemory->IsBound() && FAILED(retirementMemory->BindForRetirement(jobs, observation.original))))
+        if (! _retirementMemory || (! _retirementMemory->IsBound() && FAILED(_retirementMemory->BindForRetirement(_jobs, _observation.original))))
             BoundaryFailure(__LINE__);
-        observation.outcome  = terminal.status == JobStatus::Finished ? result : terminal;
-        observation.finished = true;
-        pump.parent          = nullptr;
+        _observation.outcome  = _terminal.status == JobStatus::Finished ? result : _terminal;
+        _observation.finished = true;
+        _pump.parent          = nullptr;
     }
 };
 #pragma warning(pop)
@@ -532,29 +535,29 @@ class CloseParent final : public Job, public OwnerWorkPump
         RetireTransport,
         Publish
     };
-    JobScheduler& jobs;
-    GpuWorkQueue& queue;
-    GpuCommandPump& commands;
-    CommittedDisplayController& display;
-    Client& client;
-    CloseState& state;
-    const ClosePoint point;
-    OwnerWorkMultiplexer& routes;
-    Stage stage = Stage::Allocate;
-    JobTicket ticket;
-    std::unique_ptr<ClosePayload> payload;
+    JobScheduler& _jobs;
+    GpuWorkQueue& _queue;
+    GpuCommandPump& _commands;
+    CommittedDisplayController& _display;
+    Client& _client;
+    CloseState& _state;
+    const ClosePoint _point;
+    OwnerWorkMultiplexer& _routes;
+    Stage _stage = Stage::Allocate;
+    JobTicket _ticket;
+    std::unique_ptr<ClosePayload> _payload;
 
     bool Hold(ClosePoint boundary) noexcept
     {
-        if (boundary != point)
+        if (boundary != _point)
             return false;
-        state.ready = true;
+        _state.ready = true;
         return true;
     }
     void Resume(Stage next, JobExecutionLane lane = JobExecutionLane::Compute) noexcept
     {
-        stage = next;
-        if (! jobs.Resume(ticket, lane))
+        _stage = next;
+        if (! _jobs.Resume(_ticket, lane))
             BoundaryFailure(__LINE__);
     }
 
@@ -567,91 +570,92 @@ public:
                 CloseState& s,
                 ClosePoint p,
                 OwnerWorkMultiplexer& mux) noexcept
-        : jobs(j),
-          queue(q),
-          commands(c),
-          display(d),
-          client(cl),
-          state(s),
-          point(p),
-          routes(mux)
+        : _jobs(j),
+          _queue(q),
+          _commands(c),
+          _display(d),
+          _client(cl),
+          _state(s),
+          _point(p),
+          _routes(mux)
     {
     }
     ~CloseParent() override
     {
-        if (payload)
+        if (_payload)
             BoundaryFailure(__LINE__);
-        state.wrapperDestroyed = true;
+        _state.wrapperDestroyed = true;
     }
     JobResult Run(JobContext& context) override
     {
-        if (GetCurrentThreadId() == state.owner || context.reservedMemoryBytes != kBytes)
+        if (GetCurrentThreadId() == _state.owner || context.reservedMemoryBytes != kBytes)
             return {JobStatus::Failed, E_UNEXPECTED};
-        if (stage == Stage::Allocate)
+        if (_stage == Stage::Allocate)
         {
-            payload = std::make_unique<ClosePayload>();
-            payload->publication =
-                std::make_unique<OriginalDisplayPublication>(state.owner, OriginalDisplayPublication::Bounds{384ull * 1024 * 1024, 256ull * 1024 * 1024});
-            payload->memory = SharedPublicationMemory::CreateForWork(kBytes);
+            _payload = std::make_unique<ClosePayload>();
+            _payload->publication =
+                std::make_unique<OriginalDisplayPublication>(_state.owner, OriginalDisplayPublication::Bounds{384ull * 1024 * 1024, 256ull * 1024 * 1024});
+            _payload->memory = SharedPublicationMemory::CreateForWork(kBytes);
         }
-        else if (stage == Stage::Prepare)
+        else if (_stage == Stage::Prepare)
         {
-            auto draft = CanvasDocumentDraft::Rebuild(*payload->input, 1);
-            auto layer = (*payload->input).layers[0];
+            auto draft = CanvasDocumentDraft::Rebuild(*_payload->input, 1);
+            auto layer = (*_payload->input).layers[0];
             constexpr std::array<std::uint8_t, 12> pixels{0, 0, 0, 0, 0, 0, 255, 255, 0, 0, 0, 0};
             layer.asset->image = Raster::Make(3, 1, RasterFormat::Bgra8888, pixels.data(), pixels.size());
             if (! draft || ! layer.asset->image.HasStorage() || ! draft->Append(std::move(layer)))
                 return {JobStatus::Failed, E_FAIL};
-            payload->final = draft->Seal();
-            if (! payload->final)
+            _payload->final = draft->Seal();
+            if (! _payload->final)
                 return {JobStatus::Failed, E_FAIL};
             OriginalDisplayPublication::RowInput rows;
-            rows.documentSerial = payload->documentSerial; // Exact original owner-captured row epoch.
+            rows.documentSerial = _payload->documentSerial; // Exact original owner-captured row epoch.
             rows.firstItemId    = PreparedLayerRows::FirstItemIdentity;
             rows.hiddenPattern  = L"{0} (hidden)";
-            return payload->publication->PrepareForWork(*payload->final, std::move(rows), context.cancellation);
+            return _payload->publication->PrepareForWork(*_payload->final, std::move(rows), context.cancellation);
         }
-        else if (stage == Stage::Record)
-            return payload->publication->RecordForWork(context.cancellation);
+        else if (_stage == Stage::Record)
+            return _payload->publication->RecordForWork(context.cancellation);
         return {};
     }
     void RetireWorkerStage(JobContext& context, JobResult result) noexcept override
     {
-        const bool hold = (stage == Stage::Allocate && point == ClosePoint::AllocateWorker) ||
-                          (stage == Stage::Prepare && point == ClosePoint::PrepareWorker) || (stage == Stage::Record && point == ClosePoint::RecordWorker) ||
-                          (stage == Stage::RetireTransport && point == ClosePoint::RetireTransportWorker);
+        const bool hold = (_stage == Stage::Allocate && _point == ClosePoint::AllocateWorker) ||
+                          (_stage == Stage::Prepare && _point == ClosePoint::PrepareWorker) ||
+                          (_stage == Stage::Record && _point == ClosePoint::RecordWorker) ||
+                          (_stage == Stage::RetireTransport && _point == ClosePoint::RetireTransportWorker);
         if (hold)
         {
-            state.heldProducer.store(true, std::memory_order_release);
-            state.ready.store(true, std::memory_order_release);
-            jobs.NotifyOwnerWork();
+            _state.heldProducer.store(true, std::memory_order_release);
+            _state.ready.store(true, std::memory_order_release);
+            _jobs.NotifyOwnerWork();
             // Deterministic test gate: Close signals this actual scheduler event, then joins this producer.
             // No owner wait, forged completion, Sleep or performance assertion.
             if (WaitForSingleObject(static_cast<HANDLE>(context.shutdownEvent), 10000) != WAIT_OBJECT_0)
                 BoundaryFailure(__LINE__);
-            state.shutdownObserved.store(true, std::memory_order_release);
+            _state.shutdownObserved.store(true, std::memory_order_release);
         }
-        if (stage == Stage::Record)
-            payload->publication->FinishRecordingForWork(result);
-        else if (stage == Stage::RetireTransport && ! payload->publication->RetireTransportForWork())
+        if (_stage == Stage::Record)
+            _payload->publication->FinishRecordingForWork(result);
+        else if (_stage == Stage::RetireTransport && ! _payload->publication->RetireTransportForWork())
             BoundaryFailure(__LINE__);
     }
     bool DeferRetirement(JobResult result, JobTicket original) noexcept override
     {
-        if (result.status != JobStatus::Finished || (ticket.generation && ticket != original))
+        if (result.status != JobStatus::Finished || (_ticket.generation && _ticket != original))
             BoundaryFailure(__LINE__);
-        if (stage == Stage::Record)
+        if (_stage == Stage::Record)
         {
-            if (! payload->publication->RecordingJoinedOwner())
+            if (! _payload->publication->RecordingJoinedOwner())
                 BoundaryFailure(__LINE__);
             if (! Hold(ClosePoint::ProducerJoined))
             {
-                stage = Stage::AwaitTransport;
-                jobs.NotifyOwnerWork();
+                _stage = Stage::AwaitTransport;
+                _jobs.NotifyOwnerWork();
             }
             return true;
         }
-        if (stage == Stage::RetireTransport)
+        if (_stage == Stage::RetireTransport)
         {
             if (! Hold(ClosePoint::TransportRetired))
                 Resume(Stage::Publish);
@@ -661,37 +665,37 @@ public:
     }
     bool DeferCompletion(JobResult, JobTicket original) noexcept override
     {
-        ticket = original;
-        if (stage == Stage::Allocate)
+        _ticket = original;
+        if (_stage == Stage::Allocate)
         {
             if (Hold(ClosePoint::Allocated))
                 return true;
             CommittedDisplayDescriptor descriptor;
-            if (! client.DescribeCommittedDisplayOwner(descriptor) ||
-                FAILED(payload->publication->CaptureOwner(jobs, ticket, queue, commands, display, descriptor)))
+            if (! _client.DescribeCommittedDisplayOwner(descriptor) ||
+                FAILED(_payload->publication->CaptureOwner(_jobs, _ticket, _queue, _commands, _display, descriptor)))
                 BoundaryFailure(__LINE__);
-            payload->captured       = true;
-            payload->documentSerial = descriptor.key.document.documentSerial;
+            _payload->captured       = true;
+            _payload->documentSerial = descriptor.key.document.documentSerial;
             if (Hold(ClosePoint::Captured))
                 return true;
-            payload->input = client.session.Document();
+            _payload->input = _client.session.Document();
             Resume(Stage::Prepare);
             return true;
         }
-        if (stage == Stage::Prepare)
+        if (_stage == Stage::Prepare)
         {
             if (Hold(ClosePoint::Prepared))
                 return true;
-            if (FAILED(payload->publication->AdmitRecordingOwner()))
+            if (FAILED(_payload->publication->AdmitRecordingOwner()))
                 BoundaryFailure(__LINE__);
             if (! Hold(ClosePoint::RecorderAdmitted))
                 Resume(Stage::Record, JobExecutionLane::GpuRecording);
             return true;
         }
-        if (stage == Stage::Publish)
+        if (_stage == Stage::Publish)
         {
-            if (FAILED(payload->memory->BindForPublication(jobs, ticket)) ||
-                FAILED(payload->publication->PreparePublicationOwner(payload->memory, *payload->final)) || ! Hold(ClosePoint::PrivatePublished))
+            if (FAILED(_payload->memory->BindForPublication(_jobs, _ticket)) ||
+                FAILED(_payload->publication->PreparePublicationOwner(_payload->memory, *_payload->final)) || ! Hold(ClosePoint::PrivatePublished))
                 BoundaryFailure(__LINE__);
             return true;
         }
@@ -699,15 +703,15 @@ public:
     }
     bool HasPending() const noexcept override
     {
-        return ! state.originalJoined;
+        return ! _state.originalJoined;
     }
     bool HasReady() const noexcept override
     {
-        return ! state.ready && stage == Stage::AwaitTransport && payload && payload->publication->TransportReadyOwner();
+        return ! _state.ready && _stage == Stage::AwaitTransport && _payload && _payload->publication->TransportReadyOwner();
     }
     void Pump() noexcept override
     {
-        if (! HasReady() || ! payload->publication->AuthorizeTransportRetirementOwner())
+        if (! HasReady() || ! _payload->publication->AuthorizeTransportRetirementOwner())
             BoundaryFailure(__LINE__);
         Resume(Stage::RetireTransport);
     }
@@ -715,25 +719,25 @@ public:
     {
         CommittedDisplayDescriptor descriptor;
         std::shared_ptr<const PreparedLayerRows> rows;
-        return payload && client.DescribeCommittedDisplayOwner(descriptor) &&
-               FAILED(payload->publication->CaptureOwner(jobs, ticket, queue, commands, display, descriptor)) &&
-               FAILED(payload->publication->PreparePublicationOwner(payload->memory, *client.session.Document())) && ! payload->publication->AdoptOwner(rows) &&
-               ! rows;
+        return _payload && _client.DescribeCommittedDisplayOwner(descriptor) &&
+               FAILED(_payload->publication->CaptureOwner(_jobs, _ticket, _queue, _commands, _display, descriptor)) &&
+               FAILED(_payload->publication->PreparePublicationOwner(_payload->memory, *_client.session.Document())) &&
+               ! _payload->publication->AdoptOwner(rows) && ! rows;
     }
     void RetainJoinedRetirement(JobScheduler& scheduler, JobTicket original) noexcept override
     {
-        if (&scheduler != &jobs || ! jobs.InJoinedRetirementCallback(original) || ! payload || state.retired || ! state.ready ||
-            (ticket.generation && ticket != original))
+        if (&scheduler != &_jobs || ! _jobs.InJoinedRetirementCallback(original) || ! _payload || _state.retired || ! _state.ready ||
+            (_ticket.generation && _ticket != original))
             BoundaryFailure(__LINE__);
-        if (! payload->memory->IsBound() && FAILED(payload->memory->BindForRetirement(jobs, original)))
+        if (! _payload->memory->IsBound() && FAILED(_payload->memory->BindForRetirement(_jobs, original)))
             BoundaryFailure(__LINE__);
-        if (payload->captured && ! payload->publication->JoinedShutdownOwner(state.gpu))
+        if (_payload->captured && ! _payload->publication->JoinedShutdownOwner(_state.gpu))
             BoundaryFailure(__LINE__);
-        state.retired        = std::move(payload);
-        state.originalJoined = true;
+        _state.retired        = std::move(_payload);
+        _state.originalJoined = true;
         // Actual scheduler Close joined all producers before invoking this exact hook. Only now may
         // the borrowing route detach, before its owner-affine job wrapper is destroyed.
-        if (! routes.Detach(*this))
+        if (! _routes.Detach(*this))
             BoundaryFailure(__LINE__);
     }
     void Completed(JobResult) noexcept override

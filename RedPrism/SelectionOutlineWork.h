@@ -37,7 +37,7 @@ public:
     [[nodiscard]] static std::optional<PreparedSelectionOutline> Prepare(SelectionLoops source,
                                                                          std::shared_ptr<const SharedPublicationMemory> outputMemory,
                                                                          CancelToken cancellation = {},
-                                                                         Observer observer        = {});
+                                                                         Observer observer        = {nullptr, nullptr});
 
     [[nodiscard]] const Loops& Points() const noexcept;
     [[nodiscard]] const void* SourceIdentity() const noexcept;

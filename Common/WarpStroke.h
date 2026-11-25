@@ -106,14 +106,14 @@ public:
         void (*checkpoint)(void*, WorkStage) = nullptr;
         void* context                        = nullptr;
     };
-    [[nodiscard]] bool AppendForWork(Vec2 point, CancelToken cancellation, WorkObserver observer = {});
+    [[nodiscard]] bool AppendForWork(Vec2 point, CancelToken cancellation, WorkObserver observer = {nullptr, nullptr});
     using SampleMemoryPlan = WarpSampleMemoryPlan;
     // Known factory owner only, before exclusive transfer. O(1) geometry/capacity/cached-byte arithmetic,
     // no tile traversal, retained source capture, scratch or allocation. Caller grows the original complete
     // opening/processing reservation before accepting the point and capturing its private input.
     [[nodiscard]] std::optional<SampleMemoryPlan> PlanSampleMemory(Vec2 point) const noexcept;
     [[nodiscard]] bool IsSamplePlanCurrentForOwner(const SampleMemoryPlan& plan) const noexcept;
-    [[nodiscard]] bool AppendPlannedForWork(const SampleMemoryPlan& plan, CancelToken cancellation, WorkObserver observer = {});
+    [[nodiscard]] bool AppendPlannedForWork(const SampleMemoryPlan& plan, CancelToken cancellation, WorkObserver observer = {nullptr, nullptr});
     [[nodiscard]] std::thread::id WorkOwner() const noexcept
     {
         return _workOwner;
@@ -133,15 +133,15 @@ public:
     [[nodiscard]] Raster Image() const;
     // Exclusive worker snapshots: one adopted allocation per image/tile; every row is initialized before
     // output publication. Failure/cancellation invalidates the private draft and returns no partial output.
-    [[nodiscard]] Raster ImageForWork(CancelToken cancellation, WorkObserver observer = {});
+    [[nodiscard]] Raster ImageForWork(CancelToken cancellation, WorkObserver observer = {nullptr, nullptr});
     // Tiles of the working copy (256² of the document grid) whose pixels changed since the last call, for the live
     // preview.
     [[nodiscard]] std::vector<RasterTile> TakeChangedTiles();
-    [[nodiscard]] std::vector<RasterTile> TakeChangedTilesForWork(CancelToken cancellation, WorkObserver observer = {});
+    [[nodiscard]] std::vector<RasterTile> TakeChangedTilesForWork(CancelToken cancellation, WorkObserver observer = {nullptr, nullptr});
     // Complete immutable snapshot of every touched tile. Unchanged prior tile versions are shared; a recorder
     // can build from the original source without depending on a previously displayed preview. Caller admits
     // the old/new overlap and retires the complete vector and its original accounting owner off the UI thread.
-    [[nodiscard]] std::vector<RasterTile> AllTouchedTilesForWork(CancelToken cancellation, WorkObserver observer = {});
+    [[nodiscard]] std::vector<RasterTile> AllTouchedTilesForWork(CancelToken cancellation, WorkObserver observer = {nullptr, nullptr});
     [[nodiscard]] SmearMode Mode() const noexcept
     {
         return _mode;

@@ -272,7 +272,7 @@ void TestPlanMemoryBoundariesAndUnchangedPlan()
         Grid{64, 64, 1.0, infinity, 8.0, 96.0f},
         Grid{64, 64, 1.0, 8.0, nan, 96.0f},
         Grid{64, 64, 1.0, 8.0, 8.0, 0.0f},
-        Grid{64, 64, 1.0, 8.0, 8.0, infinity},
+        Grid{64, 64, 1.0, 8.0, 8.0, (std::numeric_limits<float>::infinity)()},
         Grid{16384, 8192, 1.0, 0.0, 0.0, 96.0f},
         Grid{64, 64, (std::numeric_limits<double>::denorm_min)(), 0.0, 0.0, 96.0f},
         Grid{64, 64, (std::numeric_limits<double>::max)(), 0.0, 0.0, 96.0f},

@@ -28,18 +28,18 @@ public:
     static_assert(std::atomic<std::uint32_t>::is_always_lock_free);
     static_assert(std::numeric_limits<std::uint32_t>::max() >= kMaximumCapacity);
 
-    explicit OwnerWakeCounts(std::uint32_t capacity) noexcept : capacity_(capacity)
+    explicit OwnerWakeCounts(std::uint32_t capacity) noexcept : _capacity(capacity)
     {
     }
 
     [[nodiscard]] bool IsValid() const noexcept
     {
-        return capacity_ >= 1 && capacity_ <= kMaximumCapacity;
+        return _capacity >= 1 && _capacity <= kMaximumCapacity;
     }
 
     [[nodiscard]] std::uint32_t Capacity() const noexcept
     {
-        return capacity_;
+        return _capacity;
     }
 
     // One owner-thread producer calls Request. Consumers may only call Take.
@@ -53,9 +53,9 @@ public:
             return false;
         }
 
-        std::atomic<std::uint32_t>& count = counts_[index];
+        std::atomic<std::uint32_t>& count = _counts[index];
         std::uint32_t expected            = count.load(std::memory_order_relaxed);
-        const std::uint32_t desired       = expected < capacity_ ? expected + 1 : capacity_;
+        const std::uint32_t desired       = expected < _capacity ? expected + 1 : _capacity;
 
         if (count.compare_exchange_strong(expected, desired, std::memory_order_relaxed, std::memory_order_relaxed))
         {
@@ -79,12 +79,12 @@ public:
         {
             return 0;
         }
-        return counts_[index].exchange(0, std::memory_order_relaxed);
+        return _counts[index].exchange(0, std::memory_order_relaxed);
     }
 
 private:
-    const std::uint32_t capacity_;
-    std::array<std::atomic<std::uint32_t>, kChannelCount> counts_{};
+    const std::uint32_t _capacity;
+    std::array<std::atomic<std::uint32_t>, kChannelCount> _counts{};
 };
 #pragma warning(pop)
 

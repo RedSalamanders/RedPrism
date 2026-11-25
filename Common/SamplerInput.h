@@ -41,7 +41,7 @@ public:
     };
 
     // The optional seed is primarily useful for exercising counter exhaustion.
-    explicit SamplerInput(std::uint64_t sequenceSeed = 0) noexcept : lastSequence_(sequenceSeed)
+    explicit SamplerInput(std::uint64_t sequenceSeed = 0) noexcept : _lastSequence(sequenceSeed)
     {
     }
 
@@ -64,119 +64,119 @@ public:
 
     [[nodiscard]] bool Begin(std::uint64_t opening, std::int32_t width, std::int32_t height) noexcept
     {
-        if (opening == 0 || opening <= lastOpening_ || width <= 0 || height <= 0 || active_.has_value() || pendingCount_ != 0 || (sessionOpen_ && ! sealed_))
+        if (opening == 0 || opening <= _lastOpening || width <= 0 || height <= 0 || _active.has_value() || _pendingCount != 0 || (_sessionOpen && ! _sealed))
         {
             return false;
         }
 
-        currentOpening_ = opening;
-        lastOpening_    = opening;
-        width_          = width;
-        height_         = height;
-        head_           = 0;
-        pendingCount_   = 0;
-        active_.reset();
-        latestOpaqueColor_.reset();
-        sealed_      = false;
-        cancelled_   = false;
-        sessionOpen_ = true;
+        _currentOpening = opening;
+        _lastOpening    = opening;
+        _width          = width;
+        _height         = height;
+        _head           = 0;
+        _pendingCount   = 0;
+        _active.reset();
+        _latestOpaqueColor.reset();
+        _sealed      = false;
+        _cancelled   = false;
+        _sessionOpen = true;
         return true;
     }
 
     [[nodiscard]] Admission Accept(std::uint64_t opening, std::int32_t x, std::int32_t y, bool coalesce = true) noexcept
     {
-        if (! MatchesOpenSession(opening) || sealed_ || x < 0 || y < 0 || x >= width_ || y >= height_ ||
-            lastSequence_ == (std::numeric_limits<std::uint64_t>::max)())
+        if (! MatchesOpenSession(opening) || _sealed || x < 0 || y < 0 || x >= _width || y >= _height ||
+            _lastSequence == (std::numeric_limits<std::uint64_t>::max)())
         {
             return Admission::Refused;
         }
 
-        const SamplerPointStamp stamp{opening, lastSequence_ + 1};
-        if (coalesce && pendingCount_ != 0)
+        const SamplerPointStamp stamp{opening, _lastSequence + 1};
+        if (coalesce && _pendingCount != 0)
         {
-            const std::uint32_t tail = (head_ + pendingCount_ - 1) % kPendingCapacity;
-            SamplerPoint& pending    = pending_[tail];
+            const std::uint32_t tail = (_head + _pendingCount - 1) % kPendingCapacity;
+            SamplerPoint& pending    = _pending[tail];
             if (pending.x == x && pending.y == y)
             {
                 pending.stamp = stamp;
-                lastSequence_ = stamp.sequence;
+                _lastSequence = stamp.sequence;
                 return Admission::Coalesced;
             }
         }
 
-        if (pendingCount_ == kPendingCapacity)
+        if (_pendingCount == kPendingCapacity)
         {
-            sealed_ = true;
+            _sealed = true;
             return Admission::Overflow;
         }
 
-        const std::uint32_t tail = (head_ + pendingCount_) % kPendingCapacity;
-        pending_[tail]           = SamplerPoint{x, y, stamp};
-        ++pendingCount_;
-        lastSequence_ = stamp.sequence;
+        const std::uint32_t tail = (_head + _pendingCount) % kPendingCapacity;
+        _pending[tail]           = SamplerPoint{x, y, stamp};
+        ++_pendingCount;
+        _lastSequence = stamp.sequence;
         return Admission::Recorded;
     }
 
     // Owner-only. An active point is never replaced until its exact stamp is acknowledged.
     [[nodiscard]] std::optional<SamplerPoint> SelectNext(std::uint64_t opening) noexcept
     {
-        if (! MatchesSession(opening) || active_.has_value() || pendingCount_ == 0)
+        if (! MatchesSession(opening) || _active.has_value() || _pendingCount == 0)
         {
             return std::nullopt;
         }
 
-        active_ = pending_[head_];
-        head_   = (head_ + 1) % kPendingCapacity;
-        --pendingCount_;
-        return active_;
+        _active = _pending[_head];
+        _head   = (_head + 1) % kPendingCapacity;
+        --_pendingCount;
+        return _active;
     }
 
     [[nodiscard]] bool Acknowledge(SamplerPointStamp stamp, std::optional<std::uint32_t> opaqueArgb) noexcept
     {
-        if (! active_.has_value() || ! MatchesStamp(active_.value().stamp, stamp))
+        if (! _active.has_value() || ! MatchesStamp(_active.value().stamp, stamp))
         {
             return false;
         }
 
-        if (! cancelled_ && opaqueArgb.has_value() && (opaqueArgb.value() & 0xFF000000U) == 0xFF000000U)
+        if (! _cancelled && opaqueArgb.has_value() && (opaqueArgb.value() & 0xFF000000U) == 0xFF000000U)
         {
-            latestOpaqueColor_ = SamplerOpaqueColor{opaqueArgb.value(), stamp};
+            _latestOpaqueColor = SamplerOpaqueColor{opaqueArgb.value(), stamp};
         }
-        active_.reset();
+        _active.reset();
         return true;
     }
 
     [[nodiscard]] bool Seal(std::uint64_t opening) noexcept
     {
-        if (! MatchesOpenSession(opening) || sealed_)
+        if (! MatchesOpenSession(opening) || _sealed)
         {
             return false;
         }
-        sealed_ = true;
+        _sealed = true;
         return true;
     }
 
     [[nodiscard]] bool Cancel(std::uint64_t opening) noexcept
     {
-        if (! MatchesOpenSession(opening) || cancelled_ || (sealed_ && ! active_.has_value() && pendingCount_ == 0))
+        if (! MatchesOpenSession(opening) || _cancelled || (_sealed && ! _active.has_value() && _pendingCount == 0))
         {
             return false;
         }
-        sealed_       = true;
-        cancelled_    = true;
-        head_         = 0;
-        pendingCount_ = 0;
+        _sealed       = true;
+        _cancelled    = true;
+        _head         = 0;
+        _pendingCount = 0;
         return true;
     }
 
     [[nodiscard]] bool IsFinished(std::uint64_t opening) const noexcept
     {
-        return MatchesSession(opening) && sealed_ && ! active_.has_value() && pendingCount_ == 0;
+        return MatchesSession(opening) && _sealed && ! _active.has_value() && _pendingCount == 0;
     }
 
     [[nodiscard]] bool HasNoWork(std::uint64_t opening) const noexcept
     {
-        return MatchesOpenSession(opening) && ! sealed_ && ! active_.has_value() && pendingCount_ == 0;
+        return MatchesOpenSession(opening) && ! _sealed && ! _active.has_value() && _pendingCount == 0;
     }
 
     [[nodiscard]] std::optional<SamplerPoint> ActivePoint(std::uint64_t opening) const noexcept
@@ -185,33 +185,33 @@ public:
         {
             return std::nullopt;
         }
-        return active_;
+        return _active;
     }
 
     [[nodiscard]] std::optional<SamplerOpaqueColor> LatestOpaqueColor() const noexcept
     {
-        return latestOpaqueColor_;
+        return _latestOpaqueColor;
     }
 
     [[nodiscard]] std::uint32_t PendingCount() const noexcept
     {
-        return pendingCount_;
+        return _pendingCount;
     }
 
     [[nodiscard]] std::uint64_t LastSequence() const noexcept
     {
-        return lastSequence_;
+        return _lastSequence;
     }
 
 private:
     [[nodiscard]] bool MatchesOpenSession(std::uint64_t opening) const noexcept
     {
-        return sessionOpen_ && opening != 0 && opening == currentOpening_;
+        return _sessionOpen && opening != 0 && opening == _currentOpening;
     }
 
     [[nodiscard]] bool MatchesSession(std::uint64_t opening) const noexcept
     {
-        return opening != 0 && opening == currentOpening_;
+        return opening != 0 && opening == _currentOpening;
     }
 
     [[nodiscard]] static bool MatchesStamp(SamplerPointStamp left, SamplerPointStamp right) noexcept
@@ -221,43 +221,43 @@ private:
 
     void MoveFrom(SamplerInput& other) noexcept
     {
-        pending_           = other.pending_;
-        active_            = other.active_;
-        latestOpaqueColor_ = other.latestOpaqueColor_;
-        currentOpening_    = other.currentOpening_;
-        lastOpening_       = other.lastOpening_;
-        lastSequence_      = other.lastSequence_;
-        width_             = other.width_;
-        height_            = other.height_;
-        head_              = other.head_;
-        pendingCount_      = other.pendingCount_;
-        sessionOpen_       = other.sessionOpen_;
-        sealed_            = other.sealed_;
-        cancelled_         = other.cancelled_;
+        _pending           = other._pending;
+        _active            = other._active;
+        _latestOpaqueColor = other._latestOpaqueColor;
+        _currentOpening    = other._currentOpening;
+        _lastOpening       = other._lastOpening;
+        _lastSequence      = other._lastSequence;
+        _width             = other._width;
+        _height            = other._height;
+        _head              = other._head;
+        _pendingCount      = other._pendingCount;
+        _sessionOpen       = other._sessionOpen;
+        _sealed            = other._sealed;
+        _cancelled         = other._cancelled;
 
-        other.active_.reset();
-        other.latestOpaqueColor_.reset();
-        other.currentOpening_ = 0;
-        other.width_          = 0;
-        other.height_         = 0;
-        other.head_           = 0;
-        other.pendingCount_   = 0;
-        other.sessionOpen_    = false;
-        other.sealed_         = true;
-        other.cancelled_      = true;
+        other._active.reset();
+        other._latestOpaqueColor.reset();
+        other._currentOpening = 0;
+        other._width          = 0;
+        other._height         = 0;
+        other._head           = 0;
+        other._pendingCount   = 0;
+        other._sessionOpen    = false;
+        other._sealed         = true;
+        other._cancelled      = true;
     }
 
-    std::array<SamplerPoint, kPendingCapacity> pending_{};
-    std::optional<SamplerPoint> active_;
-    std::optional<SamplerOpaqueColor> latestOpaqueColor_;
-    std::uint64_t currentOpening_ = 0;
-    std::uint64_t lastOpening_    = 0;
-    std::uint64_t lastSequence_   = 0;
-    std::int32_t width_           = 0;
-    std::int32_t height_          = 0;
-    std::uint32_t head_           = 0;
-    std::uint32_t pendingCount_   = 0;
-    bool sessionOpen_             = false;
-    bool sealed_                  = false;
-    bool cancelled_               = false;
+    std::array<SamplerPoint, kPendingCapacity> _pending{};
+    std::optional<SamplerPoint> _active;
+    std::optional<SamplerOpaqueColor> _latestOpaqueColor;
+    std::uint64_t _currentOpening = 0;
+    std::uint64_t _lastOpening    = 0;
+    std::uint64_t _lastSequence   = 0;
+    std::int32_t _width           = 0;
+    std::int32_t _height          = 0;
+    std::uint32_t _head           = 0;
+    std::uint32_t _pendingCount   = 0;
+    bool _sessionOpen             = false;
+    bool _sealed                  = false;
+    bool _cancelled               = false;
 };
