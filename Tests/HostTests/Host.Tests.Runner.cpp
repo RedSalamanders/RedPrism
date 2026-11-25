@@ -1701,6 +1701,9 @@ void TestLocalization()
     // it; without a satellite the process's own (empty) table answers.
     SetStringResourceSatellite(exe.get());
     const std::wstring title = LoadStringResource(nullptr, IDS_APP_TITLE);
+    Expect(LoadEmbeddedStringResource(nullptr, IDS_APP_TITLE).empty() && LoadEmbeddedStringResource(exe.get(), IDS_APP_TITLE) == title,
+           "strings.embedded-lookup-ignores-satellite");
+    Expect(FormatEmbeddedStringResource(exe.get(), IDS_STATUS_SIZE, 1280, 800) == L"1280 × 800", "strings.embedded-format-positional");
     SetStringResourceSatellite(GetModuleHandleW(nullptr));
     const std::wstring explicitModule = LoadStringResource(exe.get(), IDS_APP_TITLE);
     const std::wstring emptySatellite = LoadStringResource(nullptr, IDS_APP_TITLE);
