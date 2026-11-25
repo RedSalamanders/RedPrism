@@ -1,0 +1,1 @@
+- Exercise successful and refused host writes with an accepted current archive and a separate new output.
