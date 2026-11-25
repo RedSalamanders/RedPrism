@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Read RedPrism settings as JSON5 and preserve unknown values when saving.
 - Read RedPrism translations from the shared Lang layout and keep support for existing satellite installations.
 - Exercise guarded project publication in the brush and selection lifecycle save fixtures.
 - Use the common embedded string and message-box helpers while retaining satellite fallback.
