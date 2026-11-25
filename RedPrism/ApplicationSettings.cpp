@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
+#include "GuardedFileCommit.h"
 #include "SettingsStore.h"
 #include "ThemePalette.h"
 
@@ -19,7 +20,8 @@
 
 namespace
 {
-constexpr UINT kSettingsReloadDelayMilliseconds = 250;
+constexpr DWORD kSettingsReloadDelayMilliseconds = 250;
+constexpr DWORD kSettingsWatchFilter = FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_CREATION;
 constexpr std::array<float, 4> kDarkClearColor{0.118f, 0.118f, 0.133f, 1.0f};
 constexpr std::array<float, 4> kLightClearColor{0.898f, 0.898f, 0.910f, 1.0f};
 
@@ -74,13 +76,14 @@ void CountNamedElements(IRawElementProviderFragment* fragment, int& named, int& 
 void Application::UseSettings(std::wstring path, const AppSettings& settings, std::optional<FileOutputTarget> acceptedTarget) noexcept
 {
     StopSettingsWatch();
-    _settingsPath       = std::move(path);
-    _settingsFileTarget = std::move(acceptedTarget);
-    if (! _settingsPath.empty())
-    {
-        (void)StartSettingsWatch();
-    }
+    _settingsPath        = std::move(path);
+    _settingsFileTarget  = std::move(acceptedTarget);
+    _settingsSeenVersion = _settingsFileTarget ? _settingsFileTarget->acceptedVersion : std::nullopt;
     ApplySettings(settings);
+    if (_window && ! _settingsPath.empty() && ! StartSettingsWatch())
+    {
+        OutputDebugStringW(L"Settings live reload could not start.\n");
+    }
 }
 
 void Application::ApplySettings(const AppSettings& settings) noexcept
@@ -120,108 +123,101 @@ void Application::RefreshTheme() noexcept
 
 bool Application::StartSettingsWatch() noexcept
 {
-    const std::wstring directory = DirectoryOf(_settingsPath);
-    if (directory.empty())
+    try
     {
+        auto directory = DirectoryOf(_settingsPath);
+        if (! _window || directory.empty())
+            return false;
+
+        wil::unique_hfind_change change{FindFirstChangeNotificationW(directory.c_str(), FALSE, kSettingsWatchFilter)};
+        if (! change)
+            return false;
+        _settingsWatchStop.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        if (! _settingsWatchStop)
+            return false;
+
+        const HWND owner        = _window.get();
+        const WPARAM generation = _settingsWatchGeneration;
+        const HANDLE stop       = _settingsWatchStop.get();
+        _settingsWatchThread    = std::jthread([this, owner, generation, stop, directory = std::move(directory), change = std::move(change)]() mutable noexcept
+        {
+            const auto postChange = [this, owner, generation]() noexcept
+            {
+                if (! _settingsWatchPending.exchange(true, std::memory_order_acq_rel) && ! PostMessageW(owner, kSettingsChangedMessage, generation, 0))
+                {
+                    _settingsWatchPending.store(false, std::memory_order_release);
+                }
+            };
+
+            // Catch a change between loading the initial file and arming the directory watch.
+            postChange();
+            HANDLE handles[]{stop, change.get()};
+            DWORD timeout = INFINITE;
+            for (;;)
+            {
+                const DWORD result = WaitForMultipleObjects(static_cast<DWORD>(std::size(handles)), handles, FALSE, timeout);
+                if (result == WAIT_OBJECT_0)
+                    return;
+                if (result == WAIT_TIMEOUT)
+                {
+                    postChange();
+                    timeout = INFINITE;
+                    continue;
+                }
+                if (result != WAIT_OBJECT_0 + 1)
+                    break;
+                if (! FindNextChangeNotification(change.get()) || GetFileAttributesW(directory.c_str()) == INVALID_FILE_ATTRIBUTES)
+                {
+                    change.reset(FindFirstChangeNotificationW(directory.c_str(), FALSE, kSettingsWatchFilter));
+                    if (! change)
+                        break;
+                    handles[1] = change.get();
+                }
+                timeout = kSettingsReloadDelayMilliseconds;
+            }
+            (void)PostMessageW(owner, kSettingsChangedMessage, generation, 1);
+        });
+        return true;
+    }
+    catch (...)
+    {
+        StopSettingsWatch();
         return false;
     }
-    // One directory watch, signalled by the OS; nothing polls. A change arms a short timer so an editor's several
-    // writes coalesce into one reload on the UI thread.
-    _settingsWatch.reset(FindFirstChangeNotificationW(
-        directory.c_str(), FALSE, FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_CREATION));
-    NoteSettingsFileState();
-    return static_cast<bool>(_settingsWatch);
 }
 
 void Application::StopSettingsWatch() noexcept
 {
-    if (_window)
-    {
-        (void)KillTimer(_window.get(), kSettingsTimerId);
-    }
-    _settingsWatch.reset();
+    ++_settingsWatchGeneration;
+    if (_settingsWatchStop)
+        (void)SetEvent(_settingsWatchStop.get());
+    if (_settingsWatchThread.joinable())
+        _settingsWatchThread.join();
+    _settingsWatchStop.reset();
+    _settingsWatchPending.store(false, std::memory_order_release);
 }
 
-HANDLE Application::SettingsWatchHandle() const noexcept
-{
-    return _settingsWatch ? _settingsWatch.get() : nullptr;
-}
-
-void Application::NoteSettingsFileState() noexcept
-{
-    WIN32_FILE_ATTRIBUTE_DATA data{};
-    if (! _settingsPath.empty() && GetFileAttributesExW(_settingsPath.c_str(), GetFileExInfoStandard, &data))
-    {
-        _settingsSeenWrite = data.ftLastWriteTime;
-        _settingsSeenSize  = (static_cast<std::uint64_t>(data.nFileSizeHigh) << 32) | data.nFileSizeLow;
-    }
-    else
-    {
-        _settingsSeenWrite = FILETIME{};
-        _settingsSeenSize  = 0;
-    }
-}
-
-void Application::OnSettingsDirectoryChanged(bool immediate) noexcept
-{
-    // A watch on a directory that was deleted or renamed away stays signaled (or cannot be re-armed), and the
-    // message wait would wake at once, forever. Watch the directory afresh; when it is gone, stop watching.
-    if (_settingsWatch &&
-        (! FindNextChangeNotification(_settingsWatch.get()) || GetFileAttributesW(DirectoryOf(_settingsPath).c_str()) == INVALID_FILE_ATTRIBUTES))
-    {
-        const FILETIME seenWrite     = _settingsSeenWrite;
-        const std::uint64_t seenSize = _settingsSeenSize;
-        _settingsWatch.reset();
-        if (! StartSettingsWatch())
-        {
-            OutputDebugStringW(L"The settings directory is gone; live reload stops until the next start.\n");
-        }
-        // The change that signaled is still to be read.
-        _settingsSeenWrite = seenWrite;
-        _settingsSeenSize  = seenSize;
-    }
-    if (immediate || ! _window)
-    {
-        (void)ReloadSettingsIfChanged();
-        return;
-    }
-    (void)SetTimer(_window.get(), kSettingsTimerId, kSettingsReloadDelayMilliseconds, nullptr);
-}
-
-bool Application::ReloadSettingsIfChanged() noexcept
+void Application::ReloadSettingsIfChanged() noexcept
 {
     if (_settingsPath.empty())
-    {
-        return false;
-    }
-    WIN32_FILE_ATTRIBUTE_DATA data{};
-    if (! GetFileAttributesExW(_settingsPath.c_str(), GetFileExInfoStandard, &data))
-    {
-        return false; // gone: the last-good settings stay
-    }
-    const std::uint64_t size = (static_cast<std::uint64_t>(data.nFileSizeHigh) << 32) | data.nFileSizeLow;
-    if (CompareFileTime(&data.ftLastWriteTime, &_settingsSeenWrite) == 0 && size == _settingsSeenSize)
-    {
-        return false;
-    }
-    _settingsSeenWrite = data.ftLastWriteTime;
-    _settingsSeenSize  = size;
+        return;
+    FileOutputTarget observed;
+    if (FAILED(ObserveFileOutputTarget(_settingsPath.c_str(), observed)) || ! observed.acceptedVersion || observed.acceptedVersion == _settingsSeenVersion)
+        return;
+    _settingsSeenVersion = observed.acceptedVersion;
+
     std::optional<FileOutputTarget> acceptedTarget;
-    const std::optional<AppSettings> live = SettingsStore::LoadLive(_settingsPath, &acceptedTarget);
-    if (! live.has_value())
+    const auto live = SettingsStore::LoadLive(_settingsPath, &acceptedTarget);
+    if (! live)
     {
-        // Live invalid: keep the file as the user left it and the last-good settings in memory.
         OutputDebugStringW(L"The settings file is not a settings document; keeping the previous settings.\n");
-        return true;
+        return;
     }
     _settingsFileTarget = std::move(acceptedTarget);
-    if (live.value() == _settings)
-    {
-        return true;
-    }
-    // The language and the window placement apply at the next start; everything else applies now.
-    ApplySettings(live.value());
-    return true;
+    if (_settingsFileTarget && _settingsFileTarget->acceptedVersion)
+        _settingsSeenVersion = _settingsFileTarget->acceptedVersion;
+    if (*live != _settings)
+        ApplySettings(*live);
 }
 
 void Application::SaveSettings() noexcept
@@ -258,8 +254,8 @@ void Application::SaveSettings() noexcept
     const HRESULT saved = SettingsStore::SaveAccepted(*_settingsFileTarget, _settings, &published);
     if (SUCCEEDED(saved))
     {
-        _settingsFileTarget = std::move(published);
-        NoteSettingsFileState(); // our own write is not a change to reload
+        _settingsFileTarget  = std::move(published);
+        _settingsSeenVersion = _settingsFileTarget ? _settingsFileTarget->acceptedVersion : std::nullopt;
     }
     else if (saved == kOutputVersionConflict)
     {
@@ -517,22 +513,38 @@ int Application::RunProductHardeningSelfTest() noexcept
     }
     SettingsLoadResult loaded = SettingsStore::LoadCold(path);
     UseSettings(path, initial, std::move(loaded.acceptedTarget));
-    if (! _settingsWatch || ! _chrome->ThemeIsDark() || ! _settings.sampleRing)
+    const auto waitForChange = [this](bool watchStops = false) noexcept
     {
-        SelfTestFailure(L"The settings watch did not start from the self-test file.\n");
+        const auto started = GetTickCount64();
+        for (;;)
+        {
+            MSG message{};
+            while (PeekMessageW(&message, _window.get(), kSettingsChangedMessage, kSettingsChangedMessage, PM_REMOVE))
+            {
+                const bool expected = message.wParam == _settingsWatchGeneration && (message.lParam != 0) == watchStops;
+                DispatchMessageW(&message);
+                if (expected)
+                    return true;
+            }
+            const auto elapsed = GetTickCount64() - started;
+            if (elapsed >= 5000 || MsgWaitForMultipleObjectsEx(0, nullptr, static_cast<DWORD>(5000 - elapsed), QS_POSTMESSAGE, 0) != WAIT_OBJECT_0)
+                return false;
+        }
+    };
+    if (! waitForChange() || ! _chrome->ThemeIsDark() || ! _settings.sampleRing)
+    {
+        SelfTestFailure(L"The settings worker did not post its initial notification.\n");
         return 5;
     }
-    const auto waitForChange = [this]() noexcept { return _settingsWatch && WaitForSingleObject(_settingsWatch.get(), 5000) == WAIT_OBJECT_0; };
-    AppSettings edited       = initial;
-    edited.theme             = ThemePreference::Light;
-    edited.sampleRing        = false;
-    edited.layersPanelWidth  = 300;
+    AppSettings edited      = initial;
+    edited.theme            = ThemePreference::Light;
+    edited.sampleRing       = false;
+    edited.layersPanelWidth = 300;
     if (! SettingsStore::Save(path, edited) || ! waitForChange())
     {
         SelfTestFailure(L"Editing the settings file did not signal the directory watch.\n");
         return 5;
     }
-    OnSettingsDirectoryChanged(true);
     if (_chrome->ThemeIsDark() || _settings.sampleRing || _settings.layersPanelWidth != 300 || _renderer.ClearColor() != kLightClearColor)
     {
         SelfTestFailure(L"A valid edit of the settings file did not apply live.\n");
@@ -549,7 +561,6 @@ int Application::RunProductHardeningSelfTest() noexcept
         SelfTestFailure(L"Breaking the settings file did not signal the directory watch.\n");
         return 5;
     }
-    OnSettingsDirectoryChanged(true);
     std::string bytes;
     if (_chrome->ThemeIsDark() || _settings.sampleRing || ! SettingsStore::ReadFileBytes(path, bytes) || bytes != "{ broken")
     {
@@ -561,7 +572,6 @@ int Application::RunProductHardeningSelfTest() noexcept
         SelfTestFailure(L"Restoring the settings file did not signal the directory watch.\n");
         return 5;
     }
-    OnSettingsDirectoryChanged(true);
     if (! _chrome->ThemeIsDark() || ! _settings.sampleRing || _renderer.ClearColor() != kDarkClearColor)
     {
         SelfTestFailure(L"Restoring the settings file did not apply live.\n");
@@ -583,17 +593,11 @@ int Application::RunProductHardeningSelfTest() noexcept
         SelfTestFailure(L"Saving the settings did not record the window placement.\n");
         return 5;
     }
-    // Deleting the watched directory must not leave a watch that stays signaled: the message wait would wake at
-    // once, forever. The watch goes (there is no directory left to watch) and the last-good settings stay.
+    // A removed directory retires the worker and keeps the last accepted settings.
     std::filesystem::remove_all(scratch, error);
-    const bool deletionSignaled = waitForChange();
-    OnSettingsDirectoryChanged(true);
-    if (! deletionSignaled || _settingsWatch || ! _chrome->ThemeIsDark())
+    if (! waitForChange(true) || _settingsWatchThread.joinable() || ! _chrome->ThemeIsDark())
     {
-        SelfTestFailure(std::format(L"Deleting the settings directory left the watch armed (signaled {}, "
-                                    L"watch {}).\n",
-                                    deletionSignaled,
-                                    static_cast<bool>(_settingsWatch)));
+        SelfTestFailure(L"Deleting the settings directory did not retire its worker.\n");
         return 5;
     }
     StopSettingsWatch();

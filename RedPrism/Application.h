@@ -61,6 +61,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -338,13 +339,10 @@ private:
     void RefreshTheme() noexcept;
     bool StartSettingsWatch() noexcept;
     void StopSettingsWatch() noexcept;
-    void NoteSettingsFileState() noexcept;
-    void OnSettingsDirectoryChanged(bool immediate) noexcept;
-    bool ReloadSettingsIfChanged() noexcept;
+    void ReloadSettingsIfChanged() noexcept;
     void SaveSettings() noexcept;
-    [[nodiscard]] HANDLE SettingsWatchHandle() const noexcept;
     int RunProductHardeningSelfTest() noexcept;
-    static constexpr UINT_PTR kSettingsTimerId = 7;
+    static constexpr UINT kSettingsChangedMessage = WM_APP + 2;
     // The chrome mirrors the session (RF-1001): SyncChrome after anything that may have changed it, each region
     // writing only what changed; SyncView after a pan or a zoom, which changes only the status bar's zoom and what the
     // overlay draws over the canvas.
@@ -1904,26 +1902,28 @@ private:
     std::wstring _settingsPath;
     std::optional<FileOutputTarget> _settingsFileTarget;
     AppSettings _settings;
-    wil::unique_hfind_change _settingsWatch;
-    FILETIME _settingsSeenWrite{};
-    std::uint64_t _settingsSeenSize      = 0;
-    bool _restoreMaximized               = false;
-    bool _classRegistered                = false;
-    bool _rendererReady                  = false;
-    bool _windowVisible                  = false;
-    bool _windowMinimized                = false;
-    bool _windowCloaked                  = false;
-    bool _displayPoweredOn               = true;
-    bool _systemSuspended                = false;
-    bool _frameInvalidated               = true;
-    bool _mouseTracked                   = false;
-    bool _screenshotArmed                = false;
-    HRESULT _runtimeFailure              = S_OK;
-    HRESULT _screenshotResult            = S_OK;
-    HRESULT _frameLoopFailure            = S_OK; // drawing stopped; the close it asked for prompts to save (RF-401)
-    HRESULT _lastFrameFailure            = S_OK;
-    int _failedFrames                    = 0;
-    bool _canvasFailureShown             = false;
-    int _canvasFailureNotices            = 0; // quiet runs count them
-    std::uint64_t _boundDeviceGeneration = 0;
+    std::optional<FileOutputVersion> _settingsSeenVersion;
+    wil::unique_event_nothrow _settingsWatchStop;
+    std::jthread _settingsWatchThread;
+    std::atomic_bool _settingsWatchPending = false;
+    WPARAM _settingsWatchGeneration        = 0;
+    bool _restoreMaximized                 = false;
+    bool _classRegistered                  = false;
+    bool _rendererReady                    = false;
+    bool _windowVisible                    = false;
+    bool _windowMinimized                  = false;
+    bool _windowCloaked                    = false;
+    bool _displayPoweredOn                 = true;
+    bool _systemSuspended                  = false;
+    bool _frameInvalidated                 = true;
+    bool _mouseTracked                     = false;
+    bool _screenshotArmed                  = false;
+    HRESULT _runtimeFailure                = S_OK;
+    HRESULT _screenshotResult              = S_OK;
+    HRESULT _frameLoopFailure              = S_OK; // drawing stopped; the close it asked for prompts to save (RF-401)
+    HRESULT _lastFrameFailure              = S_OK;
+    int _failedFrames                      = 0;
+    bool _canvasFailureShown               = false;
+    int _canvasFailureNotices              = 0; // quiet runs count them
+    std::uint64_t _boundDeviceGeneration   = 0;
 };

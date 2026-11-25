@@ -64,10 +64,11 @@ struct AppSettings
 
 enum class SettingsLoadStatus : std::uint8_t
 {
-    Loaded,     // the file's settings
-    Missing,    // no file: the defaults, and the template was written
-    Invalid,    // not a settings document: the bytes were backed up, the template written, the defaults used
-    Unreadable, // an I/O failure: the defaults, nothing written
+    Loaded,       // the file's settings
+    Missing,      // no file: the defaults, and the template was written
+    Invalid,      // malformed JSON: attempt a backup and template replacement
+    Unreadable,   // an I/O failure: the defaults, nothing written
+    Incompatible, // readable JSON outside the settings contract: use defaults and preserve the file
 };
 
 struct SettingsLoadResult
@@ -100,7 +101,8 @@ namespace SettingsStore
 // not know inside the entries it keeps.
 [[nodiscard]] std::string Serialize(const AppSettings& settings, std::string_view existingJson = {});
 
-// Startup: a missing file writes the template, an invalid one is backed up and replaced by the template.
+// Startup: a missing file writes the template. Malformed JSON gets a backup and the template.
+// Readable JSON outside the settings contract stays in place.
 [[nodiscard]] SettingsLoadResult LoadCold(const std::wstring& path);
 // A running app: the document, or nullopt when the file is missing or invalid (the caller keeps its last-good
 // settings). Never writes.
