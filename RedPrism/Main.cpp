@@ -504,6 +504,10 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
                 OutputDebugStringW(loaded.templateWritten ? L"The invalid settings were backed up and the template was saved.\n"
                                                           : L"Settings recovery could not publish the template. The current file was preserved.\n");
             }
+            else if (loaded.status == SettingsLoadStatus::Incompatible)
+            {
+                OutputDebugStringW(L"The settings file uses an unsupported document shape. RedPrism is using defaults.\n");
+            }
         }
         satellite.reset(Localization::LoadSatelliteModule(
             Localization::SatelliteCandidates(Localization::ExecutableDirectory(), settings.language, Localization::SystemUiLanguages())));
