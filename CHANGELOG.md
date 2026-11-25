@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Schedule RedPrism presents from its window and power events and retire hidden document surfaces without DXGI probes.
 - Add a manual paired x64 Release WARP run for the full layer-row workload, with exact build identities and retained timing and accounting evidence.
 - Recover the renderer and redraw the editor when a frame reports a hung Direct3D device.
 - Preserve concurrent edits to RedPrism settings during normal saves and startup recovery.
