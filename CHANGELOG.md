@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Register the guarded project-save fixture in the native test inventory so Release qualification can run its suites.
 - Read RedPrism settings as JSON5 and preserve unknown values when saving.
 - Read RedPrism translations from the shared Lang layout and keep support for existing satellite installations.
 - Exercise guarded project publication in the brush and selection lifecycle save fixtures.
