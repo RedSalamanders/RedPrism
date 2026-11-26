@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Adopt the shared native build profile reference in the root development guidance.
 - Bind the project-save benchmark to its vacant fixture archive and retain the accepted version for each repeated save.
 - Tooling: enforce the shared private member naming convention in RedPrism's C++ sources and test fixtures.
 - Bind the session-end settings self-test to an accepted vacant file and check the published settings version.
