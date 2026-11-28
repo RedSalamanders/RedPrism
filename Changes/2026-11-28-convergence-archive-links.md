@@ -1,0 +1,1 @@
+- Keep the RedHome convergence links valid across plan archival.
