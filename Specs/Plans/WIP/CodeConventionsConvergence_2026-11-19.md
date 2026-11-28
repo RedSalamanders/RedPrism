@@ -5,9 +5,9 @@ Owner: RedPrism maintainers.
 Prepared: 2026-11-19.
 
 - **Origin**: step CV-6-08 of the cross-repository
-  [convergence plan](https://github.com/RedSalamanders/RedHome/blob/main/Specs/Plans/WIP/Convergence_2026-11-17.md)
+  [convergence plan](https://github.com/RedSalamanders/RedHome/blob/main/wiki/Working-From-RedHome.md#plan-and-owner-decisions)
   and section H of its
-  [divergence register](https://github.com/RedSalamanders/RedHome/blob/main/Specs/Plans/WIP/Convergence_2026-11-17/DivergenceRegister.md).
+  [divergence register](https://github.com/RedSalamanders/RedHome/blob/main/wiki/Working-From-RedHome.md#divergence-register).
   Each register row names one target for every repository; this plan lists the rows that move RedPrism.
 - **Owning contracts**: [windowing](../../UI/UI_Windowing.md), [settings](../../Core/Core_Settings.md),
   [architecture](../../Core/Core_Architecture.md), [performance and resources](../../Core/Core_PerformanceAndResources.md),
@@ -71,5 +71,5 @@ Prepared: 2026-11-19.
 - Verify all six evaluated profiles and exact builds, clean restore and mismatched pin refusal. Run affected
   regressions and admitted native Release and package checks on x64 and ARM64.
 
-The [RedHome D21 ledger](https://github.com/RedSalamanders/RedHome/blob/main/Specs/Plans/WIP/Convergence_2026-11-17/DeferredTests.md)
+The [RedHome D21 ledger](https://github.com/RedSalamanders/RedHome/blob/main/wiki/Working-From-RedHome.md#qualification-and-replays)
 records the accepted-project and session-end fixture repairs and the remaining runtime and physical replays.
