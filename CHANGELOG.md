@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Keep the RedHome convergence links valid across plan archival.
 - Align the vcpkg registry, tool and shared CI engine with the reviewed convergence pins.
 - Adopt the shared native build profile reference in the root development guidance.
 - Bind the project-save benchmark to its vacant fixture archive and retain the accepted version for each repeated save.
